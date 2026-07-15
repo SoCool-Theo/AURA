@@ -139,6 +139,8 @@ AURA/
 │   │
 │   ├── tests/
 │   │   │
+│   │   ├── __init__.py
+│   │   │
 │   │   ├── unit/
 │   │   │   │
 │   │   │   ├── analytics/
@@ -154,7 +156,11 @@ AURA/
 │   │   │       └── test_validator.py
 │   │   │
 │   │   └── integration/
+│   │       ├── __init__.py
+│   │       │
 │   │       ├── api/
+│   │       │   ├── __init__.py
+│   │       │   ├── test_health_api.py
 │   │       │   ├── test_portfolio_api.py
 │   │       │   └── test_simulation_api.py
 │   │       │
@@ -164,7 +170,7 @@ AURA/
 │   ├── scripts/
 │   │   ├── seed_historical_data.py
 │   │   ├── update_market_data.py
-│   │   └── test_engine.py
+│   │   └── run_engine_check.py
 │   │
 │   ├── examples/
 │   │   ├── portfolio_request.json
@@ -239,12 +245,13 @@ AURA/
 
 - `tests/unit/` — tests individual functions and modules.
 - `tests/integration/` — tests how multiple components work together.
+- `test_health_api.py` — verifies the implemented health endpoint.
 
 ### Scripts
 
 - `seed_historical_data.py` — manually loads initial historical market data.
 - `update_market_data.py` — manually triggers a market-data update.
-- `test_engine.py` — manually runs the analytics engine for testing.
+- `run_engine_check.py` — reserved for manually checking the analytics engine.
 
 ### Shared Data
 
