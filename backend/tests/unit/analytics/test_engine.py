@@ -4,6 +4,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import backend.app.analytics as analytics_package
+from backend.app.analytics import (
+    PortfolioAnalyticsResult as PublicPortfolioAnalyticsResult,
+)
+from backend.app.analytics import analyze_portfolio as public_analyze_portfolio
 from backend.app.analytics.concentration import (
     ConcentrationResult,
     analyze_concentration,
@@ -44,6 +49,7 @@ from backend.app.analytics.volatility import (
     calculate_annualized_volatility,
     calculate_asset_volatilities,
 )
+from backend.scripts.run_engine_check import main as run_engine_check
 
 
 def _prices() -> pd.DataFrame:
@@ -68,6 +74,72 @@ def _analyze() -> PortfolioAnalyticsResult:
         periods_per_year=3,
         concentration_top_n=1,
     )
+
+
+def test_public_analytics_package_exports_stable_engine_interface() -> None:
+    assert PublicPortfolioAnalyticsResult is PortfolioAnalyticsResult
+    assert public_analyze_portfolio is analyze_portfolio
+    assert analytics_package.__all__ == [
+        "PortfolioAnalyticsResult",
+        "analyze_portfolio",
+    ]
+
+
+def test_public_analyze_portfolio_runs_end_to_end() -> None:
+    prices = _prices()
+    result = public_analyze_portfolio(
+        prices,
+        _weights(),
+        annual_risk_free_rate=0.03,
+        periods_per_year=3,
+        concentration_top_n=1,
+    )
+
+    assert isinstance(result, PublicPortfolioAnalyticsResult)
+    assert isinstance(result.max_drawdown, MaxDrawdownResult)
+    assert isinstance(result.concentration, ConcentrationResult)
+    assert isinstance(result.diversification, DiversificationResult)
+    assert isinstance(result.risk_drivers, RiskDriverResult)
+    assert isinstance(result.risk_classification, RiskClassificationResult)
+    assert result.risk_drivers.top_driver in prices.columns
+    assert result.risk_classification.risk_level in {
+        "Low",
+        "Moderate",
+        "High",
+        "Very High",
+    }
+
+
+def test_manual_engine_check_prints_finite_summary(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = run_engine_check()
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    for heading in (
+        "Analysis start:",
+        "Analysis end:",
+        "Number of assets:",
+        "Number of price observations:",
+        "Cumulative portfolio return:",
+        "Annualized portfolio return:",
+        "Annualized volatility:",
+        "Maximum drawdown:",
+        "Sharpe ratio:",
+        "Diversification level:",
+        "Diversification score:",
+        "Overall risk level:",
+        "Overall risk score:",
+        "Top risk driver:",
+    ):
+        assert heading in output
+
+    normalized_output = output.lower()
+    assert "buy" not in normalized_output
+    assert "sell" not in normalized_output
+    assert "nan" not in normalized_output
+    assert "infinity" not in normalized_output
 
 
 def test_analyze_portfolio_returns_complete_result() -> None:
