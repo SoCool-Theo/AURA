@@ -18,6 +18,7 @@ from backend.app.analytics.diversification import (
 )
 from backend.app.analytics.drawdown import (
     MaxDrawdownResult,
+    calculate_max_drawdown,
     calculate_max_drawdown_details,
 )
 from backend.app.analytics.engine import (
@@ -41,6 +42,7 @@ from backend.app.analytics.risk_driver import (
 from backend.app.analytics.sharpe import calculate_sharpe_ratio
 from backend.app.analytics.volatility import (
     calculate_annualized_volatility,
+    calculate_asset_volatilities,
 )
 
 
@@ -144,6 +146,10 @@ def test_engine_results_match_direct_public_module_calls() -> None:
         concentration.largest_weight,
         diversification.overall_score,
     )
+    asset_volatilities = calculate_asset_volatilities(
+        asset_returns,
+        periods_per_year=3,
+    )
 
     pd.testing.assert_frame_equal(result.asset_returns, asset_returns)
     pd.testing.assert_series_equal(result.portfolio_returns, portfolio_returns)
@@ -189,6 +195,62 @@ def test_engine_results_match_direct_public_module_calls() -> None:
         risk_drivers.ranked_contributions,
     )
     assert result.risk_classification == risk_classification
+    for symbol in prices.columns:
+        symbol_returns = asset_returns[symbol]
+        assert result.asset_metrics.loc[
+            symbol, "cumulative_return"
+        ] == pytest.approx(calculate_cumulative_return(symbol_returns))
+        assert result.asset_metrics.loc[
+            symbol, "annualized_return"
+        ] == pytest.approx(
+            calculate_annualized_return(
+                symbol_returns,
+                periods_per_year=3,
+            )
+        )
+        assert result.asset_metrics.loc[
+            symbol, "annualized_volatility"
+        ] == pytest.approx(asset_volatilities[symbol])
+        assert result.asset_metrics.loc[
+            symbol, "max_drawdown"
+        ] == pytest.approx(calculate_max_drawdown(symbol_returns))
+        assert result.asset_metrics.loc[
+            symbol, "sharpe_ratio"
+        ] == pytest.approx(
+            calculate_sharpe_ratio(
+                symbol_returns,
+                annual_risk_free_rate=0.03,
+                periods_per_year=3,
+            )
+        )
+
+
+def test_asset_metrics_have_required_structure_and_alignment() -> None:
+    result = _analyze()
+
+    assert isinstance(result.asset_metrics, pd.DataFrame)
+    assert list(result.asset_metrics.index) == ["BETA", "ALPHA"]
+    assert result.asset_metrics.index.name == "asset"
+    assert list(result.asset_metrics.columns) == [
+        "weight",
+        "cumulative_return",
+        "annualized_return",
+        "annualized_volatility",
+        "max_drawdown",
+        "sharpe_ratio",
+    ]
+    assert result.asset_metrics.loc["BETA", "weight"] == pytest.approx(0.60)
+    assert result.asset_metrics.loc["ALPHA", "weight"] == pytest.approx(0.40)
+
+
+def test_asset_metrics_preserve_full_numerical_precision() -> None:
+    result = _analyze()
+    beta_volatility = result.asset_metrics.loc[
+        "BETA", "annualized_volatility"
+    ]
+
+    assert beta_volatility == pytest.approx(0.2645751311064591)
+    assert beta_volatility != round(beta_volatility, 6)
 
 
 def test_engine_forwards_nondefault_parameters() -> None:
@@ -231,6 +293,25 @@ def test_engine_forwards_nondefault_parameters() -> None:
     )
     assert result.concentration.top_n == 1
     assert result.concentration.top_n_weight == pytest.approx(0.60)
+    for symbol in prices.columns:
+        symbol_returns = result.asset_returns[symbol]
+        assert result.asset_metrics.loc[
+            symbol, "annualized_return"
+        ] == pytest.approx(
+            calculate_annualized_return(
+                symbol_returns,
+                periods_per_year=6,
+            )
+        )
+        assert result.asset_metrics.loc[
+            symbol, "sharpe_ratio"
+        ] == pytest.approx(
+            calculate_sharpe_ratio(
+                symbol_returns,
+                annual_risk_free_rate=0.05,
+                periods_per_year=6,
+            )
+        )
 
 
 def test_engine_uses_covariance_aware_risk_drivers() -> None:
@@ -283,6 +364,10 @@ def test_weight_mapping_order_does_not_change_asset_alignment() -> None:
         "BETA",
         "ALPHA",
     }
+    assert result.asset_metrics["weight"].to_dict() == {
+        "BETA": pytest.approx(0.60),
+        "ALPHA": pytest.approx(0.40),
+    }
 
 
 def test_engine_preserves_inputs() -> None:
@@ -306,6 +391,7 @@ def test_engine_preserves_inputs() -> None:
 def test_engine_result_has_expected_pandas_and_nested_types() -> None:
     result = _analyze()
 
+    assert isinstance(result.asset_metrics, pd.DataFrame)
     assert isinstance(result.asset_returns, pd.DataFrame)
     assert isinstance(result.portfolio_returns, pd.Series)
     assert result.portfolio_returns.name == "portfolio_return"
@@ -365,6 +451,19 @@ def test_engine_preserves_undefined_correlations() -> None:
         "Diversification score unavailable"
     )
     assert result.risk_drivers.portfolio_volatility > 0.0
+    assert result.asset_metrics.loc[
+        "CONSTANT_RETURN", "annualized_volatility"
+    ] == pytest.approx(0.0)
+    constant_sharpe = result.asset_metrics.loc[
+        "CONSTANT_RETURN", "sharpe_ratio"
+    ]
+    assert np.isnan(constant_sharpe)
+    assert constant_sharpe != 0.0
+    assert not np.isinf(constant_sharpe)
+    assert np.isfinite(
+        result.asset_metrics.loc["VARIABLE", "sharpe_ratio"]
+    )
+    assert np.isfinite(result.sharpe_ratio)
 
 
 def test_zero_volatility_portfolio_propagates_value_error() -> None:
