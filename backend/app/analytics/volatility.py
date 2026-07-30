@@ -1,10 +1,13 @@
 import math
-from numbers import Integral, Real
+from numbers import Real
 
 import numpy as np
 import pandas as pd
 
-from ._validation import _validate_datetime_index
+from ._validation import (
+    _validate_datetime_index,
+    _validate_positive_integer,
+)
 
 
 def _validate_symbols(symbols: pd.Index) -> None:
@@ -72,16 +75,6 @@ def _validate_asset_returns(asset_returns: pd.DataFrame) -> np.ndarray:
     )
 
 
-def _validate_periods_per_year(periods_per_year: int) -> int:
-    if isinstance(periods_per_year, (bool, np.bool_)) or not isinstance(
-        periods_per_year, Integral
-    ):
-        raise TypeError("periods_per_year must be an integer")
-    if periods_per_year <= 0:
-        raise ValueError("periods_per_year must be greater than zero")
-    return int(periods_per_year)
-
-
 def calculate_periodic_volatility(returns: pd.Series) -> float:
     """Calculate sample volatility for periodic returns."""
     return_values = _validate_return_series(returns)
@@ -92,7 +85,10 @@ def calculate_annualized_volatility(
     returns: pd.Series, periods_per_year: int = 252
 ) -> float:
     """Annualize the sample volatility of periodic returns."""
-    annualization_factor = _validate_periods_per_year(periods_per_year)
+    annualization_factor = _validate_positive_integer(
+        periods_per_year,
+        "periods_per_year",
+    )
     periodic_volatility = calculate_periodic_volatility(returns)
     return float(periodic_volatility * math.sqrt(annualization_factor))
 
@@ -101,7 +97,10 @@ def calculate_asset_volatilities(
     asset_returns: pd.DataFrame, periods_per_year: int = 252
 ) -> pd.Series:
     """Calculate annualized sample volatility for each asset column."""
-    annualization_factor = _validate_periods_per_year(periods_per_year)
+    annualization_factor = _validate_positive_integer(
+        periods_per_year,
+        "periods_per_year",
+    )
     return_values = _validate_asset_returns(asset_returns)
     annualized_values = np.std(return_values, axis=0, ddof=1) * math.sqrt(
         annualization_factor

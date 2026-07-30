@@ -3,12 +3,15 @@
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
-from numbers import Integral, Real
+from numbers import Real
 
 import numpy as np
 import pandas as pd
 
-from ._validation import _validate_datetime_index
+from ._validation import (
+    _validate_datetime_index,
+    _validate_positive_integer,
+)
 
 
 _WEIGHT_TOLERANCE = 1e-6
@@ -141,16 +144,6 @@ def _validated_weights(
     )
 
 
-def _validated_periods_per_year(periods_per_year: int) -> int:
-    if isinstance(periods_per_year, (bool, np.bool_)) or not isinstance(
-        periods_per_year, Integral
-    ):
-        raise TypeError("periods_per_year must be an integer")
-    if periods_per_year <= 0:
-        raise ValueError("periods_per_year must be greater than zero")
-    return int(periods_per_year)
-
-
 def _calculate_portfolio_volatility(
     annualized_covariance: np.ndarray,
     aligned_weights: np.ndarray,
@@ -265,7 +258,10 @@ def calculate_risk_contributions(
     """Calculate signed asset contributions to portfolio volatility."""
     return_values = _validated_asset_return_values(asset_returns)
     aligned_weights = _validated_weights(weights, asset_returns.columns)
-    annualization_factor = _validated_periods_per_year(periods_per_year)
+    annualization_factor = _validate_positive_integer(
+        periods_per_year,
+        "periods_per_year",
+    )
 
     numeric_returns = pd.DataFrame(
         return_values,

@@ -3,9 +3,11 @@
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
-from numbers import Integral, Real
+from numbers import Real
 
 import numpy as np
+
+from ._validation import _validate_positive_integer
 
 
 _WEIGHT_TOLERANCE = 1e-6
@@ -74,14 +76,6 @@ def _validated_weights(weights: Mapping[str, float]) -> list[float]:
     return validated
 
 
-def _validate_top_n(top_n: int) -> int:
-    if isinstance(top_n, (bool, np.bool_)) or not isinstance(top_n, Integral):
-        raise TypeError("top_n must be an integer")
-    if top_n <= 0:
-        raise ValueError("top_n must be greater than zero")
-    return int(top_n)
-
-
 def calculate_largest_weight(weights: Mapping[str, float]) -> float:
     """Return the portfolio's largest individual asset weight."""
     validated_weights = _validated_weights(weights)
@@ -93,7 +87,7 @@ def calculate_top_n_concentration(
 ) -> float:
     """Sum the largest requested number of validated portfolio weights."""
     validated_weights = _validated_weights(weights)
-    validated_top_n = _validate_top_n(top_n)
+    validated_top_n = _validate_positive_integer(top_n, "top_n")
     largest_weights = sorted(validated_weights, reverse=True)[
         :validated_top_n
     ]
@@ -118,7 +112,7 @@ def analyze_concentration(
     weights: Mapping[str, float], top_n: int = 3
 ) -> ConcentrationResult:
     """Calculate the complete quantitative portfolio concentration result."""
-    validated_top_n = _validate_top_n(top_n)
+    validated_top_n = _validate_positive_integer(top_n, "top_n")
     return ConcentrationResult(
         largest_weight=calculate_largest_weight(weights),
         top_n_weight=calculate_top_n_concentration(

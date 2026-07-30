@@ -1,12 +1,15 @@
 """Sharpe-ratio calculation for validated periodic portfolio returns."""
 
 import math
-from numbers import Integral, Real
+from numbers import Real
 
 import numpy as np
 import pandas as pd
 
-from ._validation import _validate_datetime_index
+from ._validation import (
+    _validate_datetime_index,
+    _validate_positive_integer,
+)
 
 
 def _validated_returns(returns: pd.Series) -> np.ndarray:
@@ -54,16 +57,6 @@ def _validate_annual_risk_free_rate(annual_risk_free_rate: float) -> float:
     return validated_rate
 
 
-def _validate_periods_per_year(periods_per_year: int) -> int:
-    if isinstance(periods_per_year, (bool, np.bool_)) or not isinstance(
-        periods_per_year, Integral
-    ):
-        raise TypeError("periods_per_year must be an integer")
-    if periods_per_year <= 0:
-        raise ValueError("periods_per_year must be greater than zero")
-    return int(periods_per_year)
-
-
 def calculate_sharpe_ratio(
     returns: pd.Series,
     annual_risk_free_rate: float = 0.0,
@@ -72,7 +65,10 @@ def calculate_sharpe_ratio(
     """Calculate the annualized Sharpe ratio using sample volatility."""
     return_values = _validated_returns(returns)
     validated_rate = _validate_annual_risk_free_rate(annual_risk_free_rate)
-    validated_periods = _validate_periods_per_year(periods_per_year)
+    validated_periods = _validate_positive_integer(
+        periods_per_year,
+        "periods_per_year",
+    )
 
     periodic_risk_free_rate = (
         (1.0 + validated_rate) ** (1.0 / validated_periods) - 1.0

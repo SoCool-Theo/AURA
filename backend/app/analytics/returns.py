@@ -1,11 +1,14 @@
 import math
 from collections.abc import Mapping
-from numbers import Integral, Real
+from numbers import Real
 
 import numpy as np
 import pandas as pd
 
-from ._validation import _validate_datetime_index
+from ._validation import (
+    _validate_datetime_index,
+    _validate_positive_integer,
+)
 
 
 def _validate_symbols(symbols: pd.Index, input_name: str) -> None:
@@ -181,14 +184,12 @@ def calculate_annualized_return(
     portfolio_returns: pd.Series, periods_per_year: int = 252
 ) -> float:
     """Annualize compounded periodic portfolio returns."""
-    if isinstance(periods_per_year, (bool, np.bool_)) or not isinstance(
-        periods_per_year, Integral
-    ):
-        raise TypeError("periods_per_year must be an integer")
-    if periods_per_year <= 0:
-        raise ValueError("periods_per_year must be greater than zero")
+    validated_periods = _validate_positive_integer(
+        periods_per_year,
+        "periods_per_year",
+    )
 
     return_values = _validate_portfolio_return_series(portfolio_returns)
     cumulative_return = float(np.prod(1.0 + return_values) - 1.0)
-    exponent = int(periods_per_year) / len(return_values)
+    exponent = validated_periods / len(return_values)
     return float((1.0 + cumulative_return) ** exponent - 1.0)
