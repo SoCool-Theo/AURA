@@ -1,87 +1,68 @@
-## Completed Backend Work
-
-### FastAPI Foundation
-
-- FastAPI application foundation completed
-- Health endpoint implemented
-- Initial integration test passing
-
-### Portfolio Analytics Core
+### Analytics Validation Refactor
 
 **Status:** Completed and merged into `develop`  
-**Branch:** `feat/backend-analytics-core`
+**Branch:** `refactor/analytics-validation`
 
-Implemented deterministic portfolio analytics using prepared Pandas price data and portfolio weights.
+Consolidated repeated analytics input-validation logic into a shared private
+validation module while preserving all existing analytics behavior.
 
-#### Calculations implemented
+#### Shared validation helpers added
 
-- Asset returns
-- Portfolio returns
-- Cumulative return
-- Annualized return
-- Annualized volatility
-- Maximum drawdown
-- Maximum-drawdown peak and trough dates
-- Sharpe ratio
-- Asset correlation matrix
-- Unique asset-correlation pairs
-- Portfolio concentration
-- Herfindahl-Hirschman Index
-- Effective number of assets
-- Diversification score and level
-- Covariance-based risk contributions
-- Risk-driver ranking
-- Overall portfolio risk score
-- Overall risk classification
-- Individual asset metrics
+- Datetime-index validation
+- Positive-integer validation
+- Finite real-value validation and normalization
+- Portfolio weight-mapping validation
 
-#### Analytics engine
+#### Modules migrated
 
-- Added `analyze_portfolio(...)` coordinator
-- Added `PortfolioAnalyticsResult`
-- Added stable public imports:
-  - `analyze_portfolio`
-  - `PortfolioAnalyticsResult`
-- Added deterministic manual engine check:
-  - `python -m backend.scripts.run_engine_check`
+- `returns.py`
+- `volatility.py`
+- `drawdown.py`
+- `sharpe.py`
+- `correlation.py`
+- `concentration.py`
+- `diversification.py`
+- `risk_driver.py`
 
-#### Dependencies added
+#### Validation boundaries preserved
 
-- `pandas==3.0.5`
-- `numpy==2.5.1`
+Specialized validation remains local where behavior intentionally differs,
+including:
+
+- Sharpe zero-volatility handling
+- Return lower-bound rules
+- Portfolio-weight alignment
+- Correlation-matrix NaN behavior
+- Diversification coverage rules
+- Risk-classification thresholds
+- Drawdown calculation conventions
+- Analytics-engine consistency checks
+
+#### Compatibility preserved
+
+The refactor did not change:
+
+- Public analytics APIs
+- Public function signatures
+- Analytics formulas
+- Result dataclasses or returned structures
+- Exception behavior
+- Validation order
+- Input non-mutation behavior
+- Correlation NaN behavior
+- Risk-driver ranking behavior
 
 #### Final verification
 
-- Analytics tests: 704 passed
-- Full backend tests: 705 passed
+- Shared validation tests: 116 passed
+- Analytics tests: 820 passed
+- Full backend tests: 821 passed
 - Failed tests: 0
 - Manual engine check: passed
 - Dependency check: passed
+- Public analytics import check: passed
 - Python compilation check: passed
 - Git whitespace check: passed
-
-#### Branch boundaries preserved
-
-The analytics core:
-
-- Accepts prepared market data and portfolio weights
-- Does not fetch market data
-- Does not access PostgreSQL
-- Does not create FastAPI routes
-- Does not run historical simulations
-- Does not call the AI agent
-- Does not provide buy/sell recommendations
-
-## Current Backend Priorities
-
-1. Market-data pipeline
-2. Database foundation
-3. Schemas and API contracts
-4. Analytics-validation refactor — optional cleanup
-5. Analysis service
-6. API integration
-7. Historical simulator
-8. AI agent later
 
 ## Known Issues and Technical Debt
 
@@ -93,12 +74,12 @@ Starlette/httpx deprecation warning.
 This warning is unrelated to the analytics calculations and does not
 cause test failures.
 
-### Repeated analytics validation
+## Current Backend Priorities
 
-Some analytics modules contain repeated private input-validation logic.
-
-This is not a functional blocker. It may be consolidated later in:
-
-`refactor/analytics-validation`
-
-The refactor must preserve public APIs, error behavior, and test results.
+1. Market-data pipeline
+2. Database foundation
+3. Schemas and API contracts
+4. Analysis service
+5. API integration
+6. Historical simulator
+7. AI agent later
