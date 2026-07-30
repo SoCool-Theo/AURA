@@ -1,22 +1,15 @@
 import math
 from collections.abc import Mapping
-from numbers import Integral, Real
+from numbers import Real
 
 import numpy as np
 import pandas as pd
 
-
-def _validate_datetime_index(index: pd.Index, input_name: str) -> None:
-    if not isinstance(index, pd.DatetimeIndex):
-        raise TypeError(f"{input_name} index must be a pandas DatetimeIndex")
-    if index.hasnans:
-        raise ValueError(f"{input_name} index cannot contain NaT")
-    if index.tz is not None:
-        raise ValueError(f"{input_name} index must be timezone-naive")
-    if index.has_duplicates:
-        raise ValueError(f"{input_name} index cannot contain duplicate timestamps")
-    if not index.is_monotonic_increasing:
-        raise ValueError(f"{input_name} index must be strictly increasing")
+from ._validation import (
+    _validate_datetime_index,
+    _validate_positive_integer,
+    _validated_finite_real_values,
+)
 
 
 def _validate_symbols(symbols: pd.Index, input_name: str) -> None:
@@ -42,18 +35,10 @@ def _validated_real_values(
     validated: list[float] = []
 
     for value in np.asarray(values, dtype=object).flat:
-        if isinstance(value, (bool, np.bool_)):
-            raise TypeError(f"{input_name} values cannot be Boolean")
-        if isinstance(value, (complex, np.complexfloating)):
-            raise TypeError(f"{input_name} values cannot be complex")
-        if pd.isna(value):
-            raise ValueError(f"{input_name} values cannot be missing")
-        if not isinstance(value, Real):
-            raise TypeError(f"{input_name} values must be real numeric values")
-
-        numeric_value = float(value)
-        if not math.isfinite(numeric_value):
-            raise ValueError(f"{input_name} values must be finite")
+        numeric_value = _validated_finite_real_values(
+            value,
+            input_name,
+        ).item()
         if require_positive and numeric_value <= 0.0:
             raise ValueError(f"{input_name} values must be strictly greater than zero")
         validated.append(numeric_value)
@@ -192,14 +177,12 @@ def calculate_annualized_return(
     portfolio_returns: pd.Series, periods_per_year: int = 252
 ) -> float:
     """Annualize compounded periodic portfolio returns."""
-    if isinstance(periods_per_year, (bool, np.bool_)) or not isinstance(
-        periods_per_year, Integral
-    ):
-        raise TypeError("periods_per_year must be an integer")
-    if periods_per_year <= 0:
-        raise ValueError("periods_per_year must be greater than zero")
+    validated_periods = _validate_positive_integer(
+        periods_per_year,
+        "periods_per_year",
+    )
 
     return_values = _validate_portfolio_return_series(portfolio_returns)
     cumulative_return = float(np.prod(1.0 + return_values) - 1.0)
-    exponent = int(periods_per_year) / len(return_values)
+    exponent = validated_periods / len(return_values)
     return float((1.0 + cumulative_return) ** exponent - 1.0)

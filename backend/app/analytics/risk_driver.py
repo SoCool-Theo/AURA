@@ -3,10 +3,16 @@
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
-from numbers import Integral, Real
+from numbers import Real
 
 import numpy as np
 import pandas as pd
+
+from ._validation import (
+    _validate_datetime_index,
+    _validate_positive_integer,
+    _validated_finite_real_values,
+)
 
 
 _WEIGHT_TOLERANCE = 1e-6
@@ -28,21 +34,6 @@ class RiskDriverResult:
     portfolio_volatility: float
     top_driver: str
     ranked_contributions: pd.DataFrame
-
-
-def _validate_datetime_index(index: pd.Index) -> None:
-    if not isinstance(index, pd.DatetimeIndex):
-        raise TypeError("asset_returns index must be a pandas DatetimeIndex")
-    if index.hasnans:
-        raise ValueError("asset_returns index cannot contain NaT")
-    if index.tz is not None:
-        raise ValueError("asset_returns index must be timezone-naive")
-    if index.has_duplicates:
-        raise ValueError(
-            "asset_returns index cannot contain duplicate timestamps"
-        )
-    if not index.is_monotonic_increasing:
-        raise ValueError("asset_returns index must be strictly increasing")
 
 
 def _validate_symbols(symbols: pd.Index, input_name: str) -> None:
@@ -77,25 +68,15 @@ def _validated_asset_return_values(
             "asset_returns must contain at least one asset column"
         )
 
-    _validate_datetime_index(asset_returns.index)
+    _validate_datetime_index(asset_returns.index, "asset_returns")
     _validate_symbols(asset_returns.columns, "asset_returns")
 
     validated: list[float] = []
     for value in np.asarray(asset_returns.to_numpy(), dtype=object).flat:
-        if isinstance(value, (bool, np.bool_)):
-            raise TypeError("asset_returns values cannot be Boolean")
-        if isinstance(value, (complex, np.complexfloating)):
-            raise TypeError("asset_returns values cannot be complex")
-        if pd.isna(value):
-            raise ValueError("asset_returns values cannot be missing")
-        if not isinstance(value, Real):
-            raise TypeError(
-                "asset_returns values must be real numeric values"
-            )
-
-        numeric_value = float(value)
-        if not math.isfinite(numeric_value):
-            raise ValueError("asset_returns values must be finite")
+        numeric_value = _validated_finite_real_values(
+            value,
+            "asset_returns",
+        ).item()
         if numeric_value <= -1.0:
             raise ValueError(
                 "asset_returns values must be greater than -1.0"
@@ -154,16 +135,6 @@ def _validated_weights(
     )
 
 
-def _validated_periods_per_year(periods_per_year: int) -> int:
-    if isinstance(periods_per_year, (bool, np.bool_)) or not isinstance(
-        periods_per_year, Integral
-    ):
-        raise TypeError("periods_per_year must be an integer")
-    if periods_per_year <= 0:
-        raise ValueError("periods_per_year must be greater than zero")
-    return int(periods_per_year)
-
-
 def _calculate_portfolio_volatility(
     annualized_covariance: np.ndarray,
     aligned_weights: np.ndarray,
@@ -211,25 +182,10 @@ def _validated_contribution_values(
 
     _validate_symbols(contributions.index, "contributions")
 
-    validated: list[float] = []
-    for value in np.asarray(contributions.to_numpy(), dtype=object).flat:
-        if isinstance(value, (bool, np.bool_)):
-            raise TypeError("contribution values cannot be Boolean")
-        if isinstance(value, (complex, np.complexfloating)):
-            raise TypeError("contribution values cannot be complex")
-        if pd.isna(value):
-            raise ValueError("contribution values cannot be missing")
-        if not isinstance(value, Real):
-            raise TypeError(
-                "contribution values must be real numeric values"
-            )
-
-        numeric_value = float(value)
-        if not math.isfinite(numeric_value):
-            raise ValueError("contribution values must be finite")
-        validated.append(numeric_value)
-
-    values = np.asarray(validated, dtype=float).reshape(contributions.shape)
+    values = _validated_finite_real_values(
+        contributions.to_numpy(),
+        "contribution",
+    )
     column_positions = {
         column: contributions.columns.get_loc(column)
         for column in _CONTRIBUTION_COLUMNS
@@ -278,7 +234,10 @@ def calculate_risk_contributions(
     """Calculate signed asset contributions to portfolio volatility."""
     return_values = _validated_asset_return_values(asset_returns)
     aligned_weights = _validated_weights(weights, asset_returns.columns)
-    annualization_factor = _validated_periods_per_year(periods_per_year)
+    annualization_factor = _validate_positive_integer(
+        periods_per_year,
+        "periods_per_year",
+    )
 
     numeric_returns = pd.DataFrame(
         return_values,

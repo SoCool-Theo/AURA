@@ -6,24 +6,14 @@ from numbers import Real
 import numpy as np
 import pandas as pd
 
+from ._validation import (
+    _validate_datetime_index,
+    _validated_finite_real_values,
+)
+
 
 _CORRELATION_TOLERANCE = 1e-12
 _PAIR_COLUMNS = ["asset_1", "asset_2", "correlation"]
-
-
-def _validate_datetime_index(index: pd.Index) -> None:
-    if not isinstance(index, pd.DatetimeIndex):
-        raise TypeError("asset_returns index must be a pandas DatetimeIndex")
-    if index.hasnans:
-        raise ValueError("asset_returns index cannot contain NaT")
-    if index.tz is not None:
-        raise ValueError("asset_returns index must be timezone-naive")
-    if index.has_duplicates:
-        raise ValueError(
-            "asset_returns index cannot contain duplicate timestamps"
-        )
-    if not index.is_monotonic_increasing:
-        raise ValueError("asset_returns index must be strictly increasing")
 
 
 def _validate_symbols(
@@ -53,25 +43,15 @@ def _validated_asset_return_values(asset_returns: pd.DataFrame) -> np.ndarray:
     if len(asset_returns.columns) == 0:
         raise ValueError("asset_returns must contain at least one asset column")
 
-    _validate_datetime_index(asset_returns.index)
+    _validate_datetime_index(asset_returns.index, "asset_returns")
     _validate_symbols(asset_returns.columns, "asset_returns", "symbols")
 
     validated: list[float] = []
     for value in np.asarray(asset_returns.to_numpy(), dtype=object).flat:
-        if isinstance(value, (bool, np.bool_)):
-            raise TypeError("asset_returns values cannot be Boolean")
-        if isinstance(value, (complex, np.complexfloating)):
-            raise TypeError("asset_returns values cannot be complex")
-        if pd.isna(value):
-            raise ValueError("asset_returns values cannot be missing")
-        if not isinstance(value, Real):
-            raise TypeError(
-                "asset_returns values must be real numeric values"
-            )
-
-        numeric_value = float(value)
-        if not math.isfinite(numeric_value):
-            raise ValueError("asset_returns values must be finite")
+        numeric_value = _validated_finite_real_values(
+            value,
+            "asset_returns",
+        ).item()
         if numeric_value <= -1.0:
             raise ValueError(
                 "asset_returns values must be greater than -1.0"

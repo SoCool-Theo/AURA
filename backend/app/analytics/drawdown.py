@@ -1,9 +1,12 @@
-import math
 from dataclasses import dataclass
-from numbers import Real
 
 import numpy as np
 import pandas as pd
+
+from ._validation import (
+    _validate_datetime_index,
+    _validated_finite_real_values,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,49 +18,20 @@ class MaxDrawdownResult:
     trough_date: pd.Timestamp | None
 
 
-def _validate_datetime_index(index: pd.Index) -> None:
-    if not isinstance(index, pd.DatetimeIndex):
-        raise TypeError(
-            "portfolio_returns index must be a pandas DatetimeIndex"
-        )
-    if index.hasnans:
-        raise ValueError("portfolio_returns index cannot contain NaT")
-    if index.tz is not None:
-        raise ValueError("portfolio_returns index must be timezone-naive")
-    if index.has_duplicates:
-        raise ValueError(
-            "portfolio_returns index cannot contain duplicate timestamps"
-        )
-    if not index.is_monotonic_increasing:
-        raise ValueError(
-            "portfolio_returns index must be strictly increasing"
-        )
-
-
 def _validated_portfolio_returns(portfolio_returns: pd.Series) -> np.ndarray:
     if not isinstance(portfolio_returns, pd.Series):
         raise TypeError("portfolio_returns must be a pandas Series")
     if portfolio_returns.empty:
         raise ValueError("portfolio_returns cannot be empty")
 
-    _validate_datetime_index(portfolio_returns.index)
+    _validate_datetime_index(portfolio_returns.index, "portfolio_returns")
     validated: list[float] = []
 
     for value in np.asarray(portfolio_returns.to_numpy(), dtype=object).flat:
-        if isinstance(value, (bool, np.bool_)):
-            raise TypeError("portfolio_returns values cannot be Boolean")
-        if isinstance(value, (complex, np.complexfloating)):
-            raise TypeError("portfolio_returns values cannot be complex")
-        if pd.isna(value):
-            raise ValueError("portfolio_returns values cannot be missing")
-        if not isinstance(value, Real):
-            raise TypeError(
-                "portfolio_returns values must be real numeric values"
-            )
-
-        numeric_value = float(value)
-        if not math.isfinite(numeric_value):
-            raise ValueError("portfolio_returns values must be finite")
+        numeric_value = _validated_finite_real_values(
+            value,
+            "portfolio_returns",
+        ).item()
         if numeric_value <= -1.0:
             raise ValueError(
                 "portfolio_returns values must be greater than -1.0"
