@@ -64,6 +64,79 @@ The refactor did not change:
 - Python compilation check: passed
 - Git whitespace check: passed
 
+## Backend Schemas and Contracts
+
+**Status:** Completed and merged into `develop`  
+**Source branch:** `feat/backend-schemas-contracts`
+
+### Completed scope
+
+- Added shared Pydantic schema conventions.
+- Added `AuraBaseModel` as an internal schema foundation with unknown-field
+  rejection.
+- Added normalized `AssetSymbol`.
+- Added inclusive `AnalysisPeriod`.
+- Added weight-based `PortfolioHoldingInput`.
+- Added `PortfolioAnalysisRequest`.
+- Added prepared historical market-data request and response contracts.
+- Added atomic analytics-result contracts.
+- Added complete `PortfolioAnalysisResponse`.
+- Added exactly 21 approved package-level public schema exports.
+- Added four validated synthetic canonical JSON examples.
+- Added API-contract documentation.
+- Added direct schema, example, and public-export tests.
+
+### Important contract behavior
+
+- Uses Pydantic 2-compatible models.
+- Rejects unknown fields.
+- Uses decimal portfolio weights.
+- Requires portfolio weights to total `1.0`.
+- Normalizes symbols by trimming and uppercasing.
+- Uses inclusive date ranges.
+- Preserves caller-owned input objects.
+- Preserves ordered collections.
+- Preserves negative maximum drawdown.
+- Preserves signed risk contributions.
+- Represents intentionally unavailable values as JSON `null`.
+- Prevents Pandas, NumPy, `NaN`, and Infinity from leaking into the public JSON
+  contract.
+- Remains provider-independent and database-independent.
+
+### Final verification
+
+- Schema tests: 301 passed
+- Canonical example tests: 4 passed
+- Public-export tests: 5 passed
+- Analytics regression tests: 820 passed
+- Full backend tests: 1,122 passed
+- Failed tests: 0
+- Skipped tests: 0
+- Existing warnings: 1 Starlette/httpx deprecation warning
+- Public schema import check: passed
+- Approved public exports: exactly 21
+- Strict JSON validation: passed for all four canonical examples
+- Manual analytics engine check: passed
+- Python compilation check: passed
+- Dependency check: passed
+- Dependency versions changed: none
+- Documentation consistency check: passed
+- Git whitespace check: passed
+
+### Deferred work
+
+- FastAPI routes
+- Service orchestration
+- Production conversion from `PortfolioAnalyticsResult`
+- Pandas and NumPy adapter logic
+- Market-data provider integration
+- Market-data fetching and cleaning
+- Database persistence
+- Portfolio CRUD
+- Amount/share-to-weight conversion
+- Historical-simulation contracts and calculations
+- AI-agent contracts and explanations
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -76,10 +149,19 @@ cause test failures.
 
 ## Current Backend Priorities
 
-1. Market-data pipeline
-2. Database foundation
-3. Schemas and API contracts
-4. Analysis service
-5. API integration
-6. Historical simulator
-7. AI agent later
+### Remaining independent parent workstreams
+
+- `feat/backend-market-data-pipeline` — planned
+- `feat/backend-database-foundation` — planned
+
+The exact team assignment for these workstreams has not been confirmed.
+
+### Blocked follow-on work
+
+- `feat/backend-analysis-service`: schemas are complete; this branch remains
+  blocked until the necessary market-data and data-access components are
+  stable.
+- `feat/backend-portfolio-api`: schemas are complete; this branch remains
+  blocked until the database foundation is stable.
+- Historical simulation, API integration, and AI-agent work remain later
+  stages with their existing dependencies.
