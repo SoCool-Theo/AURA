@@ -1,11 +1,18 @@
 """Atomic, JSON-safe Pydantic contracts for Aura analytics results."""
 
 from datetime import date
+import math
 from typing import Annotated, Literal, Self
 
-from pydantic import BeforeValidator, Field, model_validator
+from pydantic import (
+    BeforeValidator,
+    Field,
+    Strict,
+    field_validator,
+    model_validator,
+)
 
-from .common import AssetSymbol, AuraBaseModel
+from .common import AnalysisPeriod, AssetSymbol, AuraBaseModel
 
 
 def _require_json_numeric_value(value: object) -> object:
@@ -187,5 +194,183 @@ class CorrelationMatrix(AuraBaseModel):
         if any(len(row) != size for row in self.values):
             raise ValueError(
                 "each correlation matrix row must contain one value per symbol"
+            )
+        return self
+
+
+class AnalysisMetadata(AuraBaseModel):
+    """Stable observation and asset metadata from the analytics engine."""
+
+    analysis_start: date
+    analysis_end: date
+    price_observation_count: PositiveInt
+    return_observation_count: PositiveInt
+    asset_count: PositiveInt
+
+    @model_validator(mode="after")
+    def validate_observation_counts_and_dates(self) -> Self:
+        if self.analysis_start > self.analysis_end:
+            raise ValueError(
+                "analysis_start must be on or before analysis_end"
+            )
+        if self.return_observation_count != self.price_observation_count - 1:
+            raise ValueError(
+                "return_observation_count must equal "
+                "price_observation_count minus one"
+            )
+        return self
+
+
+class PortfolioMetrics(AuraBaseModel):
+    """The engine's top-level scalar portfolio metrics."""
+
+    cumulative_return: FiniteFloat
+    annualized_return: FiniteFloat
+    annualized_volatility: NonNegativeFiniteFloat
+    sharpe_ratio: FiniteFloat
+
+
+class PortfolioReturnPoint(AuraBaseModel):
+    """One dated periodically rebalanced portfolio return observation."""
+
+    date: date
+    portfolio_return: FiniteFloat
+
+
+class RiskDriverAnalysis(AuraBaseModel):
+    """Portfolio volatility and its already-ranked risk-driver entries."""
+
+    portfolio_volatility: NonNegativeFiniteFloat
+    top_driver: AssetSymbol
+    entries: Annotated[list[RiskDriverEntry], Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def validate_entries(self) -> Self:
+        symbols = [entry.symbol for entry in self.entries]
+        if len(symbols) != len(set(symbols)):
+            raise ValueError(
+                "risk-driver symbols must be unique after normalization"
+            )
+        if self.top_driver != self.entries[0].symbol:
+            raise ValueError(
+                "top_driver must match the first ranked risk-driver entry"
+            )
+        return self
+
+
+class PortfolioAnalysisResponse(AnalysisPeriod):
+    """Complete JSON-safe destination contract for portfolio analytics."""
+
+    portfolio_name: Annotated[str, Strict()]
+    metadata: AnalysisMetadata
+    portfolio_metrics: PortfolioMetrics
+    max_drawdown: MaximumDrawdownMetrics
+    concentration: ConcentrationMetrics
+    diversification: DiversificationMetrics
+    risk_classification: RiskClassification
+    risk_drivers: RiskDriverAnalysis
+    asset_metrics: Annotated[list[AssetMetrics], Field(min_length=1)]
+    correlation_matrix: CorrelationMatrix
+    correlation_pairs: list[CorrelationPair]
+    portfolio_returns: Annotated[
+        list[PortfolioReturnPoint],
+        Field(min_length=1),
+    ]
+
+    @field_validator("portfolio_name", mode="before")
+    @classmethod
+    def normalize_portfolio_name(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(
+                "portfolio_name cannot be empty after normalization"
+            )
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_response_consistency(self) -> Self:
+        return_dates = [point.date for point in self.portfolio_returns]
+        if len(return_dates) != len(set(return_dates)):
+            raise ValueError("portfolio return dates must be unique")
+        if any(
+            current <= previous
+            for previous, current in zip(return_dates, return_dates[1:])
+        ):
+            raise ValueError(
+                "portfolio return dates must be strictly increasing"
+            )
+        if any(
+            point_date < self.start_date or point_date > self.end_date
+            for point_date in return_dates
+        ):
+            raise ValueError(
+                "portfolio return dates must fall within the inclusive "
+                "response period"
+            )
+
+        asset_symbols = [metric.symbol for metric in self.asset_metrics]
+        if len(asset_symbols) != len(set(asset_symbols)):
+            raise ValueError(
+                "asset-metric symbols must be unique after normalization"
+            )
+
+        matrix_symbols = set(self.correlation_matrix.symbols)
+        if set(asset_symbols) != matrix_symbols:
+            raise ValueError(
+                "asset-metric symbols must match correlation matrix symbols"
+            )
+
+        driver_symbols = {
+            entry.symbol for entry in self.risk_drivers.entries
+        }
+        if driver_symbols != matrix_symbols:
+            raise ValueError(
+                "risk-driver symbols must match correlation matrix symbols"
+            )
+
+        total_weight = math.fsum(
+            metric.weight for metric in self.asset_metrics
+        )
+        if not math.isclose(
+            total_weight,
+            1.0,
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        ):
+            raise ValueError(
+                "asset-metric weights must sum to 1.0 within an absolute "
+                "tolerance of 1e-9"
+            )
+
+        pair_keys: set[frozenset[str]] = set()
+        for pair in self.correlation_pairs:
+            if (
+                pair.asset_a not in matrix_symbols
+                or pair.asset_b not in matrix_symbols
+            ):
+                raise ValueError(
+                    "correlation pair symbols must belong to the "
+                    "correlation matrix"
+                )
+            pair_key = frozenset((pair.asset_a, pair.asset_b))
+            if pair_key in pair_keys:
+                raise ValueError(
+                    "duplicate unordered correlation pairs are not allowed"
+                )
+            pair_keys.add(pair_key)
+
+        if self.metadata.asset_count != len(matrix_symbols):
+            raise ValueError(
+                "metadata asset_count must match the portfolio symbol count"
+            )
+        if self.metadata.return_observation_count != len(
+            self.portfolio_returns
+        ):
+            raise ValueError(
+                "metadata return_observation_count must match the number "
+                "of portfolio return observations"
             )
         return self

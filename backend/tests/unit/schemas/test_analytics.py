@@ -6,13 +6,18 @@ import pytest
 from pydantic import ValidationError
 
 from backend.app.schemas.analytics import (
+    AnalysisMetadata,
     AssetMetrics,
     ConcentrationMetrics,
     CorrelationMatrix,
     CorrelationPair,
     DiversificationMetrics,
     MaximumDrawdownMetrics,
+    PortfolioAnalysisResponse,
+    PortfolioMetrics,
+    PortfolioReturnPoint,
     RiskClassification,
+    RiskDriverAnalysis,
     RiskDriverEntry,
 )
 
@@ -779,3 +784,697 @@ def test_correlation_matrix_does_not_mutate_nested_input_lists() -> None:
     assert values[0] is first_row
     assert values[1] is second_row
     assert result.symbols == ["BETA", "ALPHA"]
+
+
+def _second_asset_metrics_data() -> dict[str, object]:
+    data = _asset_metrics_data()
+    data.update(
+        {
+            "symbol": "MSFT",
+            "weight": 0.40,
+            "cumulative_return": 0.08,
+            "annualized_return": 0.12,
+            "annualized_volatility": 0.16,
+            "max_drawdown": -0.10,
+            "sharpe_ratio": 0.75,
+        }
+    )
+    return data
+
+
+def _second_risk_driver_data() -> dict[str, object]:
+    data = _risk_driver_data()
+    data.update(
+        {
+            "rank": 2,
+            "symbol": "MSFT",
+            "weight": 0.40,
+            "annualized_asset_volatility": 0.16,
+            "marginal_volatility_contribution": 0.13,
+            "component_volatility_contribution": 0.052,
+            "percentage_volatility_contribution": 0.325,
+        }
+    )
+    return data
+
+
+def _portfolio_response_data() -> dict[str, object]:
+    return {
+        "start_date": "2026-01-01",
+        "end_date": "2026-01-31",
+        "portfolio_name": "Core Portfolio",
+        "metadata": {
+            "analysis_start": "2026-01-01",
+            "analysis_end": "2026-01-20",
+            "price_observation_count": 3,
+            "return_observation_count": 2,
+            "asset_count": 2,
+        },
+        "portfolio_metrics": {
+            "cumulative_return": 0.10,
+            "annualized_return": 0.15,
+            "annualized_volatility": 0.16,
+            "sharpe_ratio": 0.85,
+        },
+        "max_drawdown": _maximum_drawdown_data(),
+        "concentration": _concentration_data(),
+        "diversification": _diversification_data(),
+        "risk_classification": _risk_classification_data(),
+        "risk_drivers": {
+            "portfolio_volatility": 0.16,
+            "top_driver": "AAPL",
+            "entries": [
+                _risk_driver_data(),
+                _second_risk_driver_data(),
+            ],
+        },
+        "asset_metrics": [
+            _asset_metrics_data(),
+            _second_asset_metrics_data(),
+        ],
+        "correlation_matrix": _correlation_matrix_data(),
+        "correlation_pairs": [_correlation_pair_data()],
+        "portfolio_returns": [
+            {"date": "2026-01-10", "portfolio_return": 0.04},
+            {"date": "2026-01-20", "portfolio_return": 0.06},
+        ],
+    }
+
+
+def _single_asset_response_data() -> dict[str, object]:
+    data = _portfolio_response_data()
+    data["metadata"] = {
+        "analysis_start": "2026-01-01",
+        "analysis_end": "2026-01-20",
+        "price_observation_count": 3,
+        "return_observation_count": 2,
+        "asset_count": 1,
+    }
+    asset = _asset_metrics_data()
+    asset["weight"] = 1.0
+    data["asset_metrics"] = [asset]
+    driver = _risk_driver_data()
+    driver["weight"] = 1.0
+    data["risk_drivers"] = {
+        "portfolio_volatility": 0.16,
+        "top_driver": "AAPL",
+        "entries": [driver],
+    }
+    data["correlation_matrix"] = {
+        "symbols": ["AAPL"],
+        "values": [[1.0]],
+    }
+    data["correlation_pairs"] = []
+    return data
+
+
+def _three_asset_response_data() -> dict[str, object]:
+    data = _portfolio_response_data()
+    symbols = ["AAPL", "MSFT", "BND"]
+    weights = [0.1, 0.2, 0.7]
+
+    asset_metrics: list[dict[str, object]] = []
+    risk_entries: list[dict[str, object]] = []
+    for rank, (symbol, weight) in enumerate(
+        zip(symbols, weights),
+        start=1,
+    ):
+        asset = _asset_metrics_data()
+        asset["symbol"] = symbol
+        asset["weight"] = weight
+        asset_metrics.append(asset)
+
+        driver = _risk_driver_data()
+        driver["rank"] = rank
+        driver["symbol"] = symbol
+        driver["weight"] = weight
+        risk_entries.append(driver)
+
+    data["metadata"] = {
+        "analysis_start": "2026-01-01",
+        "analysis_end": "2026-01-20",
+        "price_observation_count": 3,
+        "return_observation_count": 2,
+        "asset_count": 3,
+    }
+    data["asset_metrics"] = asset_metrics
+    data["risk_drivers"] = {
+        "portfolio_volatility": 0.16,
+        "top_driver": "AAPL",
+        "entries": risk_entries,
+    }
+    data["correlation_matrix"] = {
+        "symbols": symbols,
+        "values": [
+            [1.0, 0.40, 0.10],
+            [0.40, 1.0, -0.10],
+            [0.10, -0.10, 1.0],
+        ],
+    }
+    data["correlation_pairs"] = [
+        {"asset_a": "AAPL", "asset_b": "MSFT", "correlation": 0.40},
+        {"asset_a": "AAPL", "asset_b": "BND", "correlation": 0.10},
+        {"asset_a": "MSFT", "asset_b": "BND", "correlation": -0.10},
+    ]
+    return data
+
+
+def test_analysis_metadata_matches_exact_stable_engine_fields() -> None:
+    data = _portfolio_response_data()["metadata"]
+
+    result = AnalysisMetadata.model_validate(data)
+
+    assert result.model_dump(mode="json") == {
+        "analysis_start": "2026-01-01",
+        "analysis_end": "2026-01-20",
+        "price_observation_count": 3,
+        "return_observation_count": 2,
+        "asset_count": 2,
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("price_observation_count", True),
+        ("return_observation_count", "2"),
+        ("asset_count", 0),
+    ],
+)
+def test_analysis_metadata_rejects_invalid_numeric_fields(
+    field: str,
+    value: object,
+) -> None:
+    data = deepcopy(_portfolio_response_data()["metadata"])
+    assert isinstance(data, dict)
+    data[field] = value
+
+    with pytest.raises(ValidationError):
+        AnalysisMetadata.model_validate(data)
+
+
+def test_analysis_metadata_rejects_inconsistent_observation_counts() -> None:
+    data = deepcopy(_portfolio_response_data()["metadata"])
+    assert isinstance(data, dict)
+    data["return_observation_count"] = 1
+
+    with pytest.raises(
+        ValidationError,
+        match="return_observation_count must equal",
+    ):
+        AnalysisMetadata.model_validate(data)
+
+
+def test_analysis_metadata_rejects_unknown_field() -> None:
+    data = deepcopy(_portfolio_response_data()["metadata"])
+    assert isinstance(data, dict)
+    data["debug"] = True
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        AnalysisMetadata.model_validate(data)
+
+
+def test_portfolio_metrics_matches_exact_engine_scalar_fields() -> None:
+    data = _portfolio_response_data()["portfolio_metrics"]
+
+    result = PortfolioMetrics.model_validate(data)
+
+    assert result.model_dump() == data
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("cumulative_return", True),
+        ("annualized_return", "0.15"),
+        ("annualized_volatility", -0.01),
+        ("sharpe_ratio", float("nan")),
+        ("sharpe_ratio", float("inf")),
+        ("sharpe_ratio", -float("inf")),
+    ],
+)
+def test_portfolio_metrics_rejects_invalid_values(
+    field: str,
+    value: object,
+) -> None:
+    data = deepcopy(_portfolio_response_data()["portfolio_metrics"])
+    assert isinstance(data, dict)
+    data[field] = value
+
+    with pytest.raises(ValidationError):
+        PortfolioMetrics.model_validate(data)
+
+
+def test_portfolio_return_point_is_json_safe() -> None:
+    result = PortfolioReturnPoint(
+        date=date(2026, 1, 10),
+        portfolio_return=0.04,
+    )
+
+    assert result.model_dump(mode="json") == {
+        "date": "2026-01-10",
+        "portfolio_return": 0.04,
+    }
+
+
+@pytest.mark.parametrize(
+    "invalid_value",
+    [True, "0.04", float("nan"), float("inf"), -float("inf")],
+)
+def test_portfolio_return_point_rejects_invalid_value(
+    invalid_value: object,
+) -> None:
+    with pytest.raises(ValidationError):
+        PortfolioReturnPoint(
+            date=date(2026, 1, 10),
+            portfolio_return=invalid_value,
+        )
+
+
+def test_risk_driver_analysis_preserves_public_result_fields() -> None:
+    data = _portfolio_response_data()["risk_drivers"]
+
+    result = RiskDriverAnalysis.model_validate(data)
+
+    assert result.portfolio_volatility == pytest.approx(0.16)
+    assert result.top_driver == "AAPL"
+    assert [entry.symbol for entry in result.entries] == ["AAPL", "MSFT"]
+
+
+def test_risk_driver_analysis_rejects_duplicate_symbols() -> None:
+    data = deepcopy(_portfolio_response_data()["risk_drivers"])
+    assert isinstance(data, dict)
+    entries = data["entries"]
+    assert isinstance(entries, list)
+    entries[1]["symbol"] = " aapl "
+
+    with pytest.raises(
+        ValidationError,
+        match="risk-driver symbols must be unique after normalization",
+    ):
+        RiskDriverAnalysis.model_validate(data)
+
+
+def test_risk_driver_analysis_rejects_mismatched_top_driver() -> None:
+    data = deepcopy(_portfolio_response_data()["risk_drivers"])
+    assert isinstance(data, dict)
+    data["top_driver"] = "MSFT"
+
+    with pytest.raises(
+        ValidationError,
+        match="top_driver must match the first ranked",
+    ):
+        RiskDriverAnalysis.model_validate(data)
+
+
+def test_response_accepts_valid_multi_asset_result() -> None:
+    result = PortfolioAnalysisResponse.model_validate(
+        _portfolio_response_data()
+    )
+
+    assert result.portfolio_name == "Core Portfolio"
+    assert result.metadata.asset_count == 2
+    assert [metric.symbol for metric in result.asset_metrics] == [
+        "AAPL",
+        "MSFT",
+    ]
+    assert [entry.symbol for entry in result.risk_drivers.entries] == [
+        "AAPL",
+        "MSFT",
+    ]
+
+
+def test_response_accepts_single_asset_with_empty_correlation_pairs() -> None:
+    result = PortfolioAnalysisResponse.model_validate(
+        _single_asset_response_data()
+    )
+
+    assert result.metadata.asset_count == 1
+    assert result.correlation_matrix.symbols == ["AAPL"]
+    assert result.correlation_pairs == []
+
+
+def test_response_trims_portfolio_name() -> None:
+    data = _portfolio_response_data()
+    data["portfolio_name"] = "  Core Portfolio \t"
+
+    result = PortfolioAnalysisResponse.model_validate(data)
+
+    assert result.portfolio_name == "Core Portfolio"
+
+
+@pytest.mark.parametrize("portfolio_name", ["", " \t "])
+def test_response_rejects_empty_normalized_portfolio_name(
+    portfolio_name: str,
+) -> None:
+    data = _portfolio_response_data()
+    data["portfolio_name"] = portfolio_name
+
+    with pytest.raises(
+        ValidationError,
+        match="portfolio_name cannot be empty after normalization",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_rejects_non_string_portfolio_name() -> None:
+    data = _portfolio_response_data()
+    data["portfolio_name"] = 123
+
+    with pytest.raises(ValidationError):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_accepts_return_points_on_inclusive_boundaries() -> None:
+    data = _portfolio_response_data()
+    data["start_date"] = "2026-01-10"
+    data["end_date"] = "2026-01-20"
+
+    result = PortfolioAnalysisResponse.model_validate(data)
+
+    assert result.portfolio_returns[0].date == result.start_date
+    assert result.portfolio_returns[-1].date == result.end_date
+
+
+def test_response_accepts_equal_period_dates_when_dated_values_match() -> None:
+    data = _single_asset_response_data()
+    data["start_date"] = "2026-01-10"
+    data["end_date"] = "2026-01-10"
+    data["metadata"] = {
+        "analysis_start": "2026-01-10",
+        "analysis_end": "2026-01-10",
+        "price_observation_count": 2,
+        "return_observation_count": 1,
+        "asset_count": 1,
+    }
+    data["max_drawdown"] = {
+        "max_drawdown": 0.0,
+        "peak_date": None,
+        "trough_date": None,
+    }
+    data["portfolio_returns"] = [
+        {"date": "2026-01-10", "portfolio_return": 0.04}
+    ]
+
+    result = PortfolioAnalysisResponse.model_validate(data)
+
+    assert result.start_date == result.end_date
+    assert result.portfolio_returns[0].date == result.start_date
+
+
+def test_response_rejects_reversed_period_through_analysis_period() -> None:
+    data = _portfolio_response_data()
+    data["start_date"] = "2026-02-01"
+    data["end_date"] = "2026-01-31"
+
+    with pytest.raises(
+        ValidationError,
+        match="start_date must be on or before end_date",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_rejects_unknown_top_level_field() -> None:
+    data = _portfolio_response_data()
+    data["report_id"] = 42
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_rejects_unknown_nested_field() -> None:
+    data = _portfolio_response_data()
+    metrics = data["portfolio_metrics"]
+    assert isinstance(metrics, dict)
+    metrics["debug"] = True
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_model_dump_is_json_safe_without_non_finite_values() -> None:
+    result = PortfolioAnalysisResponse.model_validate(
+        _portfolio_response_data()
+    )
+    dumped = result.model_dump(mode="json")
+
+    serialized = json.dumps(dumped, allow_nan=False)
+
+    assert '"start_date": "2026-01-01"' in serialized
+    assert "NaN" not in serialized
+    assert "Infinity" not in serialized
+
+
+def test_response_rejects_duplicate_portfolio_return_dates() -> None:
+    data = _portfolio_response_data()
+    data["portfolio_returns"] = [
+        {"date": "2026-01-10", "portfolio_return": 0.04},
+        {"date": "2026-01-10", "portfolio_return": 0.06},
+    ]
+
+    with pytest.raises(
+        ValidationError,
+        match="portfolio return dates must be unique",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_rejects_descending_portfolio_return_dates() -> None:
+    data = _portfolio_response_data()
+    data["portfolio_returns"] = [
+        {"date": "2026-01-20", "portfolio_return": 0.06},
+        {"date": "2026-01-10", "portfolio_return": 0.04},
+    ]
+
+    with pytest.raises(
+        ValidationError,
+        match="portfolio return dates must be strictly increasing",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+@pytest.mark.parametrize("point_date", ["2025-12-31", "2026-02-01"])
+def test_response_rejects_portfolio_return_outside_period(
+    point_date: str,
+) -> None:
+    data = _portfolio_response_data()
+    returns = data["portfolio_returns"]
+    assert isinstance(returns, list)
+    returns[0]["date"] = point_date
+    if point_date == "2026-02-01":
+        returns.reverse()
+
+    with pytest.raises(
+        ValidationError,
+        match="portfolio return dates must fall within",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_accepts_non_consecutive_portfolio_return_dates() -> None:
+    data = _portfolio_response_data()
+    data["portfolio_returns"] = [
+        {"date": "2026-01-02", "portfolio_return": 0.04},
+        {"date": "2026-01-30", "portfolio_return": 0.06},
+    ]
+
+    result = PortfolioAnalysisResponse.model_validate(data)
+
+    assert [point.date for point in result.portfolio_returns] == [
+        date(2026, 1, 2),
+        date(2026, 1, 30),
+    ]
+
+
+def test_response_preserves_portfolio_return_order() -> None:
+    result = PortfolioAnalysisResponse.model_validate(
+        _portfolio_response_data()
+    )
+
+    assert [point.portfolio_return for point in result.portfolio_returns] == [
+        0.04,
+        0.06,
+    ]
+
+
+def test_response_rejects_duplicate_asset_metric_symbols() -> None:
+    data = _portfolio_response_data()
+    metrics = data["asset_metrics"]
+    assert isinstance(metrics, list)
+    metrics[1]["symbol"] = " aapl "
+
+    with pytest.raises(
+        ValidationError,
+        match="asset-metric symbols must be unique after normalization",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_rejects_mismatched_asset_and_matrix_symbols() -> None:
+    data = _portfolio_response_data()
+    metrics = data["asset_metrics"]
+    assert isinstance(metrics, list)
+    metrics[1]["symbol"] = "BND"
+
+    with pytest.raises(
+        ValidationError,
+        match="asset-metric symbols must match correlation matrix symbols",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_rejects_mismatched_driver_and_matrix_symbols() -> None:
+    data = _portfolio_response_data()
+    drivers = data["risk_drivers"]
+    assert isinstance(drivers, dict)
+    entries = drivers["entries"]
+    assert isinstance(entries, list)
+    entries[1]["symbol"] = "BND"
+
+    with pytest.raises(
+        ValidationError,
+        match="risk-driver symbols must match correlation matrix symbols",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    "weights",
+    [(0.50, 0.49), (0.50, 0.51)],
+)
+def test_response_rejects_invalid_asset_weight_total(
+    weights: tuple[float, float],
+) -> None:
+    data = _portfolio_response_data()
+    metrics = data["asset_metrics"]
+    assert isinstance(metrics, list)
+    metrics[0]["weight"] = weights[0]
+    metrics[1]["weight"] = weights[1]
+
+    with pytest.raises(
+        ValidationError,
+        match="asset-metric weights must sum to 1.0",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_accepts_floating_point_safe_asset_weight_total() -> None:
+    result = PortfolioAnalysisResponse.model_validate(
+        _three_asset_response_data()
+    )
+
+    assert [metric.weight for metric in result.asset_metrics] == [
+        0.1,
+        0.2,
+        0.7,
+    ]
+
+
+def test_response_rejects_correlation_pair_with_unknown_symbol() -> None:
+    data = _portfolio_response_data()
+    pairs = data["correlation_pairs"]
+    assert isinstance(pairs, list)
+    pairs[0]["asset_b"] = "BND"
+
+    with pytest.raises(
+        ValidationError,
+        match="correlation pair symbols must belong",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_rejects_duplicate_unordered_correlation_pair() -> None:
+    data = _portfolio_response_data()
+    pairs = data["correlation_pairs"]
+    assert isinstance(pairs, list)
+    pairs.append(
+        {
+            "asset_a": "MSFT",
+            "asset_b": "AAPL",
+            "correlation": 0.40,
+        }
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="duplicate unordered correlation pairs",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_preserves_correlation_pair_internal_and_list_order() -> None:
+    data = _three_asset_response_data()
+    pairs = data["correlation_pairs"]
+    assert isinstance(pairs, list)
+    pairs.reverse()
+
+    result = PortfolioAnalysisResponse.model_validate(data)
+
+    assert [
+        (pair.asset_a, pair.asset_b)
+        for pair in result.correlation_pairs
+    ] == [
+        ("MSFT", "BND"),
+        ("AAPL", "BND"),
+        ("AAPL", "MSFT"),
+    ]
+
+
+def test_response_preserves_risk_driver_order() -> None:
+    data = _portfolio_response_data()
+    drivers = data["risk_drivers"]
+    assert isinstance(drivers, dict)
+    entries = drivers["entries"]
+    assert isinstance(entries, list)
+    entries.reverse()
+    drivers["top_driver"] = "MSFT"
+
+    result = PortfolioAnalysisResponse.model_validate(data)
+
+    assert [entry.symbol for entry in result.risk_drivers.entries] == [
+        "MSFT",
+        "AAPL",
+    ]
+
+
+def test_response_preserves_asset_metric_order() -> None:
+    data = _portfolio_response_data()
+    metrics = data["asset_metrics"]
+    assert isinstance(metrics, list)
+    metrics.reverse()
+
+    result = PortfolioAnalysisResponse.model_validate(data)
+
+    assert [metric.symbol for metric in result.asset_metrics] == [
+        "MSFT",
+        "AAPL",
+    ]
+
+
+def test_response_does_not_mutate_complete_caller_input() -> None:
+    data = _portfolio_response_data()
+    metadata = data["metadata"]
+    returns = data["portfolio_returns"]
+    drivers = data["risk_drivers"]
+    assets = data["asset_metrics"]
+    pairs = data["correlation_pairs"]
+    matrix = data["correlation_matrix"]
+    assert isinstance(drivers, dict)
+    driver_entries = drivers["entries"]
+    assert isinstance(matrix, dict)
+    matrix_symbols = matrix["symbols"]
+    matrix_values = matrix["values"]
+    original = deepcopy(data)
+
+    PortfolioAnalysisResponse.model_validate(data)
+
+    assert data == original
+    assert data["metadata"] is metadata
+    assert data["portfolio_returns"] is returns
+    assert data["risk_drivers"] is drivers
+    assert drivers["entries"] is driver_entries
+    assert data["asset_metrics"] is assets
+    assert data["correlation_pairs"] is pairs
+    assert data["correlation_matrix"] is matrix
+    assert matrix["symbols"] is matrix_symbols
+    assert matrix["values"] is matrix_values
