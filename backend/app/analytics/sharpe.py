@@ -6,18 +6,7 @@ from numbers import Integral, Real
 import numpy as np
 import pandas as pd
 
-
-def _validate_datetime_index(index: pd.Index) -> None:
-    if not isinstance(index, pd.DatetimeIndex):
-        raise TypeError("returns index must be a pandas DatetimeIndex")
-    if index.hasnans:
-        raise ValueError("returns index cannot contain NaT")
-    if index.tz is not None:
-        raise ValueError("returns index must be timezone-naive")
-    if index.has_duplicates:
-        raise ValueError("returns index cannot contain duplicate timestamps")
-    if not index.is_monotonic_increasing:
-        raise ValueError("returns index must be strictly increasing")
+from ._validation import _validate_datetime_index
 
 
 def _validated_returns(returns: pd.Series) -> np.ndarray:
@@ -26,7 +15,7 @@ def _validated_returns(returns: pd.Series) -> np.ndarray:
     if len(returns) < 2:
         raise ValueError("returns must contain at least two observations")
 
-    _validate_datetime_index(returns.index)
+    _validate_datetime_index(returns.index, "returns")
 
     validated_values: list[float] = []
     for value in np.asarray(returns, dtype=object).flat:
