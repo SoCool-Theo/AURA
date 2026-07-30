@@ -11,6 +11,7 @@ import pandas as pd
 from ._validation import (
     _validate_datetime_index,
     _validate_positive_integer,
+    _validated_finite_real_values,
 )
 
 
@@ -72,20 +73,10 @@ def _validated_asset_return_values(
 
     validated: list[float] = []
     for value in np.asarray(asset_returns.to_numpy(), dtype=object).flat:
-        if isinstance(value, (bool, np.bool_)):
-            raise TypeError("asset_returns values cannot be Boolean")
-        if isinstance(value, (complex, np.complexfloating)):
-            raise TypeError("asset_returns values cannot be complex")
-        if pd.isna(value):
-            raise ValueError("asset_returns values cannot be missing")
-        if not isinstance(value, Real):
-            raise TypeError(
-                "asset_returns values must be real numeric values"
-            )
-
-        numeric_value = float(value)
-        if not math.isfinite(numeric_value):
-            raise ValueError("asset_returns values must be finite")
+        numeric_value = _validated_finite_real_values(
+            value,
+            "asset_returns",
+        ).item()
         if numeric_value <= -1.0:
             raise ValueError(
                 "asset_returns values must be greater than -1.0"
@@ -191,25 +182,10 @@ def _validated_contribution_values(
 
     _validate_symbols(contributions.index, "contributions")
 
-    validated: list[float] = []
-    for value in np.asarray(contributions.to_numpy(), dtype=object).flat:
-        if isinstance(value, (bool, np.bool_)):
-            raise TypeError("contribution values cannot be Boolean")
-        if isinstance(value, (complex, np.complexfloating)):
-            raise TypeError("contribution values cannot be complex")
-        if pd.isna(value):
-            raise ValueError("contribution values cannot be missing")
-        if not isinstance(value, Real):
-            raise TypeError(
-                "contribution values must be real numeric values"
-            )
-
-        numeric_value = float(value)
-        if not math.isfinite(numeric_value):
-            raise ValueError("contribution values must be finite")
-        validated.append(numeric_value)
-
-    values = np.asarray(validated, dtype=float).reshape(contributions.shape)
+    values = _validated_finite_real_values(
+        contributions.to_numpy(),
+        "contribution",
+    )
     column_positions = {
         column: contributions.columns.get_loc(column)
         for column in _CONTRIBUTION_COLUMNS

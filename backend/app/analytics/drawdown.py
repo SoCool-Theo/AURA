@@ -1,11 +1,12 @@
-import math
 from dataclasses import dataclass
-from numbers import Real
 
 import numpy as np
 import pandas as pd
 
-from ._validation import _validate_datetime_index
+from ._validation import (
+    _validate_datetime_index,
+    _validated_finite_real_values,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,20 +28,10 @@ def _validated_portfolio_returns(portfolio_returns: pd.Series) -> np.ndarray:
     validated: list[float] = []
 
     for value in np.asarray(portfolio_returns.to_numpy(), dtype=object).flat:
-        if isinstance(value, (bool, np.bool_)):
-            raise TypeError("portfolio_returns values cannot be Boolean")
-        if isinstance(value, (complex, np.complexfloating)):
-            raise TypeError("portfolio_returns values cannot be complex")
-        if pd.isna(value):
-            raise ValueError("portfolio_returns values cannot be missing")
-        if not isinstance(value, Real):
-            raise TypeError(
-                "portfolio_returns values must be real numeric values"
-            )
-
-        numeric_value = float(value)
-        if not math.isfinite(numeric_value):
-            raise ValueError("portfolio_returns values must be finite")
+        numeric_value = _validated_finite_real_values(
+            value,
+            "portfolio_returns",
+        ).item()
         if numeric_value <= -1.0:
             raise ValueError(
                 "portfolio_returns values must be greater than -1.0"

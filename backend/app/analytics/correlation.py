@@ -6,7 +6,10 @@ from numbers import Real
 import numpy as np
 import pandas as pd
 
-from ._validation import _validate_datetime_index
+from ._validation import (
+    _validate_datetime_index,
+    _validated_finite_real_values,
+)
 
 
 _CORRELATION_TOLERANCE = 1e-12
@@ -45,20 +48,10 @@ def _validated_asset_return_values(asset_returns: pd.DataFrame) -> np.ndarray:
 
     validated: list[float] = []
     for value in np.asarray(asset_returns.to_numpy(), dtype=object).flat:
-        if isinstance(value, (bool, np.bool_)):
-            raise TypeError("asset_returns values cannot be Boolean")
-        if isinstance(value, (complex, np.complexfloating)):
-            raise TypeError("asset_returns values cannot be complex")
-        if pd.isna(value):
-            raise ValueError("asset_returns values cannot be missing")
-        if not isinstance(value, Real):
-            raise TypeError(
-                "asset_returns values must be real numeric values"
-            )
-
-        numeric_value = float(value)
-        if not math.isfinite(numeric_value):
-            raise ValueError("asset_returns values must be finite")
+        numeric_value = _validated_finite_real_values(
+            value,
+            "asset_returns",
+        ).item()
         if numeric_value <= -1.0:
             raise ValueError(
                 "asset_returns values must be greater than -1.0"

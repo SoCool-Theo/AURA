@@ -8,6 +8,7 @@ import pandas as pd
 from ._validation import (
     _validate_datetime_index,
     _validate_positive_integer,
+    _validated_finite_real_values,
 )
 
 
@@ -34,18 +35,10 @@ def _validated_real_values(
     validated: list[float] = []
 
     for value in np.asarray(values, dtype=object).flat:
-        if isinstance(value, (bool, np.bool_)):
-            raise TypeError(f"{input_name} values cannot be Boolean")
-        if isinstance(value, (complex, np.complexfloating)):
-            raise TypeError(f"{input_name} values cannot be complex")
-        if pd.isna(value):
-            raise ValueError(f"{input_name} values cannot be missing")
-        if not isinstance(value, Real):
-            raise TypeError(f"{input_name} values must be real numeric values")
-
-        numeric_value = float(value)
-        if not math.isfinite(numeric_value):
-            raise ValueError(f"{input_name} values must be finite")
+        numeric_value = _validated_finite_real_values(
+            value,
+            input_name,
+        ).item()
         if require_positive and numeric_value <= 0.0:
             raise ValueError(f"{input_name} values must be strictly greater than zero")
         validated.append(numeric_value)
