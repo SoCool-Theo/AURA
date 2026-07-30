@@ -1,95 +1,161 @@
 # Aura Backend Parallel Parent Branches
 
-The FastAPI foundation and `feat/backend-analytics-core` workstreams are completed and merged into `develop`.
+**Project:** Aura — AI-Powered Portfolio Risk Intelligence  
+**Integration branch:** `develop`  
+**Release branch:** `main`
 
-The remaining backend work should continue through independent feature branches created from the latest `develop`.
+---
+
+## Purpose of This Document
+
+This document tracks Aura's major backend workstreams, their ownership boundaries,
+their current status, and the dependencies between parent branches and later
+integration branches.
+
+The backend should continue through focused branches created from the latest
+`develop`.
 
 Each branch should:
 
 - Be created directly from the latest `develop`
-- Own a clearly separated part of the backend
+- Own a clearly separated backend responsibility
 - Avoid depending on unfinished work from another branch
-- Be reviewed and merged through a Pull Request **into `develop`**
-- Avoid unnecessary changes to shared files such as `main.py`, `api/router.py`, and `CURRENT_STATUS.md`
+- Be reviewed and merged through a Pull Request into `develop`
+- Avoid unnecessary changes to shared integration files
+- Preserve the public contracts of completed components unless a change is
+  explicitly approved
 
-Branch flow for every parent branch:
+Standard feature-branch flow:
 
 ```text
 develop
-   ↓ create
+   ↓ create branch
 feat/backend-...
    ↓ Pull Request
 develop
 ```
 
-Feature branches are never created directly from main. `main` never receives a PR from a `feat/*` branch — only `develop` gets promoted to `main` later, as a release.
+Supporting cleanup branches may use prefixes such as:
+
+```text
+refactor/...
+docs/...
+test/...
+chore/...
+```
+
+Feature branches should not be opened directly against `main`.
+
+The normal release flow is:
+
+```text
+feature/refactor/docs branch
+              ↓
+           develop
+              ↓
+       release Pull Request
+              ↓
+            main
+```
 
 ---
 
-## Backend Parent Workstream Status
+# Current Backend Workstream Status
 
-| Branch | Status | Main Responsibility | Primary Files |
+| Branch | Type | Status | Main Responsibility |
 |---|---|---|---|
-| `feat/backend-analytics-core` | Completed | Pure portfolio-risk calculations | `app/analytics/`, `tests/unit/analytics/` |
-| `feat/backend-market-data-pipeline` | In progress | Fetch, clean, validate, and normalize market data | `app/data_pipeline/`, `tests/unit/data_pipeline/` |
-| `feat/backend-database-foundation` | Planned | PostgreSQL connection, models, migrations, and repositories | `app/database/`, database integration tests |
-| `feat/backend-schemas-contracts` | Planned | Pydantic schemas and API data contracts | `app/schemas/`, `docs/api_contracts/`, `examples/` |
-| `feat/backend-quality-ci` | Optional | Testing and code-quality automation | GitHub Actions, pytest, linting, type checking |
+| `feat/fastapi-foundation` | Foundation | Completed | FastAPI application foundation and health endpoint |
+| `feat/backend-analytics-core` | Parent feature | Completed | Deterministic portfolio-risk analytics engine |
+| `refactor/analytics-validation` | Supporting refactor | Completed | Shared private validation for analytics modules |
+| `feat/backend-schemas-contracts` | Parent feature | Next planned | Pydantic schemas and stable backend data contracts |
+| `feat/backend-market-data-pipeline` | Parent feature | Planned / parallel | Fetch, clean, validate, and normalize market data |
+| `feat/backend-database-foundation` | Parent feature | Planned / parallel | PostgreSQL connection, models, migrations, and repositories |
+| `feat/backend-quality-ci` | Optional support | Optional | Automated testing and code-quality checks |
+
+> Update the status of the market-data and database workstreams when their
+> assigned contributors confirm progress.
 
 ---
 
-# 1. `feat/backend-analytics-core` — Completed
+# Completed Foundation Work
 
-## Completion Status
+## `feat/fastapi-foundation`
 
 **Status:** Completed and merged into `develop`
 
-The branch produced a deterministic portfolio analytics engine with:
+### Purpose
 
-- Return calculations
+Establish a stable FastAPI backend foundation before feature-specific backend
+development begins.
+
+### Completed Work
+
+- FastAPI application foundation
+- Initial application structure
+- Health endpoint
+- Initial integration test
+- Backend test setup
+
+### Boundary
+
+The foundation branch provides application startup and basic API health
+verification. It does not own portfolio analytics, database models, market-data
+processing, schemas, simulations, or the AI agent.
+
+---
+
+# Completed Parent Workstream
+
+## 1. `feat/backend-analytics-core`
+
+**Status:** Completed and merged into `develop`
+
+### Purpose
+
+Provide deterministic portfolio-risk calculations using prepared Pandas price
+data and portfolio weights.
+
+The analytics layer is a pure calculation layer. It does not fetch market data,
+access PostgreSQL, create API routes, or call the AI agent.
+
+### Calculations Implemented
+
+- Asset returns
+- Portfolio returns
+- Cumulative return
+- Annualized return
 - Annualized volatility
 - Maximum drawdown
+- Maximum-drawdown peak and trough dates
 - Sharpe ratio
-- Correlation analysis
-- Concentration analysis
-- Diversification scoring
-- Risk-driver analysis
+- Asset correlation matrix
+- Unique asset-correlation pairs
+- Portfolio concentration
+- Herfindahl-Hirschman Index
+- Effective number of assets
+- Diversification score and level
+- Covariance-based risk contributions
+- Risk-driver ranking
+- Overall portfolio risk score
 - Overall risk classification
 - Individual asset metrics
-- Analytics-engine coordination
-- Public analytics exports
-- A deterministic manual engine-check script
 
-Final verification:
+### Analytics Engine
 
-- 704 analytics tests passed
-- 705 full backend tests passed
-- No failed tests
-- No branch-boundary violations
+- Added `analyze_portfolio(...)`
+- Added `PortfolioAnalyticsResult`
+- Added stable public analytics imports
+- Added deterministic manual engine verification:
 
-## Purpose
+```bash
+python -m backend.scripts.run_engine_check
+```
 
-Build the portfolio-risk calculation engine without connecting it to FastAPI, PostgreSQL, or external market-data APIs.
-
-## Work Included
-
-- Portfolio return calculation
-- Annualized return
-- Volatility
-- Maximum drawdown
-- Sharpe ratio
-- Asset correlation
-- Concentration analysis
-- Diversification score
-- Risk-driver identification
-- Risk classification
-- Analytics engine coordinator
-- Unit tests with fixed sample data
-
-## Main Files
+### Main Files
 
 ```text
 backend/app/analytics/
+├── __init__.py
 ├── returns.py
 ├── volatility.py
 ├── drawdown.py
@@ -102,163 +168,146 @@ backend/app/analytics/
 └── engine.py
 
 backend/tests/unit/analytics/
+backend/scripts/run_engine_check.py
 ```
 
-## Branch Boundary
+### Final Analytics-Core Verification
 
-This branch should accept prepared data such as a Pandas DataFrame and portfolio weights.
+- Analytics tests: 704 passed
+- Full backend tests: 705 passed
+- Failed tests: 0
+- Manual engine check: passed
+- Dependency check: passed
+- Python compilation check: passed
+- Git whitespace check: passed
 
-It should not:
+### Branch Boundary
 
-- Download market data
-- Read from PostgreSQL
-- Create FastAPI routes
-- Call the AI agent
+The analytics core:
+
+- Accepts prepared market data and portfolio weights
+- Produces deterministic calculation results
+- Does not fetch market data
+- Does not read from or write to PostgreSQL
+- Does not create FastAPI routes
+- Does not run historical-scenario workflows
+- Does not call the AI agent
+- Does not provide buy/sell recommendations
 
 ---
 
-# 2. `feat/backend-market-data-pipeline`
+# Completed Supporting Refactor
 
-## Purpose
+## `refactor/analytics-validation`
 
-Develop the market-data collection and cleaning process.
+**Status:** Completed and merged into `develop`
 
-## Work Included
+### Purpose
 
-- Market-data provider interface
-- Initial financial-data provider
-- Historical-price fetching
-- Date validation
-- Symbol validation
-- Missing-value handling
-- Duplicate removal
-- Column normalization
-- Data-quality validation
-- Processed DataFrame or CSV output
-- Unit tests with mocked provider responses
+Consolidate repeated private input-validation logic in the analytics package
+without changing public behavior or analytics formulas.
 
-## Main Files
+### Shared Private Helpers Added
 
-```text
-backend/app/data_pipeline/
-├── providers/
-│   └── market_provider.py
-├── fetcher.py
-├── cleaner.py
-├── validator.py
-└── updater.py
+- Datetime-index validation
+- Positive-integer validation
+- Finite real-value validation and normalization
+- Portfolio weight-mapping validation
 
-backend/tests/unit/data_pipeline/
-```
+### Modules Migrated
 
-## Suggested Output Structure
+- `returns.py`
+- `volatility.py`
+- `drawdown.py`
+- `sharpe.py`
+- `correlation.py`
+- `concentration.py`
+- `diversification.py`
+- `risk_driver.py`
 
-```text
-date
-symbol
-adjusted_close
-volume
-source
-```
+### Validation Boundaries Preserved
 
-## Branch Boundary
+Specialized validation remains local where behavior intentionally differs:
 
-This branch should produce clean market data, but it should not store it in PostgreSQL yet.
+- Sharpe zero-volatility handling
+- Return lower-bound rules
+- Portfolio-weight alignment
+- Correlation-matrix `NaN` behavior
+- Diversification coverage rules
+- Risk-classification thresholds
+- Drawdown calculation conventions
+- Analytics-engine consistency checks
 
-It should not:
+### Compatibility Preserved
 
-- Calculate portfolio risk
-- Use database repositories
-- Create portfolio API routes
-- Run historical simulations
+The refactor did not change:
 
----
+- Public analytics APIs
+- Public function signatures
+- Analytics formulas
+- Result dataclasses
+- Returned structures
+- Exception behavior
+- Validation order
+- Input non-mutation behavior
+- Correlation undefined-value behavior
+- Risk-driver ranking behavior
 
-# 3. `feat/backend-database-foundation`
+### Final Refactor Verification
 
-## Purpose
+- Shared validation tests: 116 passed
+- Analytics tests: 820 passed
+- Full backend tests: 821 passed
+- Failed tests: 0
+- Manual engine check: passed
+- Dependency check: passed
+- Public analytics import check: passed
+- Python compilation check: passed
+- Git whitespace check: passed
 
-Prepare the PostgreSQL storage system independently from the data pipeline and analytics engine.
+### Refactor Boundary
 
-## Work Included
-
-- Database configuration
-- SQLAlchemy connection
-- Database session management
-- PostgreSQL health check
-- Alembic migration setup
-- Base database model
-- Initial database tables
-- Repository methods
-- Database integration tests
-
-## Initial Models
-
-```text
-User
-Portfolio
-Holding
-MarketData
-Analysis
-```
-
-The AI conversation model can be added later during the AI-agent stage.
-
-## Main Files
-
-```text
-backend/app/database/
-├── connection.py
-├── models/
-│   ├── user.py
-│   ├── portfolio.py
-│   ├── holding.py
-│   ├── market_data.py
-│   └── analysis.py
-└── repositories/
-    ├── market_data_repository.py
-    ├── portfolio_repository.py
-    └── analysis_repository.py
-
-backend/tests/integration/database/
-```
-
-## Branch Boundary
-
-This branch should use generated test records for database testing.
-
-It should not:
-
-- Fetch live market data
-- Calculate analytics
-- Build portfolio routes
-- Build the AI agent
+This supporting branch did not add a new product feature. It improved internal
+maintainability while preserving the completed analytics-core contract.
 
 ---
 
-# 4. `feat/backend-schemas-contracts`
+# Remaining Independent Parent Workstreams
 
-## Purpose
+## 2. `feat/backend-schemas-contracts`
 
-Define the shared data formats used later by the frontend, API, analytics, and database integrations.
+**Status:** Next planned
 
-## Work Included
+### Purpose
 
-- Portfolio request schema
-- Holding schema
-- Market-data schema
-- Analytics-result schema
-- Simulation request schema
-- Simulation response schema
+Define stable Pydantic request and response structures shared by later API,
+service, database, analytics, simulation, and frontend integration work.
+
+This branch creates data contracts. It does not implement business workflows.
+
+### Planned Work
+
+- Common schema conventions
+- Portfolio request and response schemas
+- Holding input and output schemas
+- Analysis-period schemas
+- Market-data schemas
+- Analytics result schemas
+- Risk-driver schemas
+- Individual asset-metric schemas
+- Correlation and diversification schemas
+- Historical-simulation request and response schemas
 - Validation rules
 - Example request JSON
 - Example response JSON
 - API contract documentation
+- Direct schema tests
 
-## Main Files
+### Main Files
 
 ```text
 backend/app/schemas/
+├── __init__.py
 ├── portfolio.py
 ├── analytics.py
 ├── market_data.py
@@ -270,13 +319,27 @@ backend/examples/
 └── simulation_response.json
 
 docs/api_contracts/
+backend/tests/unit/schemas/
 ```
 
-## Example Portfolio Request
+### Contract Goals
+
+Schemas should:
+
+- Use clear field names
+- Define required and optional fields explicitly
+- Produce frontend-friendly JSON
+- Remain independent from SQLAlchemy models
+- Avoid exposing Pandas or NumPy objects directly
+- Match the completed analytics output structure where appropriate
+- Support later service and API integration
+- Reject invalid requests before business logic runs
+
+### Example Portfolio Analysis Request
 
 ```json
 {
-  "name": "Technology Portfolio",
+  "portfolio_name": "Technology Portfolio",
   "holdings": [
     {
       "symbol": "AAPL",
@@ -292,115 +355,338 @@ docs/api_contracts/
 }
 ```
 
-## Branch Boundary
+The exact contract must be finalized during the schemas branch. This example is
+illustrative and should not be treated as approved API behavior before that
+branch is completed.
 
-This branch defines input and output formats only.
+### Branch Boundary
 
-It should not implement:
+This branch should define and test data formats only.
 
-- Database operations
-- Analytics formulas
-- Market-data downloading
-- API route business logic
+It should not:
+
+- Create FastAPI route business logic
+- Query PostgreSQL
+- Define SQLAlchemy models
+- Fetch market data
+- Reimplement analytics formulas
+- Run historical-simulation calculations
+- Call the AI agent
+- Add investment recommendations
 
 ---
 
-# 5. Optional: `feat/backend-quality-ci`
+## 3. `feat/backend-market-data-pipeline`
 
-## Purpose
+**Status:** Planned / parallel workstream
 
-Set up automated testing and code-quality checks without changing feature logic.
+### Purpose
 
-## Work Included
+Fetch, clean, validate, and normalize historical market data for use by the
+analytics engine and later historical simulations.
+
+### Planned Work
+
+- Market-data provider interface
+- Initial financial-data provider
+- Historical-price fetching
+- Symbol validation
+- Date-range validation
+- Provider-response validation
+- Missing-value handling
+- Duplicate removal
+- Column normalization
+- Data-quality checks
+- Processed Pandas output
+- Unit tests with mocked provider responses
+- Manual data-pipeline check where useful
+
+### Main Files
+
+```text
+backend/app/data_pipeline/
+├── __init__.py
+├── providers/
+│   ├── __init__.py
+│   └── market_provider.py
+├── fetcher.py
+├── cleaner.py
+├── validator.py
+└── updater.py
+
+backend/tests/unit/data_pipeline/
+```
+
+### Suggested Normalized Data Shape
+
+```text
+date
+symbol
+adjusted_close
+volume
+source
+```
+
+The actual internal shape should be finalized by the pipeline implementation
+and coordinated with the schemas and database branches.
+
+### Branch Boundary
+
+This branch should produce validated market data.
+
+It should not:
+
+- Calculate portfolio risk
+- Store production records in PostgreSQL
+- Create portfolio API routes
+- Run complete historical simulations
+- Call the AI agent
+
+Database persistence should be handled later by a storage integration branch.
+
+---
+
+## 4. `feat/backend-database-foundation`
+
+**Status:** Planned / parallel workstream
+
+### Purpose
+
+Prepare PostgreSQL storage independently from the data-pipeline and analytics
+implementations.
+
+### Planned Work
+
+- Database configuration
+- SQLAlchemy connection
+- Session management
+- PostgreSQL health check
+- Alembic migration setup
+- Base model
+- Initial database tables
+- Repository interfaces and methods
+- Database integration tests
+
+### Initial Models
+
+```text
+User
+Portfolio
+Holding
+MarketData
+Analysis
+```
+
+Simulation-history and AI-conversation models can be added when their feature
+requirements become stable.
+
+### Main Files
+
+```text
+backend/app/database/
+├── __init__.py
+├── connection.py
+├── models/
+│   ├── __init__.py
+│   ├── user.py
+│   ├── portfolio.py
+│   ├── holding.py
+│   ├── market_data.py
+│   └── analysis.py
+└── repositories/
+    ├── __init__.py
+    ├── market_data_repository.py
+    ├── portfolio_repository.py
+    └── analysis_repository.py
+
+backend/tests/integration/database/
+```
+
+### Branch Boundary
+
+This branch should use generated test records and isolated database tests.
+
+It should not:
+
+- Fetch live market data
+- Calculate portfolio analytics
+- Build portfolio API routes
+- Run historical simulations
+- Build the AI agent
+
+---
+
+## 5. Optional: `feat/backend-quality-ci`
+
+**Status:** Optional
+
+### Purpose
+
+Add automated testing and code-quality checks without changing product behavior.
+
+### Possible Work
 
 - GitHub Actions test workflow
 - Automatic `pytest`
 - Ruff or another Python linter
 - Type checking
-- Test coverage configuration
+- Coverage configuration
 - Pull-request checks
+- Dependency verification
 
-This branch is useful, but the first four branches have higher project value.
-
----
-
-# Branches That Should Not Start Yet
-
-These are child or integration branches because they depend on one or more parent branches. They will also be created from `develop`, once their dependencies have merged into `develop`.
-
-## Integration Branch Readiness
-
-| Later Branch | Dependencies | Current Readiness |
-|---|---|---|
-| `feat/backend-analysis-service` | Analytics + database + schemas | Analytics ready; waiting for database and schemas |
-| `feat/backend-portfolio-api` | Schemas + database + analytics | Analytics ready; waiting for database and schemas |
-| `feat/backend-historical-simulator` | Analytics + historical data + schemas | Analytics ready; waiting for historical data and schemas |
-| `feat/backend-risk-reporting` | Analytics + database + schemas | Analytics ready; waiting for database and schemas |
-| `feat/backend-ai-agent` | Stable analytics + reports + database | Analytics ready; reports and database still required |
-| `feat/backend-api-integration` | Routes + services + schemas + database | Not ready yet |
-| `feat/backend-market-data-storage` | Data pipeline + database | Waiting on data pipeline and database |
-| `feat/backend-market-data-scheduler` | Data pipeline + database | Waiting on data pipeline and database |
-| `feat/backend-deployment` | Completed backend integration | Not ready yet |
-
-The historical simulator should wait until core analytics and historical market data are stable.
-
-The AI agent should wait until the system produces reliable analytics results and reports.
+This branch is useful, but schemas, data, database, services, and integration
+work have higher immediate product priority.
 
 ---
 
-## Recommended Current Parallel Work
+# Later Integration and Feature Branches
+
+These branches should begin only after their required parent components are
+stable in `develop`.
+
+## Readiness Table
+
+| Later Branch | Main Responsibility | Dependencies | Current Readiness |
+|---|---|---|---|
+| `feat/backend-analysis-service` | Coordinate validated input, market data, and analytics | Analytics + schemas + data access | Waiting for schemas and data access |
+| `feat/backend-portfolio-api` | Portfolio and holding CRUD endpoints | Schemas + database | Waiting for schemas and database |
+| `feat/backend-market-data-storage` | Save and retrieve processed historical data | Data pipeline + database | Waiting for pipeline and database |
+| `feat/backend-historical-scenario-simulator` | Test the current portfolio during a selected past event | Analytics + historical data + simulation schemas | Waiting for data and schemas |
+| `feat/backend-allocation-simulator` | Compare original and modified allocations over the same period | Analytics + historical data + simulation schemas | Waiting for data and schemas |
+| `feat/backend-combined-simulator` | Compare original and modified allocations during one event | Historical scenario + allocation simulator | Not ready |
+| `feat/backend-analysis-reporting` | Save and retrieve analysis reports | Analytics + schemas + database | Waiting for schemas and database |
+| `feat/backend-simulation-history` | Save and retrieve simulation results | Simulators + schemas + database | Not ready |
+| `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Not ready |
+| `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports + schemas + database | Not ready |
+| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready |
+| `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
+
+---
+
+# Recommended Simulation Order
+
+Aura's Historical What-If Simulator contains three planned modes:
 
 ```text
-Developer 1 → feat/backend-market-data-pipeline
-Developer 2 → feat/backend-database-foundation
-Developer 3 → feat/backend-schemas-contracts
+Historical Scenario
+        ↓
+Allocation Change
+        ↓
+Combined Simulation
 ```
 
-Optional separate cleanup:
+## Historical Scenario
+
+Answers:
+
+> How did the current portfolio behave during a selected historical event?
+
+## Allocation Change
+
+Answers:
+
+> How would different asset percentages change the portfolio's historical risk?
+
+## Combined Simulation
+
+Answers:
+
+> How would the original and modified allocations compare during the same
+> historical event?
+
+The combined mode should reuse the earlier simulation logic rather than
+duplicate it.
+
+---
+
+# Recommended Backend Dependency Flow
 
 ```text
-refactor/analytics-validation
+feat/backend-analytics-core ────────────────┐
+                                            │
+feat/backend-schemas-contracts ─────────────┼── feat/backend-analysis-service
+                                            │
+feat/backend-market-data-pipeline ──────────┤
+                                            │
+feat/backend-database-foundation ───────────┘
+
+feat/backend-market-data-pipeline
+                +
+feat/backend-database-foundation
+                ↓
+feat/backend-market-data-storage
+
+Stable analytics + schemas + historical data
+                ↓
+Historical simulation branches
+                ↓
+Reporting and history branches
+                ↓
+AI agent
+                ↓
+API integration
+                ↓
+Deployment
 ```
 
-The validation refactor is not a parent feature workstream and is not required before other independent parent branches continue.
+The completed analytics-validation refactor supports the analytics branch
+internally but does not change this dependency flow.
 
-The `feat/backend-schemas-contracts` branch can be handled by:
+---
 
-- The backend lead
-- The person who finishes first
-- A fourth contributor
+# Recommended Current Work
 
-The schemas branch requires coordination because all later backend components will use its formats.
+## Next Branch for the Analytics/Backend Lead
+
+```text
+feat/backend-schemas-contracts
+```
+
+## Parallel Workstreams
+
+```text
+Contributor 1 → feat/backend-schemas-contracts
+Contributor 2 → feat/backend-market-data-pipeline
+Contributor 3 → feat/backend-database-foundation
+```
+
+Assignments may differ depending on team availability.
+
+The schemas branch requires team review because later services, routes,
+database mapping, frontend integration, and simulations will rely on its field
+names and response structures.
 
 ---
 
 # Correct Git Branch Structure
 
-All parent branches should start from the latest `develop`, not `main`.
+All independent feature branches start from the latest `develop`.
 
 ```text
 develop
-├── feat/backend-analytics-core
-├── feat/backend-market-data-pipeline
-├── feat/backend-database-foundation
-└── feat/backend-schemas-contracts
+├── feat/backend-analytics-core                # completed
+├── refactor/analytics-validation              # completed support branch
+├── feat/backend-schemas-contracts             # next planned
+├── feat/backend-market-data-pipeline          # planned / parallel
+├── feat/backend-database-foundation            # planned / parallel
+└── feat/backend-quality-ci                     # optional
 ```
 
-Do not create one shared backend parent feature branch like this:
+Do not create a permanent shared backend parent branch such as:
 
 ```text
 develop
-└── feat/backend-parent
+└── backend
     ├── analytics
+    ├── schemas
     ├── database
     └── data-pipeline
 ```
 
-They are parent workstreams in the project plan, but each Git branch should still be created directly from `develop`.
+The project plan calls them parent workstreams because they are independently
+owned areas. In Git, each still branches directly from `develop`.
 
-## Frontend branches follow the same structure
-
-The same pattern applies to frontend work — every frontend branch is also created directly from `develop`, not from a separate frontend base branch:
+## Frontend branches use the same integration structure
 
 ```text
 develop
@@ -410,56 +696,43 @@ develop
 └── feat/frontend-simulation
 ```
 
-You do not need separate permanent `frontend` and `backend` branches — `develop` is the single shared integration branch for both.
+A permanent `frontend` or `backend` integration branch is unnecessary because
+`develop` is the shared integration branch for the whole project.
 
 ---
 
-# Commands Before Creating a Branch
+# Commands Before Creating a New Branch
 
-Update local `develop` first:
+Update local `develop`:
 
 ```bash
 git switch develop
 git pull origin develop
+git status
 ```
 
-Create the analytics branch:
-
-```bash
-git switch -c feat/backend-analytics-core
-```
-
-Create the market-data branch:
-
-```bash
-git switch -c feat/backend-market-data-pipeline
-```
-
-Create the database branch:
-
-```bash
-git switch -c feat/backend-database-foundation
-```
-
-Create the schemas branch:
+Create the next schemas branch:
 
 ```bash
 git switch -c feat/backend-schemas-contracts
+git push -u origin feat/backend-schemas-contracts
 ```
 
-Push a new branch to GitHub:
+General branch creation:
 
 ```bash
-git push -u origin branch-name
+git switch -c <branch-name>
+git push -u origin <branch-name>
 ```
 
 ---
 
 # Shared-File Rule
 
-To reduce merge conflicts, contributors should avoid editing the same shared files in parallel.
+To reduce merge conflicts, feature contributors should avoid editing shared
+integration files unless their branch explicitly owns the integration change.
 
-Avoid changing these files unless the branch specifically owns the integration work:
+Common shared files include:
 
 ```text
 backend/app/main.py
@@ -468,21 +741,37 @@ backend/app/services/
 CURRENT_STATUS.md
 ```
 
-Each parent branch should mainly modify its own folder and tests.
+Each parent branch should mainly modify its owned folder, tests, examples, and
+branch-specific documentation.
 
-After a branch is merged, update `CURRENT_STATUS.md` on `develop` (or in a small documentation branch merged into `develop`) — not on `main` directly.
+After a feature branch is merged, project status documentation should be
+updated from the latest `develop`, either directly according to team rules or
+through a small documentation branch such as:
+
+```text
+docs/update-backend-status
+```
+
+Documentation changes should not be added to `main` directly.
 
 ---
 
 # Recommended Development Order
 
-## Parallel Parent Stage
+## Completed Foundation and Analytics Stage
 
 ```text
+✅ feat/fastapi-foundation
 ✅ feat/backend-analytics-core
+✅ refactor/analytics-validation
+```
+
+## Remaining Parent Stage
+
+```text
+➡️ feat/backend-schemas-contracts
 ⬜ feat/backend-market-data-pipeline
 ⬜ feat/backend-database-foundation
-⬜ feat/backend-schemas-contracts
 ```
 
 ## First Integration Stage
@@ -493,15 +782,18 @@ feat/backend-analysis-service
 feat/backend-portfolio-api
 ```
 
-## Second Feature Stage
+## Simulation and Reporting Stage
 
 ```text
-feat/backend-historical-simulator
-feat/backend-risk-reporting
+feat/backend-historical-scenario-simulator
+feat/backend-allocation-simulator
+feat/backend-combined-simulator
+feat/backend-analysis-reporting
+feat/backend-simulation-history
 feat/backend-market-data-scheduler
 ```
 
-## Later AI Stage
+## AI and Full Integration Stage
 
 ```text
 feat/backend-ai-agent
@@ -512,25 +804,20 @@ feat/backend-api-integration
 
 ```text
 feat/backend-deployment
-final integration tests
+final backend integration tests
+develop → main release Pull Request
 ```
 
-Once `develop` has absorbed and stabilized all of the above, it is promoted to `main` through its own Pull Request, following the team's `develop → main` release process.
-
 ---
 
-# Final Recommendation
+# Current Recommended Next Step
 
-The strongest independent branches to begin immediately are:
+After the analytics-validation refactor and documentation updates are merged
+into `develop`, begin:
 
-1. `feat/backend-analytics-core`
-2. `feat/backend-market-data-pipeline`
-3. `feat/backend-database-foundation`
-4. `feat/backend-schemas-contracts`
+```text
+feat/backend-schemas-contracts
+```
 
-These branches are separate enough for different contributors to work at the same time with minimal dependency and fewer merge conflicts.
-
----
-## P.S
-
-- All branches above already use the **feat/** prefix and branch from `develop`, in line with the team's updated `main → develop → feat/*` workflow.
+The schemas branch should be discussed and implemented in its own project chat
+using the established phase-by-phase workflow.
