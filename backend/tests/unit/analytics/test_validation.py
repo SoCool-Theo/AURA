@@ -1,3 +1,6 @@
+from collections.abc import Mapping
+from types import MappingProxyType
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -6,7 +9,24 @@ from backend.app.analytics._validation import (
     _validate_datetime_index,
     _validate_positive_integer,
     _validated_finite_real_values,
+    _validated_weight_mapping,
 )
+
+
+class _DuplicateItemsMapping(Mapping[str, float]):
+    def __getitem__(self, key: str) -> float:
+        if key != "A":
+            raise KeyError(key)
+        return 0.5
+
+    def __iter__(self):
+        return iter(("A",))
+
+    def __len__(self) -> int:
+        return 1
+
+    def items(self) -> list[tuple[str, float]]:
+        return [("A", 0.5), ("A", 0.5)]
 
 
 def test_validate_datetime_index_accepts_valid_increasing_index() -> None:
@@ -523,5 +543,271 @@ def test_validated_finite_real_values_reports_first_invalid_element(
 ) -> None:
     with pytest.raises(exception_type) as error:
         _validated_finite_real_values(values, "ordered")
+
+    assert str(error.value) == message
+
+
+def test_validated_weight_mapping_accepts_one_asset() -> None:
+    result = _validated_weight_mapping({"A": 1.0})
+
+    assert result == {"A": 1.0}
+
+
+def test_validated_weight_mapping_accepts_multiple_assets() -> None:
+    result = _validated_weight_mapping(
+        {"A": 0.2, "B": 0.3, "C": 0.5}
+    )
+
+    assert result == {"A": 0.2, "B": 0.3, "C": 0.5}
+
+
+def test_validated_weight_mapping_accepts_zero_and_boundary_weights() -> None:
+    result = _validated_weight_mapping({"ZERO": 0.0, "ONE": 1.0})
+
+    assert result == {"ZERO": 0.0, "ONE": 1.0}
+
+
+def test_validated_weight_mapping_accepts_python_integer_weight() -> None:
+    result = _validated_weight_mapping({"A": 1})
+
+    assert result == {"A": 1.0}
+    assert type(result["A"]) is float
+
+
+def test_validated_weight_mapping_accepts_numpy_real_values() -> None:
+    result = _validated_weight_mapping(
+        {"A": np.float32(0.25), "B": np.float64(0.75)}
+    )
+
+    assert result == {"A": 0.25, "B": 0.75}
+
+
+def test_validated_weight_mapping_accepts_custom_mapping() -> None:
+    weights = MappingProxyType({"A": 0.4, "B": 0.6})
+
+    result = _validated_weight_mapping(weights)
+
+    assert type(result) is dict
+    assert result == {"A": 0.4, "B": 0.6}
+
+
+def test_validated_weight_mapping_accepts_total_within_tolerance() -> None:
+    boundary_weight = np.nextafter(0.500001, 0.5)
+
+    result = _validated_weight_mapping({"A": 0.5, "B": boundary_weight})
+
+    assert result == {"A": 0.5, "B": float(boundary_weight)}
+
+
+def test_validated_weight_mapping_preserves_insertion_order() -> None:
+    weights = {"THIRD": 0.2, "FIRST": 0.5, "SECOND": 0.3}
+
+    result = _validated_weight_mapping(weights)
+
+    assert list(result) == ["THIRD", "FIRST", "SECOND"]
+
+
+def test_validated_weight_mapping_returns_standard_dict() -> None:
+    result = _validated_weight_mapping(
+        MappingProxyType({"A": 0.5, "B": 0.5})
+    )
+
+    assert type(result) is dict
+
+
+def test_validated_weight_mapping_returns_python_float_values() -> None:
+    result = _validated_weight_mapping(
+        {"A": np.float32(0.25), "B": np.float64(0.75)}
+    )
+
+    assert all(type(value) is float for value in result.values())
+
+
+def test_validated_weight_mapping_returns_independent_object() -> None:
+    weights = {"A": 0.5, "B": 0.5}
+
+    result = _validated_weight_mapping(weights)
+
+    assert result is not weights
+
+
+def test_validated_weight_mapping_result_mutation_does_not_change_source() -> None:
+    weights = {"A": 0.5, "B": 0.5}
+
+    result = _validated_weight_mapping(weights)
+    result["A"] = 1.0
+
+    assert weights == {"A": 0.5, "B": 0.5}
+
+
+def test_validated_weight_mapping_does_not_mutate_source() -> None:
+    weights = {"B": np.float64(0.6), "A": np.float32(0.4)}
+    original = weights.copy()
+
+    _validated_weight_mapping(weights)
+
+    assert weights == original
+    assert list(weights) == ["B", "A"]
+
+
+@pytest.mark.parametrize("weights", [None, [("A", 1.0)], "A"])
+def test_validated_weight_mapping_rejects_non_mapping(
+    weights: object,
+) -> None:
+    with pytest.raises(TypeError) as error:
+        _validated_weight_mapping(weights)
+
+    assert str(error.value) == "weights must implement Mapping"
+
+
+def test_validated_weight_mapping_rejects_empty_mapping() -> None:
+    with pytest.raises(ValueError) as error:
+        _validated_weight_mapping({})
+
+    assert str(error.value) == "weights must contain at least one asset"
+
+
+@pytest.mark.parametrize(
+    ("symbol", "exception_type", "message"),
+    [
+        (1, TypeError, "weight symbols must be strings"),
+        ("", ValueError, "weight symbols cannot be empty"),
+        ("   ", ValueError, "weight symbols cannot be whitespace-only"),
+        (
+            " A",
+            ValueError,
+            "weight symbols cannot contain leading or trailing whitespace",
+        ),
+        (
+            "A ",
+            ValueError,
+            "weight symbols cannot contain leading or trailing whitespace",
+        ),
+    ],
+)
+def test_validated_weight_mapping_rejects_invalid_symbol(
+    symbol: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    with pytest.raises(exception_type) as error:
+        _validated_weight_mapping({symbol: 1.0})
+
+    assert str(error.value) == message
+
+
+def test_validated_weight_mapping_rejects_duplicate_materialized_symbols() -> None:
+    with pytest.raises(ValueError) as error:
+        _validated_weight_mapping(_DuplicateItemsMapping())
+
+    assert str(error.value) == "weight symbols must be unique"
+
+
+@pytest.mark.parametrize(
+    ("value", "exception_type", "message"),
+    [
+        (True, TypeError, "weight values cannot be Boolean"),
+        (False, TypeError, "weight values cannot be Boolean"),
+        (np.bool_(True), TypeError, "weight values cannot be Boolean"),
+        (1 + 0j, TypeError, "weight values cannot be complex"),
+        (np.complex128(1 + 0j), TypeError, "weight values cannot be complex"),
+        (None, TypeError, "weight values must be real numeric values"),
+        (np.nan, ValueError, "weight values must be finite"),
+        (pd.NA, TypeError, "weight values must be real numeric values"),
+        (np.inf, ValueError, "weight values must be finite"),
+        (-np.inf, ValueError, "weight values must be finite"),
+        ("1.0", TypeError, "weight values must be real numeric values"),
+        (object(), TypeError, "weight values must be real numeric values"),
+    ],
+)
+def test_validated_weight_mapping_rejects_invalid_weight_value(
+    value: object,
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    with pytest.raises(exception_type) as error:
+        _validated_weight_mapping({"A": value})
+
+    assert str(error.value) == message
+
+
+@pytest.mark.parametrize("value", [-0.1, 1.1])
+def test_validated_weight_mapping_rejects_out_of_range_weight(
+    value: float,
+) -> None:
+    with pytest.raises(ValueError) as error:
+        _validated_weight_mapping({"A": value})
+
+    assert str(error.value) == (
+        "each weight must be between 0.0 and 1.0 inclusive"
+    )
+
+
+def test_validated_weight_mapping_rejects_all_zero_weights() -> None:
+    with pytest.raises(ValueError) as error:
+        _validated_weight_mapping({"A": 0.0, "B": 0.0})
+
+    assert str(error.value) == "at least one weight must be greater than zero"
+
+
+@pytest.mark.parametrize(
+    "weights",
+    [
+        {"A": 0.4, "B": 0.4},
+        {"A": 0.6, "B": 0.6},
+    ],
+)
+def test_validated_weight_mapping_rejects_invalid_total(
+    weights: dict[str, float],
+) -> None:
+    with pytest.raises(ValueError) as error:
+        _validated_weight_mapping(weights)
+
+    assert str(error.value) == (
+        "total weight must equal 1.0 within a tolerance of 1e-6"
+    )
+
+
+def test_validated_weight_mapping_rejects_total_just_outside_tolerance() -> None:
+    with pytest.raises(ValueError) as error:
+        _validated_weight_mapping({"A": 0.5, "B": 0.5000011})
+
+    assert str(error.value) == (
+        "total weight must equal 1.0 within a tolerance of 1e-6"
+    )
+
+
+@pytest.mark.parametrize(
+    ("weights", "exception_type", "message"),
+    [
+        (
+            {"A": True, "": 0.5},
+            ValueError,
+            "weight symbols cannot be empty",
+        ),
+        (
+            {"A": -0.1},
+            ValueError,
+            "each weight must be between 0.0 and 1.0 inclusive",
+        ),
+        (
+            {"A": 0.0, "B": 0.0},
+            ValueError,
+            "at least one weight must be greater than zero",
+        ),
+        (
+            {"A": np.inf, "B": 0.0},
+            ValueError,
+            "weight values must be finite",
+        ),
+    ],
+)
+def test_validated_weight_mapping_preserves_validation_order(
+    weights: dict[object, object],
+    exception_type: type[Exception],
+    message: str,
+) -> None:
+    with pytest.raises(exception_type) as error:
+        _validated_weight_mapping(weights)
 
     assert str(error.value) == message
