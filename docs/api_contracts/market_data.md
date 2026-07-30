@@ -49,4 +49,3 @@ Canonical examples:
 
 Live provider integration, provider-specific symbol validation, fetching,
 cleaning, and persistence are not implemented by this schema branch.
-

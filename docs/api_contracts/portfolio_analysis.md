@@ -35,4 +35,3 @@ Canonical example:
 
 Amount-based holdings, share quantities, ownership, database IDs, and other
 persistence fields are not part of these contracts.
-

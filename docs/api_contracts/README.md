@@ -29,4 +29,3 @@ services exist.
 - Investment-amount and share-quantity conversion
 - Simulation contracts
 - AI-agent contracts
-

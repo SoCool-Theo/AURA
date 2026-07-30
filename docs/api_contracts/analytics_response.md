@@ -161,4 +161,3 @@ Canonical example:
 This destination contract contains no AI explanation or recommendation field.
 Routes, services, and production conversion from `PortfolioAnalyticsResult`
 remain deferred.
-
