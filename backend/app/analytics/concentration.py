@@ -3,14 +3,11 @@
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
-from numbers import Real
 
-import numpy as np
-
-from ._validation import _validate_positive_integer
-
-
-_WEIGHT_TOLERANCE = 1e-6
+from ._validation import (
+    _validate_positive_integer,
+    _validated_weight_mapping,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,55 +22,7 @@ class ConcentrationResult:
 
 
 def _validated_weights(weights: Mapping[str, float]) -> list[float]:
-    if not isinstance(weights, Mapping):
-        raise TypeError("weights must implement Mapping")
-
-    weight_items = list(weights.items())
-    if not weight_items:
-        raise ValueError("weights must contain at least one asset")
-
-    symbols = [symbol for symbol, _ in weight_items]
-    for symbol in symbols:
-        if not isinstance(symbol, str):
-            raise TypeError("weight symbols must be strings")
-        if not symbol:
-            raise ValueError("weight symbols cannot be empty")
-        if not symbol.strip():
-            raise ValueError("weight symbols cannot be whitespace-only")
-        if symbol != symbol.strip():
-            raise ValueError(
-                "weight symbols cannot contain leading or trailing whitespace"
-            )
-    if len(symbols) != len(set(symbols)):
-        raise ValueError("weight symbols must be unique")
-
-    validated: list[float] = []
-    for _, value in weight_items:
-        if isinstance(value, (bool, np.bool_)):
-            raise TypeError("weight values cannot be Boolean")
-        if isinstance(value, (complex, np.complexfloating)):
-            raise TypeError("weight values cannot be complex")
-        if not isinstance(value, Real):
-            raise TypeError("weight values must be real numeric values")
-
-        numeric_value = float(value)
-        if not math.isfinite(numeric_value):
-            raise ValueError("weight values must be finite")
-        if numeric_value < 0.0 or numeric_value > 1.0:
-            raise ValueError(
-                "each weight must be between 0.0 and 1.0 inclusive"
-            )
-        validated.append(numeric_value)
-
-    if not any(value > 0.0 for value in validated):
-        raise ValueError("at least one weight must be greater than zero")
-
-    total_weight = math.fsum(validated)
-    if abs(total_weight - 1.0) > _WEIGHT_TOLERANCE:
-        raise ValueError(
-            "total weight must equal 1.0 within a tolerance of 1e-6"
-        )
-    return validated
+    return list(_validated_weight_mapping(weights).values())
 
 
 def calculate_largest_weight(weights: Mapping[str, float]) -> float:
