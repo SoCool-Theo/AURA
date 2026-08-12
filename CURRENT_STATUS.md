@@ -137,6 +137,52 @@ The refactor did not change:
 - Historical-simulation contracts and calculations
 - AI-agent contracts and explanations
 
+## Historical Market Data Pipeline
+
+**Status:** Completed and merged into `develop`
+
+**Source branch:** `feat/backend-market-data-pipeline`
+
+### Completed scope
+
+- Added a market-data provider interface and a Yahoo Finance implementation
+  using `yfinance==1.5.1`.
+- Added historical price fetching for a default set of 17 stock, ETF, bond,
+  metal, and cryptocurrency symbols.
+- Preserved Aura's inclusive requested date ranges when calling the provider.
+- Added cleaning and normalization to the canonical columns `date`, `symbol`,
+  `adjusted_close`, `volume`, and `source`.
+- Added validation for dates, symbols, prices, volume, duplicates, and
+  per-symbol ordering.
+- Added missing-value handling and partial provider-failure reporting.
+- Added atomic raw and processed CSV persistence under `data/`.
+- Excluded generated market-data files from Git while retaining their
+  directories.
+- Added the `update_market_data()` workflow and a manual update CLI in
+  `backend/scripts/update_market_data.py`.
+- Added deterministic unit tests with mocked provider responses.
+
+### Current update behavior and boundaries
+
+- Updates are live on demand through manual invocation; no automatic
+  background schedule is implemented.
+- Each run replaces the requested historical CSV dataset; incremental append
+  or update optimization is not implemented.
+- This branch does not persist production records in PostgreSQL.
+- This branch does not implement FastAPI routes, service orchestration,
+  portfolio analytics, or historical simulations.
+- The automated provider tests mock Yahoo Finance network responses; no live
+  Yahoo Finance network smoke-test result is recorded.
+
+### Final verification
+
+- Focused market-data pipeline tests: 23 passed
+- Full backend tests: 1,145 passed
+- Dependency check: passed
+- Git whitespace check: passed
+- Working tree: clean
+- Existing warning: 1 Starlette/httpx deprecation warning
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -151,17 +197,17 @@ cause test failures.
 
 ### Remaining independent parent workstreams
 
-- `feat/backend-market-data-pipeline` — planned
 - `feat/backend-database-foundation` — planned
 
-The exact team assignment for these workstreams has not been confirmed.
+The exact team assignment for this workstream has not been confirmed.
 
 ### Blocked follow-on work
 
-- `feat/backend-analysis-service`: schemas are complete; this branch remains
-  blocked until the necessary market-data and data-access components are
-  stable.
+- `feat/backend-analysis-service`: analytics, schemas, and the market-data
+  pipeline are complete; this branch remains blocked until the necessary
+  data-access components are stable.
 - `feat/backend-portfolio-api`: schemas are complete; this branch remains
   blocked until the database foundation is stable.
-- Historical simulation, API integration, and AI-agent work remain later
-  stages with their existing dependencies.
+- Historical data acquisition is available, but historical simulation, API
+  integration, automatic market-data scheduling, and AI-agent work remain
+  later stages with their other existing dependencies.
