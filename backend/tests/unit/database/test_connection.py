@@ -18,8 +18,8 @@ DATABASE_URL = (
 )
 
 
-def test_declarative_base_contains_no_domain_models() -> None:
-    assert Base.metadata.tables == {}
+def test_declarative_base_contains_registered_domain_tables() -> None:
+    assert set(Base.metadata.tables) == {"users", "portfolios", "holdings"}
 
 
 def test_engine_uses_postgresql_psycopg_without_connecting() -> None:

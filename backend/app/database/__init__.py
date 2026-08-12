@@ -7,9 +7,13 @@ from .connection import (
     create_session_factory,
     session_scope,
 )
+from .models import Holding, Portfolio, User
 
 __all__ = [
     "Base",
+    "Holding",
+    "Portfolio",
+    "User",
     "check_database_connection",
     "create_database_engine",
     "create_session_factory",

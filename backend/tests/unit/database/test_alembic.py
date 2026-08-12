@@ -44,7 +44,7 @@ def test_alembic_environment_uses_aura_base_metadata() -> None:
 
     assert "from backend.app.database.base import Base" in environment_source
     assert "target_metadata = Base.metadata" in environment_source
-    assert Base.metadata.tables == {}
+    assert set(Base.metadata.tables) == {"users", "portfolios", "holdings"}
 
 
 def test_alembic_configuration_contains_no_database_url_or_credentials() -> None:
