@@ -7,9 +7,10 @@ from .connection import (
     create_session_factory,
     session_scope,
 )
-from .models import Holding, MarketData, Portfolio, User
+from .models import Analysis, Holding, MarketData, Portfolio, User
 
 __all__ = [
+    "Analysis",
     "Base",
     "Holding",
     "MarketData",

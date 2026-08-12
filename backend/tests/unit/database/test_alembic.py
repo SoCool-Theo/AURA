@@ -45,6 +45,7 @@ def test_alembic_environment_uses_aura_base_metadata() -> None:
     assert "from backend.app.database.base import Base" in environment_source
     assert "target_metadata = Base.metadata" in environment_source
     assert set(Base.metadata.tables) == {
+        "analyses",
         "users",
         "portfolios",
         "holdings",

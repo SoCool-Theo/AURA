@@ -13,6 +13,7 @@ from sqlalchemy.types import Uuid
 from ..base import Base
 
 if TYPE_CHECKING:
+    from .analysis import Analysis
     from .holding import Holding
     from .user import User
 
@@ -46,6 +47,11 @@ class Portfolio(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="portfolios")
+    analyses: Mapped[list[Analysis]] = relationship(
+        back_populates="portfolio",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     holdings: Mapped[list[Holding]] = relationship(
         back_populates="portfolio",
         cascade="all, delete-orphan",

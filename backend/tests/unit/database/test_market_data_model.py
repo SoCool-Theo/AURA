@@ -15,7 +15,13 @@ from sqlalchemy.schema import CreateIndex, CreateTable
 from backend.app.database import Base, Holding, MarketData, Portfolio, User
 
 
-EXPECTED_TABLES = {"users", "portfolios", "holdings", "market_data"}
+EXPECTED_TABLES = {
+    "analyses",
+    "users",
+    "portfolios",
+    "holdings",
+    "market_data",
+}
 
 
 def test_market_data_uses_existing_base_and_expected_table_name() -> None:
