@@ -15,7 +15,7 @@ from sqlalchemy.types import Uuid
 from backend.app.database import Base, Holding, Portfolio, User
 
 
-EXPECTED_TABLES = {"users", "portfolios", "holdings"}
+EXPECTED_TABLES = {"users", "portfolios", "holdings", "market_data"}
 
 
 def test_models_use_existing_aura_base_and_expected_tables() -> None:
