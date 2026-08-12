@@ -73,7 +73,7 @@ def test_alembic_configuration_loads_without_connecting(
     script = ScriptDirectory.from_config(config)
 
     assert script.dir == str(ALEMBIC_DIRECTORY)
-    assert list(script.walk_revisions()) == []
+    assert len(list(script.walk_revisions())) == 1
 
 
 def test_offline_migration_operation_does_not_connect(
@@ -91,13 +91,16 @@ def test_offline_migration_operation_does_not_connect(
     command.upgrade(_alembic_config(), "head", sql=True)
 
 
-def test_no_schema_revision_exists() -> None:
+def test_exactly_one_initial_schema_revision_exists() -> None:
     revision_files = [
         path
         for path in VERSIONS_DIRECTORY.rglob("*.py")
         if path.name != "__init__.py"
     ]
 
-    assert revision_files == []
+    assert len(revision_files) == 1
     script = ScriptDirectory.from_config(_alembic_config())
-    assert list(script.walk_revisions()) == []
+    revisions = list(script.walk_revisions())
+    assert len(revisions) == 1
+    assert revisions[0].down_revision is None
+    assert script.get_current_head() == revisions[0].revision
