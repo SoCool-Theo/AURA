@@ -69,11 +69,8 @@ feature/refactor/docs branch
 | `refactor/analytics-validation` | Supporting refactor | Completed | Shared private validation for analytics modules |
 | `feat/backend-schemas-contracts` | Parent feature | Completed | Pydantic schemas and stable backend data contracts |
 | `feat/backend-market-data-pipeline` | Parent feature | Completed | Fetch, clean, validate, normalize, and locally persist market data |
-| `feat/backend-database-foundation` | Parent feature | Planned / parallel | PostgreSQL connection, models, migrations, and repositories |
+| `feat/backend-database-foundation` | Parent feature | Completed | PostgreSQL connection, models, migrations, repositories, and live integration verification |
 | `feat/backend-quality-ci` | Optional support | Optional | Automated testing and code-quality checks |
-
-> Update the status of the database workstream when its assigned contributors
-> confirm progress.
 
 ---
 
@@ -484,28 +481,25 @@ Database persistence should be handled later by a storage integration branch.
 
 ---
 
-# Remaining Independent Parent Workstreams
+# Completed Database Parent Workstream
 
 ## 4. `feat/backend-database-foundation`
 
-**Status:** Planned / parallel workstream
+**Status:** Completed and merged into `develop`
 
 ### Purpose
 
-Prepare PostgreSQL storage independently from the data-pipeline and analytics
-implementations.
+Provide the PostgreSQL persistence foundation used by later storage, service,
+reporting, and API integration work.
 
-### Planned Work
+### Completed Work
 
-- Database configuration
-- SQLAlchemy connection
-- Session management
-- PostgreSQL health check
-- Alembic migration setup
-- Base model
-- Initial database tables
-- Repository interfaces and methods
-- Database integration tests
+- PostgreSQL configuration using synchronous SQLAlchemy 2.x and Psycopg 3
+- Explicit lazy engine creation and caller-controlled sessions and transactions
+- Alembic migration infrastructure and one initial PostgreSQL schema migration
+- `User`, `Portfolio`, `Holding`, `MarketData`, and `Analysis` ORM models
+- `PortfolioRepository`, `MarketDataRepository`, and `AnalysisRepository`
+- Isolated live PostgreSQL migration and repository integration tests
 
 ### Initial Models
 
@@ -517,8 +511,19 @@ MarketData
 Analysis
 ```
 
-Simulation-history and AI-conversation models can be added when their feature
-requirements become stable.
+Simulation-history and AI-conversation persistence remain deferred until their
+feature requirements become stable.
+
+### Stable Persistence Decisions
+
+- User-owned domain resources use UUID identifiers.
+- Holdings persist ordered weights; shares and invested amounts remain deferred.
+- Total Holding weight is validated transactionally at repository level.
+- MarketData identity is `(symbol, date)` and uses the normalized pipeline shape.
+- Analysis reports use relational metadata plus a JSONB result snapshot.
+- Repositories receive caller-owned sessions and do not automatically commit or
+  roll back transactions.
+- PostgreSQL implements ownership cascades, and Alembic owns schema migrations.
 
 ### Main Files
 
@@ -542,17 +547,32 @@ backend/app/database/
 backend/tests/integration/database/
 ```
 
+### Final Verification
+
+- PostgreSQL version: 18.4
+- Database unit tests: 93 passed
+- Live PostgreSQL integration tests: 5 passed, 0 skipped
+- Schema tests: 301 passed
+- Market-data pipeline tests: 23 passed
+- Analytics tests: 820 passed
+- Full backend tests: 1,243 passed, 0 failed, 0 skipped
+- Live Alembic upgrade, repository integration, and downgrade: passed
+- Compilation, dependency, and Git diff checks: passed
+- Existing warning: one unrelated Starlette/httpx deprecation warning
+
 ### Branch Boundary
 
-This branch should use generated test records and isolated database tests.
+This branch used generated records and an isolated PostgreSQL test database.
 
-It should not:
+It did not implement:
 
-- Fetch live market data
-- Calculate portfolio analytics
-- Build portfolio API routes
-- Run historical simulations
-- Build the AI agent
+- Market-data pipeline-to-PostgreSQL integration
+- Portfolio API routes
+- Analysis or reporting services
+- Historical simulations or simulation history
+- Automatic market-data scheduling
+- AI conversation persistence
+- Full backend API integration
 
 ---
 
@@ -588,15 +608,15 @@ stable in `develop`.
 
 | Later Branch | Main Responsibility | Dependencies | Current Readiness |
 |---|---|---|---|
-| `feat/backend-analysis-service` | Coordinate validated input, market data, and analytics | Analytics + schemas + data access | Analytics, schemas, and market-data pipeline complete; waiting for data access |
-| `feat/backend-portfolio-api` | Portfolio and holding CRUD endpoints | Schemas + database | Schemas complete; waiting for database foundation |
-| `feat/backend-market-data-storage` | Save and retrieve processed historical data | Data pipeline + database | Data pipeline complete; waiting for database foundation and storage integration |
+| `feat/backend-analysis-service` | Coordinate validated input, market data, and analytics | Analytics + schemas + data access | Foundations are complete; database-backed market-data access and service orchestration remain |
+| `feat/backend-portfolio-api` | Portfolio and holding CRUD endpoints | Schemas + database | Prerequisites are complete; API and service implementation can begin |
+| `feat/backend-market-data-storage` | Save and retrieve processed historical data | Data pipeline + database | Both parent foundations are complete; storage integration can begin |
 | `feat/backend-historical-scenario-simulator` | Test the current portfolio during a selected past event | Analytics + historical data + simulation schemas | Historical data acquisition available; simulation schemas and finalized requirements remain deferred |
 | `feat/backend-allocation-simulator` | Compare original and modified allocations over the same period | Analytics + historical data + simulation schemas | Historical data acquisition available; simulation schemas and finalized requirements remain deferred |
 | `feat/backend-combined-simulator` | Compare original and modified allocations during one event | Historical scenario + allocation simulator | Not ready |
-| `feat/backend-analysis-reporting` | Save and retrieve analysis reports | Analytics + schemas + database | Schemas complete; waiting for database and report persistence |
+| `feat/backend-analysis-reporting` | Save and retrieve analysis reports | Analytics + schemas + database | Foundations and snapshot repository are complete; reporting service/mapping remains |
 | `feat/backend-simulation-history` | Save and retrieve simulation results | Simulators + schemas + database | Not ready |
-| `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Data pipeline complete; deferred until database/storage prerequisites are ready |
+| `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Pipeline and database are complete; still deferred until storage integration is ready |
 | `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports + schemas + database | Not ready |
 | `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
@@ -681,18 +701,20 @@ exist.
 
 # Recommended Current Work
 
-## Remaining Independent Parent Workstreams
+All required independent database, analytics, schema, and market-data parent
+foundations are now complete. The next focused integration workstreams are:
 
 ```text
-feat/backend-database-foundation
+feat/backend-market-data-storage
+feat/backend-portfolio-api
+feat/backend-analysis-service
 ```
 
-The exact team assignment should be confirmed by the team. The current
-repository documentation does not show this workstream as actively assigned.
-
-For the analytics/backend lead, `feat/backend-database-foundation` is the
-remaining independent parent workstream. `feat/backend-analysis-service` must
-wait until its data-access dependency is stable.
+Market-data storage has both parent foundations available. Portfolio API work
+has its schema and database prerequisites. Analysis-service work can begin its
+mapping and orchestration design, but database-backed historical-data access
+still depends on storage integration. These are separate downstream features;
+none is implemented merely because its prerequisites are available.
 
 ---
 
@@ -706,7 +728,7 @@ develop
 ├── refactor/analytics-validation              # completed support branch
 ├── feat/backend-schemas-contracts             # completed
 ├── feat/backend-market-data-pipeline          # completed
-├── feat/backend-database-foundation            # planned / parallel
+├── feat/backend-database-foundation            # completed
 └── feat/backend-quality-ci                     # optional
 ```
 
@@ -789,7 +811,7 @@ Documentation changes should not be added to `main` directly.
 
 # Recommended Development Order
 
-## Completed Foundation, Analytics, Contracts, and Market Data Stage
+## Completed Foundation, Analytics, Contracts, Market Data, and Database Stage
 
 ```text
 ✅ feat/fastapi-foundation
@@ -797,12 +819,7 @@ Documentation changes should not be added to `main` directly.
 ✅ refactor/analytics-validation
 ✅ feat/backend-schemas-contracts
 ✅ feat/backend-market-data-pipeline
-```
-
-## Remaining Parent Stage
-
-```text
-⬜ feat/backend-database-foundation
+✅ feat/backend-database-foundation
 ```
 
 ## First Integration Stage
@@ -843,16 +860,18 @@ develop → main release Pull Request
 
 # Current Recommended Next Step
 
-After the market-data-pipeline branch and its documentation update are merged
-into `develop`, continue or assign the remaining independent parent workstream:
+With the analytics, schemas, market-data pipeline, and database foundation now
+merged into `develop`, begin one of the first integration workstreams:
 
 ```text
-feat/backend-database-foundation
+feat/backend-market-data-storage
+feat/backend-portfolio-api
+feat/backend-analysis-service
 ```
 
-The data-pipeline dependency is now satisfied for market-data storage and
-scheduling, but their database/storage prerequisites remain. Later
-analysis-service, portfolio-API, storage, reporting, simulation, AI, and
-integration branches should begin only when their remaining listed
-dependencies are stable. The exact team assignment should be confirmed by the
-team.
+Market-data storage now has both parent foundations and should precede automatic
+scheduling. Portfolio API prerequisites are available. Analysis service and
+reporting have stable analytics, schemas, and persistence foundations, but must
+still implement their own mapping/orchestration and use the storage integration
+for database-backed historical data. Simulation, AI, full integration, and
+deployment branches remain governed by their listed unfinished dependencies.
