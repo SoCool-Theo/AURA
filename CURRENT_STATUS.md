@@ -183,6 +183,60 @@ The refactor did not change:
 - Working tree: clean
 - Existing warning: 1 Starlette/httpx deprecation warning
 
+## Backend Database Foundation
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-database-foundation`
+
+### Completed scope
+
+- Added PostgreSQL configuration with SQLAlchemy 2.x and Psycopg 3.
+- Added explicit, lazy engine creation and caller-controlled synchronous
+  sessions and transactions.
+- Added Alembic migration infrastructure and one initial PostgreSQL schema
+  migration.
+- Added `User`, `Portfolio`, `Holding`, `MarketData`, and `Analysis` ORM models.
+- Added `PortfolioRepository`, `MarketDataRepository`, and
+  `AnalysisRepository`.
+- Added isolated live PostgreSQL migration and repository integration tests.
+
+### Stable persistence boundaries
+
+- User-owned domain resources use UUID identifiers.
+- Holdings persist ordered portfolio weights; shares and invested amounts
+  remain deferred.
+- Total Holding weight is validated transactionally at repository level.
+- MarketData uses `(symbol, date)` identity and persists the existing normalized
+  market-data shape.
+- Analysis reports use relational metadata plus an immutable JSONB snapshot.
+- Repositories use caller-owned sessions and do not automatically commit or
+  roll back transactions.
+- PostgreSQL owns configured ownership cascades, and Alembic owns schema
+  migrations.
+
+### Final verification
+
+- PostgreSQL version: 18.4
+- Database unit tests: 93 passed
+- Live PostgreSQL integration tests: 5 passed, 0 skipped
+- Schema tests: 301 passed
+- Market-data pipeline tests: 23 passed
+- Analytics tests: 820 passed
+- Full backend tests: 1,243 passed, 0 failed, 0 skipped
+- Live Alembic upgrade, repository integration, and downgrade: passed
+- Compilation, dependency, and Git diff checks: passed
+- Existing warning: 1 unrelated Starlette/httpx deprecation warning
+
+### Deferred integration work
+
+- Market-data pipeline-to-PostgreSQL integration
+- Portfolio API routes
+- Analysis and reporting services
+- Historical simulations and simulation history
+- Automatic market-data scheduling
+- AI conversation persistence
+- Full backend API integration
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -195,19 +249,22 @@ cause test failures.
 
 ## Current Backend Priorities
 
-### Remaining independent parent workstreams
+### Ready follow-on work
 
-- `feat/backend-database-foundation` — planned
+- `feat/backend-market-data-storage`: the market-data pipeline and database
+  foundation are complete; the pipeline-to-PostgreSQL mapping and storage
+  workflow remain to be implemented.
+- `feat/backend-portfolio-api`: its schema and database prerequisites are now
+  available; API and service orchestration remain unimplemented.
+- `feat/backend-analysis-service` and `feat/backend-analysis-reporting`: their
+  analytics, schema, and persistence foundations are available, while service
+  mapping/orchestration and database-backed market-data access remain future
+  integration work.
 
-The exact team assignment for this workstream has not been confirmed.
+### Still deferred or dependency-blocked
 
-### Blocked follow-on work
-
-- `feat/backend-analysis-service`: analytics, schemas, and the market-data
-  pipeline are complete; this branch remains blocked until the necessary
-  data-access components are stable.
-- `feat/backend-portfolio-api`: schemas are complete; this branch remains
-  blocked until the database foundation is stable.
-- Historical data acquisition is available, but historical simulation, API
-  integration, automatic market-data scheduling, and AI-agent work remain
-  later stages with their other existing dependencies.
+- Market-data scheduling remains dependent on completed storage integration.
+- Historical simulations still require finalized simulation contracts and
+  implementation; simulation history remains dependent on those simulators.
+- AI persistence, full backend API integration, and deployment remain later
+  workstreams.
