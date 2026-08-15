@@ -6,6 +6,7 @@ from decimal import Decimal
 import os
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 from uuid import UUID
 
 from alembic import command
@@ -36,6 +37,8 @@ from backend.app.database.repositories import (
     PortfolioRepository,
 )
 from backend.app.services.market_data_service import MarketDataService
+import backend.scripts.seed_historical_data as seed_script
+import backend.scripts.update_market_data as update_script
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
@@ -513,6 +516,191 @@ def test_market_data_service_live_caller_rollback_removes_all_rows(
             start_date,
             end_date,
         ) == []
+
+
+def test_seed_workflow_live_repeat_upsert_and_existing_row_update(
+    tmp_path: Path,
+    postgres_engine: Engine,
+    session_factory: sessionmaker[Session],
+) -> None:
+    input_path = tmp_path / "phase_8_processed.csv"
+    input_data = pd.DataFrame(
+        {
+            "date": ["2050-01-02", "2050-01-03"],
+            "symbol": ["P8SEEDA", "P8SEEDB"],
+            "adjusted_close": [123.125, 200.5],
+            "volume": [None, 2_000],
+            "source": ["phase-8-seed", "phase-8-seed"],
+        }
+    )
+    input_data.to_csv(input_path, index=False)
+
+    with patch.object(
+        seed_script,
+        "create_database_engine",
+        return_value=postgres_engine,
+    ) as create_engine:
+        assert seed_script.seed_historical_data(input_path) == 2
+        assert seed_script.seed_historical_data(input_path) == 2
+
+        with session_factory() as session:
+            repeated_rows = list(
+                session.scalars(
+                    select(MarketData)
+                    .where(MarketData.symbol.in_(["P8SEEDA", "P8SEEDB"]))
+                    .order_by(MarketData.symbol, MarketData.date)
+                ).all()
+            )
+
+        assert len(repeated_rows) == 2
+        assert [
+            (
+                row.symbol,
+                row.date,
+                row.adjusted_close,
+                row.volume,
+                row.source,
+            )
+            for row in repeated_rows
+        ] == [
+            (
+                "P8SEEDA",
+                date(2050, 1, 2),
+                Decimal("123.125000000000"),
+                None,
+                "phase-8-seed",
+            ),
+            (
+                "P8SEEDB",
+                date(2050, 1, 3),
+                Decimal("200.500000000000"),
+                2_000,
+                "phase-8-seed",
+            ),
+        ]
+
+        input_data.loc[0, "adjusted_close"] = 124.75
+        input_data.loc[0, "volume"] = 777
+        input_data.loc[0, "source"] = "phase-8-seed-updated"
+        input_data.to_csv(input_path, index=False)
+
+        assert seed_script.seed_historical_data(input_path) == 2
+
+    assert create_engine.call_count == 3
+
+    with session_factory() as session:
+        updated_rows = list(
+            session.scalars(
+                select(MarketData)
+                .where(MarketData.symbol.in_(["P8SEEDA", "P8SEEDB"]))
+                .order_by(MarketData.symbol, MarketData.date)
+            ).all()
+        )
+
+    assert len(updated_rows) == 2
+    assert updated_rows[0].adjusted_close == Decimal("124.750000000000")
+    assert updated_rows[0].volume == 777
+    assert updated_rows[0].source == "phase-8-seed-updated"
+
+
+def test_updater_persist_database_workflow_commits_live_canonical_frame(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    postgres_engine: Engine,
+    session_factory: sessionmaker[Session],
+) -> None:
+    data = _canonical_market_data(
+        [
+            ("P8UPDA", "2051-01-02", 300.125, None, "phase-8-update"),
+            (
+                "P8UPDB",
+                "2051-01-03",
+                400.123456789012,
+                4_000,
+                "phase-8-update",
+            ),
+        ]
+    )
+    result = update_script.MarketDataUpdateResult(
+        raw_path=tmp_path / "unused_raw.csv",
+        processed_path=tmp_path / "unused_processed.csv",
+        row_count=2,
+        symbols=("P8UPDA", "P8UPDB"),
+        failed_symbols=(),
+        requested_start_date="2051-01-02",
+        requested_end_date="2051-01-03",
+        actual_start_date="2051-01-02",
+        actual_end_date="2051-01-03",
+    )
+
+    with (
+        patch.object(
+            update_script,
+            "_update_market_data_with_frame",
+            return_value=(result, data),
+        ) as update_handoff,
+        patch.object(
+            update_script,
+            "create_database_engine",
+            return_value=postgres_engine,
+        ),
+    ):
+        update_script.main(
+            [
+                "--symbols",
+                "P8UPDA",
+                "P8UPDB",
+                "--start-date",
+                "2051-01-02",
+                "--end-date",
+                "2051-01-03",
+                "--persist-database",
+            ]
+        )
+
+    update_handoff.assert_called_once_with(
+        symbols=["P8UPDA", "P8UPDB"],
+        start_date="2051-01-02",
+        end_date="2051-01-03",
+    )
+    assert "Database rows stored: 2" in capsys.readouterr().out
+    assert not result.raw_path.exists()
+    assert not result.processed_path.exists()
+
+    with session_factory() as session:
+        rows = list(
+            session.scalars(
+                select(MarketData)
+                .where(MarketData.symbol.in_(["P8UPDA", "P8UPDB"]))
+                .order_by(MarketData.symbol, MarketData.date)
+            ).all()
+        )
+
+    assert [
+        (
+            row.symbol,
+            row.date,
+            row.adjusted_close,
+            row.volume,
+            row.source,
+        )
+        for row in rows
+    ] == [
+        (
+            "P8UPDA",
+            date(2051, 1, 2),
+            Decimal("300.125000000000"),
+            None,
+            "phase-8-update",
+        ),
+        (
+            "P8UPDB",
+            date(2051, 1, 3),
+            Decimal("400.123456789012"),
+            4_000,
+            "phase-8-update",
+        ),
+    ]
 
 
 def test_analysis_jsonb_round_trip_and_database_cascades(
