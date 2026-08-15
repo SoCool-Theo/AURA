@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from pathlib import Path
 import sys
+
+import pandas as pd
+from sqlalchemy.exc import SQLAlchemyError
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -12,7 +16,17 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app.data_pipeline.fetcher import DEFAULT_START_DATE, DEFAULT_SYMBOLS
-from app.data_pipeline.updater import update_market_data
+from app.data_pipeline.updater import (
+    MarketDataUpdateResult,
+    _update_market_data_with_frame,
+    update_market_data,
+)
+from app.database.connection import (
+    create_database_engine,
+    create_session_factory,
+    session_scope,
+)
+from app.services.market_data_service import MarketDataService
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -38,22 +52,29 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Inclusive end date in YYYY-MM-DD format. Defaults to today.",
     )
+    parser.add_argument(
+        "--persist-database",
+        action="store_true",
+        help="Persist the validated update to PostgreSQL after CSV processing.",
+    )
     return parser
 
 
-def main() -> None:
-    args = _build_parser().parse_args()
-    symbols = args.symbols if args.symbols is not None else DEFAULT_SYMBOLS
-
+def _persist_market_data(data: pd.DataFrame) -> int:
+    """Persist validated rows in one caller-controlled transaction."""
+    engine = create_database_engine()
     try:
-        result = update_market_data(
-            symbols=symbols,
-            start_date=args.start_date,
-            end_date=args.end_date,
-        )
-    except (TypeError, ValueError, RuntimeError) as error:
-        raise SystemExit(f"Aura market-data update failed: {error}") from error
+        session_factory = create_session_factory(engine)
+        with session_scope(session_factory) as session:
+            stored_count = MarketDataService(session).store(data)
+            session.commit()
+        return stored_count
+    finally:
+        engine.dispose()
 
+
+def _print_update_result(result: MarketDataUpdateResult) -> None:
+    """Print the existing updater summary."""
     print("Aura market-data update completed.")
     print("----------------------------------")
     print(f"Raw file:       {result.raw_path}")
@@ -70,6 +91,33 @@ def main() -> None:
     )
     if result.failed_symbols:
         print(f"Failed symbols: {', '.join(result.failed_symbols)}")
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = _build_parser().parse_args(argv)
+    symbols = args.symbols if args.symbols is not None else DEFAULT_SYMBOLS
+
+    try:
+        stored_count: int | None = None
+        if args.persist_database:
+            result, data = _update_market_data_with_frame(
+                symbols=symbols,
+                start_date=args.start_date,
+                end_date=args.end_date,
+            )
+            stored_count = _persist_market_data(data)
+        else:
+            result = update_market_data(
+                symbols=symbols,
+                start_date=args.start_date,
+                end_date=args.end_date,
+            )
+    except (SQLAlchemyError, TypeError, ValueError, RuntimeError) as error:
+        raise SystemExit(f"Aura market-data update failed: {error}") from error
+
+    _print_update_result(result)
+    if stored_count is not None:
+        print(f"Database rows stored: {stored_count:,}")
 
 
 if __name__ == "__main__":

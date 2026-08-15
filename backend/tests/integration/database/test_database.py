@@ -6,12 +6,14 @@ from decimal import Decimal
 import os
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 from uuid import UUID
 
 from alembic import command
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
+import pandas as pd
 import pytest
 import sqlalchemy as sa
 from sqlalchemy import inspect, select
@@ -34,6 +36,9 @@ from backend.app.database.repositories import (
     MarketDataRepository,
     PortfolioRepository,
 )
+from backend.app.services.market_data_service import MarketDataService
+import backend.scripts.seed_historical_data as seed_script
+import backend.scripts.update_market_data as update_script
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
@@ -166,6 +171,23 @@ def _column_map(inspector: sa.Inspector, table: str) -> dict[str, Any]:
         column["name"]: column
         for column in inspector.get_columns(table, schema="public")
     }
+
+
+def _canonical_market_data(
+    rows: list[tuple[str, str, float, int | None, str]],
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "date": pd.to_datetime([row[1] for row in rows]),
+            "symbol": pd.Series([row[0] for row in rows], dtype="string"),
+            "adjusted_close": pd.Series(
+                [row[2] for row in rows],
+                dtype="float64",
+            ),
+            "volume": pd.Series([row[3] for row in rows], dtype="Int64"),
+            "source": pd.Series([row[4] for row in rows], dtype="string"),
+        }
+    )
 
 
 def test_live_migration_schema_types_and_revision(
@@ -315,6 +337,370 @@ def test_market_data_postgresql_upsert_and_range_round_trip(
                 MarketData.date == first_date,
             )
         ) == 1
+
+
+def test_market_data_service_live_round_trip_is_inclusive_and_ordered(
+    session_factory: sessionmaker[Session],
+) -> None:
+    start_date = date(2040, 1, 2)
+    end_date = date(2040, 1, 4)
+    data = _canonical_market_data(
+        [
+            ("P7B", "2040-01-02", 200.25, 20, "phase-7-live"),
+            ("P7B", "2040-01-04", 201.25, 21, "phase-7-live"),
+            ("P7A", "2040-01-02", 1.2345678901235, None, "phase-7-live"),
+            ("P7A", "2040-01-04", 101.125, 10, "phase-7-live"),
+        ]
+    )
+
+    with session_factory() as session:
+        assert MarketDataService(session).store(data) == 4
+        session.commit()
+
+    with session_factory() as session:
+        rows = MarketDataService(session).get_range(
+            ["P7B", "P7A"],
+            start_date,
+            end_date,
+        )
+
+    assert [
+        (
+            row.symbol,
+            row.date,
+            row.adjusted_close,
+            row.volume,
+            row.source,
+        )
+        for row in rows
+    ] == [
+        (
+            "P7A",
+            start_date,
+            Decimal("1.234567890124"),
+            None,
+            "phase-7-live",
+        ),
+        (
+            "P7A",
+            end_date,
+            Decimal("101.125000000000"),
+            10,
+            "phase-7-live",
+        ),
+        (
+            "P7B",
+            start_date,
+            Decimal("200.250000000000"),
+            20,
+            "phase-7-live",
+        ),
+        (
+            "P7B",
+            end_date,
+            Decimal("201.250000000000"),
+            21,
+            "phase-7-live",
+        ),
+    ]
+
+
+def test_market_data_service_live_repeat_upsert_updates_existing_row(
+    session_factory: sessionmaker[Session],
+) -> None:
+    observation_date = date(2040, 2, 1)
+    initial = _canonical_market_data(
+        [("P7UPSERT", "2040-02-01", 10.0, 100, "phase-7-initial")]
+    )
+    updated = _canonical_market_data(
+        [("P7UPSERT", "2040-02-01", 11.5, None, "phase-7-updated")]
+    )
+
+    with session_factory() as session:
+        assert MarketDataService(session).store(initial) == 1
+        session.commit()
+
+    with session_factory() as session:
+        assert MarketDataService(session).store(updated) == 1
+        session.commit()
+
+    with session_factory() as session:
+        rows = MarketDataService(session).get_range(
+            ["P7UPSERT"],
+            observation_date,
+            observation_date,
+        )
+        identity_count = session.scalar(
+            select(sa.func.count()).select_from(MarketData).where(
+                MarketData.symbol == "P7UPSERT",
+                MarketData.date == observation_date,
+            )
+        )
+
+    assert identity_count == 1
+    assert len(rows) == 1
+    assert rows[0].adjusted_close == Decimal("11.500000000000")
+    assert rows[0].volume is None
+    assert rows[0].source == "phase-7-updated"
+
+
+def test_market_data_service_live_batches_more_than_one_thousand_rows(
+    session_factory: sessionmaker[Session],
+) -> None:
+    row_count = 1_001
+    dates = pd.date_range("2041-01-01", periods=row_count)
+    data = pd.DataFrame(
+        {
+            "date": dates,
+            "symbol": pd.Series(["P7BATCH"] * row_count, dtype="string"),
+            "adjusted_close": pd.Series(
+                [float(index + 1) for index in range(row_count)],
+                dtype="float64",
+            ),
+            "volume": pd.Series(range(row_count), dtype="Int64"),
+            "source": pd.Series(
+                ["phase-7-batch"] * row_count,
+                dtype="string",
+            ),
+        }
+    )
+
+    with session_factory() as session:
+        assert MarketDataService(session).store(data) == row_count
+        session.commit()
+
+    with session_factory() as session:
+        rows = MarketDataService(session).get_range(
+            ["P7BATCH"],
+            dates[0].date(),
+            dates[-1].date(),
+        )
+        persisted_count = session.scalar(
+            select(sa.func.count()).select_from(MarketData).where(
+                MarketData.symbol == "P7BATCH"
+            )
+        )
+
+    assert persisted_count == row_count
+    assert len(rows) == row_count
+    assert rows[0].date == dates[0].date()
+    assert rows[-1].date == dates[-1].date()
+
+
+def test_market_data_service_live_caller_rollback_removes_all_rows(
+    session_factory: sessionmaker[Session],
+) -> None:
+    start_date = date(2044, 1, 2)
+    end_date = date(2044, 1, 3)
+    data = _canonical_market_data(
+        [
+            ("P7ROLLBACK", "2044-01-02", 50.0, 500, "phase-7-rollback"),
+            ("P7ROLLBACK", "2044-01-03", 51.0, 501, "phase-7-rollback"),
+        ]
+    )
+
+    with session_factory() as session:
+        assert MarketDataService(session).store(data) == 2
+        assert len(
+            MarketDataService(session).get_range(
+                ["P7ROLLBACK"],
+                start_date,
+                end_date,
+            )
+        ) == 2
+        session.rollback()
+
+    with session_factory() as session:
+        assert MarketDataService(session).get_range(
+            ["P7ROLLBACK"],
+            start_date,
+            end_date,
+        ) == []
+
+
+def test_seed_workflow_live_repeat_upsert_and_existing_row_update(
+    tmp_path: Path,
+    postgres_engine: Engine,
+    session_factory: sessionmaker[Session],
+) -> None:
+    input_path = tmp_path / "phase_8_processed.csv"
+    input_data = pd.DataFrame(
+        {
+            "date": ["2050-01-02", "2050-01-03"],
+            "symbol": ["P8SEEDA", "P8SEEDB"],
+            "adjusted_close": [123.125, 200.5],
+            "volume": [None, 2_000],
+            "source": ["phase-8-seed", "phase-8-seed"],
+        }
+    )
+    input_data.to_csv(input_path, index=False)
+
+    with patch.object(
+        seed_script,
+        "create_database_engine",
+        return_value=postgres_engine,
+    ) as create_engine:
+        assert seed_script.seed_historical_data(input_path) == 2
+        assert seed_script.seed_historical_data(input_path) == 2
+
+        with session_factory() as session:
+            repeated_rows = list(
+                session.scalars(
+                    select(MarketData)
+                    .where(MarketData.symbol.in_(["P8SEEDA", "P8SEEDB"]))
+                    .order_by(MarketData.symbol, MarketData.date)
+                ).all()
+            )
+
+        assert len(repeated_rows) == 2
+        assert [
+            (
+                row.symbol,
+                row.date,
+                row.adjusted_close,
+                row.volume,
+                row.source,
+            )
+            for row in repeated_rows
+        ] == [
+            (
+                "P8SEEDA",
+                date(2050, 1, 2),
+                Decimal("123.125000000000"),
+                None,
+                "phase-8-seed",
+            ),
+            (
+                "P8SEEDB",
+                date(2050, 1, 3),
+                Decimal("200.500000000000"),
+                2_000,
+                "phase-8-seed",
+            ),
+        ]
+
+        input_data.loc[0, "adjusted_close"] = 124.75
+        input_data.loc[0, "volume"] = 777
+        input_data.loc[0, "source"] = "phase-8-seed-updated"
+        input_data.to_csv(input_path, index=False)
+
+        assert seed_script.seed_historical_data(input_path) == 2
+
+    assert create_engine.call_count == 3
+
+    with session_factory() as session:
+        updated_rows = list(
+            session.scalars(
+                select(MarketData)
+                .where(MarketData.symbol.in_(["P8SEEDA", "P8SEEDB"]))
+                .order_by(MarketData.symbol, MarketData.date)
+            ).all()
+        )
+
+    assert len(updated_rows) == 2
+    assert updated_rows[0].adjusted_close == Decimal("124.750000000000")
+    assert updated_rows[0].volume == 777
+    assert updated_rows[0].source == "phase-8-seed-updated"
+
+
+def test_updater_persist_database_workflow_commits_live_canonical_frame(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    postgres_engine: Engine,
+    session_factory: sessionmaker[Session],
+) -> None:
+    data = _canonical_market_data(
+        [
+            ("P8UPDA", "2051-01-02", 300.125, None, "phase-8-update"),
+            (
+                "P8UPDB",
+                "2051-01-03",
+                400.123456789012,
+                4_000,
+                "phase-8-update",
+            ),
+        ]
+    )
+    result = update_script.MarketDataUpdateResult(
+        raw_path=tmp_path / "unused_raw.csv",
+        processed_path=tmp_path / "unused_processed.csv",
+        row_count=2,
+        symbols=("P8UPDA", "P8UPDB"),
+        failed_symbols=(),
+        requested_start_date="2051-01-02",
+        requested_end_date="2051-01-03",
+        actual_start_date="2051-01-02",
+        actual_end_date="2051-01-03",
+    )
+
+    with (
+        patch.object(
+            update_script,
+            "_update_market_data_with_frame",
+            return_value=(result, data),
+        ) as update_handoff,
+        patch.object(
+            update_script,
+            "create_database_engine",
+            return_value=postgres_engine,
+        ),
+    ):
+        update_script.main(
+            [
+                "--symbols",
+                "P8UPDA",
+                "P8UPDB",
+                "--start-date",
+                "2051-01-02",
+                "--end-date",
+                "2051-01-03",
+                "--persist-database",
+            ]
+        )
+
+    update_handoff.assert_called_once_with(
+        symbols=["P8UPDA", "P8UPDB"],
+        start_date="2051-01-02",
+        end_date="2051-01-03",
+    )
+    assert "Database rows stored: 2" in capsys.readouterr().out
+    assert not result.raw_path.exists()
+    assert not result.processed_path.exists()
+
+    with session_factory() as session:
+        rows = list(
+            session.scalars(
+                select(MarketData)
+                .where(MarketData.symbol.in_(["P8UPDA", "P8UPDB"]))
+                .order_by(MarketData.symbol, MarketData.date)
+            ).all()
+        )
+
+    assert [
+        (
+            row.symbol,
+            row.date,
+            row.adjusted_close,
+            row.volume,
+            row.source,
+        )
+        for row in rows
+    ] == [
+        (
+            "P8UPDA",
+            date(2051, 1, 2),
+            Decimal("300.125000000000"),
+            None,
+            "phase-8-update",
+        ),
+        (
+            "P8UPDB",
+            date(2051, 1, 3),
+            Decimal("400.123456789012"),
+            4_000,
+            "phase-8-update",
+        ),
+    ]
 
 
 def test_analysis_jsonb_round_trip_and_database_cascades(
