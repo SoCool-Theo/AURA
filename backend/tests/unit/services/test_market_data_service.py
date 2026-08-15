@@ -1,11 +1,17 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
 import pytest
+from sqlalchemy.orm import Session
 
-from backend.app.services.market_data_service import _to_market_data_records
+import backend.app.services.market_data_service as service_module
+from backend.app.services.market_data_service import (
+    MarketDataService,
+    _to_market_data_records,
+)
 
 
 def _canonical_data() -> pd.DataFrame:
@@ -21,6 +27,42 @@ def _canonical_data() -> pd.DataFrame:
             "source": pd.Series(["provider-b", "provider-a"], dtype="string"),
         }
     )
+
+
+def _canonical_rows(row_count: int) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "date": pd.date_range("2026-01-01", periods=row_count),
+            "symbol": pd.Series(["AAPL"] * row_count, dtype="string"),
+            "adjusted_close": np.arange(
+                100.0,
+                100.0 + row_count,
+                dtype=np.float64,
+            ),
+            "volume": pd.Series(range(row_count), dtype="Int64"),
+            "source": pd.Series(["provider"] * row_count, dtype="string"),
+        }
+    )
+
+
+def _service_with_repository() -> tuple[
+    MarketDataService,
+    MagicMock,
+    MagicMock,
+    MagicMock,
+]:
+    session = MagicMock(spec=Session)
+    repository = MagicMock(spec=service_module.MarketDataRepository)
+    repository.upsert_many.side_effect = lambda records: len(records)
+
+    with patch.object(
+        service_module,
+        "MarketDataRepository",
+        return_value=repository,
+    ) as repository_type:
+        service = MarketDataService(session)
+
+    return service, session, repository, repository_type
 
 
 def test_mapper_preserves_fields_and_row_order_with_python_storage_types() -> None:
@@ -106,3 +148,113 @@ def test_mapper_preserves_duplicate_rows_in_their_original_order() -> None:
         Decimal("101.125000000000"),
         Decimal("102.000000000000"),
     ]
+
+
+def test_service_uses_caller_owned_session() -> None:
+    _, session, _, repository_type = _service_with_repository()
+
+    repository_type.assert_called_once_with(session)
+
+
+def test_store_uses_existing_mapper_output() -> None:
+    service, _, repository, _ = _service_with_repository()
+    data = _canonical_data()
+    prepared_records = [
+        {
+            "symbol": "UNCHANGED",
+            "date": date(2026, 2, 1),
+            "adjusted_close": Decimal("10.000000000000"),
+            "volume": None,
+            "source": " source ",
+        }
+    ]
+
+    with patch.object(
+        service_module,
+        "_to_market_data_records",
+        return_value=prepared_records,
+    ) as mapper:
+        stored_count = service.store(data)
+
+    assert stored_count == 1
+    mapper.assert_called_once_with(data)
+    repository.upsert_many.assert_called_once_with(prepared_records)
+
+
+@pytest.mark.parametrize("row_count", [999, 1_000])
+def test_store_uses_one_repository_write_up_to_batch_limit(
+    row_count: int,
+) -> None:
+    service, session, repository, _ = _service_with_repository()
+
+    stored_count = service.store(_canonical_rows(row_count))
+
+    assert stored_count == row_count
+    repository.upsert_many.assert_called_once()
+    assert len(repository.upsert_many.call_args.args[0]) == row_count
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+
+
+def test_store_splits_large_input_and_handles_final_partial_batch() -> None:
+    service, _, repository, _ = _service_with_repository()
+
+    stored_count = service.store(_canonical_rows(2_001))
+
+    assert stored_count == 2_001
+    batches = [call.args[0] for call in repository.upsert_many.call_args_list]
+    assert [len(batch) for batch in batches] == [1_000, 1_000, 1]
+
+
+def test_store_empty_data_returns_zero_without_repository_write() -> None:
+    service, session, repository, _ = _service_with_repository()
+
+    stored_count = service.store(_canonical_rows(0))
+
+    assert stored_count == 0
+    repository.upsert_many.assert_not_called()
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+
+
+def test_store_propagates_failure_and_stops_later_batches() -> None:
+    service, session, repository, _ = _service_with_repository()
+    failure = RuntimeError("repository write failed")
+    repository.upsert_many.side_effect = [1_000, failure]
+
+    with pytest.raises(RuntimeError) as raised:
+        service.store(_canonical_rows(2_001))
+
+    assert raised.value is failure
+    assert repository.upsert_many.call_count == 2
+    assert [
+        len(call.args[0])
+        for call in repository.upsert_many.call_args_list
+    ] == [1_000, 1_000]
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+
+
+def test_get_range_delegates_without_transforming_inputs_or_results() -> None:
+    service, session, repository, _ = _service_with_repository()
+    symbols = [" aapl ", "AAPL", " aapl "]
+    start_date = date(2026, 1, 31)
+    end_date = date(2026, 1, 1)
+    expected_rows = [MagicMock(), MagicMock()]
+    repository.get_range.return_value = expected_rows
+
+    result = service.get_range(symbols, start_date, end_date)
+
+    assert result is expected_rows
+    repository.get_range.assert_called_once_with(
+        symbols,
+        start_date,
+        end_date,
+    )
+    assert repository.get_range.call_args.args[0] is symbols
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
