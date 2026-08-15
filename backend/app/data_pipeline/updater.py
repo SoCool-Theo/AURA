@@ -56,7 +56,7 @@ def _atomic_write_csv(data: pd.DataFrame, path: Path) -> None:
             temporary_path.unlink()
 
 
-def update_market_data(
+def _update_market_data_with_frame(
     symbols: Iterable[str] | None = None,
     start_date: date | datetime | str = DEFAULT_START_DATE,
     end_date: date | datetime | str | None = None,
@@ -64,8 +64,8 @@ def update_market_data(
     provider: MarketDataProvider | None = None,
     raw_path: Path = RAW_DATA_PATH,
     processed_path: Path = PROCESSED_DATA_PATH,
-) -> MarketDataUpdateResult:
-    """Fetch, persist raw, clean, validate, and persist processed market data."""
+) -> tuple[MarketDataUpdateResult, pd.DataFrame]:
+    """Run one update and return its summary and validated canonical rows."""
     selected_symbols = tuple(symbols) if symbols is not None else DEFAULT_SYMBOLS
     selected_end_date = end_date if end_date is not None else date.today()
 
@@ -87,7 +87,7 @@ def update_market_data(
     dates = pd.to_datetime(clean_data["date"])
     output_symbols = tuple(clean_data["symbol"].drop_duplicates().tolist())
 
-    return MarketDataUpdateResult(
+    result = MarketDataUpdateResult(
         raw_path=raw_path,
         processed_path=processed_path,
         row_count=int(len(clean_data)),
@@ -98,3 +98,25 @@ def update_market_data(
         actual_start_date=dates.min().date().isoformat(),
         actual_end_date=dates.max().date().isoformat(),
     )
+    return result, clean_data
+
+
+def update_market_data(
+    symbols: Iterable[str] | None = None,
+    start_date: date | datetime | str = DEFAULT_START_DATE,
+    end_date: date | datetime | str | None = None,
+    *,
+    provider: MarketDataProvider | None = None,
+    raw_path: Path = RAW_DATA_PATH,
+    processed_path: Path = PROCESSED_DATA_PATH,
+) -> MarketDataUpdateResult:
+    """Fetch, persist raw, clean, validate, and persist processed market data."""
+    result, _ = _update_market_data_with_frame(
+        symbols=symbols,
+        start_date=start_date,
+        end_date=end_date,
+        provider=provider,
+        raw_path=raw_path,
+        processed_path=processed_path,
+    )
+    return result
