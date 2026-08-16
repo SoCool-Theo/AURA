@@ -237,6 +237,59 @@ The refactor did not change:
 - AI conversation persistence
 - Full backend API integration
 
+## Market-Data Storage Integration
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-market-data-storage`
+
+### Completed scope
+
+- Added pure canonical DataFrame-to-repository mapping with `pd.Timestamp` to
+  Python `date`, adjusted close to explicitly quantized 12-place `Decimal`
+  using `ROUND_HALF_UP`, nullable volume to `None`, and preserved symbol,
+  source, row order, and caller-owned input data.
+- Added `MarketDataService` using a caller-owned SQLAlchemy session, the
+  existing `MarketDataRepository`, 1,000-record write batches, and inclusive,
+  deterministic historical range retrieval.
+- Added a manual processed-CSV historical seed/backfill workflow that reuses
+  existing market-data validation and commits once at the outer script boundary.
+- Added a private updater handoff for the already-cleaned and validated
+  DataFrame while preserving the public
+  `update_market_data(...) -> MarketDataUpdateResult` contract.
+- Preserved the updater's default CSV-only behavior and added explicit
+  `--persist-database` PostgreSQL persistence after successful processing.
+- Preserved caller-controlled commit and rollback behavior across service and
+  repository batches.
+
+### Stable integration boundaries
+
+- The market-data pipeline remains responsible for fetch, clean, validate, and
+  local CSV persistence.
+- CSV and PostgreSQL persistence remain separate transactions by design.
+- The full processed historical dataset was not automatically seeded into
+  PostgreSQL during verification.
+- The existing processed dataset was confirmed to exist and validate with
+  69,449 rows across 17 symbols.
+- Automatic scheduling, APIs, analysis/reporting orchestration, simulations,
+  AI behavior, frontend integration, and deployment remain separate workstreams.
+
+### Final verification
+
+- PostgreSQL version: 18.4
+- Market-data service tests: 15 passed
+- Market-data pipeline tests: 27 passed
+- Script tests: 16 passed
+- Database unit and repository tests: 93 passed
+- Live PostgreSQL integration tests: 11 passed, 0 skipped
+- Schema tests: 301 passed
+- Analytics tests: 820 passed
+- Full backend tests: 1,284 passed, 0 skipped
+- Live coverage included persistence/retrieval, inclusive ordering, nullable
+  volume, Decimal/Numeric persistence, repeat upserts, existing-row updates,
+  1,001-row batching, caller commit/rollback, processed-CSV seeding, and updater
+  `--persist-database` persistence.
+- Compilation, dependency, and Git diff checks: passed
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -249,22 +302,26 @@ cause test failures.
 
 ## Current Backend Priorities
 
-### Ready follow-on work
+### Recommended next workstream
 
-- `feat/backend-market-data-storage`: the market-data pipeline and database
-  foundation are complete; the pipeline-to-PostgreSQL mapping and storage
-  workflow remain to be implemented.
+- `feat/backend-analysis-service`: its analytics, schema, database, and
+  database-backed historical market-data prerequisites are complete; service
+  mapping and orchestration remain unimplemented and can now begin.
+
+### Other ready follow-on work
+
 - `feat/backend-portfolio-api`: its schema and database prerequisites are now
   available; API and service orchestration remain unimplemented.
-- `feat/backend-analysis-service` and `feat/backend-analysis-reporting`: their
-  analytics, schema, and persistence foundations are available, while service
-  mapping/orchestration and database-backed market-data access remain future
-  integration work.
+- `feat/backend-market-data-scheduler`: its pipeline, database, and storage
+  prerequisites are complete; automatic scheduling itself remains unimplemented
+  and deferred.
+- `feat/backend-analysis-reporting`: its analytics, schema, database, and
+  market-data foundations are available; reporting service mapping remains
+  unimplemented.
 
 ### Still deferred or dependency-blocked
 
-- Market-data scheduling remains dependent on completed storage integration.
 - Historical simulations still require finalized simulation contracts and
   implementation; simulation history remains dependent on those simulators.
-- AI persistence, full backend API integration, and deployment remain later
-  workstreams.
+- Analysis reporting, AI persistence, full backend API integration,
+  frontend/backend integration, and deployment remain later workstreams.
