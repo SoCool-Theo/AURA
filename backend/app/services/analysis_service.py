@@ -5,10 +5,12 @@ from datetime import date
 import math
 
 import pandas as pd
+from sqlalchemy.orm import Session
 
-from ..analytics import PortfolioAnalyticsResult
+from ..analytics import PortfolioAnalyticsResult, analyze_portfolio
 from ..database.models import MarketData
 from ..schemas import PortfolioAnalysisRequest, PortfolioAnalysisResponse
+from .market_data_service import MarketDataService
 
 
 _MISSING_MARKET_DATA_PREFIX = (
@@ -250,3 +252,29 @@ def _map_analysis_response(
             "portfolio_returns": portfolio_returns,
         }
     )
+
+
+class AnalysisService:
+    """Coordinate database-backed portfolio analysis without transactions."""
+
+    def __init__(self, session: Session) -> None:
+        self._market_data_service = MarketDataService(session)
+
+    def analyze(
+        self,
+        request: PortfolioAnalysisRequest,
+    ) -> PortfolioAnalysisResponse:
+        """Return completed analytics for one validated portfolio request."""
+        symbols = [holding.symbol for holding in request.holdings]
+        weights = {
+            holding.symbol: float(holding.weight)
+            for holding in request.holdings
+        }
+        records = self._market_data_service.get_range(
+            symbols,
+            request.start_date,
+            request.end_date,
+        )
+        prices = _build_price_frame(records, symbols)
+        result = analyze_portfolio(prices, weights)
+        return _map_analysis_response(request, result)

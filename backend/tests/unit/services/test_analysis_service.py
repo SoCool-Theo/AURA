@@ -2,12 +2,15 @@ from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 import json
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.orm import Session
 
+import backend.app.services.analysis_service as service_module
 from backend.app.analytics.concentration import ConcentrationResult
 from backend.app.analytics.diversification import DiversificationResult
 from backend.app.analytics.drawdown import MaxDrawdownResult
@@ -20,6 +23,7 @@ from backend.app.schemas import (
     PortfolioAnalysisResponse,
 )
 from backend.app.services.analysis_service import (
+    AnalysisService,
     _build_price_frame,
     _map_analysis_response,
 )
@@ -187,6 +191,325 @@ def _analytics_result() -> PortfolioAnalyticsResult:
         correlation_matrix=correlation_matrix,
         correlation_pairs=correlation_pairs,
     )
+
+
+def _request_with_zero_weight() -> PortfolioAnalysisRequest:
+    return PortfolioAnalysisRequest.model_validate(
+        {
+            "portfolio_name": "Zero Weight Portfolio",
+            "holdings": [
+                {"symbol": "MSFT", "weight": 0.6},
+                {"symbol": "ZERO", "weight": 0.0},
+                {"symbol": "AAPL", "weight": 0.4},
+            ],
+            "start_date": "2026-02-01",
+            "end_date": "2026-02-28",
+        }
+    )
+
+
+def _retrieved_analysis_records() -> list[MarketData]:
+    return [
+        *[
+            _record("AAPL", observation_date, adjusted_close)
+            for observation_date, adjusted_close in (
+                ("2026-01-02", "100.000000000000"),
+                ("2026-01-03", "101.000000000000"),
+                ("2026-01-04", "99.000000000000"),
+                ("2026-01-05", "102.000000000000"),
+            )
+        ],
+        *[
+            _record("BND", observation_date, adjusted_close)
+            for observation_date, adjusted_close in (
+                ("2026-01-02", "70.000000000000"),
+                ("2026-01-03", "70.100000000000"),
+                ("2026-01-04", "70.200000000000"),
+                ("2026-01-05", "70.300000000000"),
+            )
+        ],
+        *[
+            _record("MSFT", observation_date, adjusted_close)
+            for observation_date, adjusted_close in (
+                ("2026-01-02", "400.000000000000"),
+                ("2026-01-03", "404.000000000000"),
+                ("2026-01-04", "396.000000000000"),
+                ("2026-01-05", "408.000000000000"),
+            )
+        ],
+    ]
+
+
+def _mocked_market_data_service() -> tuple[MagicMock, MagicMock]:
+    market_data_service = MagicMock(spec=service_module.MarketDataService)
+    market_data_service_type = MagicMock(
+        return_value=market_data_service,
+    )
+    return market_data_service, market_data_service_type
+
+
+def test_analysis_service_orchestrates_existing_boundaries_in_order() -> None:
+    session = MagicMock(spec=Session)
+    request = _request_with_zero_weight()
+    request_snapshot = request.model_dump()
+    records = _retrieved_analysis_records()
+    record_snapshot = [
+        (
+            record.symbol,
+            record.date,
+            record.adjusted_close,
+            record.volume,
+            record.source,
+        )
+        for record in records
+    ]
+    prices = pd.DataFrame({"sentinel": [1.0]})
+    analytics_result = MagicMock(spec=PortfolioAnalyticsResult)
+    response = MagicMock(spec=PortfolioAnalysisResponse)
+    market_data_service, market_data_service_type = (
+        _mocked_market_data_service()
+    )
+    market_data_service.get_range.return_value = records
+
+    with (
+        patch.object(
+            service_module,
+            "MarketDataService",
+            market_data_service_type,
+        ),
+        patch.object(
+            service_module,
+            "_build_price_frame",
+            return_value=prices,
+        ) as build_price_frame,
+        patch.object(
+            service_module,
+            "analyze_portfolio",
+            return_value=analytics_result,
+        ) as analyze_portfolio,
+        patch.object(
+            service_module,
+            "_map_analysis_response",
+            return_value=response,
+        ) as map_analysis_response,
+    ):
+        result = AnalysisService(session).analyze(request)
+
+    symbols = ["MSFT", "ZERO", "AAPL"]
+    expected_weights = {"MSFT": 0.6, "ZERO": 0.0, "AAPL": 0.4}
+    market_data_service_type.assert_called_once_with(session)
+    market_data_service.get_range.assert_called_once_with(
+        symbols,
+        date(2026, 2, 1),
+        date(2026, 2, 28),
+    )
+    build_price_frame.assert_called_once()
+    assert build_price_frame.call_args.args[0] is records
+    passed_symbols = market_data_service.get_range.call_args.args[0]
+    assert passed_symbols == symbols
+    assert build_price_frame.call_args.args[1] is passed_symbols
+    analyze_portfolio.assert_called_once_with(prices, expected_weights)
+    passed_weights = analyze_portfolio.call_args.args[1]
+    assert list(passed_weights) == symbols
+    assert all(type(weight) is float for weight in passed_weights.values())
+    assert analyze_portfolio.call_args.kwargs == {}
+    map_analysis_response.assert_called_once_with(request, analytics_result)
+    assert map_analysis_response.call_args.args[0] is request
+    assert result is response
+    assert request.model_dump() == request_snapshot
+    assert [
+        (
+            record.symbol,
+            record.date,
+            record.adjusted_close,
+            record.volume,
+            record.source,
+        )
+        for record in records
+    ] == record_snapshot
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+
+
+def test_analysis_service_integrates_real_phase_two_and_three_helpers() -> None:
+    session = MagicMock(spec=Session)
+    request = _analysis_request()
+    request_snapshot = request.model_dump()
+    records = _retrieved_analysis_records()
+    record_snapshot = [
+        (
+            record.symbol,
+            record.date,
+            record.adjusted_close,
+            record.volume,
+            record.source,
+        )
+        for record in records
+    ]
+    market_data_service, market_data_service_type = (
+        _mocked_market_data_service()
+    )
+    market_data_service.get_range.return_value = records
+    controlled_result = _analytics_result()
+
+    with (
+        patch.object(
+            service_module,
+            "MarketDataService",
+            market_data_service_type,
+        ),
+        patch.object(
+            service_module,
+            "analyze_portfolio",
+            return_value=controlled_result,
+        ) as analyze_portfolio,
+    ):
+        response = AnalysisService(session).analyze(request)
+
+    prices, weights = analyze_portfolio.call_args.args
+    assert list(prices.columns) == ["MSFT", "AAPL", "BND"]
+    assert list(prices.index) == [
+        pd.Timestamp("2026-01-02"),
+        pd.Timestamp("2026-01-03"),
+        pd.Timestamp("2026-01-04"),
+        pd.Timestamp("2026-01-05"),
+    ]
+    assert prices.to_dict(orient="list") == {
+        "MSFT": [400.0, 404.0, 396.0, 408.0],
+        "AAPL": [100.0, 101.0, 99.0, 102.0],
+        "BND": [70.0, 70.1, 70.2, 70.3],
+    }
+    assert list(weights) == ["MSFT", "AAPL", "BND"]
+    assert weights == {"MSFT": 0.5, "AAPL": 0.3, "BND": 0.2}
+    assert analyze_portfolio.call_args.kwargs == {}
+    assert isinstance(response, PortfolioAnalysisResponse)
+    assert response.portfolio_name == request.portfolio_name
+    assert response.start_date == request.start_date
+    assert response.end_date == request.end_date
+    assert response.metadata.analysis_start == date(2026, 1, 2)
+    assert response.metadata.analysis_end == date(2026, 1, 5)
+    assert request.model_dump() == request_snapshot
+    assert [
+        (
+            record.symbol,
+            record.date,
+            record.adjusted_close,
+            record.volume,
+            record.source,
+        )
+        for record in records
+    ] == record_snapshot
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+
+
+def test_analysis_service_propagates_missing_symbol_error() -> None:
+    session = MagicMock(spec=Session)
+    request = _analysis_request()
+    market_data_service, market_data_service_type = (
+        _mocked_market_data_service()
+    )
+    market_data_service.get_range.return_value = [
+        _record("MSFT", "2026-01-02", "400.000000000000")
+    ]
+
+    with (
+        patch.object(
+            service_module,
+            "MarketDataService",
+            market_data_service_type,
+        ),
+        patch.object(service_module, "analyze_portfolio") as analyze_portfolio,
+        patch.object(
+            service_module,
+            "_map_analysis_response",
+        ) as map_analysis_response,
+    ):
+        with pytest.raises(ValueError) as raised:
+            AnalysisService(session).analyze(request)
+
+    assert str(raised.value) == (
+        "market data is unavailable for requested symbols: AAPL, BND"
+    )
+    analyze_portfolio.assert_not_called()
+    map_analysis_response.assert_not_called()
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+
+
+def test_analysis_service_propagates_analytics_error_unchanged() -> None:
+    session = MagicMock(spec=Session)
+    request = _analysis_request()
+    failure = ValueError("returns must contain at least two observations")
+    market_data_service, market_data_service_type = (
+        _mocked_market_data_service()
+    )
+    market_data_service.get_range.return_value = _retrieved_analysis_records()
+
+    with (
+        patch.object(
+            service_module,
+            "MarketDataService",
+            market_data_service_type,
+        ),
+        patch.object(
+            service_module,
+            "analyze_portfolio",
+            side_effect=failure,
+        ),
+        patch.object(
+            service_module,
+            "_map_analysis_response",
+        ) as map_analysis_response,
+    ):
+        with pytest.raises(ValueError) as raised:
+            AnalysisService(session).analyze(request)
+
+    assert raised.value is failure
+    map_analysis_response.assert_not_called()
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+
+
+def test_analysis_service_propagates_market_data_error_unchanged() -> None:
+    session = MagicMock(spec=Session)
+    request = _analysis_request()
+    failure = RuntimeError("market-data retrieval failed")
+    market_data_service, market_data_service_type = (
+        _mocked_market_data_service()
+    )
+    market_data_service.get_range.side_effect = failure
+
+    with (
+        patch.object(
+            service_module,
+            "MarketDataService",
+            market_data_service_type,
+        ),
+        patch.object(
+            service_module,
+            "_build_price_frame",
+        ) as build_price_frame,
+        patch.object(service_module, "analyze_portfolio") as analyze_portfolio,
+        patch.object(
+            service_module,
+            "_map_analysis_response",
+        ) as map_analysis_response,
+    ):
+        with pytest.raises(RuntimeError) as raised:
+            AnalysisService(session).analyze(request)
+
+    assert raised.value is failure
+    build_price_frame.assert_not_called()
+    analyze_portfolio.assert_not_called()
+    map_analysis_response.assert_not_called()
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
 
 
 def test_map_analysis_response_constructs_complete_strict_response() -> None:
