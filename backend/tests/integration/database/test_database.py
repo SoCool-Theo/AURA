@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,11 @@ from backend.app.database.repositories import (
     MarketDataRepository,
     PortfolioRepository,
 )
+from backend.app.schemas import (
+    PortfolioAnalysisRequest,
+    PortfolioAnalysisResponse,
+)
+from backend.app.services.analysis_service import AnalysisService
 from backend.app.services.market_data_service import MarketDataService
 import backend.scripts.seed_historical_data as seed_script
 import backend.scripts.update_market_data as update_script
@@ -516,6 +522,153 @@ def test_market_data_service_live_caller_rollback_removes_all_rows(
             start_date,
             end_date,
         ) == []
+
+
+def test_analysis_service_live_real_multi_asset_workflow(
+    session_factory: sessionmaker[Session],
+) -> None:
+    requested_symbols = ["P5BND", "P5AAPL"]
+    start_date = date(2060, 1, 2)
+    end_date = date(2060, 1, 7)
+    data = _canonical_market_data(
+        [
+            ("P5AAPL", "2060-01-01", 197.0, 1_000, "phase-5-live"),
+            ("P5AAPL", "2060-01-02", 200.0, 1_001, "phase-5-live"),
+            ("P5AAPL", "2060-01-03", 198.0, 1_002, "phase-5-live"),
+            ("P5AAPL", "2060-01-05", 204.0, 1_003, "phase-5-live"),
+            ("P5AAPL", "2060-01-06", 202.0, 1_004, "phase-5-live"),
+            ("P5AAPL", "2060-01-07", 208.0, 1_005, "phase-5-live"),
+            ("P5AAPL", "2060-01-08", 210.0, 1_006, "phase-5-live"),
+            ("P5BND", "2060-01-01", 99.0, None, "phase-5-live"),
+            ("P5BND", "2060-01-02", 100.0, None, "phase-5-live"),
+            ("P5BND", "2060-01-03", 101.0, None, "phase-5-live"),
+            ("P5BND", "2060-01-04", 150.0, None, "phase-5-live"),
+            ("P5BND", "2060-01-05", 99.0, None, "phase-5-live"),
+            ("P5BND", "2060-01-06", 103.0, None, "phase-5-live"),
+            ("P5BND", "2060-01-07", 102.0, None, "phase-5-live"),
+            ("P5BND", "2060-01-08", 104.0, None, "phase-5-live"),
+        ]
+    )
+    request = PortfolioAnalysisRequest.model_validate(
+        {
+            "portfolio_name": "Live Integration Portfolio",
+            "holdings": [
+                {"symbol": "P5BND", "weight": 0.45},
+                {"symbol": "P5AAPL", "weight": 0.55},
+            ],
+            "start_date": start_date,
+            "end_date": end_date,
+        }
+    )
+
+    with session_factory() as session:
+        assert MarketDataService(session).store(data) == 15
+        assert session.in_transaction()
+
+        response = AnalysisService(session).analyze(request)
+
+        assert session.in_transaction()
+        assert isinstance(response, PortfolioAnalysisResponse)
+        assert response.portfolio_name == "Live Integration Portfolio"
+        assert response.start_date == start_date
+        assert response.end_date == end_date
+        assert response.metadata.analysis_start == start_date
+        assert response.metadata.analysis_end == end_date
+        assert response.metadata.price_observation_count == 5
+        assert response.metadata.return_observation_count == 4
+        assert response.metadata.asset_count == 2
+        assert [metric.symbol for metric in response.asset_metrics] == (
+            requested_symbols
+        )
+        assert response.correlation_matrix.symbols == requested_symbols
+        assert [
+            (pair.asset_a, pair.asset_b)
+            for pair in response.correlation_pairs
+        ] == [("P5BND", "P5AAPL")]
+        assert len(response.portfolio_returns) == 4
+        assert all(
+            math.isfinite(value)
+            for value in (
+                response.portfolio_metrics.cumulative_return,
+                response.portfolio_metrics.annualized_return,
+                response.portfolio_metrics.annualized_volatility,
+                response.portfolio_metrics.sharpe_ratio,
+            )
+        )
+        assert PortfolioAnalysisResponse.model_validate(
+            response.model_dump()
+        ) == response
+        assert session.scalar(
+            select(sa.func.count()).select_from(Analysis)
+        ) == 0
+
+        with session_factory() as uncommitted_reader:
+            assert uncommitted_reader.scalar(
+                select(sa.func.count())
+                .select_from(MarketData)
+                .where(MarketData.symbol.in_(requested_symbols))
+            ) == 0
+            assert uncommitted_reader.scalar(
+                select(sa.func.count()).select_from(Analysis)
+            ) == 0
+
+        session.rollback()
+        assert not session.in_transaction()
+
+    with session_factory() as rolled_back_reader:
+        assert rolled_back_reader.scalar(
+            select(sa.func.count())
+            .select_from(MarketData)
+            .where(MarketData.symbol.in_(requested_symbols))
+        ) == 0
+
+
+def test_analysis_service_live_missing_symbols_preserve_request_order(
+    session_factory: sessionmaker[Session],
+) -> None:
+    data = _canonical_market_data(
+        [
+            ("P5PRESENT", "2061-01-02", 100.0, 100, "phase-5-live"),
+            ("P5PRESENT", "2061-01-03", 102.0, 101, "phase-5-live"),
+            ("P5PRESENT", "2061-01-04", 101.0, 102, "phase-5-live"),
+        ]
+    )
+    request = PortfolioAnalysisRequest.model_validate(
+        {
+            "portfolio_name": "Missing Symbols",
+            "holdings": [
+                {"symbol": "P5MISSB", "weight": 0.2},
+                {"symbol": "P5PRESENT", "weight": 0.5},
+                {"symbol": "P5MISSA", "weight": 0.3},
+            ],
+            "start_date": "2061-01-02",
+            "end_date": "2061-01-04",
+        }
+    )
+
+    with session_factory() as session:
+        assert MarketDataService(session).store(data) == 3
+
+        with pytest.raises(ValueError) as raised:
+            AnalysisService(session).analyze(request)
+
+        assert str(raised.value) == (
+            "market data is unavailable for requested symbols: "
+            "P5MISSB, P5MISSA"
+        )
+        assert session.in_transaction()
+        assert session.scalar(
+            select(sa.func.count()).select_from(Analysis)
+        ) == 0
+
+        with session_factory() as uncommitted_reader:
+            assert uncommitted_reader.scalar(
+                select(sa.func.count())
+                .select_from(MarketData)
+                .where(MarketData.symbol == "P5PRESENT")
+            ) == 0
+
+        session.rollback()
 
 
 def test_seed_workflow_live_repeat_upsert_and_existing_row_update(
