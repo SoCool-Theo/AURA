@@ -123,7 +123,9 @@ The refactor did not change:
 - Documentation consistency check: passed
 - Git whitespace check: passed
 
-### Deferred work
+### Branch boundary at completion
+
+The schemas-contract branch itself did not implement:
 
 - FastAPI routes
 - Service orchestration
@@ -227,7 +229,9 @@ The refactor did not change:
 - Compilation, dependency, and Git diff checks: passed
 - Existing warning: 1 unrelated Starlette/httpx deprecation warning
 
-### Deferred integration work
+### Branch boundary at completion
+
+The database-foundation branch itself did not implement:
 
 - Market-data pipeline-to-PostgreSQL integration
 - Portfolio API routes
@@ -270,8 +274,10 @@ The refactor did not change:
   PostgreSQL during verification.
 - The existing processed dataset was confirmed to exist and validate with
   69,449 rows across 17 symbols.
-- Automatic scheduling, APIs, analysis/reporting orchestration, simulations,
-  AI behavior, frontend integration, and deployment remain separate workstreams.
+- Analysis-service orchestration is owned by the completed separate workstream
+  documented below.
+- Automatic scheduling, APIs, reporting, simulations, AI behavior, frontend
+  integration, and deployment remain separate workstreams.
 
 ### Final verification
 
@@ -290,6 +296,81 @@ The refactor did not change:
   `--persist-database` persistence.
 - Compilation, dependency, and Git diff checks: passed
 
+## Backend Analysis Service
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-analysis-service`
+
+### Completed scope
+
+- Added a pure adapter from database `MarketData` records to the analytics
+  price frame, preserving requested symbol order and converting adjusted-close
+  `Decimal` values to analytics floats.
+- Uses the exact common-date intersection across all requested assets without
+  forward-fill, backfill, interpolation, or synthesized prices.
+- Added explicit missing-symbol validation in requested-symbol order.
+- Added a pure `PortfolioAnalyticsResult` to `PortfolioAnalysisResponse`
+  mapper that preserves negative maximum drawdown, signed risk contributions,
+  and risk-driver, asset, correlation, and portfolio-return ordering.
+- Converts only intentionally unavailable analytics values, including
+  legitimately undefined Sharpe ratios and correlations, to schema `null`.
+- Added production `AnalysisService` orchestration from a validated
+  `PortfolioAnalysisRequest` through PostgreSQL historical data and the
+  existing analytics engine to a validated `PortfolioAnalysisResponse`.
+
+### Stable service boundaries
+
+```text
+PortfolioAnalysisRequest
+        ↓
+AnalysisService
+        ↓
+MarketDataService → MarketDataRepository → PostgreSQL
+        ↓
+analytics input adapter → analyze_portfolio(...)
+        ↓
+PortfolioAnalyticsResult → response mapper
+        ↓
+PortfolioAnalysisResponse
+```
+
+- Historical data retrieval remains owned by `MarketDataService`; the analysis
+  service does not fetch or update market data.
+- The caller owns the SQLAlchemy session and transaction. The service does not
+  commit, roll back, or close the session.
+- The service reuses `analyze_portfolio(...)` with its existing defaults and
+  does not duplicate or alter analytics formulas.
+- Analysis execution is read-only and does not persist an `Analysis` snapshot
+  or report.
+
+### Final verification
+
+- AnalysisService unit tests: 25 passed
+- Analytics tests: 820 passed
+- Schema tests: 301 passed
+- MarketDataService tests: 15 passed
+- Database unit tests: 93 passed
+- Live PostgreSQL integration tests: 13 passed, 0 skipped
+- Full backend tests: 1,311 passed, 0 failed, 0 errors, 0 skipped
+- Python compilation, dependency check, direct import smoke check, and Git
+  integrity/whitespace checks: passed
+- Existing warning: 1 unrelated Starlette/httpx deprecation warning
+
+Live PostgreSQL coverage verified successful multi-asset analysis, inclusive
+date bounds, requested ordering despite repository ordering, exact common-date
+intersection, missing-symbol behavior, caller-owned session/transaction
+behavior, and no `Analysis` snapshot creation. Verification used focused test
+records and did not require permanently seeding the full historical CSV.
+
+### Deferred work
+
+- FastAPI portfolio-analysis routes and portfolio CRUD APIs
+- Analysis snapshot/report persistence and report-history retrieval
+- Historical, allocation, and combined simulations and simulation history
+- Automatic market-data scheduling
+- AI-agent behavior
+- Full backend API integration, frontend/backend integration, and deployment
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -304,24 +385,23 @@ cause test failures.
 
 ### Recommended next workstream
 
-- `feat/backend-analysis-service`: its analytics, schema, database, and
-  database-backed historical market-data prerequisites are complete; service
-  mapping and orchestration remain unimplemented and can now begin.
+- `feat/backend-portfolio-api`: portfolio schemas, portfolio/holding database
+  repositories, and the analysis service are complete; portfolio API and
+  service exposure remain unimplemented and can now begin.
 
 ### Other ready follow-on work
 
-- `feat/backend-portfolio-api`: its schema and database prerequisites are now
-  available; API and service orchestration remain unimplemented.
 - `feat/backend-market-data-scheduler`: its pipeline, database, and storage
   prerequisites are complete; automatic scheduling itself remains unimplemented
   and deferred.
-- `feat/backend-analysis-reporting`: its analytics, schema, database, and
-  market-data foundations are available; reporting service mapping remains
-  unimplemented.
+- `feat/backend-analysis-reporting`: its analytics, schema, database,
+  market-data, and analysis-service prerequisites are available; report
+  persistence and reporting mapping remain unimplemented as a separate later
+  workstream.
 
 ### Still deferred or dependency-blocked
 
 - Historical simulations still require finalized simulation contracts and
   implementation; simulation history remains dependent on those simulators.
-- Analysis reporting, AI persistence, full backend API integration,
+- Analysis reporting, AI behavior/persistence, full backend API integration,
   frontend/backend integration, and deployment remain later workstreams.
