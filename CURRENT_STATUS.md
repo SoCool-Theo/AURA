@@ -364,12 +364,79 @@ records and did not require permanently seeding the full historical CSV.
 
 ### Deferred work
 
-- FastAPI portfolio-analysis routes and portfolio CRUD APIs
+- FastAPI portfolio-analysis routes; portfolio CRUD APIs were completed later
+  by the separate `feat/backend-portfolio-api` workstream documented below
 - Analysis snapshot/report persistence and report-history retrieval
 - Historical, allocation, and combined simulations and simulation history
 - Automatic market-data scheduling
 - AI-agent behavior
 - Full backend API integration, frontend/backend integration, and deployment
+
+## Backend Portfolio API
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-portfolio-api`
+
+### Completed scope
+
+- Added CRUD-oriented contracts for portfolio creation, rename/update, holdings
+  replacement, duplication, complete responses, holding responses, summaries,
+  and list responses. The existing 21-name package-level schema export contract
+  remains unchanged; simulation schemas were not added.
+- Added `PortfolioService` coordination for create, get, list, rename, holdings
+  replacement, duplicate, and delete. ID-based operations enforce ownership at
+  the service boundary.
+- Added frontend-neutral REST endpoints usable by web and mobile clients:
+  `POST /api/portfolios`, `GET /api/portfolios`,
+  `GET /api/portfolios/{portfolio_id}`,
+  `PATCH /api/portfolios/{portfolio_id}`,
+  `PUT /api/portfolios/{portfolio_id}/holdings`,
+  `POST /api/portfolios/{portfolio_id}/duplicate`, and
+  `DELETE /api/portfolios/{portfolio_id}`.
+- Preserved UUID ownership and ordered symbol/weight holdings. Replacement,
+  duplication with new portfolio and holding identities, and deletion are
+  supported. Shares, invested amounts, and current values are not persisted.
+
+### Ownership and transaction boundaries
+
+- `X-User-ID` is a temporary ownership selector that validates the supplied
+  UUID against an existing `User`; it is not secure authentication.
+- Portfolio access remains owner-scoped, and missing and wrong-owner portfolio
+  IDs produce the same client-visible `404`.
+- `PortfolioRepository` and `PortfolioService` remain commit/rollback-free,
+  and the service does not close sessions. Successful writes commit at the API
+  boundary; failure rollback and request-scoped cleanup remain owned by the
+  database dependency.
+- Database engine/session setup remains lazy, so application import and health
+  checks do not require portfolio data or a live PostgreSQL connection.
+
+### Final synchronized verification
+
+- Portfolio API integration tests: 42 passed
+- PortfolioService tests: 21 passed
+- Portfolio schema tests: 84 passed
+- Complete schema suite: 351 passed
+- PortfolioRepository tests: 17 passed
+- AnalysisService tests: 25 passed
+- Analytics tests: 820 passed
+- Live PostgreSQL integration: 16 passed, 0 skipped
+- Full backend: 1,427 passed, 0 failed, 0 errors, 0 skipped
+- Compilation, dependency, import, health, and API-surface checks: passed
+- Existing warning: 1 Starlette TestClient/httpx deprecation warning
+
+Live portfolio coverage exercised the real FastAPI → request dependency →
+PortfolioService → PortfolioRepository → PostgreSQL path, including CRUD,
+ordered holding persistence, duplication, ownership isolation, fresh-session
+persistence, and existing-user validation.
+
+### Branch boundary at completion
+
+The Portfolio API workstream did not implement secure authentication,
+JWT/login/user registration, a portfolio-analysis HTTP endpoint, report
+persistence/history, simulations or simulation history, automatic market-data
+scheduling, AI-agent behavior, full backend API integration, frontend work, or
+deployment. Analysis execution remains a separate completed service capability
+until a later reporting/API workstream exposes it.
 
 ## Known Issues and Technical Debt
 
@@ -385,23 +452,22 @@ cause test failures.
 
 ### Recommended next workstream
 
-- `feat/backend-portfolio-api`: portfolio schemas, portfolio/holding database
-  repositories, and the analysis service are complete; portfolio API and
-  service exposure remain unimplemented and can now begin.
+- `feat/backend-analysis-reporting`: AnalysisService and the Portfolio API are
+  complete, and Analysis persistence infrastructure already exists. Report
+  persistence/service orchestration, response mapping, and API exposure remain
+  unfinished and are the next focused backend workstream.
 
 ### Other ready follow-on work
 
 - `feat/backend-market-data-scheduler`: its pipeline, database, and storage
   prerequisites are complete; automatic scheduling itself remains unimplemented
   and deferred.
-- `feat/backend-analysis-reporting`: its analytics, schema, database,
-  market-data, and analysis-service prerequisites are available; report
-  persistence and reporting mapping remain unimplemented as a separate later
-  workstream.
 
 ### Still deferred or dependency-blocked
 
 - Historical simulations still require finalized simulation contracts and
   implementation; simulation history remains dependent on those simulators.
-- Analysis reporting, AI behavior/persistence, full backend API integration,
-  frontend/backend integration, and deployment remain later workstreams.
+- Simulation requirements/contracts remain deferred. Automatic market-data
+  scheduling remains a separate deferred workstream.
+- AI behavior/persistence, full backend API integration, frontend/backend
+  integration, and deployment remain later workstreams.
