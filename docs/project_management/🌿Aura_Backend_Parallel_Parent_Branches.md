@@ -71,6 +71,7 @@ feature/refactor/docs branch
 | `feat/backend-market-data-pipeline` | Parent feature | Completed | Fetch, clean, validate, normalize, and locally persist market data |
 | `feat/backend-database-foundation` | Parent feature | Completed | PostgreSQL connection, models, migrations, repositories, and live integration verification |
 | `feat/backend-market-data-storage` | Integration feature | Completed | Save and retrieve processed historical data through PostgreSQL |
+| `feat/backend-analysis-service` | Integration feature | Completed | Coordinate validated portfolio-analysis input, PostgreSQL historical data, existing analytics, and response schemas |
 | `feat/backend-quality-ci` | Optional support | Optional | Automated testing and code-quality checks |
 
 ---
@@ -655,7 +656,87 @@ frontend/backend integration, or deployment.
 
 ---
 
-## 6. Optional: `feat/backend-quality-ci`
+## 6. `feat/backend-analysis-service`
+
+**Status:** Completed and merged into `develop`
+
+### Purpose
+
+Coordinate validated portfolio-analysis requests, PostgreSQL-backed historical
+market data, the existing analytics engine, and validated response schemas.
+
+### Completed Work
+
+- Added a pure database-record to analytics-price-frame adapter.
+- Preserved requested holding/symbol order and used the exact common-date
+  intersection across requested assets.
+- Added missing-symbol validation and adjusted-close `Decimal` to float
+  conversion without forward-fill, backfill, interpolation, or synthesized
+  prices.
+- Added a pure analytics-result to response mapper that preserves negative
+  maximum drawdown, signed risk contributions, and all defined collection
+  ordering.
+- Converted only intentionally unavailable analytics values, such as undefined
+  Sharpe ratios or correlations, to schema `null`.
+- Added production `AnalysisService` using caller-owned SQLAlchemy session and
+  transaction control, `MarketDataService`, and the existing
+  `analyze_portfolio(...)` defaults.
+- Kept analysis execution read-only with no `Analysis` snapshot/report
+  persistence and no analytics-formula duplication.
+
+### Production Dependency Flow
+
+```text
+PortfolioAnalysisRequest
+        ↓
+AnalysisService
+        ↓
+MarketDataService
+        ↓
+MarketDataRepository
+        ↓
+PostgreSQL historical market data
+        ↓
+analytics input adapter
+        ↓
+analyze_portfolio(...)
+        ↓
+PortfolioAnalyticsResult
+        ↓
+response mapper
+        ↓
+PortfolioAnalysisResponse
+```
+
+### Final Verification
+
+- AnalysisService unit tests: 25 passed
+- Analytics tests: 820 passed
+- Schema tests: 301 passed
+- MarketDataService tests: 15 passed
+- Database unit tests: 93 passed
+- Live PostgreSQL integration tests: 13 passed, 0 skipped
+- Full backend tests: 1,311 passed, 0 failed, 0 errors, 0 skipped
+- Compilation, dependency, direct-import smoke, and Git integrity checks:
+  passed
+- Existing warning: one unrelated Starlette/httpx deprecation warning
+
+Live PostgreSQL verification covered multi-asset analysis, inclusive dates,
+requested ordering despite repository ordering, exact common-date intersection,
+missing requested symbols, caller-owned transaction/session behavior, and no
+`Analysis` snapshot creation. It used focused test records rather than a
+permanently seeded full historical CSV.
+
+### Branch Boundary
+
+This branch did not add FastAPI portfolio-analysis routes, portfolio CRUD APIs,
+report persistence/history, simulations, automatic market-data scheduling,
+AI-agent behavior, frontend/backend integration, or deployment. It does not
+own market-data fetching or updating.
+
+---
+
+## 7. Optional: `feat/backend-quality-ci`
 
 **Status:** Optional
 
@@ -687,17 +768,17 @@ stable in `develop`.
 
 | Later Branch | Main Responsibility | Dependencies | Current Readiness |
 |---|---|---|---|
-| `feat/backend-analysis-service` | Coordinate validated input, market data, and analytics | Analytics + schemas + data access | All major prerequisites are complete; service mapping and orchestration can begin |
+| `feat/backend-analysis-service` | Coordinate validated input, PostgreSQL market data, analytics, and response schemas | Analytics + schemas + data access | Completed and merged into `develop` |
 | `feat/backend-portfolio-api` | Portfolio and holding CRUD endpoints | Schemas + database | Prerequisites are complete; API and service implementation can begin |
 | `feat/backend-market-data-storage` | Save and retrieve processed historical data | Data pipeline + database | Completed and merged into `develop` |
 | `feat/backend-historical-scenario-simulator` | Test the current portfolio during a selected past event | Analytics + historical data + simulation schemas | Historical acquisition and PostgreSQL access are complete; simulation schemas and finalized requirements remain deferred |
 | `feat/backend-allocation-simulator` | Compare original and modified allocations over the same period | Analytics + historical data + simulation schemas | Historical acquisition and PostgreSQL access are complete; simulation schemas and finalized requirements remain deferred |
 | `feat/backend-combined-simulator` | Compare original and modified allocations during one event | Historical scenario + allocation simulator | Not ready |
-| `feat/backend-analysis-reporting` | Save and retrieve analysis reports | Analytics + schemas + database | Foundations and snapshot repository are complete; reporting service/mapping remains |
+| `feat/backend-analysis-reporting` | Save and retrieve analysis reports | Analytics + schemas + database + analysis service | Analytics/service/schema/database prerequisites are available; report persistence and reporting mapping remain unimplemented |
 | `feat/backend-simulation-history` | Save and retrieve simulation results | Simulators + schemas + database | Not ready |
 | `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Prerequisites are complete; automatic scheduling remains unimplemented and deferred |
-| `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports + schemas + database | Not ready |
-| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready |
+| `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Not ready; stable reporting and simulation outputs remain unavailable |
+| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; portfolio APIs, reporting, simulations, AI, and other listed feature work remain incomplete |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
 
 ---
@@ -743,7 +824,7 @@ duplicate it.
 ```text
 feat/backend-analytics-core ────────────────┐
                                             │
-feat/backend-schemas-contracts ─────────────┼── feat/backend-analysis-service
+feat/backend-schemas-contracts ─────────────┼── ✅ feat/backend-analysis-service
                                             │
 completed backend-market-data-storage ──────┘
 
@@ -753,7 +834,7 @@ feat/backend-database-foundation
                 ↓
 ✅ feat/backend-market-data-storage
                 ↓
-analysis service / market-data scheduler / later historical-data consumers
+market-data scheduler / later historical-data consumers
 
 Stable analytics + schemas + historical data
                 ↓
@@ -780,20 +861,19 @@ exist.
 
 # Recommended Current Work
 
-All required independent database, analytics, schema, and market-data parent
-foundations are complete, and database-backed historical market-data access is
-now available. The recommended next focused backend workstream is:
+The analytics, schema, database, historical market-data, and analysis-service
+foundations are complete. The recommended next focused backend workstream is:
 
 ```text
-feat/backend-analysis-service
+feat/backend-portfolio-api
 ```
 
-Analysis-service work now has its analytics, schema, database, and
-database-backed historical-data prerequisites and can begin mapping and
-orchestration. Portfolio API work also has its schema and database prerequisites.
-Market-data scheduler prerequisites are complete, but automatic scheduling
-remains unimplemented and deferred. These are separate downstream features;
-none is implemented merely because its prerequisites are available.
+Portfolio schemas, portfolio/holding repositories, and AnalysisService are now
+complete, making portfolio API/service exposure the appropriate next
+integration-stage feature. The portfolio API is not yet implemented.
+`feat/backend-analysis-reporting` remains a separate later-ready workstream;
+report persistence and reporting mapping are still unimplemented. Market-data
+scheduling also remains separate and deferred.
 
 ---
 
@@ -809,6 +889,7 @@ develop
 ├── feat/backend-market-data-pipeline          # completed
 ├── feat/backend-database-foundation            # completed
 ├── feat/backend-market-data-storage            # completed
+├── feat/backend-analysis-service                # completed
 └── feat/backend-quality-ci                     # optional
 ```
 
@@ -891,7 +972,7 @@ Documentation changes should not be added to `main` directly.
 
 # Recommended Development Order
 
-## Completed Foundation, Analytics, Contracts, Market Data, Database, and Storage Stage
+## Completed Foundation, Analytics, Contracts, Market Data, Database, Storage, and Analysis-Service Stage
 
 ```text
 ✅ feat/fastapi-foundation
@@ -901,12 +982,12 @@ Documentation changes should not be added to `main` directly.
 ✅ feat/backend-market-data-pipeline
 ✅ feat/backend-database-foundation
 ✅ feat/backend-market-data-storage
+✅ feat/backend-analysis-service
 ```
 
 ## First Integration Stage
 
 ```text
-feat/backend-analysis-service
 feat/backend-portfolio-api
 ```
 
@@ -940,18 +1021,17 @@ develop → main release Pull Request
 
 # Current Recommended Next Step
 
-With analytics, schemas, the market-data pipeline, the database foundation, and
-market-data storage merged into `develop`, begin the recommended backend
-workstream:
+With analytics, schemas, the market-data pipeline, the database foundation,
+market-data storage, and AnalysisService merged into `develop`, begin the
+recommended backend workstream:
 
 ```text
-feat/backend-analysis-service
+feat/backend-portfolio-api
 ```
 
-Analysis service now has stable analytics, schemas, database infrastructure,
-and database-backed historical market-data access, but its mapping and
-orchestration remain unimplemented. Portfolio API prerequisites are also
-available. Scheduler prerequisites are complete, but automatic scheduling
-remains deferred. Reporting, simulation, AI, full integration, frontend/backend
+Portfolio schemas, portfolio/holding repositories, and AnalysisService are
+complete, but the portfolio API itself is not implemented. Analysis reporting
+remains a separate later-ready workstream whose persistence and mapping are
+unfinished. Scheduler, simulation, AI, full integration, frontend/backend
 integration, and deployment branches remain governed by their listed unfinished
 dependencies.
