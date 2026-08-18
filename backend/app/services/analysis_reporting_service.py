@@ -21,6 +21,10 @@ from .analysis_service import AnalysisService
 from .portfolio_service import PortfolioService
 
 
+class ReportNotFoundError(Exception):
+    """Raised when a report is absent from an established owned portfolio."""
+
+
 class AnalysisReportingService:
     """Coordinate owned report workflows without managing transactions."""
 
@@ -99,7 +103,7 @@ class AnalysisReportingService:
         portfolio_id: UUID,
         report_id: UUID,
     ) -> PortfolioReportResponse | None:
-        """Return one associated report for an owned portfolio, if present."""
+        """Return one report, distinguishing parent and report absence."""
         portfolio = self._portfolio_service.get(
             user_id=user_id,
             portfolio_id=portfolio_id,
@@ -109,5 +113,5 @@ class AnalysisReportingService:
 
         analysis = self._repository.get_by_id(report_id)
         if analysis is None or analysis.portfolio_id != portfolio.id:
-            return None
+            raise ReportNotFoundError
         return analysis_record_to_report_response(analysis)

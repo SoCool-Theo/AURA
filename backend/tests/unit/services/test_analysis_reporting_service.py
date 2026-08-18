@@ -23,6 +23,7 @@ from backend.app.services.analysis_reporting_mapper import (
 )
 from backend.app.services.analysis_reporting_service import (
     AnalysisReportingService,
+    ReportNotFoundError,
 )
 from backend.app.services.analysis_service import AnalysisService
 from backend.app.services.portfolio_service import PortfolioService
@@ -402,22 +403,27 @@ def test_get_report_missing_and_different_portfolio_are_identical_not_found(
         analysis.portfolio_id = uuid4()
         repository.get_by_id.return_value = analysis
 
-    with patch.object(
-        service_module,
-        "analysis_record_to_report_response",
-    ) as report_mapper:
-        result = service.get_report(
+    with (
+        patch.object(
+            service_module,
+            "analysis_record_to_report_response",
+        ) as report_mapper,
+        pytest.raises(ReportNotFoundError),
+    ):
+        service.get_report(
             user_id=_USER_ID,
             portfolio_id=_PORTFOLIO_ID,
             report_id=_REPORT_ID,
         )
 
-    assert result is None
     report_mapper.assert_not_called()
     _assert_session_lifecycle_untouched(session)
 
 
-def test_get_report_unowned_parent_returns_none_before_report_lookup() -> None:
+@pytest.mark.parametrize("portfolio_state", ["missing", "wrong-owner"])
+def test_get_report_unowned_parent_returns_none_before_report_lookup(
+    portfolio_state: str,
+) -> None:
     service, session, portfolio_service, _, repository = (
         _service_with_dependencies()
     )
