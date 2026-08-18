@@ -3,9 +3,8 @@
 from collections.abc import Iterator
 from functools import lru_cache
 from typing import Annotated
-from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, Security, status
+from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -32,22 +31,6 @@ def get_database_session() -> Iterator[Session]:
 
 
 DatabaseSession = Annotated[Session, Depends(get_database_session)]
-
-
-def get_temporary_owner_id(
-    session: DatabaseSession,
-    user_id: Annotated[UUID, Header(alias="X-User-ID")],
-) -> UUID:
-    """Resolve the temporary, non-authenticated portfolio owner selector."""
-    if session.get(User, user_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-    return user_id
-
-
-TemporaryOwnerId = Annotated[UUID, Depends(get_temporary_owner_id)]
 
 
 _bearer_credentials = HTTPBearer(auto_error=False)

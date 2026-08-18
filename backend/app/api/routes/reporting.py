@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.dependencies import DatabaseSession, TemporaryOwnerId
+from app.api.dependencies import CurrentUser, DatabaseSession
 from app.schemas.common import AnalysisPeriod
 from app.schemas.reporting import (
     PortfolioReportListResponse,
@@ -52,11 +52,11 @@ def create_report(
     portfolio_id: UUID,
     request: AnalysisPeriod,
     session: DatabaseSession,
-    user_id: TemporaryOwnerId,
+    current_user: CurrentUser,
 ) -> PortfolioReportResponse:
     try:
         report = AnalysisReportingService(session).create_report(
-            user_id=user_id,
+            user_id=current_user.id,
             portfolio_id=portfolio_id,
             period=request,
         )
@@ -81,11 +81,11 @@ def create_report(
 def list_reports(
     portfolio_id: UUID,
     session: DatabaseSession,
-    user_id: TemporaryOwnerId,
+    current_user: CurrentUser,
 ) -> PortfolioReportListResponse:
     try:
         reports = AnalysisReportingService(session).list_reports(
-            user_id=user_id,
+            user_id=current_user.id,
             portfolio_id=portfolio_id,
         )
     except Exception as error:
@@ -105,11 +105,11 @@ def get_report(
     portfolio_id: UUID,
     report_id: UUID,
     session: DatabaseSession,
-    user_id: TemporaryOwnerId,
+    current_user: CurrentUser,
 ) -> PortfolioReportResponse:
     try:
         report = AnalysisReportingService(session).get_report(
-            user_id=user_id,
+            user_id=current_user.id,
             portfolio_id=portfolio_id,
             report_id=report_id,
         )

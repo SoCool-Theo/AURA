@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -6,11 +7,13 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 import app.api.dependencies as dependency_module
 import app.api.routes.portfolio as route_module
 from app.core.config import settings
+from app.core.security import create_access_token
 from app.database.models import Holding, Portfolio, User
 from app.main import app
 
@@ -18,7 +21,8 @@ from app.main import app
 OWNER_ID = UUID("62a1279e-bc8d-4c89-876d-a09250b50395")
 PORTFOLIO_ID = UUID("e6518442-58cb-408f-ae3f-bf47fb00b555")
 OTHER_PORTFOLIO_ID = UUID("100b15fb-9965-41e8-862e-c199cfaaee95")
-REQUEST_HEADERS = {"X-User-ID": str(OWNER_ID)}
+JWT_SECRET = "phase-6-portfolio-api-test-secret-value"
+REQUEST_HEADERS: dict[str, str] = {}
 CREATED_AT = datetime(2026, 8, 17, 2, 30, tzinfo=UTC)
 UPDATED_AT = datetime(2026, 8, 17, 3, 45, tzinfo=UTC)
 
@@ -29,6 +33,22 @@ class ApiHarness:
     session: MagicMock
     service: MagicMock
     session_factory: MagicMock
+
+
+@pytest.fixture(autouse=True)
+def bearer_request_headers() -> Iterator[None]:
+    with patch.object(
+        settings,
+        "jwt_secret_key",
+        SecretStr(JWT_SECRET),
+    ):
+        REQUEST_HEADERS["Authorization"] = (
+            f"Bearer {create_access_token(OWNER_ID)}"
+        )
+        try:
+            yield
+        finally:
+            REQUEST_HEADERS.clear()
 
 
 def _portfolio(
@@ -92,14 +112,17 @@ def test_phase4_app_import_keeps_database_factory_lazy_and_health_works() -> Non
     create_engine.assert_not_called()
 
 
-def test_phase4_valid_owner_header_is_resolved_for_request(
+def test_valid_bearer_identity_wins_without_requiring_x_user_id(
     api_harness: ApiHarness,
 ) -> None:
     api_harness.service.list_for_user.return_value = []
 
     response = api_harness.client.get(
         "/api/portfolios",
-        headers=REQUEST_HEADERS,
+        headers={
+            **REQUEST_HEADERS,
+            "X-User-ID": str(OTHER_PORTFOLIO_ID),
+        },
     )
 
     assert response.status_code == 200
@@ -110,30 +133,37 @@ def test_phase4_valid_owner_header_is_resolved_for_request(
     api_harness.session.close.assert_called_once_with()
 
 
-def test_phase4_missing_owner_header_uses_normal_validation(
+@pytest.mark.parametrize(
+    "headers",
+    [{}, {"X-User-ID": str(OWNER_ID)}],
+)
+def test_missing_bearer_and_x_user_id_only_are_unauthorized(
     api_harness: ApiHarness,
+    headers: dict[str, str],
 ) -> None:
-    response = api_harness.client.get("/api/portfolios")
+    response = api_harness.client.get("/api/portfolios", headers=headers)
 
-    assert response.status_code == 422
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
     api_harness.service.list_for_user.assert_not_called()
     api_harness.session.commit.assert_not_called()
 
 
-def test_phase4_malformed_owner_header_uses_normal_validation(
+def test_malformed_bearer_token_is_unauthorized(
     api_harness: ApiHarness,
 ) -> None:
     response = api_harness.client.get(
         "/api/portfolios",
-        headers={"X-User-ID": "not-a-uuid"},
+        headers={"Authorization": "Bearer not-a-jwt"},
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
     api_harness.service.list_for_user.assert_not_called()
     api_harness.session.commit.assert_not_called()
 
 
-def test_phase4_unknown_valid_owner_returns_404_and_closes_session(
+def test_valid_token_for_unknown_user_returns_unauthorized_and_closes_session(
     api_harness: ApiHarness,
 ) -> None:
     api_harness.session.get.return_value = None
@@ -143,8 +173,11 @@ def test_phase4_unknown_valid_owner_returns_404_and_closes_session(
         headers=REQUEST_HEADERS,
     )
 
-    assert response.status_code == 404
-    assert response.json() == {"detail": "User not found"}
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid or missing authentication credentials"
+    }
+    assert response.headers["www-authenticate"] == "Bearer"
     api_harness.service.list_for_user.assert_not_called()
     api_harness.session.commit.assert_not_called()
     api_harness.session.rollback.assert_called_once_with()

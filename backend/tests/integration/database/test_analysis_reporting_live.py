@@ -22,11 +22,14 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 import pandas as pd
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import Engine, func, inspect, select, text, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.dependencies import get_database_session
+from app.core.config import settings as app_settings
+from app.core.security import create_access_token
 from app.database.connection import session_scope
 from app.database.models import Analysis, Portfolio, User
 from app.database.repositories import PortfolioRepository
@@ -61,6 +64,7 @@ REPORT_PERIOD = {
     "start_date": START_DATE.isoformat(),
     "end_date": END_DATE.isoformat(),
 }
+JWT_SECRET = "phase-6-live-reporting-api-secret-value"
 
 
 @dataclass(frozen=True)
@@ -188,12 +192,15 @@ def live_client(
             yield session
 
     previous_override = app.dependency_overrides.get(get_database_session)
+    original_jwt_secret = app_settings.jwt_secret_key
     app.dependency_overrides[get_database_session] = override_database_session
+    app_settings.jwt_secret_key = SecretStr(JWT_SECRET)
 
     try:
         with TestClient(app) as client:
             yield client
     finally:
+        app_settings.jwt_secret_key = original_jwt_secret
         if previous_override is None:
             app.dependency_overrides.pop(get_database_session, None)
         else:
@@ -210,7 +217,7 @@ def clean_application_rows(postgres_engine: Engine) -> Iterator[None]:
 
 
 def _headers(user_id: UUID) -> dict[str, str]:
-    return {"X-User-ID": str(user_id)}
+    return {"Authorization": f"Bearer {create_access_token(user_id)}"}
 
 
 def _canonical_market_data() -> pd.DataFrame:
@@ -310,6 +317,13 @@ def test_live_reporting_lifecycle_persistence_isolation_and_immutability(
     other_report_path = (
         f"/api/portfolios/{seeded.other_portfolio_id}/reports"
     )
+
+    x_header_only_response = live_client.get(
+        owner_report_path,
+        headers={"X-User-ID": str(USER_A_ID)},
+    )
+    assert x_header_only_response.status_code == 401
+    assert x_header_only_response.headers["www-authenticate"] == "Bearer"
 
     create_response = live_client.post(
         owner_report_path,
