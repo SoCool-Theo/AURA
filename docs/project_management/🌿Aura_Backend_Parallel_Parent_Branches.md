@@ -72,6 +72,7 @@ feature/refactor/docs branch
 | `feat/backend-database-foundation` | Parent feature | Completed | PostgreSQL connection, models, migrations, repositories, and live integration verification |
 | `feat/backend-market-data-storage` | Integration feature | Completed | Save and retrieve processed historical data through PostgreSQL |
 | `feat/backend-analysis-service` | Integration feature | Completed | Coordinate validated portfolio-analysis input, PostgreSQL historical data, existing analytics, and response schemas |
+| `feat/backend-portfolio-api` | Integration feature | Completed and merged into `develop` | Frontend-neutral portfolio and holding CRUD service/API |
 | `feat/backend-quality-ci` | Optional support | Optional | Automated testing and code-quality checks |
 
 ---
@@ -736,7 +737,90 @@ own market-data fetching or updating.
 
 ---
 
-## 7. Optional: `feat/backend-quality-ci`
+## 7. `feat/backend-portfolio-api`
+
+**Status:** Completed and merged into `develop`
+
+### Purpose
+
+Expose persisted portfolio and holding CRUD behavior through a frontend-neutral
+service and REST API shared by Aura's web and mobile clients.
+
+### Completed Work
+
+- Added CRUD-oriented schemas for portfolio creation, rename/update, holdings
+  replacement, duplication, full portfolio responses, holding responses,
+  summaries, and list responses.
+- Preserved the existing 21-name package-level schema export contract and did
+  not add simulation schemas.
+- Added `PortfolioService` coordination for create, get, list, rename, replace
+  holdings, duplicate, and delete.
+- Enforced ownership at the service boundary for ID-based portfolio operations.
+- Added these routes under the existing `/api` prefix:
+  - `POST /api/portfolios`
+  - `GET /api/portfolios`
+  - `GET /api/portfolios/{portfolio_id}`
+  - `PATCH /api/portfolios/{portfolio_id}`
+  - `PUT /api/portfolios/{portfolio_id}/holdings`
+  - `POST /api/portfolios/{portfolio_id}/duplicate`
+  - `DELETE /api/portfolios/{portfolio_id}`
+
+These are shared REST endpoints, not separate web and mobile API variants. No
+portfolio-analysis HTTP endpoint was added.
+
+### Ownership, Persistence, and Transaction Boundaries
+
+- `X-User-ID` is a temporary ownership selector. It validates that the supplied
+  UUID identifies an existing `User`, but it is not secure authentication.
+- Owner-scoped ID access returns the same client-visible `404` for missing and
+  wrong-owner portfolios.
+- Portfolios and holdings preserve UUID identities, user ownership, ordered
+  positions, and symbol/weight allocations.
+- Holdings can be replaced as a complete ordered allocation. Duplication creates
+  new portfolio and holding identities, and portfolio deletion uses the existing
+  persistence cascade.
+- Shares, invested amounts, and current-value fields are not persisted.
+- `PortfolioRepository` does not commit or roll back. `PortfolioService` does
+  not commit, roll back, or close sessions. Successful writes commit at the
+  request/API boundary, while failure rollback and cleanup are handled by the
+  request-scoped database dependency.
+- Database setup remains lazy; application import and `/api/health` do not
+  require portfolio data or a live PostgreSQL connection.
+
+### Final Post-Synchronization Verification
+
+- Portfolio API integration tests: 42 passed
+- PortfolioService tests: 21 passed
+- Portfolio schema tests: 84 passed
+- Complete schema suite: 351 passed
+- PortfolioRepository tests: 17 passed
+- AnalysisService tests: 25 passed
+- Analytics tests: 820 passed
+- Live PostgreSQL integration tests: 16 passed, 0 skipped
+- Full backend tests: 1,427 passed, 0 failed, 0 errors, 0 skipped
+- Compilation, dependency, direct-import, health, and API-surface checks: passed
+- Existing warning: one Starlette TestClient/httpx deprecation warning
+
+Live portfolio tests exercised the real FastAPI → request dependency →
+PortfolioService → PortfolioRepository → PostgreSQL stack. Coverage included
+the CRUD lifecycle, portfolio and ordered-holding persistence, duplication,
+ownership isolation, fresh-session persistence, and existing-user validation.
+
+### Branch Boundary
+
+This workstream did not implement secure authentication, JWT/login/user
+registration, a portfolio-analysis HTTP endpoint, report persistence/history,
+historical/allocation/combined simulations, simulation history, automatic
+market-data scheduling, AI-agent behavior, full backend API integration,
+frontend implementation, or deployment.
+
+Analysis execution remains a separate completed service capability. Reporting
+persistence, mapping, orchestration, and exposure remain owned by a later
+workstream.
+
+---
+
+## 8. Optional: `feat/backend-quality-ci`
 
 **Status:** Optional
 
@@ -769,7 +853,7 @@ stable in `develop`.
 | Later Branch | Main Responsibility | Dependencies | Current Readiness |
 |---|---|---|---|
 | `feat/backend-analysis-service` | Coordinate validated input, PostgreSQL market data, analytics, and response schemas | Analytics + schemas + data access | Completed and merged into `develop` |
-| `feat/backend-portfolio-api` | Portfolio and holding CRUD endpoints | Schemas + database | Prerequisites are complete; API and service implementation can begin |
+| `feat/backend-portfolio-api` | Portfolio and holding CRUD endpoints | Schemas + database | Completed and merged into `develop` |
 | `feat/backend-market-data-storage` | Save and retrieve processed historical data | Data pipeline + database | Completed and merged into `develop` |
 | `feat/backend-historical-scenario-simulator` | Test the current portfolio during a selected past event | Analytics + historical data + simulation schemas | Historical acquisition and PostgreSQL access are complete; simulation schemas and finalized requirements remain deferred |
 | `feat/backend-allocation-simulator` | Compare original and modified allocations over the same period | Analytics + historical data + simulation schemas | Historical acquisition and PostgreSQL access are complete; simulation schemas and finalized requirements remain deferred |
@@ -778,7 +862,7 @@ stable in `develop`.
 | `feat/backend-simulation-history` | Save and retrieve simulation results | Simulators + schemas + database | Not ready |
 | `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Prerequisites are complete; automatic scheduling remains unimplemented and deferred |
 | `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Not ready; stable reporting and simulation outputs remain unavailable |
-| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; portfolio APIs, reporting, simulations, AI, and other listed feature work remain incomplete |
+| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; portfolio CRUD routes exist, but reporting, simulations, AI, and other full integration work remain incomplete |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
 
 ---
@@ -828,6 +912,10 @@ feat/backend-schemas-contracts ─────────────┼── 
                                             │
 completed backend-market-data-storage ──────┘
 
+feat/backend-schemas-contracts ─────────────┐
+                                            ├── ✅ feat/backend-portfolio-api
+feat/backend-database-foundation ───────────┘
+
 feat/backend-market-data-pipeline
                 +
 feat/backend-database-foundation
@@ -854,26 +942,26 @@ internally but does not change this dependency flow.
 
 The completed schemas-contract branch remains in the flow as a stable
 dependency for later services, APIs, reporting, simulations, and AI
-integration. Its presence does not imply that those later implementations
-exist.
+integration. AnalysisService and the Portfolio API are complete, but their
+presence does not imply that reporting, simulation, AI, or full integration
+work exists.
 
 ---
 
 # Recommended Current Work
 
-The analytics, schema, database, historical market-data, and analysis-service
-foundations are complete. The recommended next focused backend workstream is:
+The analytics, schema, database, historical market-data, AnalysisService, and
+Portfolio API foundations are complete. The recommended next focused backend
+workstream is:
 
 ```text
-feat/backend-portfolio-api
+feat/backend-analysis-reporting
 ```
 
-Portfolio schemas, portfolio/holding repositories, and AnalysisService are now
-complete, making portfolio API/service exposure the appropriate next
-integration-stage feature. The portfolio API is not yet implemented.
-`feat/backend-analysis-reporting` remains a separate later-ready workstream;
-report persistence and reporting mapping are still unimplemented. Market-data
-scheduling also remains separate and deferred.
+Analysis persistence infrastructure already exists, but reporting persistence
+orchestration, service mapping, and API exposure remain unfinished. Simulation
+requirements and contracts remain deferred, and market-data scheduling remains
+a separate deferred workstream.
 
 ---
 
@@ -890,6 +978,7 @@ develop
 ├── feat/backend-database-foundation            # completed
 ├── feat/backend-market-data-storage            # completed
 ├── feat/backend-analysis-service                # completed
+├── feat/backend-portfolio-api                   # completed
 └── feat/backend-quality-ci                     # optional
 ```
 
@@ -972,7 +1061,7 @@ Documentation changes should not be added to `main` directly.
 
 # Recommended Development Order
 
-## Completed Foundation, Analytics, Contracts, Market Data, Database, Storage, and Analysis-Service Stage
+## Completed Foundation, Analytics, Contracts, Market Data, Database, and Storage Stage
 
 ```text
 ✅ feat/fastapi-foundation
@@ -982,24 +1071,24 @@ Documentation changes should not be added to `main` directly.
 ✅ feat/backend-market-data-pipeline
 ✅ feat/backend-database-foundation
 ✅ feat/backend-market-data-storage
-✅ feat/backend-analysis-service
 ```
 
 ## First Integration Stage
 
 ```text
-feat/backend-portfolio-api
+✅ feat/backend-analysis-service
+✅ feat/backend-portfolio-api
 ```
 
 ## Simulation and Reporting Stage
 
 ```text
-feat/backend-historical-scenario-simulator
-feat/backend-allocation-simulator
-feat/backend-combined-simulator
-feat/backend-analysis-reporting
+feat/backend-analysis-reporting             # recommended next
+feat/backend-historical-scenario-simulator  # requirements/contracts deferred
+feat/backend-allocation-simulator           # requirements/contracts deferred
+feat/backend-combined-simulator             # requirements/contracts deferred
 feat/backend-simulation-history
-feat/backend-market-data-scheduler
+feat/backend-market-data-scheduler          # scheduling deferred
 ```
 
 ## AI and Full Integration Stage
@@ -1022,16 +1111,15 @@ develop → main release Pull Request
 # Current Recommended Next Step
 
 With analytics, schemas, the market-data pipeline, the database foundation,
-market-data storage, and AnalysisService merged into `develop`, begin the
-recommended backend workstream:
+market-data storage, AnalysisService, and the Portfolio API merged into
+`develop`, begin the recommended backend workstream:
 
 ```text
-feat/backend-portfolio-api
+feat/backend-analysis-reporting
 ```
 
-Portfolio schemas, portfolio/holding repositories, and AnalysisService are
-complete, but the portfolio API itself is not implemented. Analysis reporting
-remains a separate later-ready workstream whose persistence and mapping are
-unfinished. Scheduler, simulation, AI, full integration, frontend/backend
-integration, and deployment branches remain governed by their listed unfinished
-dependencies.
+Analysis persistence infrastructure already exists, but reporting persistence
+orchestration, service mapping, and API exposure remain unfinished. Simulation
+requirements/contracts and automatic market-data scheduling remain deferred.
+AI, full integration, frontend/backend integration, and deployment remain
+governed by their listed unfinished dependencies.
