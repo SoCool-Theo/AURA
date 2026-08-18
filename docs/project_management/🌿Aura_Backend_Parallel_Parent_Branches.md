@@ -73,6 +73,8 @@ feature/refactor/docs branch
 | `feat/backend-market-data-storage` | Integration feature | Completed | Save and retrieve processed historical data through PostgreSQL |
 | `feat/backend-analysis-service` | Integration feature | Completed | Coordinate validated portfolio-analysis input, PostgreSQL historical data, existing analytics, and response schemas |
 | `feat/backend-portfolio-api` | Integration feature | Completed and merged into `develop` | Frontend-neutral portfolio and holding CRUD service/API |
+| `feat/backend-analysis-reporting` | Integration feature | Completed and merged into `develop` | Save, retrieve, and expose immutable portfolio-analysis reports using the existing analysis service and PostgreSQL Analysis snapshot infrastructure |
+| `feat/backend-authentication` | Integration feature | Recommended next | Implement real user authentication and replace the temporary trusted `X-User-ID` identity at protected API boundaries |
 | `feat/backend-quality-ci` | Optional support | Optional | Automated testing and code-quality checks |
 
 ---
@@ -815,12 +817,78 @@ market-data scheduling, AI-agent behavior, full backend API integration,
 frontend implementation, or deployment.
 
 Analysis execution remains a separate completed service capability. Reporting
-persistence, mapping, orchestration, and exposure remain owned by a later
-workstream.
+persistence, mapping, orchestration, and exposure were completed later by the
+reporting workstream documented below.
 
 ---
 
-## 8. Optional: `feat/backend-quality-ci`
+## 8. `feat/backend-analysis-reporting`
+
+**Status:** Completed and merged into `develop`
+
+### Purpose
+
+Save, retrieve, and expose immutable portfolio-analysis reports using the
+existing `AnalysisService` and PostgreSQL `Analysis` snapshot infrastructure.
+
+### Completed Work
+
+- Added module-level report response, summary, and list schemas without
+  expanding the stable 21-name package-level schema export surface.
+- Added pure validated snapshot/report mapping using
+  `portfolio-analysis-response-v1`, including relational/snapshot analysis-date
+  consistency checks.
+- Added `AnalysisReportingService` coordination across owned portfolios,
+  ordered holdings, the unchanged read-only `AnalysisService`, and the existing
+  `AnalysisRepository`.
+- Reused the existing `Analysis` model and JSONB persistence without a new
+  migration or repository API expansion.
+- Added report creation, deterministic history, and detail endpoints:
+  - `POST /api/portfolios/{portfolio_id}/reports`
+  - `GET /api/portfolios/{portfolio_id}/reports`
+  - `GET /api/portfolios/{portfolio_id}/reports/{report_id}`
+- POST reuses `AnalysisPeriod` and returns HTTP 201 after persistence; report
+  GETs remain read-only.
+- Preserved private ownership semantics, immutable saved snapshots, existing
+  analytics values/order, and caller-owned transaction boundaries.
+- Missing/wrong-owner portfolios return `Portfolio not found`, while
+  missing/wrong-associated reports return `Report not found` without exposing
+  resource ownership.
+- Repositories and services do not commit, roll back, or close sessions;
+  successful POST creation commits at the request boundary.
+- Kept `X-User-ID` as a temporary ownership selector only; secure
+  authentication remains unfinished.
+
+### Live PostgreSQL and Final Verification
+
+Live tests covered the complete FastAPI-to-PostgreSQL reporting workflow, JSONB
+snapshot validation, fresh-session retrieval, history ordering, ownership
+isolation, failed-analysis rollback, saved-report immutability, date and
+ordering consistency, and read-only GET behavior.
+
+- Reporting schema tests: 23 passed
+- Reporting mapper tests: 14 passed
+- Reporting service tests: 13 passed
+- Reporting API tests: 20 passed
+- Reporting live PostgreSQL tests: 2 passed
+- Service suite: 88 passed
+- API integration suite: 66 passed
+- Schema suite: 374 passed
+- Analytics suite: 820 passed
+- Full backend suite: 1,499 passed, 0 failed, 0 errors, 0 skipped
+- Manual analytics engine, compilation, dependency, and Git diff checks: passed
+- Existing warning: one non-blocking Starlette/httpx TestClient deprecation
+  warning
+
+### Branch Boundary
+
+This workstream did not implement secure authentication, user registration,
+simulations or simulation history, AI-agent behavior, PDF generation, report
+sharing, frontend work, automatic market-data scheduling, or deployment.
+
+---
+
+## 9. Optional: `feat/backend-quality-ci`
 
 **Status:** Optional
 
@@ -855,14 +923,15 @@ stable in `develop`.
 | `feat/backend-analysis-service` | Coordinate validated input, PostgreSQL market data, analytics, and response schemas | Analytics + schemas + data access | Completed and merged into `develop` |
 | `feat/backend-portfolio-api` | Portfolio and holding CRUD endpoints | Schemas + database | Completed and merged into `develop` |
 | `feat/backend-market-data-storage` | Save and retrieve processed historical data | Data pipeline + database | Completed and merged into `develop` |
+| `feat/backend-analysis-reporting` | Save, retrieve, and expose immutable portfolio-analysis reports | Analytics + schemas + database + analysis service + portfolio API | Completed and merged into `develop` |
+| `feat/backend-authentication` | Replace the temporary trusted `X-User-ID` identity with real user authentication at protected API boundaries | Existing user ownership + portfolio/report APIs | Recommended next; not implemented |
 | `feat/backend-historical-scenario-simulator` | Test the current portfolio during a selected past event | Analytics + historical data + simulation schemas | Historical acquisition and PostgreSQL access are complete; simulation schemas and finalized requirements remain deferred |
 | `feat/backend-allocation-simulator` | Compare original and modified allocations over the same period | Analytics + historical data + simulation schemas | Historical acquisition and PostgreSQL access are complete; simulation schemas and finalized requirements remain deferred |
 | `feat/backend-combined-simulator` | Compare original and modified allocations during one event | Historical scenario + allocation simulator | Not ready |
-| `feat/backend-analysis-reporting` | Save and retrieve analysis reports | Analytics + schemas + database + analysis service | Analytics/service/schema/database prerequisites are available; report persistence and reporting mapping remain unimplemented |
 | `feat/backend-simulation-history` | Save and retrieve simulation results | Simulators + schemas + database | Not ready |
 | `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Prerequisites are complete; automatic scheduling remains unimplemented and deferred |
-| `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Not ready; stable reporting and simulation outputs remain unavailable |
-| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; portfolio CRUD routes exist, but reporting, simulations, AI, and other full integration work remain incomplete |
+| `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Not ready; reporting is complete, but stable simulation outputs remain unavailable |
+| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; portfolio and reporting routes exist, but authentication, simulations, AI, and other full integration work remain incomplete |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
 
 ---
@@ -924,17 +993,25 @@ feat/backend-database-foundation
                 ↓
 market-data scheduler / later historical-data consumers
 
-Stable analytics + schemas + historical data
+AnalysisService + Portfolio API + Analysis persistence
                 ↓
-Historical simulation branches
+✅ feat/backend-analysis-reporting
                 ↓
-Reporting and history branches
+feat/backend-authentication
+                ↓
+historical scenario simulator
+                ↓
+allocation simulator
+                ↓
+combined simulator
+                ↓
+simulation history
                 ↓
 AI agent
                 ↓
-API integration
+full backend API integration
                 ↓
-Deployment
+deployment
 ```
 
 The completed analytics-validation refactor supports the analytics branch
@@ -942,26 +1019,27 @@ internally but does not change this dependency flow.
 
 The completed schemas-contract branch remains in the flow as a stable
 dependency for later services, APIs, reporting, simulations, and AI
-integration. AnalysisService and the Portfolio API are complete, but their
-presence does not imply that reporting, simulation, AI, or full integration
-work exists.
+integration. AnalysisService, the Portfolio API, and analysis reporting are
+complete. Authentication, simulations, AI behavior, and full integration
+remain separate unfinished workstreams.
 
 ---
 
 # Recommended Current Work
 
-The analytics, schema, database, historical market-data, AnalysisService, and
-Portfolio API foundations are complete. The recommended next focused backend
-workstream is:
+The analytics, schema, database, historical market-data, AnalysisService,
+Portfolio API, and analysis-reporting workstreams are complete. The recommended
+next focused backend workstream is:
 
 ```text
-feat/backend-analysis-reporting
+feat/backend-authentication
 ```
 
-Analysis persistence infrastructure already exists, but reporting persistence
-orchestration, service mapping, and API exposure remain unfinished. Simulation
-requirements and contracts remain deferred, and market-data scheduling remains
-a separate deferred workstream.
+This workstream should replace the temporary trusted `X-User-ID` request
+identity with real user authentication at protected API boundaries before
+additional user-facing simulation or AI APIs are added. Simulation requirements
+and contracts remain deferred, and market-data scheduling remains a separate
+deferred workstream.
 
 ---
 
@@ -979,7 +1057,9 @@ develop
 ├── feat/backend-market-data-storage            # completed
 ├── feat/backend-analysis-service                # completed
 ├── feat/backend-portfolio-api                   # completed
-└── feat/backend-quality-ci                     # optional
+├── feat/backend-analysis-reporting               # completed
+├── feat/backend-authentication                   # recommended next
+└── feat/backend-quality-ci                       # optional
 ```
 
 Do not create a permanent shared backend parent branch such as:
@@ -1080,10 +1160,16 @@ Documentation changes should not be added to `main` directly.
 ✅ feat/backend-portfolio-api
 ```
 
-## Simulation and Reporting Stage
+## Reporting and Identity Stage
 
 ```text
-feat/backend-analysis-reporting             # recommended next
+✅ feat/backend-analysis-reporting
+feat/backend-authentication                  # recommended next
+```
+
+## Simulation Stage
+
+```text
 feat/backend-historical-scenario-simulator  # requirements/contracts deferred
 feat/backend-allocation-simulator           # requirements/contracts deferred
 feat/backend-combined-simulator             # requirements/contracts deferred
@@ -1111,15 +1197,15 @@ develop → main release Pull Request
 # Current Recommended Next Step
 
 With analytics, schemas, the market-data pipeline, the database foundation,
-market-data storage, AnalysisService, and the Portfolio API merged into
-`develop`, begin the recommended backend workstream:
+market-data storage, AnalysisService, the Portfolio API, and analysis reporting
+merged into `develop`, begin the recommended backend workstream:
 
 ```text
-feat/backend-analysis-reporting
+feat/backend-authentication
 ```
 
-Analysis persistence infrastructure already exists, but reporting persistence
-orchestration, service mapping, and API exposure remain unfinished. Simulation
-requirements/contracts and automatic market-data scheduling remain deferred.
-AI, full integration, frontend/backend integration, and deployment remain
-governed by their listed unfinished dependencies.
+Replace the temporary trusted `X-User-ID` ownership selector with real user
+authentication at protected API boundaries. Simulation requirements/contracts
+and automatic market-data scheduling remain deferred. AI, full integration,
+frontend/backend integration, and deployment remain governed by their listed
+unfinished dependencies.

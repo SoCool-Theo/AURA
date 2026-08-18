@@ -366,7 +366,8 @@ records and did not require permanently seeding the full historical CSV.
 
 - FastAPI portfolio-analysis routes; portfolio CRUD APIs were completed later
   by the separate `feat/backend-portfolio-api` workstream documented below
-- Analysis snapshot/report persistence and report-history retrieval
+- Persistent analysis reports and report-history retrieval were completed later
+  by the separate `feat/backend-analysis-reporting` workstream documented below
 - Historical, allocation, and combined simulations and simulation history
 - Automatic market-data scheduling
 - AI-agent behavior
@@ -435,8 +436,84 @@ The Portfolio API workstream did not implement secure authentication,
 JWT/login/user registration, a portfolio-analysis HTTP endpoint, report
 persistence/history, simulations or simulation history, automatic market-data
 scheduling, AI-agent behavior, full backend API integration, frontend work, or
-deployment. Analysis execution remains a separate completed service capability
-until a later reporting/API workstream exposes it.
+deployment. Analysis execution was subsequently exposed through the completed
+reporting workstream documented below.
+
+## Backend Analysis Reporting
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-analysis-reporting`
+
+### Completed scope
+
+- Added module-level `PortfolioReportResponse`, `PortfolioReportSummary`, and
+  `PortfolioReportListResponse` contracts while retaining
+  `PortfolioAnalysisResponse` as the canonical nested analytics result. The
+  stable 21-name package-level schema export surface was not expanded.
+- Added pure mapping from validated analysis responses to JSON-safe snapshots
+  and from persisted `Analysis` records to report summaries and validated full
+  reports.
+- Added `AnalysisReportingService` orchestration across owned persisted
+  portfolios, ordered holdings, the existing read-only `AnalysisService`,
+  snapshot serialization, and the existing `AnalysisRepository`.
+- Reused the existing PostgreSQL `Analysis` model and repository without a new
+  migration or reporting-specific repository expansion.
+- Added `POST /api/portfolios/{portfolio_id}/reports`,
+  `GET /api/portfolios/{portfolio_id}/reports`, and
+  `GET /api/portfolios/{portfolio_id}/reports/{report_id}`.
+- POST reuses `AnalysisPeriod` and returns HTTP 201 after persistence. History
+  preserves the existing deterministic repository ordering.
+
+### Snapshot, ownership, and transaction boundaries
+
+- Persisted JSONB snapshots use `portfolio-analysis-response-v1` and are
+  validated back through `PortfolioAnalysisResponse` during retrieval.
+- Relational start/end dates must match the validated snapshot. Negative
+  drawdowns, signed risk contributions, intentional nulls, numeric behavior,
+  and collection ordering remain preserved.
+- Saved reports are immutable application-level snapshots; later portfolio
+  edits do not change an existing report.
+- `X-User-ID` remains a temporary trusted ownership selector, not secure
+  authentication. Missing/wrong-owner portfolios return `Portfolio not found`,
+  while missing/wrong-associated reports return `Report not found` without
+  exposing ownership information.
+- Repositories and services do not commit, roll back, or close sessions.
+  Successful report creation commits at the request/API boundary, GET report
+  operations are read-only, and failed analysis leaves no partial report.
+
+### Live PostgreSQL verification
+
+Live verification exercised the complete FastAPI → reporting service →
+AnalysisService → market-data service → PostgreSQL market data → analytics →
+AnalysisRepository → PostgreSQL snapshot flow. Coverage included real report
+persistence, validated JSONB snapshots, fresh-session detail retrieval,
+deterministic history ordering, ownership isolation, failed-analysis rollback,
+saved-report immutability after portfolio edits, relational/snapshot date
+consistency, ordering preservation, and read-only GET behavior.
+
+### Final verification
+
+- Reporting schema tests: 23 passed
+- Reporting mapper tests: 14 passed
+- Reporting service tests: 13 passed
+- Reporting API tests: 20 passed
+- Reporting live PostgreSQL tests: 2 passed
+- Service suite: 88 passed
+- API integration suite: 66 passed
+- Schema suite: 374 passed
+- Analytics suite: 820 passed
+- Full backend suite: 1,499 passed, 0 failed, 0 errors, 0 skipped
+- Manual analytics engine, Python compilation, dependency, and Git diff checks:
+  passed
+- Existing warning: 1 non-blocking Starlette/httpx TestClient deprecation
+  warning
+
+### Branch boundary at completion
+
+Analysis reporting did not implement authentication/JWT/login, user
+registration, historical/allocation/combined simulations, simulation history,
+AI-agent behavior, PDF generation, report sharing, frontend work, automatic
+market-data scheduling, or deployment.
 
 ## Known Issues and Technical Debt
 
@@ -452,10 +529,9 @@ cause test failures.
 
 ### Recommended next workstream
 
-- `feat/backend-analysis-reporting`: AnalysisService and the Portfolio API are
-  complete, and Analysis persistence infrastructure already exists. Report
-  persistence/service orchestration, response mapping, and API exposure remain
-  unfinished and are the next focused backend workstream.
+- `feat/backend-authentication`: implement real user authentication and replace
+  the temporary trusted `X-User-ID` request identity at protected API
+  boundaries before adding further user-facing simulation or AI APIs.
 
 ### Other ready follow-on work
 
@@ -469,5 +545,5 @@ cause test failures.
   implementation; simulation history remains dependent on those simulators.
 - Simulation requirements/contracts remain deferred. Automatic market-data
   scheduling remains a separate deferred workstream.
-- AI behavior/persistence, full backend API integration, frontend/backend
-  integration, and deployment remain later workstreams.
+- Authentication, AI behavior/persistence, full backend API integration,
+  frontend/backend integration, and deployment remain unfinished.
