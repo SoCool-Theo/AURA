@@ -36,6 +36,7 @@ from backend.app.database.repositories import (
     AnalysisRepository,
     MarketDataRepository,
     PortfolioRepository,
+    UserRepository,
 )
 from backend.app.schemas import (
     PortfolioAnalysisRequest,
@@ -338,6 +339,45 @@ def test_user_credentials_and_legacy_users_persist_together(
         assert credential_loaded.password_hash == (
             "$argon2id$persisted-test-hash"
         )
+
+
+def test_user_repository_live_round_trip_and_legacy_compatibility(
+    session_factory: sessionmaker[Session],
+) -> None:
+    with session_factory() as session:
+        legacy_user = User()
+        session.add(legacy_user)
+        session.flush()
+
+        repository = UserRepository(session)
+        credential_user = repository.create(
+            email="repository@example.com",
+            password_hash="$argon2id$repository-test-hash",
+        )
+        credential_user_id = credential_user.id
+        legacy_user_id = legacy_user.id
+
+        with session_factory() as uncommitted_reader:
+            assert uncommitted_reader.get(User, credential_user_id) is None
+
+        session.commit()
+
+    with session_factory() as session:
+        repository = UserRepository(session)
+        credential_loaded = repository.get_by_email(
+            "repository@example.com"
+        )
+        legacy_loaded = session.get(User, legacy_user_id)
+
+        assert credential_loaded is not None
+        assert credential_loaded.id == credential_user_id
+        assert credential_loaded.password_hash == (
+            "$argon2id$repository-test-hash"
+        )
+        assert repository.get_by_email("REPOSITORY@EXAMPLE.COM") is None
+        assert legacy_loaded is not None
+        assert legacy_loaded.email is None
+        assert legacy_loaded.password_hash is None
 
 
 def test_duplicate_non_null_user_email_violates_unique_constraint(
