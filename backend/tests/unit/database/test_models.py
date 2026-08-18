@@ -1,10 +1,11 @@
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Numeric,
+    Text,
     UniqueConstraint,
     inspect,
 )
@@ -74,6 +75,52 @@ def test_required_model_columns_are_not_nullable() -> None:
         "updated_at",
     ):
         assert Holding.__table__.c[column_name].nullable is False
+
+
+def test_user_credentials_are_nullable_text_and_support_legacy_construction(
+) -> None:
+    generated_user = User()
+    explicit_id = uuid4()
+    explicit_user = User(id=explicit_id)
+    credential_user = User(
+        email="canonical@example.com",
+        password_hash="$argon2id$test-hash",
+    )
+
+    assert isinstance(User.__table__.c.email.type, Text)
+    assert isinstance(User.__table__.c.password_hash.type, Text)
+    assert User.__table__.c.email.nullable is True
+    assert User.__table__.c.password_hash.nullable is True
+    assert generated_user.email is None
+    assert generated_user.password_hash is None
+    assert explicit_user.id == explicit_id
+    assert explicit_user.email is None
+    assert explicit_user.password_hash is None
+    assert credential_user.email == "canonical@example.com"
+    assert credential_user.password_hash == "$argon2id$test-hash"
+
+
+def test_user_credential_constraints_match_persistence_contract() -> None:
+    check_constraints = {
+        constraint.name: str(constraint.sqltext)
+        for constraint in User.__table__.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+    unique_constraints = {
+        constraint.name: tuple(
+            column.name for column in constraint.columns
+        )
+        for constraint in User.__table__.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+
+    assert check_constraints == {
+        "ck_users_credentials_complete": (
+            "(email IS NULL AND password_hash IS NULL) OR "
+            "(email IS NOT NULL AND password_hash IS NOT NULL)"
+        )
+    }
+    assert unique_constraints == {"uq_users_email": ("email",)}
 
 
 def test_foreign_keys_target_owners_and_cascade_on_delete() -> None:
@@ -194,6 +241,14 @@ def test_models_compile_as_postgresql_ddl_without_connecting() -> None:
 
     assert set(ddl_by_table) == EXPECTED_TABLES
     assert "UUID" in ddl_by_table["users"]
+    assert "email TEXT" in ddl_by_table["users"]
+    assert "password_hash TEXT" in ddl_by_table["users"]
+    assert "CONSTRAINT uq_users_email UNIQUE (email)" in (
+        ddl_by_table["users"]
+    )
+    assert "CONSTRAINT ck_users_credentials_complete CHECK" in (
+        ddl_by_table["users"]
+    )
     assert "TIMESTAMP WITH TIME ZONE" in ddl_by_table["users"]
     assert "NUMERIC(20, 18)" in ddl_by_table["holdings"]
     assert "ON DELETE CASCADE" in ddl_by_table["portfolios"]

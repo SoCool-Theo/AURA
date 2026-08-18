@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from alembic import command
 from alembic.config import Config
@@ -56,6 +56,8 @@ APPLICATION_TABLES = {
     "portfolios",
     "users",
 }
+INITIAL_REVISION = "9f4c2a7b1d3e"
+LEGACY_MIGRATION_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
 def _test_database_url() -> str:
@@ -115,13 +117,58 @@ def postgres_engine() -> Iterator[Engine]:
                     )
 
         settings.database_url = raw_url  # type: ignore[assignment]
-        command.upgrade(_alembic_config(), "head")
+        command.upgrade(_alembic_config(), INITIAL_REVISION)
         upgraded = True
+        with engine.begin() as connection:
+            connection.execute(
+                sa.text("INSERT INTO users (id) VALUES (:user_id)"),
+                {"user_id": LEGACY_MIGRATION_USER_ID},
+            )
+
+        command.upgrade(_alembic_config(), "head")
+        with engine.connect() as connection:
+            migrated_credentials = connection.execute(
+                sa.text(
+                    "SELECT email, password_hash FROM users WHERE id = :user_id"
+                ),
+                {"user_id": LEGACY_MIGRATION_USER_ID},
+            ).one()
+        if migrated_credentials != (None, None):
+            raise AssertionError(
+                "authentication migration changed legacy User credentials"
+            )
+        with engine.begin() as connection:
+            connection.execute(
+                sa.text("DELETE FROM users WHERE id = :user_id"),
+                {"user_id": LEGACY_MIGRATION_USER_ID},
+            )
         yield engine
     finally:
         try:
             if upgraded:
-                command.downgrade(_alembic_config(), "base")
+                try:
+                    command.downgrade(
+                        _alembic_config(),
+                        INITIAL_REVISION,
+                    )
+                    with engine.connect() as connection:
+                        initial_user_columns = set(
+                            _column_map(
+                                inspect(connection),
+                                "users",
+                            )
+                        )
+                    if initial_user_columns != {
+                        "id",
+                        "created_at",
+                        "updated_at",
+                    }:
+                        raise AssertionError(
+                            "authentication downgrade did not restore the "
+                            "initial users table"
+                        )
+                finally:
+                    command.downgrade(_alembic_config(), "base")
                 with engine.connect() as connection:
                     final_tables = set(
                         inspect(connection).get_table_names(schema="public")
@@ -211,6 +258,10 @@ def test_live_migration_schema_types_and_revision(
         user_columns = _column_map(inspector, "users")
 
         assert isinstance(user_columns["id"]["type"], postgresql.UUID)
+        assert isinstance(user_columns["email"]["type"], sa.Text)
+        assert user_columns["email"]["nullable"] is True
+        assert isinstance(user_columns["password_hash"]["type"], sa.Text)
+        assert user_columns["password_hash"]["nullable"] is True
         assert isinstance(holding_columns["weight"]["type"], sa.Numeric)
         assert holding_columns["weight"]["type"].precision == 20
         assert holding_columns["weight"]["type"].scale == 18
@@ -225,6 +276,22 @@ def test_live_migration_schema_types_and_revision(
         )
         assert isinstance(user_columns["created_at"]["type"], sa.DateTime)
         assert user_columns["created_at"]["type"].timezone is True
+        user_unique_constraints = {
+            constraint["name"]: tuple(constraint["column_names"])
+            for constraint in inspector.get_unique_constraints(
+                "users",
+                schema="public",
+            )
+        }
+        assert user_unique_constraints["uq_users_email"] == ("email",)
+        user_check_constraints = {
+            constraint["name"]: constraint["sqltext"]
+            for constraint in inspector.get_check_constraints(
+                "users",
+                schema="public",
+            )
+        }
+        assert "ck_users_credentials_complete" in user_check_constraints
 
         migration_revision = MigrationContext.configure(
             connection
@@ -232,7 +299,91 @@ def test_live_migration_schema_types_and_revision(
 
     script = ScriptDirectory.from_config(_alembic_config())
     assert migration_revision == script.get_current_head()
-    assert len(list(script.walk_revisions())) == 1
+    assert len(list(script.walk_revisions())) == 2
+
+
+def test_user_credentials_and_legacy_users_persist_together(
+    session_factory: sessionmaker[Session],
+) -> None:
+    explicit_id = uuid4()
+    with session_factory.begin() as session:
+        generated_legacy = User()
+        explicit_legacy = User(id=explicit_id)
+        credential_user = User(
+            email="canonical@example.com",
+            password_hash="$argon2id$persisted-test-hash",
+        )
+        session.add_all(
+            [generated_legacy, explicit_legacy, credential_user]
+        )
+        session.flush()
+        generated_legacy_id = generated_legacy.id
+        credential_user_id = credential_user.id
+
+    with session_factory() as session:
+        generated_loaded = session.get(User, generated_legacy_id)
+        explicit_loaded = session.get(User, explicit_id)
+        credential_loaded = session.get(User, credential_user_id)
+
+        assert generated_loaded is not None
+        assert generated_loaded.email is None
+        assert generated_loaded.password_hash is None
+        assert generated_loaded.created_at.tzinfo is not None
+        assert generated_loaded.updated_at.tzinfo is not None
+        assert explicit_loaded is not None
+        assert explicit_loaded.email is None
+        assert explicit_loaded.password_hash is None
+        assert credential_loaded is not None
+        assert credential_loaded.email == "canonical@example.com"
+        assert credential_loaded.password_hash == (
+            "$argon2id$persisted-test-hash"
+        )
+
+
+def test_duplicate_non_null_user_email_violates_unique_constraint(
+    session_factory: sessionmaker[Session],
+) -> None:
+    with session_factory.begin() as session:
+        session.add(
+            User(
+                email="duplicate@example.com",
+                password_hash="$argon2id$first-test-hash",
+            )
+        )
+
+    with session_factory() as session:
+        session.add(
+            User(
+                email="duplicate@example.com",
+                password_hash="$argon2id$second-test-hash",
+            )
+        )
+        with pytest.raises(IntegrityError) as raised:
+            session.flush()
+        assert raised.value.orig.diag.constraint_name == "uq_users_email"
+        session.rollback()
+
+
+@pytest.mark.parametrize(
+    ("email", "password_hash"),
+    [
+        ("incomplete@example.com", None),
+        (None, "$argon2id$orphaned-test-hash"),
+    ],
+)
+def test_incomplete_user_credentials_violate_pair_constraint(
+    session_factory: sessionmaker[Session],
+    email: str | None,
+    password_hash: str | None,
+) -> None:
+    with session_factory() as session:
+        session.add(User(email=email, password_hash=password_hash))
+        with pytest.raises(IntegrityError) as raised:
+            session.flush()
+        assert raised.value.orig.diag.constraint_name == (
+            "ck_users_credentials_complete"
+        )
+        session.rollback()
 
 
 def test_portfolio_repository_commit_round_trip_and_caller_rollback(
