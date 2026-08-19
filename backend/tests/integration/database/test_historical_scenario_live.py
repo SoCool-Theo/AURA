@@ -40,8 +40,14 @@ from app.scenarios.definitions import (
     HISTORICAL_SCENARIOS,
     get_historical_scenario,
 )
-from app.scenarios.simulator import simulate_historical_scenario
+from app.scenarios.simulator import (
+    HistoricalSimulationResult,
+    simulate_allocation_change,
+    simulate_historical_scenario,
+)
 from app.schemas.simulation import (
+    AllocationSimulationResponse,
+    AllocationSimulationResult,
     HistoricalScenarioListResponse,
     HistoricalScenarioResponse,
     HistoricalScenarioSimulationResponse,
@@ -68,6 +74,14 @@ COMMON_DATES = (
     date(2020, 2, 5),
     date(2020, 2, 6),
     date(2020, 2, 7),
+)
+ALLOCATION_START_DATE = date(2064, 1, 1)
+ALLOCATION_END_DATE = date(2064, 1, 8)
+ALLOCATION_COMMON_DATES = (
+    date(2064, 1, 2),
+    date(2064, 1, 4),
+    date(2064, 1, 6),
+    date(2064, 1, 7),
 )
 
 
@@ -424,6 +438,68 @@ def _simulation_path(portfolio_id: UUID) -> str:
     )
 
 
+def _allocation_simulation_path(portfolio_id: UUID) -> str:
+    return f"/api/portfolios/{portfolio_id}/simulations/allocations"
+
+
+def _allocation_request(
+    holdings: Sequence[tuple[str, float]],
+) -> dict[str, object]:
+    return {
+        "start_date": ALLOCATION_START_DATE.isoformat(),
+        "end_date": ALLOCATION_END_DATE.isoformat(),
+        "modified_allocation": [
+            {"symbol": symbol, "weight": weight}
+            for symbol, weight in holdings
+        ],
+    }
+
+
+def _assert_allocation_result_matches(
+    actual: AllocationSimulationResult,
+    expected: HistoricalSimulationResult,
+) -> None:
+    assert actual.metrics.normalized_starting_value == pytest.approx(
+        expected.normalized_starting_value
+    )
+    assert actual.metrics.normalized_ending_value == pytest.approx(
+        expected.normalized_ending_value
+    )
+    assert actual.metrics.cumulative_return == pytest.approx(
+        expected.cumulative_return
+    )
+    assert actual.metrics.annualized_volatility == pytest.approx(
+        expected.annualized_volatility
+    )
+    if expected.sharpe_ratio is None:
+        assert actual.metrics.sharpe_ratio is None
+    else:
+        assert actual.metrics.sharpe_ratio == pytest.approx(
+            expected.sharpe_ratio
+        )
+    assert actual.metrics.maximum_drawdown.max_drawdown == pytest.approx(
+        expected.maximum_drawdown.max_drawdown
+    )
+    assert actual.metrics.maximum_drawdown.peak_date == (
+        None
+        if expected.maximum_drawdown.peak_date is None
+        else expected.maximum_drawdown.peak_date.date()
+    )
+    assert actual.metrics.maximum_drawdown.trough_date == (
+        None
+        if expected.maximum_drawdown.trough_date is None
+        else expected.maximum_drawdown.trough_date.date()
+    )
+    assert [point.date for point in actual.trajectory] == [
+        point.date.date() for point in expected.trajectory
+    ]
+    assert [point.normalized_value for point in actual.trajectory] == (
+        pytest.approx(
+            [point.normalized_value for point in expected.trajectory]
+        )
+    )
+
+
 def test_live_public_catalogue_and_authentication_boundary(
     live_client: TestClient,
     session_factory: sessionmaker[Session],
@@ -721,3 +797,330 @@ def test_live_two_user_ownership_isolation_returns_private_not_found(
     )
     assert response.status_code == 404
     assert response.json() == {"detail": "Portfolio not found"}
+
+
+def test_live_allocation_simulation_canonicalizes_order_and_is_read_only(
+    live_client: TestClient,
+    session_factory: sessionmaker[Session],
+    postgres_engine: Engine,
+) -> None:
+    account = _register_and_login(
+        live_client,
+        email="phase6-allocation-owner@example.com",
+    )
+    portfolio_id = _create_portfolio(
+        live_client,
+        account=account,
+        name="Phase 6 Allocation Portfolio",
+        holdings=(("AAPL", 0.5), ("BND", 0.3), ("GLD", 0.2)),
+    )
+    _store_market_data(
+        session_factory,
+        (
+            ("AAPL", date(2064, 1, 1), 98.0, 1_001),
+            ("AAPL", date(2064, 1, 2), 100.0, 1_002),
+            ("AAPL", date(2064, 1, 3), 102.0, 1_003),
+            ("AAPL", date(2064, 1, 4), 104.0, 1_004),
+            ("AAPL", date(2064, 1, 6), 103.0, 1_006),
+            ("AAPL", date(2064, 1, 7), 108.0, 1_007),
+            ("AAPL", date(2064, 1, 8), 109.0, 1_008),
+            ("BND", date(2064, 1, 2), 100.0, None),
+            ("BND", date(2064, 1, 3), 100.5, None),
+            ("BND", date(2064, 1, 4), 99.0, None),
+            ("BND", date(2064, 1, 5), 100.0, None),
+            ("BND", date(2064, 1, 6), 101.0, None),
+            ("BND", date(2064, 1, 7), 102.0, None),
+            ("GLD", date(2064, 1, 2), 50.0, 2_002),
+            ("GLD", date(2064, 1, 4), 52.0, 2_004),
+            ("GLD", date(2064, 1, 6), 51.0, 2_006),
+            ("GLD", date(2064, 1, 7), 54.0, 2_007),
+        ),
+    )
+    state_before = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+    assert state_before.analysis_count == 0
+    assert "simulations" not in state_before.table_names
+    assert "simulation_history" not in state_before.table_names
+
+    response = live_client.post(
+        _allocation_simulation_path(portfolio_id),
+        headers=account.headers,
+        json=_allocation_request(
+            (("GLD", 0.0), ("AAPL", 0.7), ("BND", 0.3))
+        ),
+    )
+
+    assert response.status_code == 200
+    result = AllocationSimulationResponse.model_validate(response.json())
+    assert result.portfolio_id == portfolio_id
+    assert result.portfolio_name == "Phase 6 Allocation Portfolio"
+    assert result.start_date == ALLOCATION_START_DATE
+    assert result.end_date == ALLOCATION_END_DATE
+    assert result.metadata.effective_start_date == ALLOCATION_COMMON_DATES[0]
+    assert result.metadata.effective_end_date == ALLOCATION_COMMON_DATES[-1]
+    assert result.metadata.price_observation_count == len(
+        ALLOCATION_COMMON_DATES
+    )
+    assert result.metadata.return_observation_count == (
+        len(ALLOCATION_COMMON_DATES) - 1
+    )
+
+    assert [item.symbol for item in result.original.allocation] == [
+        "AAPL",
+        "BND",
+        "GLD",
+    ]
+    assert [float(item.weight) for item in result.original.allocation] == (
+        pytest.approx([0.5, 0.3, 0.2])
+    )
+    assert [item.symbol for item in result.modified.allocation] == [
+        "AAPL",
+        "BND",
+        "GLD",
+    ]
+    assert [float(item.weight) for item in result.modified.allocation] == (
+        pytest.approx([0.7, 0.3, 0.0])
+    )
+    assert result.modified.allocation[-1].symbol == "GLD"
+    assert result.modified.allocation[-1].weight == 0
+
+    expected_prices = pd.DataFrame(
+        [
+            [100.0, 100.0, 50.0],
+            [104.0, 99.0, 52.0],
+            [103.0, 101.0, 51.0],
+            [108.0, 102.0, 54.0],
+        ],
+        index=pd.DatetimeIndex(ALLOCATION_COMMON_DATES),
+        columns=("AAPL", "BND", "GLD"),
+        dtype=float,
+    )
+    expected = simulate_allocation_change(
+        expected_prices,
+        {"AAPL": 0.5, "BND": 0.3, "GLD": 0.2},
+        {"AAPL": 0.7, "BND": 0.3, "GLD": 0.0},
+    )
+    _assert_allocation_result_matches(result.original, expected.original)
+    _assert_allocation_result_matches(result.modified, expected.modified)
+    assert result.comparison.normalized_ending_value_delta == pytest.approx(
+        expected.normalized_ending_value_delta
+    )
+    assert result.comparison.cumulative_return_delta == pytest.approx(
+        expected.cumulative_return_delta
+    )
+    assert result.comparison.annualized_volatility_delta == pytest.approx(
+        expected.annualized_volatility_delta
+    )
+    if expected.sharpe_ratio_delta is None:
+        assert result.comparison.sharpe_ratio_delta is None
+    else:
+        assert result.comparison.sharpe_ratio_delta == pytest.approx(
+            expected.sharpe_ratio_delta
+        )
+    assert result.comparison.maximum_drawdown_delta == pytest.approx(
+        expected.maximum_drawdown_delta
+    )
+    assert [point.date for point in result.original.trajectory] == list(
+        ALLOCATION_COMMON_DATES
+    )
+    assert [point.date for point in result.modified.trajectory] == list(
+        ALLOCATION_COMMON_DATES
+    )
+
+    state_after = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+    assert state_after == state_before
+    assert [(row[2], row[4], row[3]) for row in state_after.holdings] == [
+        ("AAPL", 0, Decimal("0.500000000000000000")),
+        ("BND", 1, Decimal("0.300000000000000000")),
+        ("GLD", 2, Decimal("0.200000000000000000")),
+    ]
+    assert len([row for row in state_after.market_data if row[0] == "GLD"]) == 4
+
+
+def test_live_allocation_authentication_and_ownership_are_private(
+    live_client: TestClient,
+    session_factory: sessionmaker[Session],
+    postgres_engine: Engine,
+) -> None:
+    owner = _register_and_login(
+        live_client,
+        email="phase6-allocation-private-owner@example.com",
+    )
+    other_user = _register_and_login(
+        live_client,
+        email="phase6-allocation-private-other@example.com",
+    )
+    portfolio_id = _create_portfolio(
+        live_client,
+        account=owner,
+        name="Phase 6 Private Allocation Portfolio",
+        holdings=(("AAPL", 0.5), ("BND", 0.3), ("GLD", 0.2)),
+    )
+    state_before = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+    request = _allocation_request(
+        (("AAPL", 0.5), ("BND", 0.3), ("GLD", 0.2))
+    )
+
+    unauthenticated = live_client.post(
+        _allocation_simulation_path(portfolio_id),
+        headers={"X-User-ID": str(owner.id)},
+        json=request,
+    )
+    assert unauthenticated.status_code == 401
+    assert unauthenticated.json() == {
+        "detail": "Invalid or missing authentication credentials"
+    }
+
+    wrong_owner = live_client.post(
+        _allocation_simulation_path(portfolio_id),
+        headers=other_user.headers,
+        json=request,
+    )
+    assert wrong_owner.status_code == 404
+    assert wrong_owner.json() == {"detail": "Portfolio not found"}
+
+    state_after = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+    assert state_after == state_before
+
+
+def test_live_allocation_symbol_mismatch_is_unprocessable_and_read_only(
+    live_client: TestClient,
+    session_factory: sessionmaker[Session],
+    postgres_engine: Engine,
+) -> None:
+    account = _register_and_login(
+        live_client,
+        email="phase6-allocation-symbols@example.com",
+    )
+    portfolio_id = _create_portfolio(
+        live_client,
+        account=account,
+        name="Phase 6 Allocation Symbol Mismatch",
+        holdings=(("AAPL", 0.5), ("BND", 0.3), ("GLD", 0.2)),
+    )
+    state_before = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+
+    response = live_client.post(
+        _allocation_simulation_path(portfolio_id),
+        headers=account.headers,
+        json=_allocation_request(
+            (("MSFT", 0.2), ("AAPL", 0.5), ("BND", 0.3))
+        ),
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": (
+            "modified allocation symbols must exactly match saved "
+            "portfolio symbols"
+        )
+    }
+    assert "traceback" not in response.text.casefold()
+    state_after = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+    assert state_after == state_before
+
+
+def test_live_allocation_data_failures_are_unprocessable_and_read_only(
+    live_client: TestClient,
+    session_factory: sessionmaker[Session],
+    postgres_engine: Engine,
+) -> None:
+    account = _register_and_login(
+        live_client,
+        email="phase6-allocation-data-errors@example.com",
+    )
+    missing_portfolio_id = _create_portfolio(
+        live_client,
+        account=account,
+        name="Phase 6 Allocation Missing Data",
+        holdings=(("MISSA", 0.5), ("MISSB", 0.5)),
+    )
+    insufficient_portfolio_id = _create_portfolio(
+        live_client,
+        account=account,
+        name="Phase 6 Allocation Insufficient Data",
+        holdings=(("SHORTA", 0.5), ("SHORTB", 0.5)),
+    )
+    _store_market_data(
+        session_factory,
+        (
+            ("MISSA", date(2064, 1, 2), 100.0, None),
+            ("SHORTA", date(2064, 1, 2), 100.0, None),
+            ("SHORTA", date(2064, 1, 3), 101.0, None),
+            ("SHORTA", date(2064, 1, 4), 102.0, None),
+            ("SHORTB", date(2064, 1, 2), 50.0, None),
+            ("SHORTB", date(2064, 1, 4), 51.0, None),
+            ("SHORTB", date(2064, 1, 5), 52.0, None),
+        ),
+    )
+    missing_before = _persistence_state(
+        session_factory,
+        postgres_engine,
+        missing_portfolio_id,
+    )
+    insufficient_before = _persistence_state(
+        session_factory,
+        postgres_engine,
+        insufficient_portfolio_id,
+    )
+
+    missing_response = live_client.post(
+        _allocation_simulation_path(missing_portfolio_id),
+        headers=account.headers,
+        json=_allocation_request((("MISSA", 0.5), ("MISSB", 0.5))),
+    )
+    assert missing_response.status_code == 422
+    assert missing_response.json() == {
+        "detail": "market data is unavailable for requested symbols: MISSB"
+    }
+
+    insufficient_response = live_client.post(
+        _allocation_simulation_path(insufficient_portfolio_id),
+        headers=account.headers,
+        json=_allocation_request((("SHORTA", 0.5), ("SHORTB", 0.5))),
+    )
+    assert insufficient_response.status_code == 422
+    assert insufficient_response.json() == {
+        "detail": (
+            "prices must contain at least three rows for historical simulation"
+        )
+    }
+
+    missing_after = _persistence_state(
+        session_factory,
+        postgres_engine,
+        missing_portfolio_id,
+    )
+    insufficient_after = _persistence_state(
+        session_factory,
+        postgres_engine,
+        insufficient_portfolio_id,
+    )
+    assert missing_after == missing_before
+    assert insufficient_after == insufficient_before
+    assert missing_after.analysis_count == 0
+    assert "simulations" not in missing_after.table_names
+    assert "simulation_history" not in missing_after.table_names
