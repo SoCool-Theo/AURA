@@ -1,4 +1,4 @@
-"""Pure deterministic calculations for historical portfolio scenarios."""
+"""Pure deterministic calculations for historical portfolio simulations."""
 
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -49,6 +49,19 @@ class HistoricalSimulationResult:
     sharpe_ratio: float | None
     maximum_drawdown: MaxDrawdownResult
     trajectory: tuple[HistoricalTrajectoryPoint, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AllocationComparisonResult:
+    """Immutable results and modified-minus-original allocation deltas."""
+
+    original: HistoricalSimulationResult
+    modified: HistoricalSimulationResult
+    normalized_ending_value_delta: float
+    cumulative_return_delta: float
+    annualized_volatility_delta: float
+    sharpe_ratio_delta: float | None
+    maximum_drawdown_delta: float
 
 
 def _calculate_nullable_sharpe(portfolio_returns: pd.Series) -> float | None:
@@ -137,8 +150,51 @@ def simulate_historical_scenario(
     )
 
 
+def simulate_allocation_change(
+    prices: pd.DataFrame,
+    original_weights: Mapping[str, float],
+    modified_weights: Mapping[str, float],
+) -> AllocationComparisonResult:
+    """Compare two allocations over the same prepared historical prices."""
+    original = simulate_historical_scenario(prices, original_weights)
+    modified = simulate_historical_scenario(prices, modified_weights)
+
+    sharpe_ratio_delta = None
+    if original.sharpe_ratio is not None and modified.sharpe_ratio is not None:
+        sharpe_ratio_delta = _require_finite_result(
+            modified.sharpe_ratio - original.sharpe_ratio,
+            result_name="Sharpe ratio delta",
+        )
+
+    return AllocationComparisonResult(
+        original=original,
+        modified=modified,
+        normalized_ending_value_delta=_require_finite_result(
+            modified.normalized_ending_value
+            - original.normalized_ending_value,
+            result_name="normalized ending value delta",
+        ),
+        cumulative_return_delta=_require_finite_result(
+            modified.cumulative_return - original.cumulative_return,
+            result_name="cumulative return delta",
+        ),
+        annualized_volatility_delta=_require_finite_result(
+            modified.annualized_volatility - original.annualized_volatility,
+            result_name="annualized volatility delta",
+        ),
+        sharpe_ratio_delta=sharpe_ratio_delta,
+        maximum_drawdown_delta=_require_finite_result(
+            modified.maximum_drawdown.max_drawdown
+            - original.maximum_drawdown.max_drawdown,
+            result_name="maximum drawdown delta",
+        ),
+    )
+
+
 __all__ = [
     "HistoricalTrajectoryPoint",
     "HistoricalSimulationResult",
+    "AllocationComparisonResult",
     "simulate_historical_scenario",
+    "simulate_allocation_change",
 ]
