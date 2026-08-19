@@ -400,8 +400,9 @@ records and did not require permanently seeding the full historical CSV.
 
 ### Ownership and transaction boundaries
 
-- `X-User-ID` is a temporary ownership selector that validates the supplied
-  UUID against an existing `User`; it is not secure authentication.
+- At this workstream's completion, `X-User-ID` was a temporary ownership
+  selector that validated the supplied UUID against an existing `User`; the
+  later authentication workstream removed it from production authentication.
 - Portfolio access remains owner-scoped, and missing and wrong-owner portfolio
   IDs produce the same client-visible `404`.
 - `PortfolioRepository` and `PortfolioService` remain commit/rollback-free,
@@ -473,10 +474,11 @@ reporting workstream documented below.
   and collection ordering remain preserved.
 - Saved reports are immutable application-level snapshots; later portfolio
   edits do not change an existing report.
-- `X-User-ID` remains a temporary trusted ownership selector, not secure
-  authentication. Missing/wrong-owner portfolios return `Portfolio not found`,
-  while missing/wrong-associated reports return `Report not found` without
-  exposing ownership information.
+- At this workstream's completion, `X-User-ID` remained a temporary trusted
+  ownership selector. The later authentication workstream removed it from
+  production authentication. Missing/wrong-owner portfolios return
+  `Portfolio not found`, while missing/wrong-associated reports return
+  `Report not found` without exposing ownership information.
 - Repositories and services do not commit, roll back, or close sessions.
   Successful report creation commits at the request/API boundary, GET report
   operations are read-only, and failed analysis leaves no partial report.
@@ -515,6 +517,75 @@ registration, historical/allocation/combined simulations, simulation history,
 AI-agent behavior, PDF generation, report sharing, frontend work, automatic
 market-data scheduling, or deployment.
 
+## Backend Authentication
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-authentication`
+
+### Completed scope
+
+- Extended the existing `User` persistence with canonical email and
+  password-hash credentials while preserving credential-less legacy/internal
+  users. PostgreSQL enforces unique canonical email and credential-pair
+  integrity.
+- Added a second reversible Alembic revision without rewriting the original
+  database-foundation revision.
+- Added Argon2 password hashing through `pwdlib`; plaintext passwords are never
+  persisted, and generic/dummy verification avoids exposing unknown-account
+  differences.
+- Added Bearer JWT access tokens using the authenticated User UUID as `sub`,
+  with required `sub`, `iat`, and `exp` claims, 30-minute expiry, and HS256.
+  The signing secret is environment/configuration driven and no usable secret
+  is committed.
+- Added `POST /api/auth/register`, `POST /api/auth/login`, and
+  `GET /api/auth/me`. Duplicate canonical email returns `409`; invalid
+  credentials and invalid or missing Bearer authentication return generic
+  `401` responses through the Bearer boundary. Public User responses never
+  expose password hashes.
+- Migrated all portfolio and analysis-reporting APIs from the former trusted
+  `X-User-ID` header to Bearer authentication. Production `X-User-ID`
+  authentication was removed.
+
+### Ownership, transaction, and application boundaries
+
+- The authenticated User UUID continues into the existing service ownership
+  checks. Wrong-owner portfolios remain `404 Portfolio not found`; report
+  privacy behavior remains unchanged, with no private-resource disclosure
+  through `403`.
+- Repositories do not commit, roll back, or close caller sessions, and services
+  do not own commits or rollbacks. Successful writes commit at the API/request
+  boundary; failure rollback and cleanup remain request-boundary-owned.
+- Current-user authentication lookup is read-only. Lazy application/database
+  initialization remains preserved, and `/api/health` remains public.
+
+### Live PostgreSQL end-to-end coverage
+
+Live verification covered registration, canonical credential persistence,
+Argon2 password-hash persistence, login, JWT/Bearer authentication,
+`/api/auth/me`, authenticated portfolio access, authenticated report
+creation/retrieval, two-user ownership isolation, immutable report snapshots,
+fresh-session persistence, and rejection of `X-User-ID` as authentication.
+
+### Final verification
+
+- Live PostgreSQL integration tests: 27 passed
+- Complete API tests: 94 passed
+- Schema tests: 386 passed
+- Analytics tests: 820 passed
+- Full backend tests: 1,588 passed, 0 failed
+- Manual analytics engine, Python compilation, dependency consistency,
+  application import smoke, public health, and Git integrity/diff checks:
+  passed
+- Existing warning: 1 non-blocking Starlette/httpx TestClient deprecation
+  warning; it is not an authentication defect
+
+### Branch boundary at completion
+
+Authentication did not implement email verification, password reset, refresh
+tokens, logout/token revocation, OAuth/social login, MFA, RBAC/admin
+authorization, frontend/mobile authentication integration, historical
+simulations, AI-agent functionality, full backend integration, or deployment.
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -529,9 +600,9 @@ cause test failures.
 
 ### Recommended next workstream
 
-- `feat/backend-authentication`: implement real user authentication and replace
-  the temporary trusted `X-User-ID` request identity at protected API
-  boundaries before adding further user-facing simulation or AI APIs.
+- Move toward the Historical What-If Simulator beginning with
+  `feat/backend-historical-scenario-simulator`. Simulation contracts and final
+  requirements still require finalization before implementation.
 
 ### Other ready follow-on work
 
@@ -545,5 +616,5 @@ cause test failures.
   implementation; simulation history remains dependent on those simulators.
 - Simulation requirements/contracts remain deferred. Automatic market-data
   scheduling remains a separate deferred workstream.
-- Authentication, AI behavior/persistence, full backend API integration,
-  frontend/backend integration, and deployment remain unfinished.
+- AI behavior/persistence, full backend API integration, frontend/mobile
+  integration, and deployment remain unfinished.
