@@ -10,6 +10,10 @@ from pydantic import ValidationError
 import backend.app.schemas as schemas_package
 import backend.app.schemas.simulation as simulation_module
 from backend.app.schemas.simulation import (
+    AllocationSimulationComparison,
+    AllocationSimulationRequest,
+    AllocationSimulationResponse,
+    AllocationSimulationResult,
     HistoricalScenarioListResponse,
     HistoricalScenarioMetrics,
     HistoricalScenarioResponse,
@@ -88,6 +92,88 @@ def _response_payload() -> dict[str, object]:
     }
 
 
+def _allocation_payload(
+    *,
+    first_weight: float = 0.6,
+    second_weight: float = 0.4,
+) -> list[dict[str, object]]:
+    return [
+        {"symbol": "MSFT", "weight": first_weight},
+        {"symbol": "AAPL", "weight": second_weight},
+    ]
+
+
+def _allocation_request_payload() -> dict[str, object]:
+    return {
+        "start_date": "2020-02-01",
+        "end_date": "2020-04-30",
+        "modified_allocation": _allocation_payload(
+            first_weight=0.3,
+            second_weight=0.7,
+        ),
+    }
+
+
+def _allocation_result_payload(
+    *,
+    modified: bool = False,
+) -> dict[str, object]:
+    if not modified:
+        return {
+            "allocation": _allocation_payload(),
+            "metrics": _metrics_payload(),
+            "trajectory": _trajectory_payload(),
+        }
+
+    return {
+        "allocation": _allocation_payload(
+            first_weight=0.3,
+            second_weight=0.7,
+        ),
+        "metrics": {
+            "normalized_starting_value": 1.0,
+            "normalized_ending_value": 1.04,
+            "cumulative_return": 0.04,
+            "annualized_volatility": 0.32,
+            "sharpe_ratio": 1.2,
+            "maximum_drawdown": {
+                "max_drawdown": -0.1,
+                "peak_date": "2020-02-03",
+                "trough_date": "2020-03-02",
+            },
+        },
+        "trajectory": [
+            {"date": "2020-02-03", "normalized_value": 1.0},
+            {"date": "2020-03-02", "normalized_value": 0.9},
+            {"date": "2020-03-23", "normalized_value": 0.98},
+            {"date": "2020-04-30", "normalized_value": 1.04},
+        ],
+    }
+
+
+def _comparison_payload() -> dict[str, object]:
+    return {
+        "normalized_ending_value_delta": 0.09,
+        "cumulative_return_delta": 0.09,
+        "annualized_volatility_delta": -0.1,
+        "sharpe_ratio_delta": None,
+        "maximum_drawdown_delta": 0.15,
+    }
+
+
+def _allocation_response_payload() -> dict[str, object]:
+    return {
+        "portfolio_id": _PORTFOLIO_ID,
+        "portfolio_name": "Balanced Learning Portfolio",
+        "start_date": "2020-02-01",
+        "end_date": "2020-04-30",
+        "metadata": _metadata_payload(),
+        "original": _allocation_result_payload(),
+        "modified": _allocation_result_payload(modified=True),
+        "comparison": _comparison_payload(),
+    }
+
+
 def test_valid_scenario_response() -> None:
     response = HistoricalScenarioResponse.model_validate(_scenario_payload())
 
@@ -149,6 +235,10 @@ def test_simulation_request_rejects_empty_or_padded_id(
         ),
         (HistoricalScenarioMetrics, _metrics_payload()),
         (HistoricalScenarioSimulationResponse, _response_payload()),
+        (AllocationSimulationRequest, _allocation_request_payload()),
+        (AllocationSimulationResult, _allocation_result_payload()),
+        (AllocationSimulationComparison, _comparison_payload()),
+        (AllocationSimulationResponse, _allocation_response_payload()),
     ],
 )
 def test_all_simulation_schemas_reject_unknown_fields(
@@ -328,6 +418,297 @@ def test_canonical_simulation_example_validates_and_is_strict_json() -> None:
     assert response.metrics.sharpe_ratio is None
 
 
+def test_valid_allocation_request_preserves_period_and_order() -> None:
+    request = AllocationSimulationRequest.model_validate(
+        _allocation_request_payload()
+    )
+
+    assert request.start_date == date(2020, 2, 1)
+    assert request.end_date == date(2020, 4, 30)
+    assert [holding.symbol for holding in request.modified_allocation] == [
+        "MSFT",
+        "AAPL",
+    ]
+    assert [holding.weight for holding in request.modified_allocation] == [
+        0.3,
+        0.7,
+    ]
+
+
+def test_allocation_request_inherits_symbol_normalization() -> None:
+    payload = _allocation_request_payload()
+    payload["modified_allocation"] = [
+        {"symbol": " msft ", "weight": 0.3},
+        {"symbol": "aapl", "weight": 0.7},
+    ]
+
+    request = AllocationSimulationRequest.model_validate(payload)
+
+    assert [holding.symbol for holding in request.modified_allocation] == [
+        "MSFT",
+        "AAPL",
+    ]
+
+
+def test_allocation_request_accepts_zero_and_one_weight_boundaries() -> None:
+    payload = _allocation_request_payload()
+    payload["modified_allocation"] = _allocation_payload(
+        first_weight=0.0,
+        second_weight=1.0,
+    )
+
+    request = AllocationSimulationRequest.model_validate(payload)
+
+    assert [holding.weight for holding in request.modified_allocation] == [
+        0.0,
+        1.0,
+    ]
+
+
+@pytest.mark.parametrize("invalid_weight", [-0.01, 1.01])
+def test_allocation_request_rejects_out_of_range_weights(
+    invalid_weight: float,
+) -> None:
+    payload = _allocation_request_payload()
+    payload["modified_allocation"] = _allocation_payload(
+        first_weight=invalid_weight,
+        second_weight=1.0 - invalid_weight,
+    )
+
+    with pytest.raises(ValidationError):
+        AllocationSimulationRequest.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("first_weight", "second_weight"),
+    [(0.5, 0.499999998), (0.5, 0.500000002)],
+)
+def test_allocation_request_rejects_total_outside_existing_tolerance(
+    first_weight: float,
+    second_weight: float,
+) -> None:
+    payload = _allocation_request_payload()
+    payload["modified_allocation"] = _allocation_payload(
+        first_weight=first_weight,
+        second_weight=second_weight,
+    )
+
+    with pytest.raises(ValidationError, match="absolute tolerance of 1e-9"):
+        AllocationSimulationRequest.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("first_weight", "second_weight"),
+    [(0.5, 0.4999999995), (0.5, 0.5000000005)],
+)
+def test_allocation_request_accepts_total_within_existing_tolerance(
+    first_weight: float,
+    second_weight: float,
+) -> None:
+    payload = _allocation_request_payload()
+    payload["modified_allocation"] = _allocation_payload(
+        first_weight=first_weight,
+        second_weight=second_weight,
+    )
+
+    request = AllocationSimulationRequest.model_validate(payload)
+
+    assert len(request.modified_allocation) == 2
+
+
+def test_allocation_request_rejects_duplicate_normalized_symbols() -> None:
+    payload = _allocation_request_payload()
+    payload["modified_allocation"] = [
+        {"symbol": " aapl ", "weight": 0.5},
+        {"symbol": "AAPL", "weight": 0.5},
+    ]
+
+    with pytest.raises(ValidationError, match="unique after normalization"):
+        AllocationSimulationRequest.model_validate(payload)
+
+
+def test_allocation_request_rejects_reversed_period() -> None:
+    payload = _allocation_request_payload()
+    payload["start_date"] = "2020-05-01"
+
+    with pytest.raises(ValidationError, match="start_date"):
+        AllocationSimulationRequest.model_validate(payload)
+
+
+def test_allocation_request_does_not_support_scenario_id() -> None:
+    payload = _allocation_request_payload()
+    payload["scenario_id"] = "covid-19-shock-2020"
+
+    with pytest.raises(ValidationError):
+        AllocationSimulationRequest.model_validate(payload)
+
+
+def test_allocation_request_does_not_mutate_caller_input() -> None:
+    payload = _allocation_request_payload()
+    allocation = payload["modified_allocation"]
+    assert isinstance(allocation, list)
+    snapshot = deepcopy(payload)
+    allocation_identity = id(allocation)
+
+    AllocationSimulationRequest.model_validate(payload)
+
+    assert payload == snapshot
+    assert id(payload["modified_allocation"]) == allocation_identity
+
+
+def test_valid_allocation_results_reuse_metrics_and_trajectory_models() -> None:
+    response = AllocationSimulationResponse.model_validate(
+        _allocation_response_payload()
+    )
+
+    assert isinstance(response.original.metrics, HistoricalScenarioMetrics)
+    assert isinstance(
+        response.original.trajectory[0],
+        HistoricalScenarioTrajectoryPoint,
+    )
+    assert response.original.metrics.maximum_drawdown.max_drawdown == -0.25
+    assert response.original.metrics.sharpe_ratio is None
+    assert response.modified.metrics.maximum_drawdown.max_drawdown == -0.1
+    assert response.modified.metrics.sharpe_ratio == 1.2
+
+
+def test_allocation_response_preserves_each_allocation_order() -> None:
+    payload = _allocation_response_payload()
+    modified = payload["modified"]
+    assert isinstance(modified, dict)
+    modified["allocation"] = [
+        {"symbol": "AAPL", "weight": 0.7},
+        {"symbol": "MSFT", "weight": 0.3},
+    ]
+
+    response = AllocationSimulationResponse.model_validate(payload)
+
+    assert [holding.symbol for holding in response.original.allocation] == [
+        "MSFT",
+        "AAPL",
+    ]
+    assert [holding.symbol for holding in response.modified.allocation] == [
+        "AAPL",
+        "MSFT",
+    ]
+
+
+def test_allocation_response_has_one_shared_requested_and_effective_period() -> None:
+    response = AllocationSimulationResponse.model_validate(
+        _allocation_response_payload()
+    )
+
+    assert response.start_date == date(2020, 2, 1)
+    assert response.end_date == date(2020, 4, 30)
+    assert response.metadata.effective_start_date == date(2020, 2, 3)
+    assert response.metadata.effective_end_date == date(2020, 4, 30)
+    assert [point.date for point in response.original.trajectory] == [
+        point.date for point in response.modified.trajectory
+    ]
+    dumped = response.model_dump()
+    assert list(dumped).count("metadata") == 1
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+def test_allocation_result_rejects_nonfinite_trajectory_values(
+    bad_value: float,
+) -> None:
+    payload = _allocation_result_payload()
+    trajectory = payload["trajectory"]
+    assert isinstance(trajectory, list)
+    trajectory[1]["normalized_value"] = bad_value
+
+    with pytest.raises(ValidationError):
+        AllocationSimulationResult.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "normalized_ending_value_delta",
+        "cumulative_return_delta",
+        "annualized_volatility_delta",
+        "sharpe_ratio_delta",
+        "maximum_drawdown_delta",
+    ],
+)
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+def test_allocation_comparison_rejects_nonfinite_deltas(
+    field_name: str,
+    bad_value: float,
+) -> None:
+    payload = _comparison_payload()
+    payload[field_name] = bad_value
+
+    with pytest.raises(ValidationError):
+        AllocationSimulationComparison.model_validate(payload)
+
+
+@pytest.mark.parametrize("delta", [-0.25, 0.0, 0.25])
+def test_allocation_comparison_accepts_signed_and_zero_deltas(
+    delta: float,
+) -> None:
+    payload = {
+        field_name: delta
+        for field_name in _comparison_payload()
+    }
+
+    comparison = AllocationSimulationComparison.model_validate(payload)
+
+    assert comparison.maximum_drawdown_delta == delta
+    assert comparison.sharpe_ratio_delta == delta
+
+
+def test_allocation_comparison_accepts_nullable_sharpe_delta() -> None:
+    comparison = AllocationSimulationComparison.model_validate(
+        _comparison_payload()
+    )
+
+    assert comparison.sharpe_ratio_delta is None
+    assert json.loads(comparison.model_dump_json())["sharpe_ratio_delta"] is None
+
+
+def test_allocation_response_rejects_different_trajectory_dates() -> None:
+    payload = _allocation_response_payload()
+    modified = payload["modified"]
+    assert isinstance(modified, dict)
+    trajectory = modified["trajectory"]
+    assert isinstance(trajectory, list)
+    trajectory[1]["date"] = "2020-03-03"
+
+    with pytest.raises(ValidationError, match="trajectory dates must match"):
+        AllocationSimulationResponse.model_validate(payload)
+
+
+def test_allocation_response_rejects_effective_dates_outside_request() -> None:
+    payload = _allocation_response_payload()
+    payload["start_date"] = "2020-02-04"
+
+    with pytest.raises(ValidationError, match="effective dates"):
+        AllocationSimulationResponse.model_validate(payload)
+
+
+def test_allocation_response_round_trip_is_deterministic() -> None:
+    response = AllocationSimulationResponse.model_validate(
+        _allocation_response_payload()
+    )
+
+    serialized = response.model_dump_json()
+    round_tripped = AllocationSimulationResponse.model_validate_json(serialized)
+
+    assert round_tripped == response
+    assert round_tripped.model_dump_json() == serialized
+
+
+def test_allocation_response_validation_does_not_mutate_input() -> None:
+    payload = _allocation_response_payload()
+    snapshot = deepcopy(payload)
+
+    AllocationSimulationResponse.model_validate(payload)
+
+    assert payload == snapshot
+
+
 def test_direct_simulation_module_exports_are_importable() -> None:
     expected_names = [
         "HistoricalScenarioResponse",
@@ -337,6 +718,10 @@ def test_direct_simulation_module_exports_are_importable() -> None:
         "HistoricalScenarioTrajectoryPoint",
         "HistoricalScenarioMetrics",
         "HistoricalScenarioSimulationResponse",
+        "AllocationSimulationRequest",
+        "AllocationSimulationResult",
+        "AllocationSimulationComparison",
+        "AllocationSimulationResponse",
     ]
 
     assert simulation_module.__all__ == expected_names
