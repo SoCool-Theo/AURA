@@ -1,4 +1,4 @@
-"""Public catalogue and authenticated historical simulation endpoints."""
+"""Public catalogue and authenticated portfolio simulation endpoints."""
 
 from uuid import UUID
 
@@ -7,10 +7,17 @@ from fastapi import APIRouter, HTTPException, status
 from app.api.dependencies import CurrentUser, DatabaseSession
 from app.scenarios.definitions import HISTORICAL_SCENARIOS
 from app.schemas.simulation import (
+    AllocationSimulationRequest,
+    AllocationSimulationResponse,
     HistoricalScenarioListResponse,
     HistoricalScenarioResponse,
     HistoricalScenarioSimulationRequest,
     HistoricalScenarioSimulationResponse,
+)
+from app.services.allocation_simulation_service import (
+    AllocationSimulationService,
+    AllocationSymbolMismatchError,
+    EmptyPortfolioError as AllocationEmptyPortfolioError,
 )
 from app.services.historical_scenario_service import (
     EmptyPortfolioError,
@@ -33,6 +40,13 @@ def _internal_error() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Unable to run historical scenario",
+    )
+
+
+def _allocation_internal_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Unable to run allocation simulation",
     )
 
 
@@ -114,6 +128,41 @@ def run_historical_scenario(
         raise _internal_error() from error
     except Exception as error:
         raise _internal_error() from error
+
+    if response is None:
+        raise _portfolio_not_found()
+    return response
+
+
+@router.post(
+    "/portfolios/{portfolio_id}/simulations/allocations",
+    response_model=AllocationSimulationResponse,
+    status_code=status.HTTP_200_OK,
+)
+def run_allocation_simulation(
+    portfolio_id: UUID,
+    request: AllocationSimulationRequest,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> AllocationSimulationResponse:
+    """Compare one allocation for the authenticated user's portfolio."""
+    try:
+        response = AllocationSimulationService(session).run(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+            request=request,
+        )
+    except (
+        AllocationSymbolMismatchError,
+        AllocationEmptyPortfolioError,
+    ) as error:
+        raise _unprocessable_historical_input(str(error)) from error
+    except ValueError as error:
+        if _is_expected_historical_data_error(error):
+            raise _unprocessable_historical_input(str(error)) from error
+        raise _allocation_internal_error() from error
+    except Exception as error:
+        raise _allocation_internal_error() from error
 
     if response is None:
         raise _portfolio_not_found()
