@@ -75,6 +75,7 @@ feature/refactor/docs branch
 | `feat/backend-portfolio-api` | Integration feature | Completed and merged into `develop` | Frontend-neutral portfolio and holding CRUD service/API |
 | `feat/backend-analysis-reporting` | Integration feature | Completed and merged into `develop` | Save, retrieve, and expose immutable portfolio-analysis reports using the existing analysis service and PostgreSQL Analysis snapshot infrastructure |
 | `feat/backend-authentication` | Integration feature | Completed and merged into `develop` | Bearer JWT authentication, credential persistence, and authenticated portfolio/report ownership boundaries |
+| `feat/backend-historical-scenario-simulator` | Integration feature | Completed and merged into `develop` | Deterministic historical simulation of an owned saved portfolio against predefined market events |
 | `feat/backend-quality-ci` | Optional support | Optional | Automated testing and code-quality checks |
 
 ---
@@ -958,7 +959,133 @@ simulations, AI-agent functionality, full backend integration, or deployment.
 
 ---
 
-## 10. Optional: `feat/backend-quality-ci`
+## 10. `feat/backend-historical-scenario-simulator`
+
+**Status:** Completed and merged into `develop`
+
+### Purpose
+
+Answer this completed educational what-if question:
+
+> **How would the user's current saved portfolio have behaved during a selected
+> predefined historical market event?**
+
+The simulator applies the user's saved/current portfolio allocation unchanged.
+It is deterministic, does not forecast future prices, and does not provide
+buy/sell recommendations.
+
+### Initial Predefined Scenario Catalogue
+
+- **COVID-19 Market Shock**
+  - ID: `covid-19-shock-2020`
+  - Requested period: `2020-02-01` through `2020-04-30`
+- **2022 Inflation and Rate Shock**
+  - ID: `inflation-rate-shock-2022`
+  - Requested period: `2022-01-01` through `2022-12-31`
+
+The catalogue is immutable, deterministic, code-owned, and not stored in
+PostgreSQL. These are the only currently implemented scenarios.
+
+### Completed Contracts and Calculation Behavior
+
+- Added strict historical-simulation Pydantic contracts, imported directly from
+  `backend.app.schemas.simulation` without expanding the stable 21-name
+  package-level schema export contract.
+- Preserved unknown-field rejection, finite public numerical values, negative
+  maximum drawdown, and JSON `null` for intentionally undefined Sharpe ratios.
+- Reused Aura's periodically rebalanced fixed-weight portfolio-return semantics;
+  buy-and-hold/share-count behavior is not used.
+- Kept the saved allocation unchanged and preserved ordered holdings, including
+  zero-weight holdings.
+- Required at least three aligned price observations and used the exact
+  common-date intersection without forward-fill, backfill, interpolation,
+  synthesized prices, or silently dropped holdings.
+- Started normalized portfolio value at exactly `1.0` and returned a
+  deterministic trajectory, cumulative return, annualized volatility, Sharpe
+  ratio using existing analytics behavior, and signed maximum drawdown with
+  existing peak/trough semantics.
+- Preserved requested scenario dates separately from effective aligned dates.
+  Recovery-time calculations remain deferred.
+
+### Production Flow and Service Boundaries
+
+```text
+authenticated User
+        ↓
+owned Portfolio
+        ↓
+ordered Holdings
+        ↓
+predefined Historical Scenario
+        ↓
+MarketDataService / PostgreSQL
+        ↓
+exact common-date alignment
+        ↓
+pure historical simulator
+        ↓
+validated simulation response
+```
+
+Production simulation uses Aura's existing PostgreSQL-backed market-data and
+service infrastructure. It does not read CSV files or call Yahoo Finance
+directly, and no new external API key was required.
+
+Ownership is checked through the existing portfolio boundary. Missing and
+wrong-owner portfolios both return `404 Portfolio not found`. Services remain
+caller-session based, and simulation is read-only: the service does not commit,
+roll back, close the caller session, or persist results. The service
+intentionally reuses AnalysisService's existing private exact-date alignment
+seam rather than duplicating the algorithm. This accepted internal coupling is
+protected by regression tests and is not a public API.
+
+### Completed HTTP Surface
+
+- `GET /api/simulations/historical-scenarios` publicly returns the deterministic
+  catalogue without requiring authentication or database access merely to list
+  definitions.
+- `POST /api/portfolios/{portfolio_id}/simulations/historical-scenarios` uses
+  existing Bearer authentication and runs the selected event against the
+  authenticated user's owned portfolio. It remains read-only despite using
+  POST and does not save simulation history.
+- Missing/wrong-owner portfolio: `404 Portfolio not found`
+- Unknown scenario: `404 Historical scenario not found`
+- Expected missing/insufficient historical data: `422`
+- Invalid/missing Bearer authentication: existing `401`
+- Unexpected internal failure: `500 Unable to run historical scenario`
+- `X-User-ID` is not accepted as authentication.
+
+### Persistence and Deferred Boundaries
+
+This workstream added no Simulation ORM model, Simulation repository, Alembic
+migration, database schema change, JSONB simulation snapshot,
+simulation-history persistence, or dependency change. Simulation history,
+allocation simulation, and combined simulation remain separate future
+workstreams. Historical coverage expansion is planned under
+`feat/backend-market-data-historical-backfill`; the dependent educational event
+expansion is planned under `feat/backend-historical-scenario-catalog`. Neither
+future branch changes the completed simulator's calculations.
+
+### Final Verification
+
+- Historical scenario focused live PostgreSQL tests: 5 passed, 0 skipped
+- Complete live PostgreSQL integration suite: 25 passed, 0 skipped
+- Simulation API tests: 22 passed
+- Complete API integration suite: 116 passed
+- Historical scenario service tests: 21 passed
+- Scenario tests: 35 passed
+- Schema tests: 440 passed
+- Analytics tests: 820 passed
+- Full backend suite: 1,725 passed, 0 failed, 0 skipped
+- Manual analytics engine, Python compilation, dependency consistency,
+  application import, public health, and Git diff/whitespace/scope checks:
+  passed
+- Existing warning: one non-blocking Starlette TestClient/httpx deprecation
+  warning; it is not a historical-simulator defect
+
+---
+
+## 11. Optional: `feat/backend-quality-ci`
 
 **Status:** Optional
 
@@ -995,25 +1122,28 @@ stable in `develop`.
 | `feat/backend-market-data-storage` | Save and retrieve processed historical data | Data pipeline + database | Completed and merged into `develop` |
 | `feat/backend-analysis-reporting` | Save, retrieve, and expose immutable portfolio-analysis reports | Analytics + schemas + database + analysis service + portfolio API | Completed and merged into `develop` |
 | `feat/backend-authentication` | Authenticate protected portfolio/report APIs with Bearer JWT access tokens | Existing user ownership + portfolio/report APIs | Completed and merged into `develop` |
-| `feat/backend-historical-scenario-simulator` | Test the current portfolio during a selected past event | Analytics + historical data + simulation schemas | Next backend stage; historical acquisition and PostgreSQL access are complete, but simulation schemas and final requirements still require finalization |
-| `feat/backend-allocation-simulator` | Compare original and modified allocations over the same period | Analytics + historical data + simulation schemas | Historical acquisition and PostgreSQL access are complete; simulation schemas and finalized requirements remain deferred |
+| `feat/backend-historical-scenario-simulator` | Test the current saved portfolio during a selected predefined past event | Analytics + PostgreSQL historical data + simulation schemas + portfolio ownership | Completed and merged into `develop` |
+| `feat/backend-allocation-simulator` | Compare original and modified allocations over the same period | Completed historical-simulation foundation + allocation contracts | Recommended next core simulation workstream; not implemented |
 | `feat/backend-combined-simulator` | Compare original and modified allocations during one event | Historical scenario + allocation simulator | Not ready |
 | `feat/backend-simulation-history` | Save and retrieve simulation results | Simulators + schemas + database | Not ready |
+| `feat/backend-market-data-historical-backfill` | Extend verified historical market-data coverage toward year 2000 | Completed market-data pipeline + storage/PostgreSQL infrastructure | Planned/deferred; not required for the next allocation-simulator branch |
+| `feat/backend-historical-scenario-catalog` | Expand the predefined educational historical-event catalogue | Historical-simulation foundation + verified historical backfill/coverage | Planned/deferred; should begin after the historical backfill |
 | `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Prerequisites are complete; automatic scheduling remains unimplemented and deferred |
-| `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Not ready; reporting is complete, but stable simulation outputs remain unavailable |
-| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; portfolio, reporting, and authentication routes exist, but simulations, AI, and other full integration work remain incomplete |
+| `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Not ready; reporting and historical scenario simulation are complete, but remaining simulation and AI requirements are unfinished |
+| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; historical scenario, portfolio, reporting, and authentication routes exist, but remaining simulation, AI, and other integration work is incomplete |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
 
 ---
 
 # Recommended Simulation Order
 
-Aura's Historical What-If Simulator contains three planned modes:
+Aura's Historical What-If Simulator contains three modes in this development
+order; the first is complete:
 
 ```text
-Historical Scenario
+✅ Historical Scenario
         ↓
-Allocation Change
+Allocation Change (recommended next)
         ↓
 Combined Simulation
 ```
@@ -1022,7 +1152,10 @@ Combined Simulation
 
 Answers:
 
-> How did the current portfolio behave during a selected historical event?
+> **How would the user's current saved portfolio have behaved during a selected
+> predefined historical market event?**
+
+This mode is completed and uses the saved allocation unchanged.
 
 ## Allocation Change
 
@@ -1039,6 +1172,57 @@ Answers:
 
 The combined mode should reuse the earlier simulation logic rather than
 duplicate it.
+
+---
+
+# Planned Historical Coverage and Catalogue Expansion
+
+These planned branches are deferred future work. They are not implemented and
+do not block the recommended next core workstream,
+`feat/backend-allocation-simulator`.
+
+## `feat/backend-market-data-historical-backfill`
+
+**Status:** Planned/deferred
+
+Extend Aura's verified historical market-data coverage farther back toward
+approximately year 2000 so older educational scenarios can later be simulated
+where asset data permits. This does not mean every current Aura symbol has data
+back to 2000, and the current production dataset is not documented as beginning
+in 2000.
+
+The workstream is limited to historical-data coverage expansion. It does not
+change simulator formulas or implement allocation simulation, combined
+simulation, simulation history, AI behavior, frontend work, forecasting, or
+automatic scheduling unless separately approved.
+
+Expected future verification includes provider availability, actual supported
+asset coverage, cleaning and validation, PostgreSQL backfill/upsert behavior,
+batching, duplicate safety, partial-history assets, analytics/simulation
+regression, and live PostgreSQL checks. None of that verification is recorded as
+completed yet.
+
+## `feat/backend-historical-scenario-catalog`
+
+**Status:** Planned/deferred after historical backfill
+
+Expand Aura's predefined educational historical-event catalogue after the
+historical-data backfill and supported coverage are verified. The future
+catalogue may include market crash/stress, high-volatility, and normal/growth
+periods without changing the completed simulator calculations.
+
+The exact event list and dates are intentionally not defined here. This future
+workstream may introduce a dedicated historical-events Markdown reference when
+it begins; no such document is created or named by this update.
+
+```text
+feat/backend-market-data-historical-backfill
+                ↓ verified historical coverage
+feat/backend-historical-scenario-catalog
+```
+
+The completed Historical Scenario Simulator does not depend on either future
+expansion branch.
 
 ---
 
@@ -1069,13 +1253,17 @@ AnalysisService + Portfolio API + Analysis persistence
                 ↓
 ✅ feat/backend-authentication
                 ↓
-historical scenario simulator
+✅ feat/backend-historical-scenario-simulator
                 ↓
-allocation simulator
+feat/backend-allocation-simulator
                 ↓
-combined simulator
+feat/backend-combined-simulator
                 ↓
-simulation history
+feat/backend-simulation-history
+                ↓
+feat/backend-market-data-historical-backfill
+                ↓
+feat/backend-historical-scenario-catalog
                 ↓
 AI agent
                 ↓
@@ -1090,24 +1278,30 @@ internally but does not change this dependency flow.
 The completed schemas-contract branch remains in the flow as a stable
 dependency for later services, APIs, reporting, simulations, and AI
 integration. AnalysisService, the Portfolio API, and analysis reporting are
-complete. Authentication is also complete. Simulations, AI behavior, and full
-integration remain separate unfinished workstreams.
+complete. Authentication and the Historical Scenario Simulator are also
+complete. Allocation simulation, combined simulation, simulation history, AI
+behavior, and full integration remain separate unfinished workstreams. The
+historical backfill and dependent scenario-catalog expansion are planned later
+and do not block allocation simulation.
 
 ---
 
 # Recommended Current Work
 
 The analytics, schema, database, historical market-data, AnalysisService,
-Portfolio API, analysis-reporting, and authentication workstreams are complete.
-The next backend stage should move toward the Historical What-If Simulator,
-beginning with:
+Portfolio API, analysis-reporting, authentication, and Historical Scenario
+Simulator workstreams are complete. The recommended next core simulation
+workstream is:
 
 ```text
-feat/backend-historical-scenario-simulator
+feat/backend-allocation-simulator
 ```
 
-Simulation contracts and final requirements still require finalization before
-implementation. Market-data scheduling remains a separate deferred workstream.
+Allocation requirements and contracts still require finalization before
+implementation. Combined simulation, simulation history,
+`feat/backend-market-data-historical-backfill`,
+`feat/backend-historical-scenario-catalog`, and market-data scheduling remain
+separate deferred workstreams.
 
 ---
 
@@ -1127,7 +1321,12 @@ develop
 ├── feat/backend-portfolio-api                   # completed
 ├── feat/backend-analysis-reporting               # completed
 ├── feat/backend-authentication                   # completed
-├── feat/backend-historical-scenario-simulator    # next stage; design pending
+├── feat/backend-historical-scenario-simulator    # completed
+├── feat/backend-allocation-simulator             # recommended next
+├── feat/backend-combined-simulator               # deferred
+├── feat/backend-simulation-history               # deferred
+├── feat/backend-market-data-historical-backfill  # planned/deferred
+├── feat/backend-historical-scenario-catalog      # planned after backfill
 └── feat/backend-quality-ci                       # optional
 ```
 
@@ -1239,10 +1438,12 @@ Documentation changes should not be added to `main` directly.
 ## Simulation Stage
 
 ```text
-feat/backend-historical-scenario-simulator  # next; finalize requirements/contracts
-feat/backend-allocation-simulator           # requirements/contracts deferred
+✅ feat/backend-historical-scenario-simulator  # completed
+feat/backend-allocation-simulator             # recommended next; not implemented
 feat/backend-combined-simulator             # requirements/contracts deferred
 feat/backend-simulation-history
+feat/backend-market-data-historical-backfill  # planned/deferred
+feat/backend-historical-scenario-catalog      # planned after backfill
 feat/backend-market-data-scheduler          # scheduling deferred
 ```
 
@@ -1267,15 +1468,16 @@ develop → main release Pull Request
 
 With analytics, schemas, the market-data pipeline, the database foundation,
 market-data storage, AnalysisService, the Portfolio API, analysis reporting,
-and authentication merged into `develop`, move toward the Historical What-If
-Simulator beginning with:
+authentication, and the Historical Scenario Simulator merged into `develop`,
+the recommended next core simulation workstream is:
 
 ```text
-feat/backend-historical-scenario-simulator
+feat/backend-allocation-simulator
 ```
 
-Simulation contracts and final requirements still require finalization; do not
-treat the simulator as implemented or fully ready without that design work.
-Automatic market-data scheduling, AI, full integration, frontend/mobile
-integration, and deployment remain governed by their listed unfinished or
-deferred dependencies.
+Do not treat allocation simulation, combined simulation, simulation history,
+`feat/backend-market-data-historical-backfill`,
+`feat/backend-historical-scenario-catalog`, automatic market-data scheduling,
+AI, full integration, frontend/mobile integration, or deployment as completed.
+The backfill must precede catalogue expansion; both remain later than the
+recommended allocation-simulator workstream.

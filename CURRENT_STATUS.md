@@ -586,6 +586,134 @@ tokens, logout/token revocation, OAuth/social login, MFA, RBAC/admin
 authorization, frontend/mobile authentication integration, historical
 simulations, AI-agent functionality, full backend integration, or deployment.
 
+## Backend Historical Scenario Simulator
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-historical-scenario-simulator`
+
+### Completed responsibility
+
+The Historical Scenario Simulator now answers:
+
+> **How would the user's current saved portfolio have behaved during a selected
+> predefined historical market event?**
+
+It applies the saved/current portfolio allocation unchanged. The workflow is
+educational and deterministic: it does not forecast future prices, use
+buy-and-hold share-count semantics, or provide buy/sell recommendations.
+
+### Initial predefined scenarios
+
+- **COVID-19 Market Shock**
+  - ID: `covid-19-shock-2020`
+  - Requested period: `2020-02-01` through `2020-04-30`
+- **2022 Inflation and Rate Shock**
+  - ID: `inflation-rate-shock-2022`
+  - Requested period: `2022-01-01` through `2022-12-31`
+
+This two-scenario catalogue is immutable, deterministic, code-owned, and not
+stored in PostgreSQL.
+
+### Contracts and calculation behavior
+
+- Historical simulation uses strict Pydantic contracts imported directly from
+  `backend.app.schemas.simulation`; the established 21-name package-level
+  schema export contract was not expanded.
+- Unknown fields are rejected, public numerical values must remain finite, and
+  intentionally undefined Sharpe ratios serialize as JSON `null`.
+- The pure simulator reuses Aura's periodically rebalanced fixed-weight
+  portfolio-return semantics and keeps the saved allocation unchanged.
+- At least three aligned price observations are required. Alignment uses the
+  exact common-date intersection across every requested holding without
+  forward-fill, backfill, interpolation, synthesized prices, silently dropped
+  holdings, or special removal of zero-weight holdings.
+- Normalized portfolio value starts at exactly `1.0`. Results include a
+  deterministic normalized trajectory, cumulative return, annualized
+  volatility, Sharpe ratio using existing analytics behavior, and signed
+  maximum drawdown with existing peak/trough semantics.
+- Requested scenario dates and effective aligned dates remain separate.
+  Recovery-time calculations remain deferred.
+
+### Production integration and service boundaries
+
+```text
+authenticated User
+        ↓
+owned Portfolio
+        ↓
+ordered Holdings
+        ↓
+predefined Historical Scenario
+        ↓
+MarketDataService → PostgreSQL
+        ↓
+exact common-date alignment
+        ↓
+pure historical simulator
+        ↓
+validated simulation response
+```
+
+Production simulation retrieves historical prices through Aura's existing
+PostgreSQL-backed market-data and service infrastructure. It does not read CSV
+files or call Yahoo Finance directly, and it required no new external API key.
+
+Portfolio ownership uses the existing boundary, holding order is preserved,
+and missing and wrong-owner portfolios remain indistinguishable as
+`404 Portfolio not found`. The service is caller-session based and read-only:
+it does not commit, roll back, close the caller-owned session, or persist a
+result. It intentionally reuses AnalysisService's existing private exact-date
+alignment seam instead of duplicating that algorithm. This accepted internal
+coupling is protected by regression tests and is not a public API.
+
+### HTTP API
+
+- `GET /api/simulations/historical-scenarios` is a public, deterministic
+  catalogue endpoint. Listing definitions requires neither authentication nor
+  database access.
+- `POST /api/portfolios/{portfolio_id}/simulations/historical-scenarios` is
+  Bearer authenticated and runs the selected scenario against the authenticated
+  user's owned saved portfolio. It is computation-only and read-only despite
+  using POST, and it does not save simulation history.
+- Missing/wrong-owner portfolios return `404 Portfolio not found`; unknown
+  scenarios return `404 Historical scenario not found`; expected missing or
+  insufficient historical data returns `422`; invalid or missing Bearer
+  authentication returns the existing `401`; and unexpected internal failures
+  return `500 Unable to run historical scenario`.
+- `X-User-ID` is not accepted as authentication.
+
+### Persistence and dependency boundary
+
+This workstream added no Simulation ORM model, Simulation repository, Alembic
+migration, database schema change, JSONB simulation snapshot,
+simulation-history persistence, or dependency change. Simulation history is a
+separate later workstream.
+
+Aura currently supports only the two predefined scenarios above. The planned
+`feat/backend-market-data-historical-backfill` workstream may extend verified
+historical coverage toward year 2000 where asset data permits. The later
+`feat/backend-historical-scenario-catalog` workstream depends on that verified
+coverage and may expand the educational event catalogue. Neither workstream was
+part of this completed branch, and neither is required before the next
+allocation-simulator workstream.
+
+### Final verification
+
+- Historical scenario focused live PostgreSQL tests: 5 passed, 0 skipped
+- Complete live PostgreSQL integration suite: 25 passed, 0 skipped
+- Simulation API tests: 22 passed
+- Complete API integration suite: 116 passed
+- Historical scenario service tests: 21 passed
+- Scenario tests: 35 passed
+- Schema tests: 440 passed
+- Analytics tests: 820 passed
+- Full backend suite: 1,725 passed, 0 failed, 0 skipped
+- Manual analytics engine, Python compilation, dependency consistency,
+  application import, public health, and Git diff/whitespace/scope checks:
+  passed
+- Existing warning: one non-blocking Starlette TestClient/httpx deprecation
+  warning; it is not a historical-simulator defect
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -600,9 +728,10 @@ cause test failures.
 
 ### Recommended next workstream
 
-- Move toward the Historical What-If Simulator beginning with
-  `feat/backend-historical-scenario-simulator`. Simulation contracts and final
-  requirements still require finalization before implementation.
+- Begin `feat/backend-allocation-simulator` as the next core simulation
+  workstream. The Historical Scenario Simulator is complete and merged; the
+  allocation simulator remains unimplemented and must preserve the completed
+  historical-simulation boundaries.
 
 ### Other ready follow-on work
 
@@ -612,9 +741,17 @@ cause test failures.
 
 ### Still deferred or dependency-blocked
 
-- Historical simulations still require finalized simulation contracts and
-  implementation; simulation history remains dependent on those simulators.
-- Simulation requirements/contracts remain deferred. Automatic market-data
-  scheduling remains a separate deferred workstream.
+- Allocation simulation, combined simulation, and simulation-history
+  persistence remain unfinished. Combined simulation depends on the allocation
+  simulator, and simulation history remains a separate later workstream.
+- `feat/backend-market-data-historical-backfill` is planned/deferred to extend
+  verified historical market-data coverage toward year 2000 where supported;
+  it does not change simulator formulas or imply that all assets have data back
+  to 2000.
+- `feat/backend-historical-scenario-catalog` is planned/deferred after the
+  historical backfill. It may expand the educational event catalogue without
+  changing the completed simulator; the detailed event reference and exact
+  event list remain future work.
+- Automatic market-data scheduling remains a separate deferred workstream.
 - AI behavior/persistence, full backend API integration, frontend/mobile
   integration, and deployment remain unfinished.
