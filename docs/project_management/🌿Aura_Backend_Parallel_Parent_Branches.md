@@ -74,7 +74,7 @@ feature/refactor/docs branch
 | `feat/backend-analysis-service` | Integration feature | Completed | Coordinate validated portfolio-analysis input, PostgreSQL historical data, existing analytics, and response schemas |
 | `feat/backend-portfolio-api` | Integration feature | Completed and merged into `develop` | Frontend-neutral portfolio and holding CRUD service/API |
 | `feat/backend-analysis-reporting` | Integration feature | Completed and merged into `develop` | Save, retrieve, and expose immutable portfolio-analysis reports using the existing analysis service and PostgreSQL Analysis snapshot infrastructure |
-| `feat/backend-authentication` | Integration feature | Recommended next | Implement real user authentication and replace the temporary trusted `X-User-ID` identity at protected API boundaries |
+| `feat/backend-authentication` | Integration feature | Completed and merged into `develop` | Bearer JWT authentication, credential persistence, and authenticated portfolio/report ownership boundaries |
 | `feat/backend-quality-ci` | Optional support | Optional | Automated testing and code-quality checks |
 
 ---
@@ -772,8 +772,9 @@ portfolio-analysis HTTP endpoint was added.
 
 ### Ownership, Persistence, and Transaction Boundaries
 
-- `X-User-ID` is a temporary ownership selector. It validates that the supplied
-  UUID identifies an existing `User`, but it is not secure authentication.
+- At this workstream's completion, `X-User-ID` was a temporary ownership
+  selector that validated an existing `User`; the later authentication
+  workstream removed it from production authentication.
 - Owner-scoped ID access returns the same client-visible `404` for missing and
   wrong-owner portfolios.
 - Portfolios and holdings preserve UUID identities, user ownership, ordered
@@ -856,8 +857,9 @@ existing `AnalysisService` and PostgreSQL `Analysis` snapshot infrastructure.
   resource ownership.
 - Repositories and services do not commit, roll back, or close sessions;
   successful POST creation commits at the request boundary.
-- Kept `X-User-ID` as a temporary ownership selector only; secure
-  authentication remains unfinished.
+- At this workstream's completion, `X-User-ID` remained a temporary ownership
+  selector; the later authentication workstream removed it from production
+  authentication.
 
 ### Live PostgreSQL and Final Verification
 
@@ -888,7 +890,75 @@ sharing, frontend work, automatic market-data scheduling, or deployment.
 
 ---
 
-## 9. Optional: `feat/backend-quality-ci`
+## 9. `feat/backend-authentication`
+
+**Status:** Completed and merged into `develop`
+
+### Purpose
+
+Add real Bearer authentication while preserving Aura's existing User ownership,
+privacy, transaction, and lazy-initialization boundaries.
+
+### Completed Work
+
+- Extended the existing `User` persistence with canonical email and
+  password-hash credentials while preserving credential-less legacy/internal
+  users. PostgreSQL enforces unique canonical email and credential-pair
+  integrity.
+- Added a second reversible Alembic revision without rewriting the original
+  database-foundation revision.
+- Added Argon2 password hashing through `pwdlib`; plaintext passwords are never
+  persisted, and generic/dummy verification avoids exposing unknown-account
+  differences.
+- Added 30-minute HS256 Bearer JWT access tokens using the authenticated User
+  UUID as `sub`, with required `sub`, `iat`, and `exp` claims. The signing
+  secret is environment/configuration driven and no usable secret is committed.
+- Added `POST /api/auth/register`, `POST /api/auth/login`, and
+  `GET /api/auth/me`. Duplicate canonical email returns `409`; invalid
+  credentials and invalid or missing Bearer authentication return generic
+  `401` responses through the Bearer boundary. Public User responses do not
+  expose password hashes.
+- Replaced production `X-User-ID` authentication across all portfolio and
+  analysis-reporting APIs with Bearer authentication. The authenticated User
+  UUID continues into existing service ownership checks.
+- Preserved `404 Portfolio not found` for wrong-owner portfolios and existing
+  report privacy behavior, without introducing private-resource disclosure
+  through `403`.
+- Repositories do not commit, roll back, or close caller sessions, and services
+  do not own commits or rollbacks. Successful writes commit at the API/request
+  boundary; failure rollback and cleanup remain request-boundary-owned.
+  Current-user lookup remains read-only, initialization remains lazy, and
+  `/api/health` remains public.
+
+### Live PostgreSQL and Final Verification
+
+End-to-end coverage included registration, canonical credential and Argon2 hash
+persistence, login, JWT/Bearer authentication, `/api/auth/me`, authenticated
+portfolio and report workflows, two-user ownership isolation, immutable report
+snapshots, fresh-session persistence, and rejection of `X-User-ID` as
+authentication.
+
+- Live PostgreSQL integration tests: 27 passed
+- Complete API tests: 94 passed
+- Schema tests: 386 passed
+- Analytics tests: 820 passed
+- Full backend tests: 1,588 passed, 0 failed
+- Manual analytics engine, Python compilation, dependency consistency,
+  application import smoke, public health, and Git integrity/diff checks:
+  passed
+- Existing warning: one non-blocking Starlette/httpx TestClient deprecation
+  warning; it is not an authentication defect
+
+### Branch Boundary
+
+This workstream did not implement email verification, password reset, refresh
+tokens, logout/token revocation, OAuth/social login, MFA, RBAC/admin
+authorization, frontend/mobile authentication integration, historical
+simulations, AI-agent functionality, full backend integration, or deployment.
+
+---
+
+## 10. Optional: `feat/backend-quality-ci`
 
 **Status:** Optional
 
@@ -924,14 +994,14 @@ stable in `develop`.
 | `feat/backend-portfolio-api` | Portfolio and holding CRUD endpoints | Schemas + database | Completed and merged into `develop` |
 | `feat/backend-market-data-storage` | Save and retrieve processed historical data | Data pipeline + database | Completed and merged into `develop` |
 | `feat/backend-analysis-reporting` | Save, retrieve, and expose immutable portfolio-analysis reports | Analytics + schemas + database + analysis service + portfolio API | Completed and merged into `develop` |
-| `feat/backend-authentication` | Replace the temporary trusted `X-User-ID` identity with real user authentication at protected API boundaries | Existing user ownership + portfolio/report APIs | Recommended next; not implemented |
-| `feat/backend-historical-scenario-simulator` | Test the current portfolio during a selected past event | Analytics + historical data + simulation schemas | Historical acquisition and PostgreSQL access are complete; simulation schemas and finalized requirements remain deferred |
+| `feat/backend-authentication` | Authenticate protected portfolio/report APIs with Bearer JWT access tokens | Existing user ownership + portfolio/report APIs | Completed and merged into `develop` |
+| `feat/backend-historical-scenario-simulator` | Test the current portfolio during a selected past event | Analytics + historical data + simulation schemas | Next backend stage; historical acquisition and PostgreSQL access are complete, but simulation schemas and final requirements still require finalization |
 | `feat/backend-allocation-simulator` | Compare original and modified allocations over the same period | Analytics + historical data + simulation schemas | Historical acquisition and PostgreSQL access are complete; simulation schemas and finalized requirements remain deferred |
 | `feat/backend-combined-simulator` | Compare original and modified allocations during one event | Historical scenario + allocation simulator | Not ready |
 | `feat/backend-simulation-history` | Save and retrieve simulation results | Simulators + schemas + database | Not ready |
 | `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Prerequisites are complete; automatic scheduling remains unimplemented and deferred |
 | `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Not ready; reporting is complete, but stable simulation outputs remain unavailable |
-| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; portfolio and reporting routes exist, but authentication, simulations, AI, and other full integration work remain incomplete |
+| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; portfolio, reporting, and authentication routes exist, but simulations, AI, and other full integration work remain incomplete |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
 
 ---
@@ -997,7 +1067,7 @@ AnalysisService + Portfolio API + Analysis persistence
                 ↓
 ✅ feat/backend-analysis-reporting
                 ↓
-feat/backend-authentication
+✅ feat/backend-authentication
                 ↓
 historical scenario simulator
                 ↓
@@ -1020,26 +1090,24 @@ internally but does not change this dependency flow.
 The completed schemas-contract branch remains in the flow as a stable
 dependency for later services, APIs, reporting, simulations, and AI
 integration. AnalysisService, the Portfolio API, and analysis reporting are
-complete. Authentication, simulations, AI behavior, and full integration
-remain separate unfinished workstreams.
+complete. Authentication is also complete. Simulations, AI behavior, and full
+integration remain separate unfinished workstreams.
 
 ---
 
 # Recommended Current Work
 
 The analytics, schema, database, historical market-data, AnalysisService,
-Portfolio API, and analysis-reporting workstreams are complete. The recommended
-next focused backend workstream is:
+Portfolio API, analysis-reporting, and authentication workstreams are complete.
+The next backend stage should move toward the Historical What-If Simulator,
+beginning with:
 
 ```text
-feat/backend-authentication
+feat/backend-historical-scenario-simulator
 ```
 
-This workstream should replace the temporary trusted `X-User-ID` request
-identity with real user authentication at protected API boundaries before
-additional user-facing simulation or AI APIs are added. Simulation requirements
-and contracts remain deferred, and market-data scheduling remains a separate
-deferred workstream.
+Simulation contracts and final requirements still require finalization before
+implementation. Market-data scheduling remains a separate deferred workstream.
 
 ---
 
@@ -1058,7 +1126,8 @@ develop
 ├── feat/backend-analysis-service                # completed
 ├── feat/backend-portfolio-api                   # completed
 ├── feat/backend-analysis-reporting               # completed
-├── feat/backend-authentication                   # recommended next
+├── feat/backend-authentication                   # completed
+├── feat/backend-historical-scenario-simulator    # next stage; design pending
 └── feat/backend-quality-ci                       # optional
 ```
 
@@ -1164,13 +1233,13 @@ Documentation changes should not be added to `main` directly.
 
 ```text
 ✅ feat/backend-analysis-reporting
-feat/backend-authentication                  # recommended next
+✅ feat/backend-authentication
 ```
 
 ## Simulation Stage
 
 ```text
-feat/backend-historical-scenario-simulator  # requirements/contracts deferred
+feat/backend-historical-scenario-simulator  # next; finalize requirements/contracts
 feat/backend-allocation-simulator           # requirements/contracts deferred
 feat/backend-combined-simulator             # requirements/contracts deferred
 feat/backend-simulation-history
@@ -1197,15 +1266,16 @@ develop → main release Pull Request
 # Current Recommended Next Step
 
 With analytics, schemas, the market-data pipeline, the database foundation,
-market-data storage, AnalysisService, the Portfolio API, and analysis reporting
-merged into `develop`, begin the recommended backend workstream:
+market-data storage, AnalysisService, the Portfolio API, analysis reporting,
+and authentication merged into `develop`, move toward the Historical What-If
+Simulator beginning with:
 
 ```text
-feat/backend-authentication
+feat/backend-historical-scenario-simulator
 ```
 
-Replace the temporary trusted `X-User-ID` ownership selector with real user
-authentication at protected API boundaries. Simulation requirements/contracts
-and automatic market-data scheduling remain deferred. AI, full integration,
-frontend/backend integration, and deployment remain governed by their listed
-unfinished dependencies.
+Simulation contracts and final requirements still require finalization; do not
+treat the simulator as implemented or fully ready without that design work.
+Automatic market-data scheduling, AI, full integration, frontend/mobile
+integration, and deployment remain governed by their listed unfinished or
+deferred dependencies.
