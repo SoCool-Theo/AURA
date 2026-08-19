@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date
 from unittest.mock import MagicMock, patch
@@ -5,11 +6,13 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 import app.api.dependencies as dependency_module
 import app.api.routes.reporting as route_module
 from app.core.config import settings
+from app.core.security import create_access_token
 from app.database.models import User
 from app.main import app
 from app.schemas.common import AnalysisPeriod
@@ -28,7 +31,8 @@ from backend.tests.unit.schemas.test_reporting import (
 OWNER_ID = UUID("62a1279e-bc8d-4c89-876d-a09250b50395")
 PORTFOLIO_ID = UUID("e6518442-58cb-408f-ae3f-bf47fb00b555")
 REPORT_ID = UUID("10000000-0000-0000-0000-000000000001")
-REQUEST_HEADERS = {"X-User-ID": str(OWNER_ID)}
+JWT_SECRET = "phase-6-reporting-api-test-secret-value"
+REQUEST_HEADERS: dict[str, str] = {}
 REPORT_PATH = f"/api/portfolios/{PORTFOLIO_ID}/reports"
 DETAIL_PATH = f"{REPORT_PATH}/{REPORT_ID}"
 
@@ -38,6 +42,22 @@ class ApiHarness:
     client: TestClient
     session: MagicMock
     service: MagicMock
+
+
+@pytest.fixture(autouse=True)
+def bearer_request_headers() -> Iterator[None]:
+    with patch.object(
+        settings,
+        "jwt_secret_key",
+        SecretStr(JWT_SECRET),
+    ):
+        REQUEST_HEADERS["Authorization"] = (
+            f"Bearer {create_access_token(OWNER_ID)}"
+        )
+        try:
+            yield
+        finally:
+            REQUEST_HEADERS.clear()
 
 
 def _report() -> PortfolioReportResponse:
@@ -152,9 +172,13 @@ def test_post_rejects_invalid_analysis_period_through_schema_validation(
 
 @pytest.mark.parametrize(
     "headers",
-    [{}, {"X-User-ID": "not-a-uuid"}],
+    [
+        {},
+        {"X-User-ID": str(OWNER_ID)},
+        {"Authorization": "Bearer not-a-jwt"},
+    ],
 )
-def test_post_missing_and_malformed_owner_use_existing_validation(
+def test_post_missing_invalid_or_x_user_id_only_is_unauthorized(
     api_harness: ApiHarness,
     headers: dict[str, str],
 ) -> None:
@@ -164,20 +188,24 @@ def test_post_missing_and_malformed_owner_use_existing_validation(
         json={"start_date": "2026-01-01", "end_date": "2026-01-31"},
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
     api_harness.service.create_report.assert_not_called()
     api_harness.session.commit.assert_not_called()
 
 
-def test_unknown_valid_owner_uses_existing_not_found_behavior(
+def test_valid_token_for_unknown_user_is_unauthorized(
     api_harness: ApiHarness,
 ) -> None:
     api_harness.session.get.return_value = None
 
     response = api_harness.client.get(REPORT_PATH, headers=REQUEST_HEADERS)
 
-    assert response.status_code == 404
-    assert response.json() == {"detail": "User not found"}
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid or missing authentication credentials"
+    }
+    assert response.headers["www-authenticate"] == "Bearer"
     api_harness.service.list_reports.assert_not_called()
     api_harness.session.commit.assert_not_called()
     api_harness.session.rollback.assert_called_once_with()

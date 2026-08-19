@@ -1,6 +1,7 @@
 from pathlib import Path
+from typing import Literal
 
-from pydantic import PostgresDsn, field_validator
+from pydantic import PositiveInt, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +14,9 @@ class Settings(BaseSettings):
     debug: bool = True
     api_prefix: str = "/api"
     database_url: PostgresDsn | None = None
+    jwt_secret_key: SecretStr | None = None
+    jwt_algorithm: Literal["HS256"] = "HS256"
+    access_token_expire_minutes: PositiveInt = 30
 
     @field_validator("database_url")
     @classmethod

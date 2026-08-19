@@ -13,11 +13,14 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import Engine, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from app.api.dependencies import get_database_session
+from app.core.config import settings as app_settings
+from app.core.security import create_access_token
 from app.database.connection import session_scope
 from app.database.models import Holding, Portfolio, User
 from app.main import app
@@ -38,6 +41,7 @@ APPLICATION_TABLES = {
 USER_A_ID = UUID("10000000-0000-0000-0000-000000000001")
 USER_B_ID = UUID("10000000-0000-0000-0000-000000000002")
 UNKNOWN_USER_ID = UUID("10000000-0000-0000-0000-000000000099")
+JWT_SECRET = "phase-6-live-portfolio-api-secret-value"
 
 
 def _test_database_url() -> str:
@@ -148,12 +152,15 @@ def live_client(
             yield session
 
     previous_override = app.dependency_overrides.get(get_database_session)
+    original_jwt_secret = app_settings.jwt_secret_key
     app.dependency_overrides[get_database_session] = override_database_session
+    app_settings.jwt_secret_key = SecretStr(JWT_SECRET)
 
     try:
         with TestClient(app) as client:
             yield client
     finally:
+        app_settings.jwt_secret_key = original_jwt_secret
         if previous_override is None:
             app.dependency_overrides.pop(get_database_session, None)
         else:
@@ -190,7 +197,7 @@ def _portfolio_with_holdings(
 
 
 def _headers(user_id: UUID) -> dict[str, str]:
-    return {"X-User-ID": str(user_id)}
+    return {"Authorization": f"Bearer {create_access_token(user_id)}"}
 
 
 def _assert_portfolio_payload(
@@ -439,7 +446,7 @@ def test_wrong_owner_receives_uniform_not_found_and_cannot_mutate(
     assert owner_get_response.json() == replace_response.json()
 
 
-def test_existing_owner_succeeds_and_unknown_valid_owner_is_rejected(
+def test_bearer_owner_succeeds_and_unknown_or_x_header_only_is_rejected(
     live_client: TestClient,
     session_factory: sessionmaker[Session],
 ) -> None:
@@ -454,5 +461,12 @@ def test_existing_owner_succeeds_and_unknown_valid_owner_is_rejected(
     unknown_owner_response = live_client.get(
         "/api/portfolios", headers=_headers(UNKNOWN_USER_ID)
     )
-    assert unknown_owner_response.status_code == 404
-    assert unknown_owner_response.json() == {"detail": "User not found"}
+    assert unknown_owner_response.status_code == 401
+    assert unknown_owner_response.headers["www-authenticate"] == "Bearer"
+
+    x_header_only_response = live_client.get(
+        "/api/portfolios",
+        headers={"X-User-ID": str(USER_A_ID)},
+    )
+    assert x_header_only_response.status_code == 401
+    assert x_header_only_response.headers["www-authenticate"] == "Bearer"

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
 
-from app.api.dependencies import DatabaseSession, TemporaryOwnerId
+from app.api.dependencies import CurrentUser, DatabaseSession
 from app.database.models import Holding, Portfolio
 from app.schemas.portfolio import (
     PortfolioCreateRequest,
@@ -78,11 +78,11 @@ def _portfolio_not_found() -> HTTPException:
 def create_portfolio(
     request: PortfolioCreateRequest,
     session: DatabaseSession,
-    user_id: TemporaryOwnerId,
+    current_user: CurrentUser,
 ) -> PortfolioResponse:
     try:
         portfolio = PortfolioService(session).create(
-            user_id=user_id,
+            user_id=current_user.id,
             name=request.name,
         )
         response = _to_portfolio_response(portfolio, holdings=())
@@ -99,10 +99,12 @@ def create_portfolio(
 )
 def list_portfolios(
     session: DatabaseSession,
-    user_id: TemporaryOwnerId,
+    current_user: CurrentUser,
 ) -> PortfolioListResponse:
     try:
-        portfolios = PortfolioService(session).list_for_user(user_id=user_id)
+        portfolios = PortfolioService(session).list_for_user(
+            user_id=current_user.id
+        )
         return PortfolioListResponse(
             portfolios=[
                 _to_portfolio_summary(portfolio)
@@ -121,11 +123,11 @@ def list_portfolios(
 def get_portfolio(
     portfolio_id: UUID,
     session: DatabaseSession,
-    user_id: TemporaryOwnerId,
+    current_user: CurrentUser,
 ) -> PortfolioResponse:
     try:
         portfolio = PortfolioService(session).get(
-            user_id=user_id,
+            user_id=current_user.id,
             portfolio_id=portfolio_id,
         )
     except Exception as error:
@@ -149,11 +151,11 @@ def rename_portfolio(
     portfolio_id: UUID,
     request: PortfolioUpdateRequest,
     session: DatabaseSession,
-    user_id: TemporaryOwnerId,
+    current_user: CurrentUser,
 ) -> PortfolioResponse:
     try:
         portfolio = PortfolioService(session).rename(
-            user_id=user_id,
+            user_id=current_user.id,
             portfolio_id=portfolio_id,
             name=request.name,
         )
@@ -180,7 +182,7 @@ def replace_portfolio_holdings(
     portfolio_id: UUID,
     request: PortfolioHoldingsReplaceRequest,
     session: DatabaseSession,
-    user_id: TemporaryOwnerId,
+    current_user: CurrentUser,
 ) -> PortfolioResponse:
     holdings = [
         (holding.symbol, holding.weight)
@@ -188,7 +190,7 @@ def replace_portfolio_holdings(
     ]
     try:
         portfolio = PortfolioService(session).replace_holdings(
-            user_id=user_id,
+            user_id=current_user.id,
             portfolio_id=portfolio_id,
             holdings=holdings,
         )
@@ -220,11 +222,11 @@ def duplicate_portfolio(
     portfolio_id: UUID,
     request: PortfolioDuplicateRequest,
     session: DatabaseSession,
-    user_id: TemporaryOwnerId,
+    current_user: CurrentUser,
 ) -> PortfolioResponse:
     try:
         portfolio = PortfolioService(session).duplicate(
-            user_id=user_id,
+            user_id=current_user.id,
             portfolio_id=portfolio_id,
             name=request.name,
         )
@@ -250,11 +252,11 @@ def duplicate_portfolio(
 def delete_portfolio(
     portfolio_id: UUID,
     session: DatabaseSession,
-    user_id: TemporaryOwnerId,
+    current_user: CurrentUser,
 ) -> Response:
     try:
         deleted = PortfolioService(session).delete(
-            user_id=user_id,
+            user_id=current_user.id,
             portfolio_id=portfolio_id,
         )
     except Exception as error:

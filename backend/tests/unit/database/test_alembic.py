@@ -15,6 +15,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_CONFIG_PATH = BACKEND_ROOT / "alembic.ini"
 ALEMBIC_DIRECTORY = BACKEND_ROOT / "alembic"
 VERSIONS_DIRECTORY = ALEMBIC_DIRECTORY / "versions"
+INITIAL_REVISION = "9f4c2a7b1d3e"
+AUTHENTICATION_REVISION = "2b6e5d4a9c81"
 
 
 def _alembic_config() -> Config:
@@ -73,7 +75,7 @@ def test_alembic_configuration_loads_without_connecting(
     script = ScriptDirectory.from_config(config)
 
     assert script.dir == str(ALEMBIC_DIRECTORY)
-    assert len(list(script.walk_revisions())) == 1
+    assert len(list(script.walk_revisions())) == 2
 
 
 def test_offline_migration_operation_does_not_connect(
@@ -91,16 +93,20 @@ def test_offline_migration_operation_does_not_connect(
     command.upgrade(_alembic_config(), "head", sql=True)
 
 
-def test_exactly_one_initial_schema_revision_exists() -> None:
+def test_authentication_revision_extends_the_initial_schema_revision() -> None:
     revision_files = [
         path
         for path in VERSIONS_DIRECTORY.rglob("*.py")
         if path.name != "__init__.py"
     ]
 
-    assert len(revision_files) == 1
+    assert len(revision_files) == 2
     script = ScriptDirectory.from_config(_alembic_config())
     revisions = list(script.walk_revisions())
-    assert len(revisions) == 1
-    assert revisions[0].down_revision is None
-    assert script.get_current_head() == revisions[0].revision
+    assert [revision.revision for revision in revisions] == [
+        AUTHENTICATION_REVISION,
+        INITIAL_REVISION,
+    ]
+    assert revisions[0].down_revision == INITIAL_REVISION
+    assert revisions[1].down_revision is None
+    assert script.get_current_head() == AUTHENTICATION_REVISION
