@@ -1,0 +1,47 @@
+{
+  "portfolio_id": "12345678-1234-5678-1234-567812345678",
+  "portfolio_name": "Balanced Learning Portfolio",
+  "scenario": {
+    "id": "covid-19-shock-2020",
+    "display_name": "COVID-19 Market Shock",
+    "description": "A sharp market shock and early recovery period during the COVID-19 disruption.",
+    "requested_start_date": "2020-02-01",
+    "requested_end_date": "2020-04-30"
+  },
+  "metadata": {
+    "effective_start_date": "2020-02-03",
+    "effective_end_date": "2020-04-30",
+    "price_observation_count": 4,
+    "return_observation_count": 3
+  },
+  "metrics": {
+    "normalized_starting_value": 1.0,
+    "normalized_ending_value": 0.95,
+    "cumulative_return": -0.05,
+    "annualized_volatility": 0.42,
+    "sharpe_ratio": null,
+    "maximum_drawdown": {
+      "max_drawdown": -0.25,
+      "peak_date": "2020-02-03",
+      "trough_date": "2020-03-23"
+    }
+  },
+  "trajectory": [
+    {
+      "date": "2020-02-03",
+      "normalized_value": 1.0
+    },
+    {
+      "date": "2020-03-02",
+      "normalized_value": 0.8
+    },
+    {
+      "date": "2020-03-23",
+      "normalized_value": 0.75
+    },
+    {
+      "date": "2020-04-30",
+      "normalized_value": 0.95
+    }
+  ]
+}
