@@ -694,8 +694,8 @@ Aura currently supports only the two predefined scenarios above. The planned
 historical coverage toward year 2000 where asset data permits. The later
 `feat/backend-historical-scenario-catalog` workstream depends on that verified
 coverage and may expand the educational event catalogue. Neither workstream was
-part of this completed branch, and neither is required before the next
-allocation-simulator workstream.
+part of this completed branch, and neither was required by the completed
+Allocation Simulator.
 
 ### Final verification
 
@@ -714,6 +714,118 @@ allocation-simulator workstream.
 - Existing warning: one non-blocking Starlette TestClient/httpx deprecation
   warning; it is not a historical-simulator defect
 
+## Backend Allocation Simulator
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-allocation-simulator`
+
+### Completed responsibility
+
+Allocation Simulation is Aura's Allocation Change mode. It answers:
+
+> **How would different weights for the same saved portfolio assets have
+> changed the portfolio's historical behavior over an arbitrary historical
+> period?**
+
+It is separate from the completed Historical Scenario mode and the unfinished
+Combined Simulation mode.
+
+### Contracts and ordering behavior
+
+- Added strict allocation request, result, comparison, and response contracts
+  imported directly from `backend.app.schemas.simulation`; the stable
+  package-level schema export contract was not expanded.
+- The request changes weights only over an arbitrary start/end period and does
+  not accept a predefined historical scenario ID.
+- The modified allocation must contain exactly the saved portfolio's complete
+  normalized symbol set. Request order may differ, but original and modified
+  results are canonicalized to saved holding order.
+- Existing symbol normalization, duplicate rejection, `[0, 1]` weight bounds,
+  total-weight tolerance, zero-weight behavior, strict unknown-field rejection,
+  finite-number behavior, and caller-input non-mutation are preserved.
+
+### Calculation and historical-data behavior
+
+Allocation comparison does not duplicate financial formulas. It uses one
+already-aligned historical price frame and runs the existing historical
+simulator once with the saved weights and once with the modified weights. Both
+results therefore share the same prices, effective dates, fixed-weight /
+periodically rebalanced semantics, and existing analytics behavior.
+
+Comparison deltas are `modified - original` for normalized ending value,
+cumulative return, annualized volatility, Sharpe ratio when both values exist,
+and maximum drawdown. If either Sharpe ratio is undefined, the Sharpe delta is
+JSON `null`. Existing signed negative maximum-drawdown behavior is preserved.
+
+Historical prices come through the PostgreSQL-backed `MarketDataService`.
+Alignment uses the exact common-date intersection across every saved holding,
+with no forward fill, backfill, interpolation, synthesized prices, or silently
+dropped holdings. Zero-weight holdings still require data and participate in
+alignment. Requested dates remain separate from effective aligned dates.
+
+### Production flow and service boundaries
+
+```text
+Bearer-authenticated User
+        ↓
+owned Portfolio
+        ↓
+ordered saved Holdings
+        ↓
+exact modified symbol-set validation
+        ↓
+saved-order canonicalization
+        ↓
+one PostgreSQL historical-data retrieval
+        ↓
+one exact common-date alignment
+        ↓
+pure original-versus-modified comparison
+        ↓
+validated AllocationSimulationResponse
+```
+
+`AllocationSimulationService` reuses the existing portfolio-ownership,
+market-data, and exact-date alignment infrastructure. It is caller-session
+based and read-only: it does not commit, roll back, close the caller-owned
+session, persist a simulation, or persist an Analysis snapshot.
+
+### HTTP API and ownership privacy
+
+- `POST /api/portfolios/{portfolio_id}/simulations/allocations` uses existing
+  Bearer authentication and returns `200` for a successful simulation.
+- Missing or invalid Bearer authentication returns the existing `401`;
+  `X-User-ID` is not accepted as authentication.
+- Missing and wrong-owner portfolios remain client-indistinguishable as
+  `404 Portfolio not found`; wrong ownership is not exposed as `403`.
+- Expected allocation or historical-data failures return `422`.
+- Unexpected failures return the stable
+  `500 Unable to run allocation simulation` response without exposing internal
+  exception details.
+- The POST is computation-only and creates no simulation history.
+
+### Persistence, dependencies, and deferred boundaries
+
+This workstream added no Simulation ORM model, Simulation repository, Alembic
+migration, simulation snapshot/history persistence, or dependency change.
+Combined Simulation and simulation history remain separate unfinished
+workstreams. Historical backfill and the dependent scenario-catalog expansion
+also remain deferred and were not prerequisites for Allocation Simulation.
+
+### Final verification
+
+- Dedicated real-PostgreSQL coverage verified authenticated success,
+  saved-order canonicalization, reordered modified input, zero-weight behavior,
+  ownership privacy, authentication, expected data failures, and fresh-session
+  read-only persistence.
+- Live PostgreSQL integration suite: 29 passed
+- Full backend suite: 1,828 passed, 0 failed, 0 errors, 0 skipped
+- Manual analytics engine, Python compilation, import/application smoke,
+  public health, dependency consistency, schema export compatibility, and Git
+  diff/whitespace checks: passed
+- Existing warning: one non-blocking Starlette TestClient/httpx deprecation
+  warning; it is not an Allocation Simulator defect
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -728,10 +840,9 @@ cause test failures.
 
 ### Recommended next workstream
 
-- Begin `feat/backend-allocation-simulator` as the next core simulation
-  workstream. The Historical Scenario Simulator is complete and merged; the
-  allocation simulator remains unimplemented and must preserve the completed
-  historical-simulation boundaries.
+- Begin `feat/backend-combined-simulator` as the next core simulation
+  workstream. Its Historical Scenario and Allocation Simulator dependencies are
+  completed and merged into `develop`.
 
 ### Other ready follow-on work
 
@@ -741,9 +852,9 @@ cause test failures.
 
 ### Still deferred or dependency-blocked
 
-- Allocation simulation, combined simulation, and simulation-history
-  persistence remain unfinished. Combined simulation depends on the allocation
-  simulator, and simulation history remains a separate later workstream.
+- Combined simulation and simulation-history persistence remain unfinished.
+  Combined Simulation is the recommended next core simulation workstream, and
+  simulation history remains a separate later workstream.
 - `feat/backend-market-data-historical-backfill` is planned/deferred to extend
   verified historical market-data coverage toward year 2000 where supported;
   it does not change simulator formulas or imply that all assets have data back
