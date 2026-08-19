@@ -17,9 +17,15 @@ from app.core.security import create_access_token
 from app.database.models import User
 from app.main import app
 from app.schemas.simulation import (
+    AllocationSimulationRequest,
+    AllocationSimulationResponse,
     HistoricalScenarioListResponse,
     HistoricalScenarioSimulationRequest,
     HistoricalScenarioSimulationResponse,
+)
+from app.services.allocation_simulation_service import (
+    AllocationSymbolMismatchError,
+    EmptyPortfolioError as AllocationEmptyPortfolioError,
 )
 from app.services.historical_scenario_service import (
     EmptyPortfolioError,
@@ -35,11 +41,22 @@ CATALOGUE_PATH = "/api/simulations/historical-scenarios"
 SIMULATION_PATH = (
     f"/api/portfolios/{PORTFOLIO_ID}/simulations/historical-scenarios"
 )
+ALLOCATION_SIMULATION_PATH = (
+    f"/api/portfolios/{PORTFOLIO_ID}/simulations/allocations"
+)
 REQUEST_HEADERS: dict[str, str] = {}
 
 
 @dataclass
 class ApiHarness:
+    client: TestClient
+    session: MagicMock
+    service: MagicMock
+    session_factory: MagicMock
+
+
+@dataclass
+class AllocationApiHarness:
     client: TestClient
     session: MagicMock
     service: MagicMock
@@ -90,6 +107,34 @@ def api_harness() -> Iterator[ApiHarness]:
         )
 
 
+@pytest.fixture
+def allocation_api_harness() -> Iterator[AllocationApiHarness]:
+    session = MagicMock(spec=Session)
+    session.get.return_value = User(id=OWNER_ID)
+    session_factory = MagicMock(return_value=session)
+    service = MagicMock(spec=route_module.AllocationSimulationService)
+
+    with (
+        patch.object(
+            dependency_module,
+            "_get_session_factory",
+            return_value=session_factory,
+        ),
+        patch.object(
+            route_module,
+            "AllocationSimulationService",
+            return_value=service,
+        ),
+        TestClient(app, raise_server_exceptions=False) as client,
+    ):
+        yield AllocationApiHarness(
+            client=client,
+            session=session,
+            service=service,
+            session_factory=session_factory,
+        )
+
+
 def _simulation_response() -> HistoricalScenarioSimulationResponse:
     return HistoricalScenarioSimulationResponse.model_validate(
         {
@@ -129,6 +174,92 @@ def _simulation_response() -> HistoricalScenarioSimulationResponse:
                 {"date": "2020-03-23", "normalized_value": 0.75},
                 {"date": "2020-04-30", "normalized_value": 0.95},
             ],
+        }
+    )
+
+
+def _allocation_request_body() -> dict[str, object]:
+    return {
+        "start_date": "2020-02-01",
+        "end_date": "2020-04-30",
+        "modified_allocation": [
+            {"symbol": "ALPHA", "weight": 0.5},
+            {"symbol": "BETA", "weight": 0.5},
+            {"symbol": "ZERO", "weight": 0.0},
+        ],
+    }
+
+
+def _allocation_simulation_response() -> AllocationSimulationResponse:
+    return AllocationSimulationResponse.model_validate(
+        {
+            "portfolio_id": PORTFOLIO_ID,
+            "portfolio_name": "Balanced Learning Portfolio",
+            "start_date": "2020-02-01",
+            "end_date": "2020-04-30",
+            "metadata": {
+                "effective_start_date": "2020-02-03",
+                "effective_end_date": "2020-04-30",
+                "price_observation_count": 4,
+                "return_observation_count": 3,
+            },
+            "original": {
+                "allocation": [
+                    {"symbol": "BETA", "weight": 0.4},
+                    {"symbol": "ZERO", "weight": 0.0},
+                    {"symbol": "ALPHA", "weight": 0.6},
+                ],
+                "metrics": {
+                    "normalized_starting_value": 1.0,
+                    "normalized_ending_value": 0.95,
+                    "cumulative_return": -0.05,
+                    "annualized_volatility": 0.42,
+                    "sharpe_ratio": None,
+                    "maximum_drawdown": {
+                        "max_drawdown": -0.25,
+                        "peak_date": "2020-02-03",
+                        "trough_date": "2020-03-23",
+                    },
+                },
+                "trajectory": [
+                    {"date": "2020-02-03", "normalized_value": 1.0},
+                    {"date": "2020-03-02", "normalized_value": 0.8},
+                    {"date": "2020-03-23", "normalized_value": 0.75},
+                    {"date": "2020-04-30", "normalized_value": 0.95},
+                ],
+            },
+            "modified": {
+                "allocation": [
+                    {"symbol": "BETA", "weight": 0.5},
+                    {"symbol": "ZERO", "weight": 0.0},
+                    {"symbol": "ALPHA", "weight": 0.5},
+                ],
+                "metrics": {
+                    "normalized_starting_value": 1.0,
+                    "normalized_ending_value": 1.05,
+                    "cumulative_return": 0.05,
+                    "annualized_volatility": 0.3,
+                    "sharpe_ratio": 1.2,
+                    "maximum_drawdown": {
+                        "max_drawdown": -0.1,
+                        "peak_date": "2020-02-03",
+                        "trough_date": "2020-03-02",
+                    },
+                },
+                "trajectory": [
+                    {"date": "2020-02-03", "normalized_value": 1.0},
+                    {"date": "2020-03-02", "normalized_value": 0.9},
+                    {"date": "2020-03-23", "normalized_value": 0.97},
+                    {"date": "2020-04-30", "normalized_value": 1.05},
+                ],
+            },
+            "comparison": {
+                "normalized_ending_value_delta": 0.1,
+                "cumulative_return_delta": 0.1,
+                "annualized_volatility_delta": -0.12,
+                "sharpe_ratio_delta": None,
+                "maximum_drawdown_delta": 0.15,
+            },
         }
     )
 
@@ -424,6 +555,177 @@ def test_malformed_portfolio_uuid_uses_existing_framework_validation(
     api_harness.service.run.assert_not_called()
 
 
+def test_authenticated_allocation_post_is_a_read_only_response_passthrough(
+    allocation_api_harness: AllocationApiHarness,
+) -> None:
+    expected = _allocation_simulation_response()
+    request_body = _allocation_request_body()
+    allocation_api_harness.service.run.return_value = expected
+
+    response = allocation_api_harness.client.post(
+        ALLOCATION_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=request_body,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == expected.model_dump(mode="json")
+    assert AllocationSimulationResponse.model_validate(response.json()) == expected
+    allocation_api_harness.service.run.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        request=AllocationSimulationRequest.model_validate(request_body),
+    )
+    assert response.json()["original"] == expected.model_dump(mode="json")[
+        "original"
+    ]
+    assert response.json()["modified"] == expected.model_dump(mode="json")[
+        "modified"
+    ]
+    assert response.json()["comparison"] == expected.model_dump(mode="json")[
+        "comparison"
+    ]
+    assert response.json()["comparison"]["sharpe_ratio_delta"] is None
+    assert [
+        holding["symbol"]
+        for holding in response.json()["original"]["allocation"]
+    ] == ["BETA", "ZERO", "ALPHA"]
+    assert [
+        holding["symbol"]
+        for holding in response.json()["modified"]["allocation"]
+    ] == ["BETA", "ZERO", "ALPHA"]
+    allocation_api_harness.session.commit.assert_not_called()
+    allocation_api_harness.session.flush.assert_not_called()
+    allocation_api_harness.session.rollback.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {},
+        {"Authorization": "Bearer not-a-jwt"},
+        {"X-User-ID": str(OWNER_ID)},
+    ],
+)
+def test_allocation_post_requires_existing_bearer_authentication(
+    allocation_api_harness: AllocationApiHarness,
+    headers: dict[str, str],
+) -> None:
+    response = allocation_api_harness.client.post(
+        ALLOCATION_SIMULATION_PATH,
+        headers=headers,
+        json=_allocation_request_body(),
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid or missing authentication credentials"
+    }
+    assert response.headers["www-authenticate"] == "Bearer"
+    allocation_api_harness.service.run.assert_not_called()
+    allocation_api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("portfolio_state", ["missing", "wrong-owner"])
+def test_allocation_missing_and_wrong_owner_are_identical_not_found(
+    allocation_api_harness: AllocationApiHarness,
+    portfolio_state: str,
+) -> None:
+    allocation_api_harness.service.run.return_value = None
+
+    response = allocation_api_harness.client.post(
+        ALLOCATION_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=_allocation_request_body(),
+    )
+
+    assert portfolio_state in {"missing", "wrong-owner"}
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Portfolio not found"}
+    allocation_api_harness.service.run.assert_called_once()
+    allocation_api_harness.session.commit.assert_not_called()
+    allocation_api_harness.session.rollback.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    ("failure", "detail"),
+    [
+        (
+            AllocationSymbolMismatchError(
+                "modified allocation symbols must exactly match saved "
+                "portfolio symbols"
+            ),
+            "modified allocation symbols must exactly match saved portfolio "
+            "symbols",
+        ),
+        (
+            AllocationEmptyPortfolioError(
+                "portfolio must contain at least one holding"
+            ),
+            "portfolio must contain at least one holding",
+        ),
+        (
+            ValueError(
+                "market data is unavailable for requested symbols: MSFT, BND"
+            ),
+            "market data is unavailable for requested symbols: MSFT, BND",
+        ),
+        (
+            ValueError(
+                "prices must contain at least three rows for historical "
+                "simulation"
+            ),
+            "prices must contain at least three rows for historical simulation",
+        ),
+    ],
+)
+def test_expected_allocation_failures_preserve_detail_as_unprocessable(
+    allocation_api_harness: AllocationApiHarness,
+    failure: Exception,
+    detail: str,
+) -> None:
+    allocation_api_harness.service.run.side_effect = failure
+
+    response = allocation_api_harness.client.post(
+        ALLOCATION_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=_allocation_request_body(),
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": detail}
+    allocation_api_harness.service.run.assert_called_once()
+    allocation_api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RuntimeError("sensitive allocation database failure"),
+        ValueError("unexpected internal allocation analytics detail"),
+    ],
+)
+def test_unexpected_allocation_failure_is_stable_and_private(
+    allocation_api_harness: AllocationApiHarness,
+    failure: Exception,
+) -> None:
+    allocation_api_harness.service.run.side_effect = failure
+
+    response = allocation_api_harness.client.post(
+        ALLOCATION_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=_allocation_request_body(),
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Unable to run allocation simulation"
+    }
+    assert str(failure) not in response.text
+    allocation_api_harness.service.run.assert_called_once()
+    allocation_api_harness.session.commit.assert_not_called()
+
+
 def test_route_source_is_read_only_and_has_no_persistence_or_manual_auth() -> None:
     source = inspect.getsource(route_module)
 
@@ -432,6 +734,8 @@ def test_route_source_is_read_only_and_has_no_persistence_or_manual_auth() -> No
         "session.flush",
         "save_snapshot",
         "AnalysisRepository",
+        "SimulationRepository",
+        "session.add",
         "Authorization",
         "decode_access_token",
         "X-User-ID",
@@ -449,6 +753,10 @@ def test_new_and_existing_route_surface_remains_registered(
     assert ("/api/simulations/historical-scenarios", "GET") in methods
     assert (
         "/api/portfolios/{portfolio_id}/simulations/historical-scenarios",
+        "POST",
+    ) in methods
+    assert (
+        "/api/portfolios/{portfolio_id}/simulations/allocations",
         "POST",
     ) in methods
     assert ("/api/health", "GET") in methods
