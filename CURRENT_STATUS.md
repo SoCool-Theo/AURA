@@ -689,10 +689,13 @@ migration, database schema change, JSONB simulation snapshot,
 simulation-history persistence, or dependency change. Simulation history is a
 separate later workstream.
 
-Aura currently supports only the two predefined scenarios above. A separate
-future workstream may extend historical market-data coverage toward year 2000
-and expand the event catalogue; neither expansion was part of this completed
-branch.
+Aura currently supports only the two predefined scenarios above. The planned
+`feat/backend-market-data-historical-backfill` workstream may extend verified
+historical coverage toward year 2000 where asset data permits. The later
+`feat/backend-historical-scenario-catalog` workstream depends on that verified
+coverage and may expand the educational event catalogue. Neither workstream was
+part of this completed branch, and neither is required before the next
+allocation-simulator workstream.
 
 ### Final verification
 
@@ -741,8 +744,14 @@ cause test failures.
 - Allocation simulation, combined simulation, and simulation-history
   persistence remain unfinished. Combined simulation depends on the allocation
   simulator, and simulation history remains a separate later workstream.
-- Historical-data backfill toward year 2000 and expansion beyond the two
-  implemented predefined scenarios remain separate future work.
+- `feat/backend-market-data-historical-backfill` is planned/deferred to extend
+  verified historical market-data coverage toward year 2000 where supported;
+  it does not change simulator formulas or imply that all assets have data back
+  to 2000.
+- `feat/backend-historical-scenario-catalog` is planned/deferred after the
+  historical backfill. It may expand the educational event catalogue without
+  changing the completed simulator; the detailed event reference and exact
+  event list remain future work.
 - Automatic market-data scheduling remains a separate deferred workstream.
 - AI behavior/persistence, full backend API integration, frontend/mobile
   integration, and deployment remain unfinished.

@@ -1060,9 +1060,11 @@ protected by regression tests and is not a public API.
 This workstream added no Simulation ORM model, Simulation repository, Alembic
 migration, database schema change, JSONB simulation snapshot,
 simulation-history persistence, or dependency change. Simulation history,
-allocation simulation, combined simulation, historical-data backfill toward
-year 2000, and expansion beyond the two predefined events remain separate
-future workstreams.
+allocation simulation, and combined simulation remain separate future
+workstreams. Historical coverage expansion is planned under
+`feat/backend-market-data-historical-backfill`; the dependent educational event
+expansion is planned under `feat/backend-historical-scenario-catalog`. Neither
+future branch changes the completed simulator's calculations.
 
 ### Final Verification
 
@@ -1124,6 +1126,8 @@ stable in `develop`.
 | `feat/backend-allocation-simulator` | Compare original and modified allocations over the same period | Completed historical-simulation foundation + allocation contracts | Recommended next core simulation workstream; not implemented |
 | `feat/backend-combined-simulator` | Compare original and modified allocations during one event | Historical scenario + allocation simulator | Not ready |
 | `feat/backend-simulation-history` | Save and retrieve simulation results | Simulators + schemas + database | Not ready |
+| `feat/backend-market-data-historical-backfill` | Extend verified historical market-data coverage toward year 2000 | Completed market-data pipeline + storage/PostgreSQL infrastructure | Planned/deferred; not required for the next allocation-simulator branch |
+| `feat/backend-historical-scenario-catalog` | Expand the predefined educational historical-event catalogue | Historical-simulation foundation + verified historical backfill/coverage | Planned/deferred; should begin after the historical backfill |
 | `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Prerequisites are complete; automatic scheduling remains unimplemented and deferred |
 | `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Not ready; reporting and historical scenario simulation are complete, but remaining simulation and AI requirements are unfinished |
 | `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; historical scenario, portfolio, reporting, and authentication routes exist, but remaining simulation, AI, and other integration work is incomplete |
@@ -1171,6 +1175,57 @@ duplicate it.
 
 ---
 
+# Planned Historical Coverage and Catalogue Expansion
+
+These planned branches are deferred future work. They are not implemented and
+do not block the recommended next core workstream,
+`feat/backend-allocation-simulator`.
+
+## `feat/backend-market-data-historical-backfill`
+
+**Status:** Planned/deferred
+
+Extend Aura's verified historical market-data coverage farther back toward
+approximately year 2000 so older educational scenarios can later be simulated
+where asset data permits. This does not mean every current Aura symbol has data
+back to 2000, and the current production dataset is not documented as beginning
+in 2000.
+
+The workstream is limited to historical-data coverage expansion. It does not
+change simulator formulas or implement allocation simulation, combined
+simulation, simulation history, AI behavior, frontend work, forecasting, or
+automatic scheduling unless separately approved.
+
+Expected future verification includes provider availability, actual supported
+asset coverage, cleaning and validation, PostgreSQL backfill/upsert behavior,
+batching, duplicate safety, partial-history assets, analytics/simulation
+regression, and live PostgreSQL checks. None of that verification is recorded as
+completed yet.
+
+## `feat/backend-historical-scenario-catalog`
+
+**Status:** Planned/deferred after historical backfill
+
+Expand Aura's predefined educational historical-event catalogue after the
+historical-data backfill and supported coverage are verified. The future
+catalogue may include market crash/stress, high-volatility, and normal/growth
+periods without changing the completed simulator calculations.
+
+The exact event list and dates are intentionally not defined here. This future
+workstream may introduce a dedicated historical-events Markdown reference when
+it begins; no such document is created or named by this update.
+
+```text
+feat/backend-market-data-historical-backfill
+                ↓ verified historical coverage
+feat/backend-historical-scenario-catalog
+```
+
+The completed Historical Scenario Simulator does not depend on either future
+expansion branch.
+
+---
+
 # Recommended Backend Dependency Flow
 
 ```text
@@ -1206,6 +1261,10 @@ feat/backend-combined-simulator
                 ↓
 feat/backend-simulation-history
                 ↓
+feat/backend-market-data-historical-backfill
+                ↓
+feat/backend-historical-scenario-catalog
+                ↓
 AI agent
                 ↓
 full backend API integration
@@ -1221,7 +1280,9 @@ dependency for later services, APIs, reporting, simulations, and AI
 integration. AnalysisService, the Portfolio API, and analysis reporting are
 complete. Authentication and the Historical Scenario Simulator are also
 complete. Allocation simulation, combined simulation, simulation history, AI
-behavior, and full integration remain separate unfinished workstreams.
+behavior, and full integration remain separate unfinished workstreams. The
+historical backfill and dependent scenario-catalog expansion are planned later
+and do not block allocation simulation.
 
 ---
 
@@ -1237,9 +1298,10 @@ feat/backend-allocation-simulator
 ```
 
 Allocation requirements and contracts still require finalization before
-implementation. Combined simulation, simulation history, historical-data and
-catalogue expansion, and market-data scheduling remain separate deferred
-workstreams.
+implementation. Combined simulation, simulation history,
+`feat/backend-market-data-historical-backfill`,
+`feat/backend-historical-scenario-catalog`, and market-data scheduling remain
+separate deferred workstreams.
 
 ---
 
@@ -1263,6 +1325,8 @@ develop
 ├── feat/backend-allocation-simulator             # recommended next
 ├── feat/backend-combined-simulator               # deferred
 ├── feat/backend-simulation-history               # deferred
+├── feat/backend-market-data-historical-backfill  # planned/deferred
+├── feat/backend-historical-scenario-catalog      # planned after backfill
 └── feat/backend-quality-ci                       # optional
 ```
 
@@ -1378,6 +1442,8 @@ Documentation changes should not be added to `main` directly.
 feat/backend-allocation-simulator             # recommended next; not implemented
 feat/backend-combined-simulator             # requirements/contracts deferred
 feat/backend-simulation-history
+feat/backend-market-data-historical-backfill  # planned/deferred
+feat/backend-historical-scenario-catalog      # planned after backfill
 feat/backend-market-data-scheduler          # scheduling deferred
 ```
 
@@ -1410,6 +1476,8 @@ feat/backend-allocation-simulator
 ```
 
 Do not treat allocation simulation, combined simulation, simulation history,
-historical-data backfill/catalogue expansion, automatic market-data scheduling,
+`feat/backend-market-data-historical-backfill`,
+`feat/backend-historical-scenario-catalog`, automatic market-data scheduling,
 AI, full integration, frontend/mobile integration, or deployment as completed.
-They remain governed by their listed unfinished or deferred dependencies.
+The backfill must precede catalogue expansion; both remain later than the
+recommended allocation-simulator workstream.
