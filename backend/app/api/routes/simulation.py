@@ -9,6 +9,8 @@ from app.scenarios.definitions import HISTORICAL_SCENARIOS
 from app.schemas.simulation import (
     AllocationSimulationRequest,
     AllocationSimulationResponse,
+    CombinedSimulationRequest,
+    CombinedSimulationResponse,
     HistoricalScenarioListResponse,
     HistoricalScenarioResponse,
     HistoricalScenarioSimulationRequest,
@@ -19,6 +21,7 @@ from app.services.allocation_simulation_service import (
     AllocationSymbolMismatchError,
     EmptyPortfolioError as AllocationEmptyPortfolioError,
 )
+from app.services.combined_simulation_service import CombinedSimulationService
 from app.services.historical_scenario_service import (
     EmptyPortfolioError,
     HistoricalScenarioNotFoundError,
@@ -47,6 +50,13 @@ def _allocation_internal_error() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Unable to run allocation simulation",
+    )
+
+
+def _combined_internal_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Unable to run combined simulation",
     )
 
 
@@ -163,6 +173,43 @@ def run_allocation_simulation(
         raise _allocation_internal_error() from error
     except Exception as error:
         raise _allocation_internal_error() from error
+
+    if response is None:
+        raise _portfolio_not_found()
+    return response
+
+
+@router.post(
+    "/portfolios/{portfolio_id}/simulations/combined",
+    response_model=CombinedSimulationResponse,
+    status_code=status.HTTP_200_OK,
+)
+def run_combined_simulation(
+    portfolio_id: UUID,
+    request: CombinedSimulationRequest,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> CombinedSimulationResponse:
+    """Compare allocations during one scenario for an owned portfolio."""
+    try:
+        response = CombinedSimulationService(session).run(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+            request=request,
+        )
+    except HistoricalScenarioNotFoundError as error:
+        raise _scenario_not_found() from error
+    except (
+        AllocationSymbolMismatchError,
+        AllocationEmptyPortfolioError,
+    ) as error:
+        raise _unprocessable_historical_input(str(error)) from error
+    except ValueError as error:
+        if _is_expected_historical_data_error(error):
+            raise _unprocessable_historical_input(str(error)) from error
+        raise _combined_internal_error() from error
+    except Exception as error:
+        raise _combined_internal_error() from error
 
     if response is None:
         raise _portfolio_not_found()

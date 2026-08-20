@@ -19,6 +19,8 @@ from app.main import app
 from app.schemas.simulation import (
     AllocationSimulationRequest,
     AllocationSimulationResponse,
+    CombinedSimulationRequest,
+    CombinedSimulationResponse,
     HistoricalScenarioListResponse,
     HistoricalScenarioSimulationRequest,
     HistoricalScenarioSimulationResponse,
@@ -44,6 +46,9 @@ SIMULATION_PATH = (
 ALLOCATION_SIMULATION_PATH = (
     f"/api/portfolios/{PORTFOLIO_ID}/simulations/allocations"
 )
+COMBINED_SIMULATION_PATH = (
+    f"/api/portfolios/{PORTFOLIO_ID}/simulations/combined"
+)
 REQUEST_HEADERS: dict[str, str] = {}
 
 
@@ -60,6 +65,15 @@ class AllocationApiHarness:
     client: TestClient
     session: MagicMock
     service: MagicMock
+    session_factory: MagicMock
+
+
+@dataclass
+class CombinedApiHarness:
+    client: TestClient
+    session: MagicMock
+    service: MagicMock
+    service_type: MagicMock
     session_factory: MagicMock
 
 
@@ -131,6 +145,35 @@ def allocation_api_harness() -> Iterator[AllocationApiHarness]:
             client=client,
             session=session,
             service=service,
+            session_factory=session_factory,
+        )
+
+
+@pytest.fixture
+def combined_api_harness() -> Iterator[CombinedApiHarness]:
+    session = MagicMock(spec=Session)
+    session.get.return_value = User(id=OWNER_ID)
+    session_factory = MagicMock(return_value=session)
+    service = MagicMock(spec=route_module.CombinedSimulationService)
+
+    with (
+        patch.object(
+            dependency_module,
+            "_get_session_factory",
+            return_value=session_factory,
+        ),
+        patch.object(
+            route_module,
+            "CombinedSimulationService",
+            return_value=service,
+        ) as service_type,
+        TestClient(app, raise_server_exceptions=False) as client,
+    ):
+        yield CombinedApiHarness(
+            client=client,
+            session=session,
+            service=service,
+            service_type=service_type,
             session_factory=session_factory,
         )
 
@@ -260,6 +303,41 @@ def _allocation_simulation_response() -> AllocationSimulationResponse:
                 "sharpe_ratio_delta": None,
                 "maximum_drawdown_delta": 0.15,
             },
+        }
+    )
+
+
+def _combined_request_body() -> dict[str, object]:
+    return {
+        "scenario_id": "covid-19-shock-2020",
+        "modified_allocation": [
+            {"symbol": "ALPHA", "weight": 0.5},
+            {"symbol": "BETA", "weight": 0.5},
+            {"symbol": "ZERO", "weight": 0.0},
+        ],
+    }
+
+
+def _combined_simulation_response() -> CombinedSimulationResponse:
+    allocation_response = _allocation_simulation_response()
+    return CombinedSimulationResponse.model_validate(
+        {
+            "portfolio_id": allocation_response.portfolio_id,
+            "portfolio_name": allocation_response.portfolio_name,
+            "scenario": {
+                "id": "covid-19-shock-2020",
+                "display_name": "COVID-19 Market Shock",
+                "description": (
+                    "A sharp market shock and early recovery period during "
+                    "the COVID-19 disruption."
+                ),
+                "requested_start_date": "2020-02-01",
+                "requested_end_date": "2020-04-30",
+            },
+            "metadata": allocation_response.metadata,
+            "original": allocation_response.original,
+            "modified": allocation_response.modified,
+            "comparison": allocation_response.comparison,
         }
     )
 
@@ -726,6 +804,234 @@ def test_unexpected_allocation_failure_is_stable_and_private(
     allocation_api_harness.session.commit.assert_not_called()
 
 
+def test_authenticated_combined_post_is_read_only_response_passthrough(
+    combined_api_harness: CombinedApiHarness,
+) -> None:
+    expected = _combined_simulation_response()
+    request_body = _combined_request_body()
+    combined_api_harness.service.run.return_value = expected
+
+    response = combined_api_harness.client.post(
+        COMBINED_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=request_body,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == expected.model_dump(mode="json")
+    assert CombinedSimulationResponse.model_validate(response.json()) == expected
+    combined_api_harness.service_type.assert_called_once_with(
+        combined_api_harness.session
+    )
+    combined_api_harness.service.run.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        request=CombinedSimulationRequest.model_validate(request_body),
+    )
+    assert list(response.json()) == [
+        "portfolio_id",
+        "portfolio_name",
+        "scenario",
+        "metadata",
+        "original",
+        "modified",
+        "comparison",
+    ]
+    assert response.json()["scenario"]["requested_start_date"] == "2020-02-01"
+    assert response.json()["metadata"]["effective_start_date"] == "2020-02-03"
+    assert response.json()["original"] == expected.model_dump(mode="json")[
+        "original"
+    ]
+    assert response.json()["modified"] == expected.model_dump(mode="json")[
+        "modified"
+    ]
+    assert response.json()["comparison"] == expected.model_dump(mode="json")[
+        "comparison"
+    ]
+    assert response.json()["comparison"]["sharpe_ratio_delta"] is None
+    combined_api_harness.session.commit.assert_not_called()
+    combined_api_harness.session.flush.assert_not_called()
+    combined_api_harness.session.rollback.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {},
+        {"Authorization": "Bearer not-a-jwt"},
+        {"X-User-ID": str(OWNER_ID)},
+    ],
+)
+def test_combined_post_requires_existing_bearer_authentication(
+    combined_api_harness: CombinedApiHarness,
+    headers: dict[str, str],
+) -> None:
+    response = combined_api_harness.client.post(
+        COMBINED_SIMULATION_PATH,
+        headers=headers,
+        json=_combined_request_body(),
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid or missing authentication credentials"
+    }
+    assert response.headers["www-authenticate"] == "Bearer"
+    combined_api_harness.service.run.assert_not_called()
+    combined_api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("portfolio_state", ["missing", "wrong-owner"])
+def test_combined_missing_and_wrong_owner_are_identical_not_found(
+    combined_api_harness: CombinedApiHarness,
+    portfolio_state: str,
+) -> None:
+    combined_api_harness.service.run.return_value = None
+
+    response = combined_api_harness.client.post(
+        COMBINED_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=_combined_request_body(),
+    )
+
+    assert portfolio_state in {"missing", "wrong-owner"}
+    assert response.status_code == 404
+    assert response.status_code != 403
+    assert response.json() == {"detail": "Portfolio not found"}
+    combined_api_harness.service.run.assert_called_once()
+    combined_api_harness.session.commit.assert_not_called()
+    combined_api_harness.session.rollback.assert_called_once_with()
+
+
+def test_combined_unknown_scenario_maps_to_existing_not_found(
+    combined_api_harness: CombinedApiHarness,
+) -> None:
+    combined_api_harness.service.run.side_effect = (
+        HistoricalScenarioNotFoundError("Historical scenario not found")
+    )
+    body = _combined_request_body()
+    body["scenario_id"] = "unknown-scenario"
+
+    response = combined_api_harness.client.post(
+        COMBINED_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=body,
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Historical scenario not found"}
+    combined_api_harness.service.run.assert_called_once()
+    request = combined_api_harness.service.run.call_args.kwargs["request"]
+    assert request.scenario_id == "unknown-scenario"
+
+
+@pytest.mark.parametrize(
+    ("failure", "detail"),
+    [
+        (
+            AllocationSymbolMismatchError(
+                "modified allocation symbols must exactly match saved "
+                "portfolio symbols"
+            ),
+            "modified allocation symbols must exactly match saved portfolio "
+            "symbols",
+        ),
+        (
+            AllocationEmptyPortfolioError(
+                "portfolio must contain at least one holding"
+            ),
+            "portfolio must contain at least one holding",
+        ),
+        (
+            ValueError(
+                "market data is unavailable for requested symbols: MSFT, BND"
+            ),
+            "market data is unavailable for requested symbols: MSFT, BND",
+        ),
+        (
+            ValueError(
+                "prices must contain at least three rows for historical "
+                "simulation"
+            ),
+            "prices must contain at least three rows for historical simulation",
+        ),
+    ],
+)
+def test_combined_expected_failures_preserve_detail_as_unprocessable(
+    combined_api_harness: CombinedApiHarness,
+    failure: Exception,
+    detail: str,
+) -> None:
+    combined_api_harness.service.run.side_effect = failure
+
+    response = combined_api_harness.client.post(
+        COMBINED_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=_combined_request_body(),
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": detail}
+    combined_api_harness.service.run.assert_called_once()
+    combined_api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RuntimeError("sensitive combined database failure"),
+        ValueError("unexpected internal combined analytics detail"),
+    ],
+)
+def test_unexpected_combined_failure_is_stable_and_private(
+    combined_api_harness: CombinedApiHarness,
+    failure: Exception,
+) -> None:
+    combined_api_harness.service.run.side_effect = failure
+
+    response = combined_api_harness.client.post(
+        COMBINED_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=_combined_request_body(),
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Unable to run combined simulation"
+    }
+    assert str(failure) not in response.text
+    combined_api_harness.service.run.assert_called_once()
+    combined_api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"scenario_id": "covid-19-shock-2020"},
+        {
+            **_combined_request_body(),
+            "scenario_id": " ",
+        },
+        {
+            **_combined_request_body(),
+            "unexpected": "forbidden",
+        },
+    ],
+)
+def test_malformed_combined_request_uses_framework_validation(
+    combined_api_harness: CombinedApiHarness,
+    body: dict[str, object],
+) -> None:
+    response = combined_api_harness.client.post(
+        COMBINED_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=body,
+    )
+
+    assert response.status_code == 422
+    combined_api_harness.service.run.assert_not_called()
+
+
 def test_route_source_is_read_only_and_has_no_persistence_or_manual_auth() -> None:
     source = inspect.getsource(route_module)
 
@@ -757,6 +1063,10 @@ def test_new_and_existing_route_surface_remains_registered(
     ) in methods
     assert (
         "/api/portfolios/{portfolio_id}/simulations/allocations",
+        "POST",
+    ) in methods
+    assert (
+        "/api/portfolios/{portfolio_id}/simulations/combined",
         "POST",
     ) in methods
     assert ("/api/health", "GET") in methods
