@@ -1062,8 +1062,9 @@ This workstream added no Simulation ORM model, Simulation repository, Alembic
 migration, database schema change, JSONB simulation snapshot,
 simulation-history persistence, or dependency change. Simulation history,
 allocation simulation, and combined simulation were separate future
-workstreams at this branch's completion; Allocation Simulation has since been
-completed. Historical coverage expansion is planned under
+workstreams at this branch's completion; Allocation Simulation and Combined
+Simulation have since been completed. Historical coverage expansion is planned
+under
 `feat/backend-market-data-historical-backfill`; the dependent educational event
 expansion is planned under `feat/backend-historical-scenario-catalog`. Neither
 future branch changes the completed simulator's calculations.
@@ -1099,8 +1100,8 @@ Implement Aura's Allocation Change mode, which answers:
 > changed the portfolio's historical behavior over an arbitrary historical
 > period?**
 
-This mode is separate from the completed Historical Scenario mode and the
-unfinished Combined Simulation mode.
+This mode is separate from the completed Historical Scenario and Combined
+Simulation modes.
 
 ### Completed Contracts and Ordering Behavior
 
@@ -1182,9 +1183,10 @@ persist a simulation, or persist an Analysis snapshot.
 
 This workstream added no Simulation ORM model, Simulation repository, Alembic
 migration, simulation snapshot/history persistence, or dependency change.
-Combined Simulation and simulation history remain unfinished. Historical
-backfill and the dependent scenario-catalog expansion remain later workstreams
-and were not prerequisites for Allocation Simulation.
+Combined Simulation was completed later as a separate workstream. Simulation
+history remains unfinished. Historical backfill and the dependent
+scenario-catalog expansion remain later workstreams and were not prerequisites
+for Allocation Simulation.
 
 ### Final Verification
 
@@ -1202,7 +1204,106 @@ and were not prerequisites for Allocation Simulation.
 
 ---
 
-## 12. Optional: `feat/backend-quality-ci`
+## 12. `feat/backend-combined-simulator`
+
+**Status:** Completed and merged into `develop`
+
+### Purpose
+
+Compare the user's original saved portfolio allocation and a modified
+allocation during the same predefined historical event.
+
+Combined Simulation completes Aura's three core Historical What-If Simulator
+modes. It is a thin composition over the existing immutable Historical
+Scenario catalogue and the completed Allocation Simulation workflow, with no
+new financial formulas.
+
+### Completed Composition and Data Behavior
+
+- Added strict Combined request and response contracts directly importable
+  from `backend.app.schemas.simulation` without expanding the stable 21-name
+  package-level schema export surface.
+- Resolves the selected predefined scenario and uses its requested start and
+  end dates to create one existing `AllocationSimulationRequest`.
+- Delegates to `AllocationSimulationService`, preserving its complete saved
+  symbol-set validation, symbol normalization, weight rules, and saved-order
+  canonicalization.
+- Uses one PostgreSQL historical-data retrieval and one exact common-date
+  alignment path for both the original and modified allocations.
+- Preserves all saved holdings during alignment. Zero-weight modified holdings
+  remain supported and still require historical data.
+- Keeps requested scenario dates separate from effective aligned dates.
+
+The delegated workflow preserves fixed-weight / periodically rebalanced
+semantics, normalized starting value, cumulative return, annualized volatility,
+Sharpe ratio, signed maximum drawdown, peak/trough behavior, and
+`modified - original` comparison deltas. Nullable Sharpe ratios and nullable
+Sharpe deltas remain JSON `null` when either side is undefined.
+
+### Completed Production Flow
+
+```text
+Bearer-authenticated User
+        ↓
+owned Portfolio and ordered Holdings
+        ↓
+immutable Historical Scenario and requested dates
+        ↓
+CombinedSimulationService
+        ↓
+AllocationSimulationService
+        ↓
+one PostgreSQL retrieval and exact common-date alignment
+        ↓
+existing original-versus-modified simulator
+        ↓
+validated CombinedSimulationResponse
+```
+
+### Completed HTTP Surface and Privacy
+
+- `POST /api/portfolios/{portfolio_id}/simulations/combined` returns `200` for
+  a successful simulation and uses existing Bearer authentication.
+- Missing or invalid Bearer authentication returns the existing `401`;
+  `X-User-ID` is not accepted as authentication.
+- Missing and wrong-owner portfolios remain client-indistinguishable as
+  `404 Portfolio not found`, never `403`.
+- Unknown scenarios return `404 Historical scenario not found`.
+- Expected allocation, data, or simulation failures return the established
+  `422`.
+- Unexpected failures return the sanitized
+  `500 Unable to run combined simulation` response.
+
+### Read-Only Persistence and Dependency Boundary
+
+Combined Simulation added no Simulation ORM model, Simulation repository,
+Alembic migration, database schema change, simulation-history persistence,
+Analysis snapshot persistence, or new dependency. It does not commit, roll
+back, or close the caller-owned session. Simulation history remains a separate
+unfinished workstream.
+
+### Final Verification
+
+- Combined schema tests: 26 passed
+- Combined service tests: 11 passed
+- Combined API tests: 16 passed
+- Combined live PostgreSQL tests: 4 passed
+- Service suite: 149 passed
+- API suite: 144 passed
+- Schema suite: 513 passed
+- Analytics suite: 820 passed
+- Live PostgreSQL suite: 33 passed, 0 skipped
+- Full backend suite: 1,886 passed, 0 failed, 0 errors, 0 skipped
+- Manual analytics engine, Python compilation, direct imports, application
+  import, public health, OpenAPI route, dependency consistency, and Git
+  diff/whitespace/scope checks: passed
+- Stable package-level schema exports: exactly 21 approved names
+- Existing warning: one non-blocking Starlette TestClient/httpx deprecation
+  warning; it is not a Combined Simulation defect
+
+---
+
+## 13. Optional: `feat/backend-quality-ci`
 
 **Status:** Optional
 
@@ -1241,28 +1342,28 @@ stable in `develop`.
 | `feat/backend-authentication` | Authenticate protected portfolio/report APIs with Bearer JWT access tokens | Existing user ownership + portfolio/report APIs | Completed and merged into `develop` |
 | `feat/backend-historical-scenario-simulator` | Test the current saved portfolio during a selected predefined past event | Analytics + PostgreSQL historical data + simulation schemas + portfolio ownership | Completed and merged into `develop` |
 | `feat/backend-allocation-simulator` | Compare original and modified allocations over the same period | Completed Historical Scenario Simulator + portfolio/market-data infrastructure | Completed and merged into `develop` |
-| `feat/backend-combined-simulator` | Compare original and modified allocations during one event | Completed Historical Scenario Simulator + completed Allocation Simulator | Recommended next core simulation workstream; dependencies satisfied |
-| `feat/backend-simulation-history` | Save and retrieve simulation results | Simulators + schemas + database | Not ready |
-| `feat/backend-market-data-historical-backfill` | Extend verified historical market-data coverage toward year 2000 | Completed market-data pipeline + storage/PostgreSQL infrastructure | Planned/deferred; not required for the completed simulators or next Combined Simulator branch |
+| `feat/backend-combined-simulator` | Compare original and modified allocations during one event | Completed Historical Scenario Simulator + completed Allocation Simulator | Completed and merged into `develop` |
+| `feat/backend-simulation-history` | Save and retrieve simulation results | Completed simulators + schemas + database | Recommended next backend simulation workstream; dependencies satisfied |
+| `feat/backend-market-data-historical-backfill` | Extend verified historical market-data coverage toward year 2000 | Completed market-data pipeline + storage/PostgreSQL infrastructure | Planned/deferred; not required for the completed simulators or next simulation-history branch |
 | `feat/backend-historical-scenario-catalog` | Expand the predefined educational historical-event catalogue | Historical-simulation foundation + verified historical backfill/coverage | Planned/deferred; should begin after the historical backfill |
 | `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Prerequisites are complete; automatic scheduling remains unimplemented and deferred |
-| `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Not ready; reporting, Historical Scenario, and Allocation Simulation are complete, but Combined Simulation and AI requirements remain unfinished |
-| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; Historical Scenario, Allocation Simulation, portfolio, reporting, and authentication routes exist, but Combined Simulation, AI, and other integration work is incomplete |
+| `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Planned later; reporting and all three core simulator modes are complete, but AI requirements remain unfinished |
+| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; simulation history, AI, and other integration work remain incomplete |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
 
 ---
 
 # Recommended Simulation Order
 
-Aura's Historical What-If Simulator contains three modes in this development
-order; the first two are complete:
+Aura's Historical What-If Simulator contains three completed modes in this
+development order:
 
 ```text
 ✅ Historical Scenario
         ↓
 ✅ Allocation Change
         ↓
-Combined Simulation (recommended next)
+✅ Combined Simulation
 ```
 
 ## Historical Scenario
@@ -1291,16 +1392,17 @@ Answers:
 > How would the original and modified allocations compare during the same
 > historical event?
 
-The combined mode should reuse the earlier simulation logic rather than
-duplicate it.
+This mode is completed. It resolves one predefined scenario and delegates its
+requested dates and the modified allocation to the existing Allocation
+Simulation workflow without duplicating simulation logic.
 
 ---
 
 # Planned Historical Coverage and Catalogue Expansion
 
 These planned branches are deferred future work. They are not implemented and
-do not block the recommended next core workstream,
-`feat/backend-combined-simulator`.
+do not block the recommended next backend simulation workstream,
+`feat/backend-simulation-history`.
 
 ## `feat/backend-market-data-historical-backfill`
 
@@ -1313,9 +1415,10 @@ back to 2000, and the current production dataset is not documented as beginning
 in 2000.
 
 The workstream is limited to historical-data coverage expansion. It does not
-change completed simulator formulas or Allocation Simulation, and it does not
-implement Combined Simulation, simulation history, AI behavior, frontend work,
-forecasting, or automatic scheduling unless separately approved.
+change the completed Historical Scenario, Allocation Simulation, or Combined
+Simulation behavior, and it does not implement simulation history, AI behavior,
+frontend work, forecasting, or automatic scheduling unless separately
+approved.
 
 Expected future verification includes provider availability, actual supported
 asset coverage, cleaning and validation, PostgreSQL backfill/upsert behavior,
@@ -1378,7 +1481,7 @@ AnalysisService + Portfolio API + Analysis persistence
                 ↓
 ✅ feat/backend-allocation-simulator
                 ↓
-feat/backend-combined-simulator
+✅ feat/backend-combined-simulator
                 ↓
 feat/backend-simulation-history
                 ↓
@@ -1398,32 +1501,29 @@ internally but does not change this dependency flow.
 
 The completed schemas-contract branch remains in the flow as a stable
 dependency for later services, APIs, reporting, simulations, and AI
-integration. AnalysisService, the Portfolio API, and analysis reporting are
-complete. Authentication and the Historical Scenario Simulator are also
-complete. Allocation Simulation is complete as well. Combined Simulation is the
-recommended next core simulation workstream; simulation history, AI behavior,
-and full integration remain separate unfinished workstreams. The historical
+integration. AnalysisService, the Portfolio API, analysis reporting,
+authentication, and all three core simulator modes are complete. Simulation
+history is the recommended next backend simulation workstream; AI behavior and
+full integration remain separate unfinished workstreams. The historical
 backfill and dependent scenario-catalog expansion are planned later and do not
-block Combined Simulation.
+block simulation history.
 
 ---
 
 # Recommended Current Work
 
 The analytics, schema, database, historical market-data, AnalysisService,
-Portfolio API, analysis-reporting, authentication, Historical Scenario, and
-Allocation Simulator workstreams are complete. The recommended next core
-simulation workstream is:
+Portfolio API, analysis-reporting, authentication, Historical Scenario,
+Allocation Simulator, and Combined Simulator workstreams are complete. The
+recommended next backend simulation workstream is:
 
 ```text
-feat/backend-combined-simulator
+feat/backend-simulation-history
 ```
 
-The completed Historical Scenario and Allocation Simulator dependencies satisfy
-the Combined Simulator's current readiness boundary. Combined simulation itself
-remains unimplemented. Simulation history,
-`feat/backend-market-data-historical-backfill`,
-`feat/backend-historical-scenario-catalog`, and market-data scheduling remain
+The completed simulator modes, schemas, and database satisfy simulation
+history's current readiness boundary. Historical market-data backfill, the
+dependent scenario-catalog expansion, and market-data scheduling remain
 separate deferred workstreams.
 
 ---
@@ -1446,8 +1546,8 @@ develop
 ├── feat/backend-authentication                   # completed
 ├── feat/backend-historical-scenario-simulator    # completed
 ├── feat/backend-allocation-simulator             # completed
-├── feat/backend-combined-simulator               # recommended next
-├── feat/backend-simulation-history               # deferred
+├── feat/backend-combined-simulator               # completed
+├── feat/backend-simulation-history               # recommended next
 ├── feat/backend-market-data-historical-backfill  # planned/deferred
 ├── feat/backend-historical-scenario-catalog      # planned after backfill
 └── feat/backend-quality-ci                       # optional
@@ -1563,8 +1663,8 @@ Documentation changes should not be added to `main` directly.
 ```text
 ✅ feat/backend-historical-scenario-simulator  # completed
 ✅ feat/backend-allocation-simulator           # completed
-feat/backend-combined-simulator                # recommended next
-feat/backend-simulation-history
+✅ feat/backend-combined-simulator              # completed
+feat/backend-simulation-history                # recommended next
 feat/backend-market-data-historical-backfill  # planned/deferred
 feat/backend-historical-scenario-catalog      # planned after backfill
 feat/backend-market-data-scheduler          # scheduling deferred
@@ -1591,17 +1691,15 @@ develop → main release Pull Request
 
 With analytics, schemas, the market-data pipeline, the database foundation,
 market-data storage, AnalysisService, the Portfolio API, analysis reporting,
-authentication, the Historical Scenario Simulator, and the Allocation
-Simulator merged into `develop`, the recommended next core simulation
-workstream is:
+authentication, and all three core simulator modes merged into `develop`, the
+recommended next backend simulation workstream is:
 
 ```text
-feat/backend-combined-simulator
+feat/backend-simulation-history
 ```
 
-Do not treat combined simulation, simulation history,
-`feat/backend-market-data-historical-backfill`,
+Do not treat simulation history, `feat/backend-market-data-historical-backfill`,
 `feat/backend-historical-scenario-catalog`, automatic market-data scheduling,
 AI, full integration, frontend/mobile integration, or deployment as completed.
-The backfill must precede catalogue expansion; both remain later than the
-recommended Combined Simulator workstream.
+The backfill must precede catalogue expansion; both remain separate from the
+recommended simulation-history workstream.

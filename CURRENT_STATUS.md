@@ -727,8 +727,8 @@ Allocation Simulation is Aura's Allocation Change mode. It answers:
 > changed the portfolio's historical behavior over an arbitrary historical
 > period?**
 
-It is separate from the completed Historical Scenario mode and the unfinished
-Combined Simulation mode.
+It is separate from the completed Historical Scenario and Combined Simulation
+modes.
 
 ### Contracts and ordering behavior
 
@@ -808,9 +808,10 @@ session, persist a simulation, or persist an Analysis snapshot.
 
 This workstream added no Simulation ORM model, Simulation repository, Alembic
 migration, simulation snapshot/history persistence, or dependency change.
-Combined Simulation and simulation history remain separate unfinished
-workstreams. Historical backfill and the dependent scenario-catalog expansion
-also remain deferred and were not prerequisites for Allocation Simulation.
+Combined Simulation was completed later as a separate workstream. Simulation
+history remains separate and unfinished. Historical backfill and the dependent
+scenario-catalog expansion also remain deferred and were not prerequisites for
+Allocation Simulation.
 
 ### Final verification
 
@@ -826,6 +827,104 @@ also remain deferred and were not prerequisites for Allocation Simulation.
 - Existing warning: one non-blocking Starlette TestClient/httpx deprecation
   warning; it is not an Allocation Simulator defect
 
+## Backend Combined Simulator
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-combined-simulator`
+
+### Completed responsibility
+
+Combined Simulation answers:
+
+> **How would the user's original saved portfolio allocation and a modified
+> allocation compare during the same predefined historical event?**
+
+It completes Aura's three core Historical What-If Simulator modes by composing
+the existing immutable Historical Scenario catalogue with the completed
+Allocation Simulation workflow. It introduces no new financial formulas.
+
+### Composition and historical-data behavior
+
+- The request selects one existing predefined scenario and supplies a complete
+  modified allocation. The selected scenario provides the requested start and
+  end dates; clients do not supply a separate arbitrary period.
+- `CombinedSimulationService` resolves the scenario and delegates one
+  `AllocationSimulationRequest` to the existing `AllocationSimulationService`.
+- The workflow therefore uses one PostgreSQL historical-data retrieval and one
+  exact common-date alignment for both original and modified allocations.
+- Saved holding order is preserved even when modified holdings arrive in a
+  different order. Zero-weight modified holdings remain present and still
+  require historical data.
+- Requested scenario dates remain separate from effective aligned dates.
+
+The delegated workflow preserves the existing fixed-weight / periodically
+rebalanced semantics, normalized starting value, cumulative return, annualized
+volatility, Sharpe ratio, signed maximum drawdown, peak/trough behavior, and
+`modified - original` comparison deltas. Nullable Sharpe ratios and nullable
+Sharpe deltas remain JSON `null` when either side is undefined.
+
+### Production flow
+
+```text
+Bearer-authenticated User
+        ↓
+owned Portfolio and ordered Holdings
+        ↓
+immutable Historical Scenario and requested dates
+        ↓
+CombinedSimulationService
+        ↓
+AllocationSimulationService
+        ↓
+one PostgreSQL retrieval and exact common-date alignment
+        ↓
+existing original-versus-modified simulator
+        ↓
+validated CombinedSimulationResponse
+```
+
+### HTTP API and security
+
+`POST /api/portfolios/{portfolio_id}/simulations/combined` uses the existing
+Bearer authentication boundary and returns:
+
+- `200` for a successful Combined Simulation.
+- The existing `401` for missing or invalid Bearer authentication;
+  `X-User-ID` alone is not accepted.
+- `404 Portfolio not found` for missing and wrong-owner portfolios, never
+  ownership-revealing `403`.
+- `404 Historical scenario not found` for an unknown scenario.
+- The established `422` for expected allocation, historical-data, or
+  simulation failures.
+- Sanitized `500 Unable to run combined simulation` for unexpected failures.
+
+### Read-only persistence and dependency boundary
+
+Combined Simulation is computation-only and read-only. It added no Simulation
+ORM model, Simulation repository, Alembic migration, database schema change,
+simulation-history persistence, Analysis snapshot persistence, or new
+dependency. Its service does not commit, roll back, or close the caller-owned
+session. Simulation history remains a separate unfinished workstream.
+
+### Final verification
+
+- Combined schema tests: 26 passed
+- Combined service tests: 11 passed
+- Combined API tests: 16 passed
+- Combined live PostgreSQL tests: 4 passed
+- Service suite: 149 passed
+- API suite: 144 passed
+- Schema suite: 513 passed
+- Analytics suite: 820 passed
+- Live PostgreSQL suite: 33 passed, 0 skipped
+- Full backend suite: 1,886 passed, 0 failed, 0 errors, 0 skipped
+- Manual analytics engine, Python compilation, direct imports, application
+  import, public health, OpenAPI route, dependency consistency, and Git
+  diff/whitespace/scope checks: passed
+- Stable package-level schema export surface: exactly 21 approved names
+- Existing warning: one non-blocking Starlette TestClient/httpx deprecation
+  warning; it is not a Combined Simulation defect
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -840,9 +939,10 @@ cause test failures.
 
 ### Recommended next workstream
 
-- Begin `feat/backend-combined-simulator` as the next core simulation
-  workstream. Its Historical Scenario and Allocation Simulator dependencies are
-  completed and merged into `develop`.
+- Begin `feat/backend-simulation-history` as the next backend simulation
+  workstream. Historical Scenario, Allocation Change, and Combined Simulation
+  are completed, and its simulator, schema, and database prerequisites are now
+  available in `develop`.
 
 ### Other ready follow-on work
 
@@ -852,9 +952,6 @@ cause test failures.
 
 ### Still deferred or dependency-blocked
 
-- Combined simulation and simulation-history persistence remain unfinished.
-  Combined Simulation is the recommended next core simulation workstream, and
-  simulation history remains a separate later workstream.
 - `feat/backend-market-data-historical-backfill` is planned/deferred to extend
   verified historical market-data coverage toward year 2000 where supported;
   it does not change simulator formulas or imply that all assets have data back
