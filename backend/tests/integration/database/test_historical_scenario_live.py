@@ -33,7 +33,7 @@ from app.api.dependencies import get_database_session
 from app.core.config import settings as app_settings
 from app.core.security import verify_password
 from app.database.connection import session_scope
-from app.database.models import Analysis, MarketData, Portfolio, User
+from app.database.models import Analysis, MarketData, Portfolio, Simulation, User
 from app.database.repositories import PortfolioRepository
 from app.main import app
 from app.scenarios.definitions import (
@@ -61,6 +61,7 @@ from backend.app.database.connection import create_database_engine
 ALEMBIC_CONFIG_PATH = BACKEND_ROOT / "alembic.ini"
 APPLICATION_TABLES = {
     "analyses",
+    "simulations",
     "holdings",
     "market_data",
     "portfolios",
@@ -100,6 +101,7 @@ class PersistenceState:
     holdings: tuple[tuple[object, ...], ...]
     market_data: tuple[tuple[object, ...], ...]
     analysis_count: int
+    simulation_count: int
     table_names: frozenset[str]
 
 
@@ -142,7 +144,7 @@ def _truncate_application_tables(engine: Engine) -> None:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE TABLE analyses, holdings, portfolios, users, "
+                "TRUNCATE TABLE simulations, analyses, holdings, portfolios, users, "
                 "market_data CASCADE"
             )
         )
@@ -422,12 +424,16 @@ def _persistence_state(
         analysis_count = int(
             session.scalar(select(func.count()).select_from(Analysis)) or 0
         )
+        simulation_count = int(
+            session.scalar(select(func.count()).select_from(Simulation)) or 0
+        )
 
     return PersistenceState(
         portfolio=portfolio_state,
         holdings=holding_state,
         market_data=market_state,
         analysis_count=analysis_count,
+        simulation_count=simulation_count,
         table_names=frozenset(_table_names(postgres_engine)),
     )
 
@@ -625,7 +631,7 @@ def test_live_complete_simulation_alignment_and_read_only_persistence(
         portfolio_id,
     )
     assert state_before.analysis_count == 0
-    assert "simulations" not in state_before.table_names
+    assert state_before.simulation_count == 0
     assert "simulation_history" not in state_before.table_names
 
     response = live_client.post(
@@ -861,7 +867,7 @@ def test_live_allocation_simulation_canonicalizes_order_and_is_read_only(
         portfolio_id,
     )
     assert state_before.analysis_count == 0
-    assert "simulations" not in state_before.table_names
+    assert state_before.simulation_count == 0
     assert "simulation_history" not in state_before.table_names
 
     response = live_client.post(
@@ -1141,7 +1147,7 @@ def test_live_allocation_data_failures_are_unprocessable_and_read_only(
     assert missing_after == missing_before
     assert insufficient_after == insufficient_before
     assert missing_after.analysis_count == 0
-    assert "simulations" not in missing_after.table_names
+    assert missing_after.simulation_count == 0
     assert "simulation_history" not in missing_after.table_names
 
 
@@ -1296,7 +1302,7 @@ def test_live_combined_simulation_uses_one_aligned_period_and_is_read_only(
     )
     assert state_after == state_before
     assert state_after.analysis_count == 0
-    assert "simulations" not in state_after.table_names
+    assert state_after.simulation_count == 0
     assert "simulation_history" not in state_after.table_names
     assert [(row[2], row[4], row[3]) for row in state_after.holdings] == [
         ("CBAAPL", 0, Decimal("0.500000000000000000")),
@@ -1506,5 +1512,5 @@ def test_live_combined_data_failures_are_unprocessable_and_read_only(
     assert missing_after == missing_before
     assert insufficient_after == insufficient_before
     assert missing_after.analysis_count == 0
-    assert "simulations" not in missing_after.table_names
+    assert missing_after.simulation_count == 0
     assert "simulation_history" not in missing_after.table_names

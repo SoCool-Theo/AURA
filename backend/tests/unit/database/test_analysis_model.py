@@ -23,6 +23,7 @@ EXPECTED_TABLES = {
     "holdings",
     "market_data",
     "analyses",
+    "simulations",
 }
 
 
