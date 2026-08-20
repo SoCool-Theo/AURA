@@ -69,3 +69,6 @@ desktop.ini
 *.tmp
 *.temp
 ~$*
+
+# Node dependencies
+node_modules/
