@@ -202,7 +202,7 @@ def run_historical_scenario(
     session: DatabaseSession,
     current_user: CurrentUser,
 ) -> HistoricalScenarioSimulationResponse:
-    """Run one read-only scenario for the authenticated user's portfolio."""
+    """Run one scenario for the authenticated user's portfolio."""
     try:
         response = HistoricalScenarioService(session).run(
             user_id=current_user.id,
@@ -222,6 +222,24 @@ def run_historical_scenario(
 
     if response is None:
         raise _portfolio_not_found()
+
+    try:
+        history = SimulationHistoryService(session).save(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+            simulation_type="historical-scenario",
+            scenario_id=response.scenario.id,
+            requested_start_date=response.scenario.requested_start_date,
+            requested_end_date=response.scenario.requested_end_date,
+            response=response,
+        )
+        if history is None:
+            raise _portfolio_not_found()
+        session.commit()
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _internal_error() from error
     return response
 
 
@@ -257,6 +275,24 @@ def run_allocation_simulation(
 
     if response is None:
         raise _portfolio_not_found()
+
+    try:
+        history = SimulationHistoryService(session).save(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+            simulation_type="allocation",
+            scenario_id=None,
+            requested_start_date=response.start_date,
+            requested_end_date=response.end_date,
+            response=response,
+        )
+        if history is None:
+            raise _portfolio_not_found()
+        session.commit()
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _allocation_internal_error() from error
     return response
 
 
@@ -294,4 +330,22 @@ def run_combined_simulation(
 
     if response is None:
         raise _portfolio_not_found()
+
+    try:
+        history = SimulationHistoryService(session).save(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+            simulation_type="combined",
+            scenario_id=response.scenario.id,
+            requested_start_date=response.scenario.requested_start_date,
+            requested_end_date=response.scenario.requested_end_date,
+            response=response,
+        )
+        if history is None:
+            raise _portfolio_not_found()
+        session.commit()
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _combined_internal_error() from error
     return response

@@ -53,7 +53,16 @@ from app.schemas.simulation import (
     HistoricalScenarioResponse,
     HistoricalScenarioSimulationResponse,
 )
+from app.schemas.simulation_history import (
+    SimulationHistoryDetailResponse,
+    SimulationHistoryListResponse,
+)
 from app.services.market_data_service import MarketDataService
+from app.services.simulation_history_mapper import (
+    ALLOCATION_SIMULATION_RESPONSE_SCHEMA_VERSION,
+    COMBINED_SIMULATION_RESPONSE_SCHEMA_VERSION,
+    HISTORICAL_SCENARIO_SIMULATION_RESPONSE_SCHEMA_VERSION,
+)
 from backend.app.core.config import settings as migration_settings
 from backend.app.database.connection import create_database_engine
 
@@ -445,6 +454,14 @@ def _simulation_path(portfolio_id: UUID) -> str:
     )
 
 
+def _history_path(portfolio_id: UUID) -> str:
+    return f"/api/portfolios/{portfolio_id}/simulations"
+
+
+def _history_detail_path(portfolio_id: UUID, simulation_id: UUID) -> str:
+    return f"{_history_path(portfolio_id)}/{simulation_id}"
+
+
 def _allocation_simulation_path(portfolio_id: UUID) -> str:
     return f"/api/portfolios/{portfolio_id}/simulations/allocations"
 
@@ -574,7 +591,7 @@ def test_live_public_catalogue_and_authentication_boundary(
         assert response.headers["www-authenticate"] == "Bearer"
 
 
-def test_live_complete_simulation_alignment_and_read_only_persistence(
+def test_live_historical_post_persists_duplicates_and_history_is_immutable(
     live_client: TestClient,
     session_factory: sessionmaker[Session],
     postgres_engine: Engine,
@@ -704,12 +721,113 @@ def test_live_complete_simulation_alignment_and_read_only_persistence(
         [point.normalized_value for point in expected.trajectory]
     )
 
+    with session_factory() as fresh_session:
+        first_records = fresh_session.scalars(
+            select(Simulation).where(Simulation.portfolio_id == portfolio_id)
+        ).all()
+    assert len(first_records) == 1
+    first_record = first_records[0]
+    assert first_record.simulation_type == "historical-scenario"
+    assert first_record.scenario_id == SCENARIO_ID
+    assert first_record.requested_start_date == scenario.requested_start_date
+    assert first_record.requested_end_date == scenario.requested_end_date
+    assert first_record.schema_version == (
+        HISTORICAL_SCENARIO_SIMULATION_RESPONSE_SCHEMA_VERSION
+    )
+    assert first_record.result_snapshot == result.model_dump(mode="json")
+    assert first_record.created_at.tzinfo is not None
+
+    first_list_response = live_client.get(
+        _history_path(portfolio_id),
+        headers=account.headers,
+    )
+    assert first_list_response.status_code == 200
+    first_history = SimulationHistoryListResponse.model_validate(
+        first_list_response.json()
+    )
+    assert [item.id for item in first_history.simulations] == [first_record.id]
+
+    first_detail_response = live_client.get(
+        _history_detail_path(portfolio_id, first_record.id),
+        headers=account.headers,
+    )
+    assert first_detail_response.status_code == 200
+    first_detail = SimulationHistoryDetailResponse.model_validate(
+        first_detail_response.json()
+    )
+    assert first_detail.id == first_record.id
+    assert first_detail.result == result
+
+    duplicate_response = live_client.post(
+        _simulation_path(portfolio_id),
+        headers=account.headers,
+        json={"scenario_id": SCENARIO_ID},
+    )
+    assert duplicate_response.status_code == 200
+    assert duplicate_response.json() == response.json()
+
+    with session_factory() as fresh_session:
+        ordered_records = fresh_session.scalars(
+            select(Simulation)
+            .where(Simulation.portfolio_id == portfolio_id)
+            .order_by(Simulation.created_at.desc(), Simulation.id)
+        ).all()
+    assert len(ordered_records) == 2
+    assert ordered_records[0].id != ordered_records[1].id
+    assert all(
+        record.result_snapshot == result.model_dump(mode="json")
+        for record in ordered_records
+    )
+
+    ordered_list_response = live_client.get(
+        _history_path(portfolio_id),
+        headers=account.headers,
+    )
+    assert ordered_list_response.status_code == 200
+    ordered_history = SimulationHistoryListResponse.model_validate(
+        ordered_list_response.json()
+    )
+    assert [item.id for item in ordered_history.simulations] == [
+        record.id for record in ordered_records
+    ]
+
+    with session_factory.begin() as mutation_session:
+        portfolio = mutation_session.get(Portfolio, portfolio_id)
+        assert portfolio is not None
+        portfolio.name = "Renamed After Simulation"
+
+    immutable_detail_response = live_client.get(
+        _history_detail_path(portfolio_id, first_record.id),
+        headers=account.headers,
+    )
+    assert immutable_detail_response.status_code == 200
+    immutable_detail = SimulationHistoryDetailResponse.model_validate(
+        immutable_detail_response.json()
+    )
+    assert immutable_detail.result.portfolio_name == (
+        "Phase 6 Historical Portfolio"
+    )
+
+    other_account = _register_and_login(
+        live_client,
+        email="phase6-history-private@example.com",
+    )
+    private_response = live_client.get(
+        _history_detail_path(portfolio_id, first_record.id),
+        headers=other_account.headers,
+    )
+    assert private_response.status_code == 404
+    assert private_response.json() == {"detail": "Portfolio not found"}
+
     state_after = _persistence_state(
         session_factory,
         postgres_engine,
         portfolio_id,
     )
-    assert state_after == state_before
+    assert state_after.holdings == state_before.holdings
+    assert state_after.market_data == state_before.market_data
+    assert state_after.analysis_count == 0
+    assert state_after.simulation_count == 2
 
 
 def test_live_missing_data_and_insufficient_common_observations(
@@ -824,7 +942,7 @@ def test_live_two_user_ownership_isolation_returns_private_not_found(
     assert response.json() == {"detail": "Portfolio not found"}
 
 
-def test_live_allocation_simulation_canonicalizes_order_and_is_read_only(
+def test_live_allocation_simulation_persists_and_history_round_trips(
     live_client: TestClient,
     session_factory: sessionmaker[Session],
     postgres_engine: Engine,
@@ -955,12 +1073,53 @@ def test_live_allocation_simulation_canonicalizes_order_and_is_read_only(
         ALLOCATION_COMMON_DATES
     )
 
+    with session_factory() as fresh_session:
+        records = fresh_session.scalars(
+            select(Simulation).where(Simulation.portfolio_id == portfolio_id)
+        ).all()
+    assert len(records) == 1
+    record = records[0]
+    assert record.simulation_type == "allocation"
+    assert record.scenario_id is None
+    assert record.requested_start_date == ALLOCATION_START_DATE
+    assert record.requested_end_date == ALLOCATION_END_DATE
+    assert record.schema_version == (
+        ALLOCATION_SIMULATION_RESPONSE_SCHEMA_VERSION
+    )
+    assert record.result_snapshot == result.model_dump(mode="json")
+
+    history_response = live_client.get(
+        _history_path(portfolio_id),
+        headers=account.headers,
+    )
+    assert history_response.status_code == 200
+    history = SimulationHistoryListResponse.model_validate(
+        history_response.json()
+    )
+    assert len(history.simulations) == 1
+    assert history.simulations[0].id == record.id
+    assert history.simulations[0].scenario_id is None
+
+    detail_response = live_client.get(
+        _history_detail_path(portfolio_id, record.id),
+        headers=account.headers,
+    )
+    assert detail_response.status_code == 200
+    detail = SimulationHistoryDetailResponse.model_validate(
+        detail_response.json()
+    )
+    assert detail.result == result
+
     state_after = _persistence_state(
         session_factory,
         postgres_engine,
         portfolio_id,
     )
-    assert state_after == state_before
+    assert state_after.portfolio == state_before.portfolio
+    assert state_after.holdings == state_before.holdings
+    assert state_after.market_data == state_before.market_data
+    assert state_after.analysis_count == 0
+    assert state_after.simulation_count == 1
     assert [(row[2], row[4], row[3]) for row in state_after.holdings] == [
         ("AAPL", 0, Decimal("0.500000000000000000")),
         ("BND", 1, Decimal("0.300000000000000000")),
@@ -1151,7 +1310,7 @@ def test_live_allocation_data_failures_are_unprocessable_and_read_only(
     assert "simulation_history" not in missing_after.table_names
 
 
-def test_live_combined_simulation_uses_one_aligned_period_and_is_read_only(
+def test_live_combined_simulation_persists_and_history_round_trips(
     live_client: TestClient,
     session_factory: sessionmaker[Session],
     postgres_engine: Engine,
@@ -1295,15 +1454,51 @@ def test_live_combined_simulation_uses_one_aligned_period_and_is_read_only(
     assert result.original.trajectory[0].normalized_value == 1.0
     assert result.modified.trajectory[0].normalized_value == 1.0
 
+    with session_factory() as fresh_session:
+        records = fresh_session.scalars(
+            select(Simulation).where(Simulation.portfolio_id == portfolio_id)
+        ).all()
+    assert len(records) == 1
+    record = records[0]
+    assert record.simulation_type == "combined"
+    assert record.scenario_id == SCENARIO_ID
+    assert record.requested_start_date == scenario.requested_start_date
+    assert record.requested_end_date == scenario.requested_end_date
+    assert record.schema_version == COMBINED_SIMULATION_RESPONSE_SCHEMA_VERSION
+    assert record.result_snapshot == result.model_dump(mode="json")
+
+    history_response = live_client.get(
+        _history_path(portfolio_id),
+        headers=account.headers,
+    )
+    assert history_response.status_code == 200
+    history = SimulationHistoryListResponse.model_validate(
+        history_response.json()
+    )
+    assert len(history.simulations) == 1
+    assert history.simulations[0].id == record.id
+    assert history.simulations[0].scenario_id == SCENARIO_ID
+
+    detail_response = live_client.get(
+        _history_detail_path(portfolio_id, record.id),
+        headers=account.headers,
+    )
+    assert detail_response.status_code == 200
+    detail = SimulationHistoryDetailResponse.model_validate(
+        detail_response.json()
+    )
+    assert detail.result == result
+
     state_after = _persistence_state(
         session_factory,
         postgres_engine,
         portfolio_id,
     )
-    assert state_after == state_before
+    assert state_after.portfolio == state_before.portfolio
+    assert state_after.holdings == state_before.holdings
+    assert state_after.market_data == state_before.market_data
     assert state_after.analysis_count == 0
-    assert state_after.simulation_count == 0
-    assert "simulation_history" not in state_after.table_names
+    assert state_after.simulation_count == 1
     assert [(row[2], row[4], row[3]) for row in state_after.holdings] == [
         ("CBAAPL", 0, Decimal("0.500000000000000000")),
         ("CBBND", 1, Decimal("0.300000000000000000")),
