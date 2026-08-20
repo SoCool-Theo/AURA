@@ -17,6 +17,7 @@ from backend.app.database import Base, Holding, MarketData, Portfolio, User
 
 EXPECTED_TABLES = {
     "analyses",
+    "simulations",
     "users",
     "portfolios",
     "holdings",

@@ -25,9 +25,11 @@ EXPECTED_TABLES = {
     "holdings",
     "market_data",
     "analyses",
+    "simulations",
 }
 INITIAL_REVISION = "9f4c2a7b1d3e"
 AUTHENTICATION_REVISION = "2b6e5d4a9c81"
+SIMULATION_REVISION = "7c1e2f4a6b90"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -43,6 +45,12 @@ def _initial_revision() -> Script:
 
 def _authentication_revision() -> Script:
     revision = _script_directory().get_revision(AUTHENTICATION_REVISION)
+    assert revision is not None
+    return revision
+
+
+def _simulation_revision() -> Script:
+    revision = _script_directory().get_revision(SIMULATION_REVISION)
     assert revision is not None
     return revision
 
@@ -109,6 +117,25 @@ def _captured_upgrade() -> tuple[
                 name=create_call.args[0],
             )
         )
+
+    simulation_revision = _simulation_revision().module
+    with (
+        patch.object(simulation_revision.op, "create_table") as create_table,
+        patch.object(simulation_revision.op, "create_index") as create_index,
+    ):
+        simulation_revision.upgrade()
+
+    for create_call in create_table.call_args_list:
+        sa.Table(create_call.args[0], metadata, *create_call.args[1:])
+    indexes.extend(
+        (
+            create_call.args[1],
+            create_call.args[0],
+            tuple(create_call.args[2]),
+            create_call.kwargs.get("unique", False),
+        )
+        for create_call in create_index.call_args_list
+    )
     return metadata, indexes
 
 
@@ -163,19 +190,22 @@ def _model_indexes() -> set[tuple[str, str, tuple[str, ...], bool]]:
     }
 
 
-def test_initial_and_authentication_revisions_form_a_single_head() -> None:
+def test_revisions_form_a_single_simulation_head() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
+        SIMULATION_REVISION,
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert script.get_current_head() == AUTHENTICATION_REVISION
-    assert revisions[0].down_revision == INITIAL_REVISION
-    assert revisions[0].module.down_revision == INITIAL_REVISION
-    assert revisions[1].down_revision is None
-    assert revisions[1].module.down_revision is None
+    assert script.get_current_head() == SIMULATION_REVISION
+    assert revisions[0].down_revision == AUTHENTICATION_REVISION
+    assert revisions[0].module.down_revision == AUTHENTICATION_REVISION
+    assert revisions[1].down_revision == INITIAL_REVISION
+    assert revisions[1].module.down_revision == INITIAL_REVISION
+    assert revisions[2].down_revision is None
+    assert revisions[2].module.down_revision is None
     assert all(callable(revision.module.upgrade) for revision in revisions)
     assert all(callable(revision.module.downgrade) for revision in revisions)
 
@@ -253,7 +283,13 @@ def test_migration_table_metadata_matches_existing_base_metadata() -> None:
 def test_uuid_identifiers_have_no_database_generated_defaults() -> None:
     migration_metadata, _ = _captured_upgrade()
 
-    for table_name in ("users", "portfolios", "holdings", "analyses"):
+    for table_name in (
+        "users",
+        "portfolios",
+        "holdings",
+        "analyses",
+        "simulations",
+    ):
         id_column = migration_metadata.tables[table_name].c.id
         assert isinstance(id_column.type, sa.Uuid)
         assert id_column.server_default is None
@@ -329,6 +365,7 @@ def test_postgresql_offline_upgrade_and_downgrade_sql_without_connection(
     for table_name in EXPECTED_TABLES:
         assert f"DROP TABLE {table_name}" in downgrade_sql
     assert "DROP INDEX ix_analyses_portfolio_created_at" in downgrade_sql
+    assert "DROP INDEX ix_simulations_portfolio_created_at" in downgrade_sql
     assert "DROP INDEX ix_market_data_date" in downgrade_sql
     assert "DROP CONSTRAINT ck_users_credentials_complete" in downgrade_sql
     assert "DROP CONSTRAINT uq_users_email" in downgrade_sql

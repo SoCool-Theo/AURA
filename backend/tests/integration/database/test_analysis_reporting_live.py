@@ -50,6 +50,7 @@ from backend.app.database.connection import create_database_engine
 ALEMBIC_CONFIG_PATH = BACKEND_ROOT / "alembic.ini"
 APPLICATION_TABLES = {
     "analyses",
+    "simulations",
     "holdings",
     "market_data",
     "portfolios",
@@ -111,7 +112,7 @@ def _truncate_application_tables(engine: Engine) -> None:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE TABLE analyses, holdings, portfolios, users, "
+                "TRUNCATE TABLE simulations, analyses, holdings, portfolios, users, "
                 "market_data CASCADE"
             )
         )

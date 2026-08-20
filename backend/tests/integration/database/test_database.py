@@ -52,6 +52,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_CONFIG_PATH = BACKEND_ROOT / "alembic.ini"
 APPLICATION_TABLES = {
     "analyses",
+    "simulations",
     "holdings",
     "market_data",
     "portfolios",
@@ -207,7 +208,7 @@ def clean_application_rows(postgres_engine: Engine) -> Iterator[None]:
     with postgres_engine.begin() as connection:
         connection.execute(
             sa.text(
-                "TRUNCATE TABLE analyses, holdings, portfolios, users, "
+                "TRUNCATE TABLE simulations, analyses, holdings, portfolios, users, "
                 "market_data CASCADE"
             )
         )
@@ -300,7 +301,7 @@ def test_live_migration_schema_types_and_revision(
 
     script = ScriptDirectory.from_config(_alembic_config())
     assert migration_revision == script.get_current_head()
-    assert len(list(script.walk_revisions())) == 2
+    assert len(list(script.walk_revisions())) == 3
 
 
 def test_user_credentials_and_legacy_users_persist_together(

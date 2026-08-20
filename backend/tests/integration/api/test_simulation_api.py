@@ -57,6 +57,7 @@ class ApiHarness:
     client: TestClient
     session: MagicMock
     service: MagicMock
+    history_service: MagicMock
     session_factory: MagicMock
 
 
@@ -65,6 +66,7 @@ class AllocationApiHarness:
     client: TestClient
     session: MagicMock
     service: MagicMock
+    history_service: MagicMock
     session_factory: MagicMock
 
 
@@ -74,6 +76,7 @@ class CombinedApiHarness:
     session: MagicMock
     service: MagicMock
     service_type: MagicMock
+    history_service: MagicMock
     session_factory: MagicMock
 
 
@@ -99,6 +102,7 @@ def api_harness() -> Iterator[ApiHarness]:
     session.get.return_value = User(id=OWNER_ID)
     session_factory = MagicMock(return_value=session)
     service = MagicMock(spec=route_module.HistoricalScenarioService)
+    history_service = MagicMock(spec=route_module.SimulationHistoryService)
 
     with (
         patch.object(
@@ -111,12 +115,18 @@ def api_harness() -> Iterator[ApiHarness]:
             "HistoricalScenarioService",
             return_value=service,
         ),
+        patch.object(
+            route_module,
+            "SimulationHistoryService",
+            return_value=history_service,
+        ),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
         yield ApiHarness(
             client=client,
             session=session,
             service=service,
+            history_service=history_service,
             session_factory=session_factory,
         )
 
@@ -127,6 +137,7 @@ def allocation_api_harness() -> Iterator[AllocationApiHarness]:
     session.get.return_value = User(id=OWNER_ID)
     session_factory = MagicMock(return_value=session)
     service = MagicMock(spec=route_module.AllocationSimulationService)
+    history_service = MagicMock(spec=route_module.SimulationHistoryService)
 
     with (
         patch.object(
@@ -139,12 +150,18 @@ def allocation_api_harness() -> Iterator[AllocationApiHarness]:
             "AllocationSimulationService",
             return_value=service,
         ),
+        patch.object(
+            route_module,
+            "SimulationHistoryService",
+            return_value=history_service,
+        ),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
         yield AllocationApiHarness(
             client=client,
             session=session,
             service=service,
+            history_service=history_service,
             session_factory=session_factory,
         )
 
@@ -155,6 +172,7 @@ def combined_api_harness() -> Iterator[CombinedApiHarness]:
     session.get.return_value = User(id=OWNER_ID)
     session_factory = MagicMock(return_value=session)
     service = MagicMock(spec=route_module.CombinedSimulationService)
+    history_service = MagicMock(spec=route_module.SimulationHistoryService)
 
     with (
         patch.object(
@@ -167,6 +185,11 @@ def combined_api_harness() -> Iterator[CombinedApiHarness]:
             "CombinedSimulationService",
             return_value=service,
         ) as service_type,
+        patch.object(
+            route_module,
+            "SimulationHistoryService",
+            return_value=history_service,
+        ),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
         yield CombinedApiHarness(
@@ -174,6 +197,7 @@ def combined_api_harness() -> Iterator[CombinedApiHarness]:
             session=session,
             service=service,
             service_type=service_type,
+            history_service=history_service,
             session_factory=session_factory,
         )
 
@@ -425,6 +449,7 @@ def test_post_rejects_missing_invalid_or_x_user_id_only_authentication(
     }
     assert response.headers["www-authenticate"] == "Bearer"
     api_harness.service.run.assert_not_called()
+    api_harness.history_service.save.assert_not_called()
     api_harness.session.commit.assert_not_called()
 
 
@@ -432,7 +457,15 @@ def test_authenticated_post_passes_validated_identity_portfolio_and_request(
     api_harness: ApiHarness,
 ) -> None:
     expected = _simulation_response()
-    api_harness.service.run.return_value = expected
+    response_before = expected.model_dump(mode="python")
+    events: list[str] = []
+    api_harness.service.run.side_effect = lambda **kwargs: (
+        events.append("simulate") or expected
+    )
+    api_harness.history_service.save.side_effect = lambda **kwargs: (
+        events.append("save") or MagicMock()
+    )
+    api_harness.session.commit.side_effect = lambda: events.append("commit")
 
     response = api_harness.client.post(
         SIMULATION_PATH,
@@ -460,7 +493,19 @@ def test_authenticated_post_passes_validated_identity_portfolio_and_request(
         "2020-03-23",
         "2020-04-30",
     ]
-    api_harness.session.commit.assert_not_called()
+    api_harness.history_service.save.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        simulation_type="historical-scenario",
+        scenario_id="covid-19-shock-2020",
+        requested_start_date=date(2020, 2, 1),
+        requested_end_date=date(2020, 4, 30),
+        response=expected,
+    )
+    assert api_harness.history_service.save.call_args.kwargs["response"] is expected
+    assert expected.model_dump(mode="python") == response_before
+    assert events == ["simulate", "save", "commit"]
+    api_harness.session.commit.assert_called_once_with()
     api_harness.session.flush.assert_not_called()
     api_harness.session.rollback.assert_not_called()
 
@@ -484,6 +529,38 @@ def test_x_user_id_does_not_override_authenticated_bearer_user(
     api_harness.session.get.assert_called_once_with(User, OWNER_ID)
 
 
+@pytest.mark.parametrize("failure_stage", ["history-save", "commit"])
+def test_historical_persistence_and_commit_failures_are_sanitized(
+    api_harness: ApiHarness,
+    failure_stage: str,
+) -> None:
+    api_harness.service.run.return_value = _simulation_response()
+    internal_detail = f"sensitive historical {failure_stage} failure"
+    if failure_stage == "history-save":
+        api_harness.history_service.save.side_effect = RuntimeError(
+            internal_detail
+        )
+    else:
+        api_harness.session.commit.side_effect = RuntimeError(internal_detail)
+
+    response = api_harness.client.post(
+        SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json={"scenario_id": "covid-19-shock-2020"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Unable to run historical scenario"}
+    assert internal_detail not in response.text
+    api_harness.service.run.assert_called_once()
+    api_harness.history_service.save.assert_called_once()
+    if failure_stage == "history-save":
+        api_harness.session.commit.assert_not_called()
+    else:
+        api_harness.session.commit.assert_called_once_with()
+    api_harness.session.rollback.assert_called_once_with()
+
+
 @pytest.mark.parametrize("portfolio_state", ["missing", "wrong-owner"])
 def test_missing_and_wrong_owner_portfolios_are_identical_not_found(
     api_harness: ApiHarness,
@@ -500,6 +577,7 @@ def test_missing_and_wrong_owner_portfolios_are_identical_not_found(
     assert portfolio_state in {"missing", "wrong-owner"}
     assert response.status_code == 404
     assert response.json() == {"detail": "Portfolio not found"}
+    api_harness.history_service.save.assert_not_called()
     api_harness.session.commit.assert_not_called()
     api_harness.session.rollback.assert_called_once_with()
 
@@ -519,6 +597,7 @@ def test_unknown_scenario_maps_to_approved_not_found(
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Historical scenario not found"}
+    api_harness.history_service.save.assert_not_called()
     request = api_harness.service.run.call_args.kwargs["request"]
     assert request.scenario_id == "unknown-scenario"
 
@@ -537,6 +616,7 @@ def test_empty_portfolio_maps_to_unprocessable_detail(
 
     assert response.status_code == 422
     assert response.json() == {"detail": detail}
+    api_harness.history_service.save.assert_not_called()
 
 
 def test_missing_symbols_map_to_unprocessable_with_order_preserved(
@@ -553,6 +633,7 @@ def test_missing_symbols_map_to_unprocessable_with_order_preserved(
 
     assert response.status_code == 422
     assert response.json() == {"detail": detail}
+    api_harness.history_service.save.assert_not_called()
 
 
 def test_insufficient_aligned_history_maps_to_unprocessable(
@@ -569,6 +650,7 @@ def test_insufficient_aligned_history_maps_to_unprocessable(
 
     assert response.status_code == 422
     assert response.json() == {"detail": detail}
+    api_harness.history_service.save.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -593,6 +675,7 @@ def test_unexpected_failure_maps_to_generic_internal_error(
     assert response.status_code == 500
     assert response.json() == {"detail": "Unable to run historical scenario"}
     assert str(failure) not in response.text
+    api_harness.history_service.save.assert_not_called()
     api_harness.session.commit.assert_not_called()
 
 
@@ -633,12 +716,22 @@ def test_malformed_portfolio_uuid_uses_existing_framework_validation(
     api_harness.service.run.assert_not_called()
 
 
-def test_authenticated_allocation_post_is_a_read_only_response_passthrough(
+def test_authenticated_allocation_post_persists_and_preserves_response(
     allocation_api_harness: AllocationApiHarness,
 ) -> None:
     expected = _allocation_simulation_response()
     request_body = _allocation_request_body()
-    allocation_api_harness.service.run.return_value = expected
+    response_before = expected.model_dump(mode="python")
+    events: list[str] = []
+    allocation_api_harness.service.run.side_effect = lambda **kwargs: (
+        events.append("simulate") or expected
+    )
+    allocation_api_harness.history_service.save.side_effect = lambda **kwargs: (
+        events.append("save") or MagicMock()
+    )
+    allocation_api_harness.session.commit.side_effect = lambda: events.append(
+        "commit"
+    )
 
     response = allocation_api_harness.client.post(
         ALLOCATION_SIMULATION_PATH,
@@ -672,7 +765,22 @@ def test_authenticated_allocation_post_is_a_read_only_response_passthrough(
         holding["symbol"]
         for holding in response.json()["modified"]["allocation"]
     ] == ["BETA", "ZERO", "ALPHA"]
-    allocation_api_harness.session.commit.assert_not_called()
+    allocation_api_harness.history_service.save.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        simulation_type="allocation",
+        scenario_id=None,
+        requested_start_date=date(2020, 2, 1),
+        requested_end_date=date(2020, 4, 30),
+        response=expected,
+    )
+    assert (
+        allocation_api_harness.history_service.save.call_args.kwargs["response"]
+        is expected
+    )
+    assert expected.model_dump(mode="python") == response_before
+    assert events == ["simulate", "save", "commit"]
+    allocation_api_harness.session.commit.assert_called_once_with()
     allocation_api_harness.session.flush.assert_not_called()
     allocation_api_harness.session.rollback.assert_not_called()
 
@@ -701,7 +809,46 @@ def test_allocation_post_requires_existing_bearer_authentication(
     }
     assert response.headers["www-authenticate"] == "Bearer"
     allocation_api_harness.service.run.assert_not_called()
+    allocation_api_harness.history_service.save.assert_not_called()
     allocation_api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("failure_stage", ["history-save", "commit"])
+def test_allocation_persistence_and_commit_failures_are_sanitized(
+    allocation_api_harness: AllocationApiHarness,
+    failure_stage: str,
+) -> None:
+    allocation_api_harness.service.run.return_value = (
+        _allocation_simulation_response()
+    )
+    internal_detail = f"sensitive allocation {failure_stage} failure"
+    if failure_stage == "history-save":
+        allocation_api_harness.history_service.save.side_effect = RuntimeError(
+            internal_detail
+        )
+    else:
+        allocation_api_harness.session.commit.side_effect = RuntimeError(
+            internal_detail
+        )
+
+    response = allocation_api_harness.client.post(
+        ALLOCATION_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=_allocation_request_body(),
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Unable to run allocation simulation"
+    }
+    assert internal_detail not in response.text
+    allocation_api_harness.service.run.assert_called_once()
+    allocation_api_harness.history_service.save.assert_called_once()
+    if failure_stage == "history-save":
+        allocation_api_harness.session.commit.assert_not_called()
+    else:
+        allocation_api_harness.session.commit.assert_called_once_with()
+    allocation_api_harness.session.rollback.assert_called_once_with()
 
 
 @pytest.mark.parametrize("portfolio_state", ["missing", "wrong-owner"])
@@ -721,6 +868,7 @@ def test_allocation_missing_and_wrong_owner_are_identical_not_found(
     assert response.status_code == 404
     assert response.json() == {"detail": "Portfolio not found"}
     allocation_api_harness.service.run.assert_called_once()
+    allocation_api_harness.history_service.save.assert_not_called()
     allocation_api_harness.session.commit.assert_not_called()
     allocation_api_harness.session.rollback.assert_called_once_with()
 
@@ -773,6 +921,7 @@ def test_expected_allocation_failures_preserve_detail_as_unprocessable(
     assert response.status_code == 422
     assert response.json() == {"detail": detail}
     allocation_api_harness.service.run.assert_called_once()
+    allocation_api_harness.history_service.save.assert_not_called()
     allocation_api_harness.session.commit.assert_not_called()
 
 
@@ -801,15 +950,26 @@ def test_unexpected_allocation_failure_is_stable_and_private(
     }
     assert str(failure) not in response.text
     allocation_api_harness.service.run.assert_called_once()
+    allocation_api_harness.history_service.save.assert_not_called()
     allocation_api_harness.session.commit.assert_not_called()
 
 
-def test_authenticated_combined_post_is_read_only_response_passthrough(
+def test_authenticated_combined_post_persists_and_preserves_response(
     combined_api_harness: CombinedApiHarness,
 ) -> None:
     expected = _combined_simulation_response()
     request_body = _combined_request_body()
-    combined_api_harness.service.run.return_value = expected
+    response_before = expected.model_dump(mode="python")
+    events: list[str] = []
+    combined_api_harness.service.run.side_effect = lambda **kwargs: (
+        events.append("simulate") or expected
+    )
+    combined_api_harness.history_service.save.side_effect = lambda **kwargs: (
+        events.append("save") or MagicMock()
+    )
+    combined_api_harness.session.commit.side_effect = lambda: events.append(
+        "commit"
+    )
 
     response = combined_api_harness.client.post(
         COMBINED_SIMULATION_PATH,
@@ -849,7 +1009,22 @@ def test_authenticated_combined_post_is_read_only_response_passthrough(
         "comparison"
     ]
     assert response.json()["comparison"]["sharpe_ratio_delta"] is None
-    combined_api_harness.session.commit.assert_not_called()
+    combined_api_harness.history_service.save.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        simulation_type="combined",
+        scenario_id="covid-19-shock-2020",
+        requested_start_date=date(2020, 2, 1),
+        requested_end_date=date(2020, 4, 30),
+        response=expected,
+    )
+    assert (
+        combined_api_harness.history_service.save.call_args.kwargs["response"]
+        is expected
+    )
+    assert expected.model_dump(mode="python") == response_before
+    assert events == ["simulate", "save", "commit"]
+    combined_api_harness.session.commit.assert_called_once_with()
     combined_api_harness.session.flush.assert_not_called()
     combined_api_harness.session.rollback.assert_not_called()
 
@@ -878,7 +1053,44 @@ def test_combined_post_requires_existing_bearer_authentication(
     }
     assert response.headers["www-authenticate"] == "Bearer"
     combined_api_harness.service.run.assert_not_called()
+    combined_api_harness.history_service.save.assert_not_called()
     combined_api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("failure_stage", ["history-save", "commit"])
+def test_combined_persistence_and_commit_failures_are_sanitized(
+    combined_api_harness: CombinedApiHarness,
+    failure_stage: str,
+) -> None:
+    combined_api_harness.service.run.return_value = (
+        _combined_simulation_response()
+    )
+    internal_detail = f"sensitive combined {failure_stage} failure"
+    if failure_stage == "history-save":
+        combined_api_harness.history_service.save.side_effect = RuntimeError(
+            internal_detail
+        )
+    else:
+        combined_api_harness.session.commit.side_effect = RuntimeError(
+            internal_detail
+        )
+
+    response = combined_api_harness.client.post(
+        COMBINED_SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json=_combined_request_body(),
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Unable to run combined simulation"}
+    assert internal_detail not in response.text
+    combined_api_harness.service.run.assert_called_once()
+    combined_api_harness.history_service.save.assert_called_once()
+    if failure_stage == "history-save":
+        combined_api_harness.session.commit.assert_not_called()
+    else:
+        combined_api_harness.session.commit.assert_called_once_with()
+    combined_api_harness.session.rollback.assert_called_once_with()
 
 
 @pytest.mark.parametrize("portfolio_state", ["missing", "wrong-owner"])
@@ -899,6 +1111,7 @@ def test_combined_missing_and_wrong_owner_are_identical_not_found(
     assert response.status_code != 403
     assert response.json() == {"detail": "Portfolio not found"}
     combined_api_harness.service.run.assert_called_once()
+    combined_api_harness.history_service.save.assert_not_called()
     combined_api_harness.session.commit.assert_not_called()
     combined_api_harness.session.rollback.assert_called_once_with()
 
@@ -921,6 +1134,7 @@ def test_combined_unknown_scenario_maps_to_existing_not_found(
     assert response.status_code == 404
     assert response.json() == {"detail": "Historical scenario not found"}
     combined_api_harness.service.run.assert_called_once()
+    combined_api_harness.history_service.save.assert_not_called()
     request = combined_api_harness.service.run.call_args.kwargs["request"]
     assert request.scenario_id == "unknown-scenario"
 
@@ -973,6 +1187,7 @@ def test_combined_expected_failures_preserve_detail_as_unprocessable(
     assert response.status_code == 422
     assert response.json() == {"detail": detail}
     combined_api_harness.service.run.assert_called_once()
+    combined_api_harness.history_service.save.assert_not_called()
     combined_api_harness.session.commit.assert_not_called()
 
 
@@ -1001,6 +1216,7 @@ def test_unexpected_combined_failure_is_stable_and_private(
     }
     assert str(failure) not in response.text
     combined_api_harness.service.run.assert_called_once()
+    combined_api_harness.history_service.save.assert_not_called()
     combined_api_harness.session.commit.assert_not_called()
 
 
@@ -1032,11 +1248,11 @@ def test_malformed_combined_request_uses_framework_validation(
     combined_api_harness.service.run.assert_not_called()
 
 
-def test_route_source_is_read_only_and_has_no_persistence_or_manual_auth() -> None:
+def test_route_source_uses_only_approved_history_and_transaction_boundaries(
+) -> None:
     source = inspect.getsource(route_module)
 
     for forbidden_reference in (
-        "session.commit",
         "session.flush",
         "save_snapshot",
         "AnalysisRepository",
@@ -1049,6 +1265,9 @@ def test_route_source_is_read_only_and_has_no_persistence_or_manual_auth() -> No
         "read_csv",
     ):
         assert forbidden_reference not in source
+
+    assert source.count("SimulationHistoryService(session).save(") == 3
+    assert source.count("session.commit()") == 3
 
 
 def test_new_and_existing_route_surface_remains_registered(
