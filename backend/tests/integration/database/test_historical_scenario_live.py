@@ -48,6 +48,7 @@ from app.scenarios.simulator import (
 from app.schemas.simulation import (
     AllocationSimulationResponse,
     AllocationSimulationResult,
+    CombinedSimulationResponse,
     HistoricalScenarioListResponse,
     HistoricalScenarioResponse,
     HistoricalScenarioSimulationResponse,
@@ -442,12 +443,30 @@ def _allocation_simulation_path(portfolio_id: UUID) -> str:
     return f"/api/portfolios/{portfolio_id}/simulations/allocations"
 
 
+def _combined_simulation_path(portfolio_id: UUID) -> str:
+    return f"/api/portfolios/{portfolio_id}/simulations/combined"
+
+
 def _allocation_request(
     holdings: Sequence[tuple[str, float]],
 ) -> dict[str, object]:
     return {
         "start_date": ALLOCATION_START_DATE.isoformat(),
         "end_date": ALLOCATION_END_DATE.isoformat(),
+        "modified_allocation": [
+            {"symbol": symbol, "weight": weight}
+            for symbol, weight in holdings
+        ],
+    }
+
+
+def _combined_request(
+    holdings: Sequence[tuple[str, float]],
+    *,
+    scenario_id: str = SCENARIO_ID,
+) -> dict[str, object]:
+    return {
+        "scenario_id": scenario_id,
         "modified_allocation": [
             {"symbol": symbol, "weight": weight}
             for symbol, weight in holdings
@@ -1108,6 +1127,371 @@ def test_live_allocation_data_failures_are_unprocessable_and_read_only(
             "prices must contain at least three rows for historical simulation"
         )
     }
+
+    missing_after = _persistence_state(
+        session_factory,
+        postgres_engine,
+        missing_portfolio_id,
+    )
+    insufficient_after = _persistence_state(
+        session_factory,
+        postgres_engine,
+        insufficient_portfolio_id,
+    )
+    assert missing_after == missing_before
+    assert insufficient_after == insufficient_before
+    assert missing_after.analysis_count == 0
+    assert "simulations" not in missing_after.table_names
+    assert "simulation_history" not in missing_after.table_names
+
+
+def test_live_combined_simulation_uses_one_aligned_period_and_is_read_only(
+    live_client: TestClient,
+    session_factory: sessionmaker[Session],
+    postgres_engine: Engine,
+) -> None:
+    account = _register_and_login(
+        live_client,
+        email="combined-live-owner@example.com",
+    )
+    portfolio_id = _create_portfolio(
+        live_client,
+        account=account,
+        name="Combined Live Portfolio",
+        holdings=(
+            ("CBAAPL", 0.5),
+            ("CBBND", 0.3),
+            ("CBGLD", 0.2),
+        ),
+    )
+    _store_market_data(
+        session_factory,
+        (
+            ("CBAAPL", date(2020, 1, 31), 99.0, 900),
+            ("CBAAPL", date(2020, 2, 3), 100.0, 1_003),
+            ("CBAAPL", date(2020, 2, 4), 70.0, 1_004),
+            ("CBAAPL", date(2020, 2, 5), 80.0, 1_005),
+            ("CBAAPL", date(2020, 2, 6), 90.0, 1_006),
+            ("CBAAPL", date(2020, 2, 7), 100.0, 1_007),
+            ("CBAAPL", date(2020, 5, 1), 101.0, 1_501),
+            ("CBBND", date(2020, 1, 31), 100.0, None),
+            ("CBBND", date(2020, 2, 3), 100.0, None),
+            ("CBBND", date(2020, 2, 5), 100.0, None),
+            ("CBBND", date(2020, 2, 6), 100.0, None),
+            ("CBBND", date(2020, 2, 7), 100.0, None),
+            ("CBBND", date(2020, 2, 10), 100.0, None),
+            ("CBBND", date(2020, 5, 1), 100.0, None),
+            ("CBGLD", date(2020, 1, 31), 49.0, 2_031),
+            ("CBGLD", date(2020, 2, 3), 50.0, 2_003),
+            ("CBGLD", date(2020, 2, 5), 52.0, 2_005),
+            ("CBGLD", date(2020, 2, 6), 51.0, 2_006),
+            ("CBGLD", date(2020, 2, 7), 54.0, 2_007),
+            ("CBGLD", date(2020, 5, 1), 55.0, 2_501),
+        ),
+    )
+    state_before = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+    scenario = get_historical_scenario(SCENARIO_ID)
+    assert scenario is not None
+
+    request = _combined_request(
+        (("CBGLD", 0.0), ("CBBND", 1.0), ("CBAAPL", 0.0))
+    )
+    response = live_client.post(
+        _combined_simulation_path(portfolio_id),
+        headers=account.headers,
+        json=request,
+    )
+
+    assert response.status_code == 200
+    assert request == {
+        "scenario_id": SCENARIO_ID,
+        "modified_allocation": [
+            {"symbol": "CBGLD", "weight": 0.0},
+            {"symbol": "CBBND", "weight": 1.0},
+            {"symbol": "CBAAPL", "weight": 0.0},
+        ],
+    }
+    result = CombinedSimulationResponse.model_validate(response.json())
+    assert result.portfolio_id == portfolio_id
+    assert result.portfolio_name == "Combined Live Portfolio"
+    assert result.scenario.id == scenario.id
+    assert result.scenario.display_name == scenario.display_name
+    assert result.scenario.description == scenario.description
+    assert (
+        result.scenario.requested_start_date
+        == scenario.requested_start_date
+    )
+    assert result.scenario.requested_end_date == scenario.requested_end_date
+    assert result.metadata.effective_start_date == COMMON_DATES[0]
+    assert result.metadata.effective_end_date == COMMON_DATES[-1]
+    assert result.metadata.price_observation_count == len(COMMON_DATES)
+    assert result.metadata.return_observation_count == len(COMMON_DATES) - 1
+
+    assert [item.symbol for item in result.original.allocation] == [
+        "CBAAPL",
+        "CBBND",
+        "CBGLD",
+    ]
+    assert [float(item.weight) for item in result.original.allocation] == (
+        pytest.approx([0.5, 0.3, 0.2])
+    )
+    assert [item.symbol for item in result.modified.allocation] == [
+        "CBAAPL",
+        "CBBND",
+        "CBGLD",
+    ]
+    assert [float(item.weight) for item in result.modified.allocation] == (
+        pytest.approx([0.0, 1.0, 0.0])
+    )
+    assert result.modified.allocation[0].weight == 0
+    assert result.modified.allocation[2].weight == 0
+
+    expected_prices = pd.DataFrame(
+        [
+            [100.0, 100.0, 50.0],
+            [80.0, 100.0, 52.0],
+            [90.0, 100.0, 51.0],
+            [100.0, 100.0, 54.0],
+        ],
+        index=pd.DatetimeIndex(COMMON_DATES),
+        columns=("CBAAPL", "CBBND", "CBGLD"),
+        dtype=float,
+    )
+    expected = simulate_allocation_change(
+        expected_prices,
+        {"CBAAPL": 0.5, "CBBND": 0.3, "CBGLD": 0.2},
+        {"CBAAPL": 0.0, "CBBND": 1.0, "CBGLD": 0.0},
+    )
+    _assert_allocation_result_matches(result.original, expected.original)
+    _assert_allocation_result_matches(result.modified, expected.modified)
+    assert result.comparison.normalized_ending_value_delta == pytest.approx(
+        expected.normalized_ending_value_delta
+    )
+    assert result.comparison.cumulative_return_delta == pytest.approx(
+        expected.cumulative_return_delta
+    )
+    assert result.comparison.annualized_volatility_delta == pytest.approx(
+        expected.annualized_volatility_delta
+    )
+    assert expected.sharpe_ratio_delta is None
+    assert result.modified.metrics.sharpe_ratio is None
+    assert result.comparison.sharpe_ratio_delta is None
+    assert result.comparison.maximum_drawdown_delta == pytest.approx(
+        expected.maximum_drawdown_delta
+    )
+    original_dates = [point.date for point in result.original.trajectory]
+    modified_dates = [point.date for point in result.modified.trajectory]
+    assert original_dates == modified_dates == list(COMMON_DATES)
+    assert result.original.trajectory[0].normalized_value == 1.0
+    assert result.modified.trajectory[0].normalized_value == 1.0
+
+    state_after = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+    assert state_after == state_before
+    assert state_after.analysis_count == 0
+    assert "simulations" not in state_after.table_names
+    assert "simulation_history" not in state_after.table_names
+    assert [(row[2], row[4], row[3]) for row in state_after.holdings] == [
+        ("CBAAPL", 0, Decimal("0.500000000000000000")),
+        ("CBBND", 1, Decimal("0.300000000000000000")),
+        ("CBGLD", 2, Decimal("0.200000000000000000")),
+    ]
+    assert len(
+        [row for row in state_after.market_data if row[0] == "CBGLD"]
+    ) == 6
+
+
+def test_live_combined_authentication_and_ownership_are_private(
+    live_client: TestClient,
+    session_factory: sessionmaker[Session],
+    postgres_engine: Engine,
+) -> None:
+    owner = _register_and_login(
+        live_client,
+        email="combined-live-private-owner@example.com",
+    )
+    other_user = _register_and_login(
+        live_client,
+        email="combined-live-private-other@example.com",
+    )
+    portfolio_id = _create_portfolio(
+        live_client,
+        account=owner,
+        name="Combined Private Portfolio",
+        holdings=(("CBPRIVATE", 1.0),),
+    )
+    state_before = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+    request = _combined_request((("CBPRIVATE", 1.0),))
+
+    for headers in (
+        {},
+        {"Authorization": "Bearer not-a-valid-token"},
+        {"X-User-ID": str(owner.id)},
+    ):
+        unauthenticated = live_client.post(
+            _combined_simulation_path(portfolio_id),
+            headers=headers,
+            json=request,
+        )
+        assert unauthenticated.status_code == 401
+        assert unauthenticated.json() == {
+            "detail": "Invalid or missing authentication credentials"
+        }
+
+    wrong_owner = live_client.post(
+        _combined_simulation_path(portfolio_id),
+        headers=other_user.headers,
+        json=request,
+    )
+    assert wrong_owner.status_code == 404
+    assert wrong_owner.json() == {"detail": "Portfolio not found"}
+
+    missing = live_client.post(
+        _combined_simulation_path(uuid4()),
+        headers=other_user.headers,
+        json=request,
+    )
+    assert missing.status_code == wrong_owner.status_code
+    assert missing.json() == wrong_owner.json()
+
+    state_after = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+    assert state_after == state_before
+
+
+def test_live_combined_unknown_scenario_is_not_found_and_read_only(
+    live_client: TestClient,
+    session_factory: sessionmaker[Session],
+    postgres_engine: Engine,
+) -> None:
+    account = _register_and_login(
+        live_client,
+        email="combined-live-unknown-scenario@example.com",
+    )
+    portfolio_id = _create_portfolio(
+        live_client,
+        account=account,
+        name="Combined Unknown Scenario Portfolio",
+        holdings=(("CBUNKNOWN", 1.0),),
+    )
+    state_before = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+
+    response = live_client.post(
+        _combined_simulation_path(portfolio_id),
+        headers=account.headers,
+        json=_combined_request(
+            (("CBUNKNOWN", 1.0),),
+            scenario_id="not-a-real-scenario",
+        ),
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Historical scenario not found"}
+    assert "traceback" not in response.text.casefold()
+    assert "select " not in response.text.casefold()
+    state_after = _persistence_state(
+        session_factory,
+        postgres_engine,
+        portfolio_id,
+    )
+    assert state_after == state_before
+
+
+def test_live_combined_data_failures_are_unprocessable_and_read_only(
+    live_client: TestClient,
+    session_factory: sessionmaker[Session],
+    postgres_engine: Engine,
+) -> None:
+    account = _register_and_login(
+        live_client,
+        email="combined-live-data-errors@example.com",
+    )
+    missing_portfolio_id = _create_portfolio(
+        live_client,
+        account=account,
+        name="Combined Missing Data Portfolio",
+        holdings=(("CBMISSA", 0.5), ("CBMISSZERO", 0.5)),
+    )
+    insufficient_portfolio_id = _create_portfolio(
+        live_client,
+        account=account,
+        name="Combined Insufficient Data Portfolio",
+        holdings=(("CBSHORTA", 0.5), ("CBSHORTB", 0.5)),
+    )
+    _store_market_data(
+        session_factory,
+        (
+            ("CBMISSA", date(2020, 2, 3), 100.0, None),
+            ("CBMISSA", date(2020, 2, 5), 101.0, None),
+            ("CBMISSA", date(2020, 2, 6), 102.0, None),
+            ("CBSHORTA", date(2020, 2, 3), 100.0, None),
+            ("CBSHORTA", date(2020, 2, 4), 101.0, None),
+            ("CBSHORTA", date(2020, 2, 5), 102.0, None),
+            ("CBSHORTB", date(2020, 2, 3), 50.0, None),
+            ("CBSHORTB", date(2020, 2, 5), 51.0, None),
+            ("CBSHORTB", date(2020, 2, 6), 52.0, None),
+        ),
+    )
+    missing_before = _persistence_state(
+        session_factory,
+        postgres_engine,
+        missing_portfolio_id,
+    )
+    insufficient_before = _persistence_state(
+        session_factory,
+        postgres_engine,
+        insufficient_portfolio_id,
+    )
+
+    missing_response = live_client.post(
+        _combined_simulation_path(missing_portfolio_id),
+        headers=account.headers,
+        json=_combined_request(
+            (("CBMISSZERO", 0.0), ("CBMISSA", 1.0))
+        ),
+    )
+    assert missing_response.status_code == 422
+    assert missing_response.json() == {
+        "detail": (
+            "market data is unavailable for requested symbols: CBMISSZERO"
+        )
+    }
+    assert "traceback" not in missing_response.text.casefold()
+    assert "select " not in missing_response.text.casefold()
+
+    insufficient_response = live_client.post(
+        _combined_simulation_path(insufficient_portfolio_id),
+        headers=account.headers,
+        json=_combined_request(
+            (("CBSHORTB", 0.5), ("CBSHORTA", 0.5))
+        ),
+    )
+    assert insufficient_response.status_code == 422
+    assert insufficient_response.json() == {
+        "detail": (
+            "prices must contain at least three rows for historical simulation"
+        )
+    }
+    assert "traceback" not in insufficient_response.text.casefold()
+    assert "select " not in insufficient_response.text.casefold()
 
     missing_after = _persistence_state(
         session_factory,
