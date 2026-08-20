@@ -16,6 +16,10 @@ from app.schemas.simulation import (
     HistoricalScenarioSimulationRequest,
     HistoricalScenarioSimulationResponse,
 )
+from app.schemas.simulation_history import (
+    SimulationHistoryDetailResponse,
+    SimulationHistoryListResponse,
+)
 from app.services.allocation_simulation_service import (
     AllocationSimulationService,
     AllocationSymbolMismatchError,
@@ -26,6 +30,10 @@ from app.services.historical_scenario_service import (
     EmptyPortfolioError,
     HistoricalScenarioNotFoundError,
     HistoricalScenarioService,
+)
+from app.services.simulation_history_service import (
+    SimulationHistoryService,
+    SimulationNotFoundError,
 )
 
 
@@ -60,6 +68,20 @@ def _combined_internal_error() -> HTTPException:
     )
 
 
+def _history_internal_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Unable to retrieve simulation history",
+    )
+
+
+def _history_detail_internal_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Unable to retrieve simulation",
+    )
+
+
 def _portfolio_not_found() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -71,6 +93,13 @@ def _scenario_not_found() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Historical scenario not found",
+    )
+
+
+def _simulation_not_found() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Simulation not found",
     )
 
 
@@ -108,6 +137,58 @@ def list_historical_scenarios() -> HistoricalScenarioListResponse:
             for scenario in HISTORICAL_SCENARIOS
         ]
     )
+
+
+@router.get(
+    "/portfolios/{portfolio_id}/simulations",
+    response_model=SimulationHistoryListResponse,
+    status_code=status.HTTP_200_OK,
+)
+def list_simulation_history(
+    portfolio_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> SimulationHistoryListResponse:
+    """Return immutable simulation metadata for one owned portfolio."""
+    try:
+        history = SimulationHistoryService(session).list_for_portfolio(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+        )
+    except Exception as error:
+        raise _history_internal_error() from error
+
+    if history is None:
+        raise _portfolio_not_found()
+    return history
+
+
+@router.get(
+    "/portfolios/{portfolio_id}/simulations/{simulation_id}",
+    response_model=SimulationHistoryDetailResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_simulation_history(
+    portfolio_id: UUID,
+    simulation_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> SimulationHistoryDetailResponse:
+    """Return one validated immutable simulation for an owned portfolio."""
+    try:
+        simulation = SimulationHistoryService(session).get(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+            simulation_id=simulation_id,
+        )
+    except SimulationNotFoundError as error:
+        raise _simulation_not_found() from error
+    except Exception as error:
+        raise _history_detail_internal_error() from error
+
+    if simulation is None:
+        raise _portfolio_not_found()
+    return simulation
 
 
 @router.post(
