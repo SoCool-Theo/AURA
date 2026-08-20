@@ -162,6 +162,20 @@ class AllocationSimulationRequest(AnalysisPeriod):
         return self
 
 
+class CombinedSimulationRequest(HistoricalScenarioSimulationRequest):
+    """Select one scenario and modified allocation for comparison."""
+
+    modified_allocation: Annotated[
+        list[PortfolioHoldingInput],
+        Field(min_length=1),
+    ]
+
+    @model_validator(mode="after")
+    def validate_modified_allocation(self) -> Self:
+        _validate_portfolio_holdings(self.modified_allocation)
+        return self
+
+
 class AllocationSimulationResult(AuraBaseModel):
     """One ordered allocation and its historical simulation result."""
 
@@ -219,6 +233,43 @@ class AllocationSimulationComparison(AuraBaseModel):
     maximum_drawdown_delta: FiniteFloat
 
 
+def _validate_allocation_response_consistency(
+    *,
+    requested_start_date: date,
+    requested_end_date: date,
+    metadata: HistoricalScenarioSimulationMetadata,
+    original: AllocationSimulationResult,
+    modified: AllocationSimulationResult,
+) -> None:
+    """Validate two allocation results over one requested aligned period."""
+    if (
+        metadata.effective_start_date < requested_start_date
+        or metadata.effective_end_date > requested_end_date
+    ):
+        raise ValueError(
+            "effective dates must fall within the requested period"
+        )
+
+    original_dates = [point.date for point in original.trajectory]
+    modified_dates = [point.date for point in modified.trajectory]
+    if original_dates != modified_dates:
+        raise ValueError(
+            "original and modified trajectory dates must match"
+        )
+    if len(original_dates) != metadata.price_observation_count:
+        raise ValueError(
+            "trajectory length must match price_observation_count"
+        )
+    if original_dates[0] != metadata.effective_start_date:
+        raise ValueError(
+            "first trajectory date must match effective_start_date"
+        )
+    if original_dates[-1] != metadata.effective_end_date:
+        raise ValueError(
+            "last trajectory date must match effective_end_date"
+        )
+
+
 class AllocationSimulationResponse(AnalysisPeriod):
     """Complete comparison for two allocations over one aligned period."""
 
@@ -236,36 +287,41 @@ class AllocationSimulationResponse(AnalysisPeriod):
 
     @model_validator(mode="after")
     def validate_response_consistency(self) -> Self:
-        if (
-            self.metadata.effective_start_date < self.start_date
-            or self.metadata.effective_end_date > self.end_date
-        ):
-            raise ValueError(
-                "effective dates must fall within the requested period"
-            )
+        _validate_allocation_response_consistency(
+            requested_start_date=self.start_date,
+            requested_end_date=self.end_date,
+            metadata=self.metadata,
+            original=self.original,
+            modified=self.modified,
+        )
+        return self
 
-        original_dates = [
-            point.date for point in self.original.trajectory
-        ]
-        modified_dates = [
-            point.date for point in self.modified.trajectory
-        ]
-        if original_dates != modified_dates:
-            raise ValueError(
-                "original and modified trajectory dates must match"
-            )
-        if len(original_dates) != self.metadata.price_observation_count:
-            raise ValueError(
-                "trajectory length must match price_observation_count"
-            )
-        if original_dates[0] != self.metadata.effective_start_date:
-            raise ValueError(
-                "first trajectory date must match effective_start_date"
-            )
-        if original_dates[-1] != self.metadata.effective_end_date:
-            raise ValueError(
-                "last trajectory date must match effective_end_date"
-            )
+
+class CombinedSimulationResponse(AuraBaseModel):
+    """Complete allocation comparison during one predefined scenario."""
+
+    portfolio_id: UUID
+    portfolio_name: StrictString
+    scenario: HistoricalScenarioResponse
+    metadata: HistoricalScenarioSimulationMetadata
+    original: AllocationSimulationResult
+    modified: AllocationSimulationResult
+    comparison: AllocationSimulationComparison
+
+    @field_validator("portfolio_name", mode="before")
+    @classmethod
+    def normalize_portfolio_name(cls, value: object) -> object:
+        return _normalize_display_text(value, field_name="portfolio_name")
+
+    @model_validator(mode="after")
+    def validate_response_consistency(self) -> Self:
+        _validate_allocation_response_consistency(
+            requested_start_date=self.scenario.requested_start_date,
+            requested_end_date=self.scenario.requested_end_date,
+            metadata=self.metadata,
+            original=self.original,
+            modified=self.modified,
+        )
         return self
 
 
@@ -353,4 +409,6 @@ __all__ = [
     "AllocationSimulationResult",
     "AllocationSimulationComparison",
     "AllocationSimulationResponse",
+    "CombinedSimulationRequest",
+    "CombinedSimulationResponse",
 ]

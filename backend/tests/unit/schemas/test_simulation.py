@@ -14,6 +14,8 @@ from backend.app.schemas.simulation import (
     AllocationSimulationRequest,
     AllocationSimulationResponse,
     AllocationSimulationResult,
+    CombinedSimulationRequest,
+    CombinedSimulationResponse,
     HistoricalScenarioListResponse,
     HistoricalScenarioMetrics,
     HistoricalScenarioResponse,
@@ -174,6 +176,28 @@ def _allocation_response_payload() -> dict[str, object]:
     }
 
 
+def _combined_request_payload() -> dict[str, object]:
+    return {
+        "scenario_id": "covid-19-shock-2020",
+        "modified_allocation": _allocation_payload(
+            first_weight=0.3,
+            second_weight=0.7,
+        ),
+    }
+
+
+def _combined_response_payload() -> dict[str, object]:
+    return {
+        "portfolio_id": _PORTFOLIO_ID,
+        "portfolio_name": "Balanced Learning Portfolio",
+        "scenario": _scenario_payload(),
+        "metadata": _metadata_payload(),
+        "original": _allocation_result_payload(),
+        "modified": _allocation_result_payload(modified=True),
+        "comparison": _comparison_payload(),
+    }
+
+
 def test_valid_scenario_response() -> None:
     response = HistoricalScenarioResponse.model_validate(_scenario_payload())
 
@@ -239,6 +263,8 @@ def test_simulation_request_rejects_empty_or_padded_id(
         (AllocationSimulationResult, _allocation_result_payload()),
         (AllocationSimulationComparison, _comparison_payload()),
         (AllocationSimulationResponse, _allocation_response_payload()),
+        (CombinedSimulationRequest, _combined_request_payload()),
+        (CombinedSimulationResponse, _combined_response_payload()),
     ],
 )
 def test_all_simulation_schemas_reject_unknown_fields(
@@ -709,6 +735,256 @@ def test_allocation_response_validation_does_not_mutate_input() -> None:
     assert payload == snapshot
 
 
+def test_valid_combined_request_preserves_scenario_allocation_and_order() -> None:
+    request = CombinedSimulationRequest.model_validate(
+        _combined_request_payload()
+    )
+
+    assert request.scenario_id == "covid-19-shock-2020"
+    assert [holding.symbol for holding in request.modified_allocation] == [
+        "MSFT",
+        "AAPL",
+    ]
+    assert [holding.weight for holding in request.modified_allocation] == [
+        0.3,
+        0.7,
+    ]
+
+
+def test_combined_request_preserves_scenario_id_like_historical_request() -> None:
+    scenario_id = "Unknown-Scenario-ID"
+
+    combined = CombinedSimulationRequest(
+        scenario_id=scenario_id,
+        modified_allocation=_allocation_payload(),
+    )
+    historical = HistoricalScenarioSimulationRequest(
+        scenario_id=scenario_id
+    )
+
+    assert combined.scenario_id == historical.scenario_id == scenario_id
+
+
+@pytest.mark.parametrize(
+    "scenario_id",
+    ["", " ", "\t", " covid-19-shock-2020", "covid-19-shock-2020 "],
+)
+def test_combined_request_reuses_historical_scenario_id_rejection(
+    scenario_id: str,
+) -> None:
+    payload = _combined_request_payload()
+    payload["scenario_id"] = scenario_id
+
+    with pytest.raises(ValidationError) as combined_error:
+        CombinedSimulationRequest.model_validate(payload)
+    with pytest.raises(ValidationError) as historical_error:
+        HistoricalScenarioSimulationRequest(scenario_id=scenario_id)
+
+    assert combined_error.value.errors()[0]["msg"] == (
+        historical_error.value.errors()[0]["msg"]
+    )
+
+
+def test_combined_request_normalizes_symbols_without_reordering() -> None:
+    payload = _combined_request_payload()
+    payload["modified_allocation"] = [
+        {"symbol": " msft ", "weight": 0.3},
+        {"symbol": "aapl", "weight": 0.7},
+    ]
+
+    request = CombinedSimulationRequest.model_validate(payload)
+
+    assert [holding.symbol for holding in request.modified_allocation] == [
+        "MSFT",
+        "AAPL",
+    ]
+
+
+def test_combined_request_rejects_duplicate_normalized_symbols() -> None:
+    payload = _combined_request_payload()
+    payload["modified_allocation"] = [
+        {"symbol": " aapl ", "weight": 0.5},
+        {"symbol": "AAPL", "weight": 0.5},
+    ]
+
+    with pytest.raises(ValidationError, match="unique after normalization"):
+        CombinedSimulationRequest.model_validate(payload)
+
+
+@pytest.mark.parametrize("invalid_weight", [-0.01, 1.01])
+def test_combined_request_rejects_out_of_range_weights(
+    invalid_weight: float,
+) -> None:
+    payload = _combined_request_payload()
+    payload["modified_allocation"] = [
+        {"symbol": "MSFT", "weight": invalid_weight},
+        {"symbol": "AAPL", "weight": 1.0},
+    ]
+
+    with pytest.raises(ValidationError):
+        CombinedSimulationRequest.model_validate(payload)
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+def test_combined_request_rejects_nonfinite_weights(bad_value: float) -> None:
+    payload = _combined_request_payload()
+    payload["modified_allocation"] = [
+        {"symbol": "MSFT", "weight": bad_value},
+        {"symbol": "AAPL", "weight": 0.0},
+    ]
+
+    with pytest.raises(ValidationError):
+        CombinedSimulationRequest.model_validate(payload)
+
+
+def test_combined_request_rejects_total_outside_existing_tolerance() -> None:
+    payload = _combined_request_payload()
+    payload["modified_allocation"] = _allocation_payload(
+        first_weight=0.5,
+        second_weight=0.499999998,
+    )
+
+    with pytest.raises(ValidationError, match="absolute tolerance of 1e-9"):
+        CombinedSimulationRequest.model_validate(payload)
+
+
+def test_combined_request_accepts_zero_weight_holdings() -> None:
+    payload = _combined_request_payload()
+    payload["modified_allocation"] = _allocation_payload(
+        first_weight=0.0,
+        second_weight=1.0,
+    )
+
+    request = CombinedSimulationRequest.model_validate(payload)
+
+    assert [holding.weight for holding in request.modified_allocation] == [
+        0.0,
+        1.0,
+    ]
+
+
+def test_combined_request_does_not_mutate_caller_input() -> None:
+    payload = _combined_request_payload()
+    allocation = payload["modified_allocation"]
+    assert isinstance(allocation, list)
+    snapshot = deepcopy(payload)
+    allocation_identity = id(allocation)
+
+    CombinedSimulationRequest.model_validate(payload)
+
+    assert payload == snapshot
+    assert id(payload["modified_allocation"]) == allocation_identity
+
+
+def test_valid_combined_response_reuses_existing_nested_contracts() -> None:
+    response = CombinedSimulationResponse.model_validate(
+        _combined_response_payload()
+    )
+
+    assert response.portfolio_id == UUID(_PORTFOLIO_ID)
+    assert isinstance(response.scenario, HistoricalScenarioResponse)
+    assert isinstance(response.metadata, HistoricalScenarioSimulationMetadata)
+    assert isinstance(response.original, AllocationSimulationResult)
+    assert isinstance(response.modified, AllocationSimulationResult)
+    assert isinstance(response.comparison, AllocationSimulationComparison)
+    assert list(response.model_dump()) == [
+        "portfolio_id",
+        "portfolio_name",
+        "scenario",
+        "metadata",
+        "original",
+        "modified",
+        "comparison",
+    ]
+
+
+def test_combined_response_keeps_requested_and_effective_dates_separate() -> None:
+    response = CombinedSimulationResponse.model_validate(
+        _combined_response_payload()
+    )
+
+    assert response.scenario.requested_start_date == date(2020, 2, 1)
+    assert response.scenario.requested_end_date == date(2020, 4, 30)
+    assert response.metadata.effective_start_date == date(2020, 2, 3)
+    assert response.metadata.effective_end_date == date(2020, 4, 30)
+
+
+def test_combined_response_preserves_nullable_sharpe_and_signed_drawdown() -> None:
+    payload = _combined_response_payload()
+    modified = payload["modified"]
+    assert isinstance(modified, dict)
+    metrics = modified["metrics"]
+    assert isinstance(metrics, dict)
+    metrics["sharpe_ratio"] = None
+
+    response = CombinedSimulationResponse.model_validate(payload)
+
+    assert response.original.metrics.sharpe_ratio is None
+    assert response.modified.metrics.sharpe_ratio is None
+    assert response.original.metrics.maximum_drawdown.max_drawdown == -0.25
+    assert response.modified.metrics.maximum_drawdown.max_drawdown == -0.1
+    assert response.comparison.sharpe_ratio_delta is None
+    dumped = json.loads(response.model_dump_json())
+    assert dumped["original"]["metrics"]["sharpe_ratio"] is None
+    assert dumped["comparison"]["sharpe_ratio_delta"] is None
+
+
+def test_combined_response_rejects_different_trajectory_dates() -> None:
+    payload = _combined_response_payload()
+    modified = payload["modified"]
+    assert isinstance(modified, dict)
+    trajectory = modified["trajectory"]
+    assert isinstance(trajectory, list)
+    trajectory[1]["date"] = "2020-03-03"
+
+    with pytest.raises(ValidationError, match="trajectory dates must match"):
+        CombinedSimulationResponse.model_validate(payload)
+
+
+def test_combined_response_rejects_effective_dates_outside_scenario() -> None:
+    payload = _combined_response_payload()
+    scenario = payload["scenario"]
+    assert isinstance(scenario, dict)
+    scenario["requested_start_date"] = "2020-02-04"
+
+    with pytest.raises(ValidationError, match="effective dates"):
+        CombinedSimulationResponse.model_validate(payload)
+
+
+def test_combined_response_validation_does_not_mutate_input() -> None:
+    payload = _combined_response_payload()
+    snapshot = deepcopy(payload)
+
+    CombinedSimulationResponse.model_validate(payload)
+
+    assert payload == snapshot
+
+
+def test_shared_consistency_helper_preserves_allocation_response_behavior() -> None:
+    valid = AllocationSimulationResponse.model_validate(
+        _allocation_response_payload()
+    )
+    invalid = _allocation_response_payload()
+    invalid["start_date"] = "2020-02-04"
+
+    assert valid.metadata.effective_start_date == date(2020, 2, 3)
+    with pytest.raises(
+        ValidationError,
+        match="effective dates must fall within the requested period",
+    ):
+        AllocationSimulationResponse.model_validate(invalid)
+
+
+def test_combined_schema_addition_preserves_historical_response_behavior() -> None:
+    response = HistoricalScenarioSimulationResponse.model_validate(
+        _response_payload()
+    )
+
+    assert response.scenario.requested_start_date == date(2020, 2, 1)
+    assert response.metrics.maximum_drawdown.max_drawdown == -0.25
+    assert response.metrics.sharpe_ratio is None
+
+
 def test_direct_simulation_module_exports_are_importable() -> None:
     expected_names = [
         "HistoricalScenarioResponse",
@@ -722,6 +998,8 @@ def test_direct_simulation_module_exports_are_importable() -> None:
         "AllocationSimulationResult",
         "AllocationSimulationComparison",
         "AllocationSimulationResponse",
+        "CombinedSimulationRequest",
+        "CombinedSimulationResponse",
     ]
 
     assert simulation_module.__all__ == expected_names
