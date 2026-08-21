@@ -59,6 +59,35 @@ HISTORICAL_SCENARIOS: tuple[HistoricalScenarioDefinition, ...] = (
         requested_start_date=date(2022, 1, 1),
         requested_end_date=date(2022, 12, 31),
     ),
+    HistoricalScenarioDefinition(
+        id="dot-com-bust-2000-2002",
+        display_name="Dot-Com Bust",
+        description=(
+            "A prolonged technology-led market decline following the "
+            "dot-com bubble."
+        ),
+        requested_start_date=date(2000, 3, 10),
+        requested_end_date=date(2002, 10, 9),
+    ),
+    HistoricalScenarioDefinition(
+        id="global-financial-crisis-2007-2009",
+        display_name="Global Financial Crisis",
+        description=(
+            "A severe global market downturn during the 2007–2009 "
+            "financial crisis."
+        ),
+        requested_start_date=date(2007, 10, 9),
+        requested_end_date=date(2009, 3, 9),
+    ),
+    HistoricalScenarioDefinition(
+        id="q4-market-selloff-2018",
+        display_name="Q4 2018 Market Selloff",
+        description=(
+            "A sharp late-2018 market selloff marked by elevated volatility."
+        ),
+        requested_start_date=date(2018, 10, 1),
+        requested_end_date=date(2018, 12, 31),
+    ),
 )
 
 

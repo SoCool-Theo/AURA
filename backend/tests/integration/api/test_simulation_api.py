@@ -384,14 +384,23 @@ def test_public_catalogue_requires_no_authentication_database_or_service(
     assert [scenario.id for scenario in catalogue.scenarios] == [
         "covid-19-shock-2020",
         "inflation-rate-shock-2022",
+        "dot-com-bust-2000-2002",
+        "global-financial-crisis-2007-2009",
+        "q4-market-selloff-2018",
     ]
     assert [scenario.requested_start_date for scenario in catalogue.scenarios] == [
         date(2020, 2, 1),
         date(2022, 1, 1),
+        date(2000, 3, 10),
+        date(2007, 10, 9),
+        date(2018, 10, 1),
     ]
     assert [scenario.requested_end_date for scenario in catalogue.scenarios] == [
         date(2020, 4, 30),
         date(2022, 12, 31),
+        date(2002, 10, 9),
+        date(2009, 3, 9),
+        date(2018, 12, 31),
     ]
     api_harness.session_factory.assert_not_called()
     api_harness.service.run.assert_not_called()
@@ -406,7 +415,7 @@ def test_public_catalogue_order_is_deterministic() -> None:
 
     assert first.status_code == second.status_code == 200
     assert first.json() == second.json()
-    assert len(first.json()["scenarios"]) == 2
+    assert len(first.json()["scenarios"]) == 5
 
 
 def test_public_catalogue_ignores_invalid_or_x_user_id_authentication(
