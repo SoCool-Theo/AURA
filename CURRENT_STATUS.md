@@ -673,8 +673,9 @@ coupling is protected by regression tests and is not a public API.
   database access.
 - `POST /api/portfolios/{portfolio_id}/simulations/historical-scenarios` is
   Bearer authenticated and runs the selected scenario against the authenticated
-  user's owned saved portfolio. It is computation-only and read-only despite
-  using POST, and it does not save simulation history.
+  user's owned saved portfolio. At this workstream's completion, it was
+  computation-only and did not save simulation history; successful results are
+  now persisted by the completed Simulation History workstream below.
 - Missing/wrong-owner portfolios return `404 Portfolio not found`; unknown
   scenarios return `404 Historical scenario not found`; expected missing or
   insufficient historical data returns `422`; invalid or missing Bearer
@@ -686,8 +687,9 @@ coupling is protected by regression tests and is not a public API.
 
 This workstream added no Simulation ORM model, Simulation repository, Alembic
 migration, database schema change, JSONB simulation snapshot,
-simulation-history persistence, or dependency change. Simulation history is a
-separate later workstream.
+simulation-history persistence, or dependency change. At this workstream's
+completion, Simulation History was a separate later workstream; it has since
+been completed as documented below.
 
 Aura currently supports only the two predefined scenarios above. The planned
 `feat/backend-market-data-historical-backfill` workstream may extend verified
@@ -802,16 +804,17 @@ session, persist a simulation, or persist an Analysis snapshot.
 - Unexpected failures return the stable
   `500 Unable to run allocation simulation` response without exposing internal
   exception details.
-- The POST is computation-only and creates no simulation history.
+- At this workstream's completion, the POST was computation-only and created no
+  simulation history; successful results are now persisted by the completed
+  Simulation History workstream below.
 
 ### Persistence, dependencies, and deferred boundaries
 
 This workstream added no Simulation ORM model, Simulation repository, Alembic
 migration, simulation snapshot/history persistence, or dependency change.
-Combined Simulation was completed later as a separate workstream. Simulation
-history remains separate and unfinished. Historical backfill and the dependent
-scenario-catalog expansion also remain deferred and were not prerequisites for
-Allocation Simulation.
+Combined Simulation and Simulation History were completed later as separate
+workstreams. Historical backfill and the dependent scenario-catalog expansion
+remain future work and were not prerequisites for Allocation Simulation.
 
 ### Final verification
 
@@ -900,11 +903,12 @@ Bearer authentication boundary and returns:
 
 ### Read-only persistence and dependency boundary
 
-Combined Simulation is computation-only and read-only. It added no Simulation
-ORM model, Simulation repository, Alembic migration, database schema change,
-simulation-history persistence, Analysis snapshot persistence, or new
-dependency. Its service does not commit, roll back, or close the caller-owned
-session. Simulation history remains a separate unfinished workstream.
+At this workstream's completion, Combined Simulation was computation-only and
+added no Simulation ORM model, Simulation repository, Alembic migration,
+database schema change, simulation-history persistence, Analysis snapshot
+persistence, or new dependency. Its calculation service still does not commit,
+roll back, or close the caller-owned session. Successful results are now
+persisted by the completed Simulation History workstream below.
 
 ### Final verification
 
@@ -925,6 +929,66 @@ session. Simulation history remains a separate unfinished workstream.
 - Existing warning: one non-blocking Starlette TestClient/httpx deprecation
   warning; it is not a Combined Simulation defect
 
+## Backend Simulation History
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-simulation-history`
+
+### Completed purpose and persistence behavior
+
+Simulation History saves and retrieves immutable results from Aura's three
+completed simulation modes: Historical Scenario, Allocation Simulation, and
+Combined Simulation.
+
+- Successful Historical Scenario simulations are persisted.
+- Successful Allocation simulations are persisted.
+- Successful Combined simulations are persisted.
+- Every successful run creates an independent history record; repeated
+  identical simulations are not deduplicated.
+- Results are stored as versioned JSONB snapshots and revalidated through the
+  correct existing simulation response schema when retrieved.
+- Added Simulation ORM persistence, one reversible Alembic migration,
+  `SimulationRepository`, and `SimulationHistoryService`.
+- History belongs to its portfolio through `portfolio_id`, and portfolio
+  deletion cascades its associated Simulation records.
+- History is immutable and ordered deterministically newest-first by
+  `created_at DESC`, then `id ASC`.
+
+### Completed HTTP surface
+
+- `GET /api/portfolios/{portfolio_id}/simulations` returns the authenticated
+  owner's ordered history summaries.
+- `GET /api/portfolios/{portfolio_id}/simulations/{simulation_id}` returns one
+  authenticated, owner-scoped, schema-revalidated saved result.
+- The existing Historical Scenario, Allocation Simulation, and Combined
+  Simulation POSTs now persist successful results without changing their
+  calculation contracts or validated HTTP response structures.
+
+### Transaction, authentication, and privacy boundaries
+
+- A successful simulation POST saves history and commits exactly once at the
+  API/request boundary. Repositories and services do not commit, roll back, or
+  close caller-owned sessions.
+- History GET endpoints remain read-only. Failed simulations create no
+  committed history, and request-session rollback and cleanup remain owned by
+  the existing database dependency.
+- Bearer authentication remains required; `X-User-ID` is not authentication.
+- Missing and wrong-owner portfolios return `404 Portfolio not found`.
+  Missing or wrong-associated simulations return `404 Simulation not found`;
+  private ownership is not exposed through `403`.
+
+### Final verification
+
+- Full backend suite: 2,029 passed, 0 failed, 0 errors, 0 skipped
+- Live PostgreSQL and migration verification: passed
+- Historical Scenario, Allocation, and Combined persistence flows: verified
+- API, privacy, transaction, and analytics regression verification: passed
+- Manual analytics engine, Python compilation, application/import, public
+  health, OpenAPI, dependency consistency, and Git diff/whitespace/scope
+  checks: passed
+- Existing warning: one non-blocking Starlette/httpx TestClient deprecation
+  warning
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -939,10 +1003,11 @@ cause test failures.
 
 ### Recommended next workstream
 
-- Begin `feat/backend-simulation-history` as the next backend simulation
-  workstream. Historical Scenario, Allocation Change, and Combined Simulation
-  are completed, and its simulator, schema, and database prerequisites are now
-  available in `develop`.
+- Begin the planned, unimplemented
+  `feat/backend-market-data-historical-backfill` workstream. Its purpose is to
+  extend verified historical market-data coverage farther back toward
+  approximately year 2000 where provider and asset history permit; this does
+  not imply that every Aura asset has data back to 2000.
 
 ### Other ready follow-on work
 
@@ -952,14 +1017,10 @@ cause test failures.
 
 ### Still deferred or dependency-blocked
 
-- `feat/backend-market-data-historical-backfill` is planned/deferred to extend
-  verified historical market-data coverage toward year 2000 where supported;
-  it does not change simulator formulas or imply that all assets have data back
-  to 2000.
 - `feat/backend-historical-scenario-catalog` is planned/deferred after the
-  historical backfill. It may expand the educational event catalogue without
-  changing the completed simulator; the detailed event reference and exact
-  event list remain future work.
+  historical backfill is successfully verified. It may then expand the
+  educational event catalogue without changing the completed simulator; the
+  detailed event reference and exact event list remain future work.
 - Automatic market-data scheduling remains a separate deferred workstream.
 - AI behavior/persistence, full backend API integration, frontend/mobile
   integration, and deployment remain unfinished.
