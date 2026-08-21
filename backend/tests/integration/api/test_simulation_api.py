@@ -245,6 +245,37 @@ def _simulation_response() -> HistoricalScenarioSimulationResponse:
     )
 
 
+def _q4_simulation_response() -> HistoricalScenarioSimulationResponse:
+    payload = _simulation_response().model_dump(mode="python")
+    payload["scenario"] = {
+        "id": "q4-market-selloff-2018",
+        "display_name": "Q4 2018 Market Selloff",
+        "description": (
+            "A sharp late-2018 market selloff marked by elevated volatility."
+        ),
+        "requested_start_date": date(2018, 10, 1),
+        "requested_end_date": date(2018, 12, 31),
+    }
+    payload["metadata"] = {
+        "effective_start_date": date(2018, 10, 1),
+        "effective_end_date": date(2018, 12, 31),
+        "price_observation_count": 4,
+        "return_observation_count": 3,
+    }
+    payload["metrics"]["maximum_drawdown"] = {
+        "max_drawdown": -0.25,
+        "peak_date": date(2018, 10, 1),
+        "trough_date": date(2018, 12, 24),
+    }
+    payload["trajectory"] = [
+        {"date": date(2018, 10, 1), "normalized_value": 1.0},
+        {"date": date(2018, 11, 1), "normalized_value": 0.8},
+        {"date": date(2018, 12, 24), "normalized_value": 0.75},
+        {"date": date(2018, 12, 31), "normalized_value": 0.95},
+    ]
+    return HistoricalScenarioSimulationResponse.model_validate(payload)
+
+
 def _allocation_request_body() -> dict[str, object]:
     return {
         "start_date": "2020-02-01",
@@ -402,6 +433,30 @@ def test_public_catalogue_requires_no_authentication_database_or_service(
         date(2009, 3, 9),
         date(2018, 12, 31),
     ]
+    assert [
+        scenario.model_dump() for scenario in catalogue.scenarios[:2]
+    ] == [
+        {
+            "id": "covid-19-shock-2020",
+            "display_name": "COVID-19 Market Shock",
+            "description": (
+                "A sharp market shock and early recovery period during the "
+                "COVID-19 disruption."
+            ),
+            "requested_start_date": date(2020, 2, 1),
+            "requested_end_date": date(2020, 4, 30),
+        },
+        {
+            "id": "inflation-rate-shock-2022",
+            "display_name": "2022 Inflation and Rate Shock",
+            "description": (
+                "An extended cross-asset stress period associated with "
+                "inflation and rising interest rates."
+            ),
+            "requested_start_date": date(2022, 1, 1),
+            "requested_end_date": date(2022, 12, 31),
+        },
+    ]
     api_harness.session_factory.assert_not_called()
     api_harness.service.run.assert_not_called()
     api_harness.session.commit.assert_not_called()
@@ -516,6 +571,55 @@ def test_authenticated_post_passes_validated_identity_portfolio_and_request(
     assert events == ["simulate", "save", "commit"]
     api_harness.session.commit.assert_called_once_with()
     api_harness.session.flush.assert_not_called()
+    api_harness.session.rollback.assert_not_called()
+
+
+def test_authenticated_post_accepts_new_q4_scenario_and_persists_response(
+    api_harness: ApiHarness,
+) -> None:
+    expected = _q4_simulation_response()
+    response_before = expected.model_dump(mode="python")
+    events: list[str] = []
+    api_harness.service.run.side_effect = lambda **kwargs: (
+        events.append("simulate") or expected
+    )
+    api_harness.history_service.save.side_effect = lambda **kwargs: (
+        events.append("save") or MagicMock()
+    )
+    api_harness.session.commit.side_effect = lambda: events.append("commit")
+
+    response = api_harness.client.post(
+        SIMULATION_PATH,
+        headers=REQUEST_HEADERS,
+        json={"scenario_id": "q4-market-selloff-2018"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == expected.model_dump(mode="json")
+    assert (
+        HistoricalScenarioSimulationResponse.model_validate(response.json())
+        == expected
+    )
+    api_harness.service.run.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        request=HistoricalScenarioSimulationRequest(
+            scenario_id="q4-market-selloff-2018"
+        ),
+    )
+    api_harness.history_service.save.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        simulation_type="historical-scenario",
+        scenario_id="q4-market-selloff-2018",
+        requested_start_date=date(2018, 10, 1),
+        requested_end_date=date(2018, 12, 31),
+        response=expected,
+    )
+    assert api_harness.history_service.save.call_args.kwargs["response"] is expected
+    assert expected.model_dump(mode="python") == response_before
+    assert events == ["simulate", "save", "commit"]
+    api_harness.session.commit.assert_called_once_with()
     api_harness.session.rollback.assert_not_called()
 
 
