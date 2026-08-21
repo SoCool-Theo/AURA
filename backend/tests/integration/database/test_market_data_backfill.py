@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 from alembic import command
 from alembic.config import Config
@@ -23,6 +24,8 @@ from backend.app.services.market_data_backfill_service import (
     MarketDataBackfillService,
 )
 from backend.app.services.market_data_service import MarketDataService
+import backend.scripts.backfill_historical_market_data as backfill_script
+import app.services.market_data_backfill_service as backfill_service_module
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
@@ -428,3 +431,129 @@ def test_caller_rollback_removes_successful_backfill(
         )
 
     assert count == 0
+
+
+def test_cli_caller_commits_successful_backfill(
+    postgres_engine: Engine,
+    session_factory: sessionmaker[Session],
+) -> None:
+    raw_data = _raw_data(
+        [
+            ("P4COMMIT", "2000-01-03", 10.0, 100, "phase-4-cli"),
+            ("P4COMMIT", "2000-01-04", 11.0, 101, "phase-4-cli"),
+        ]
+    )
+    with (
+        patch.object(
+            backfill_service_module,
+            "fetch_historical_prices",
+            return_value=raw_data,
+        ),
+        patch.object(
+            backfill_script,
+            "create_database_engine",
+            return_value=postgres_engine,
+        ),
+    ):
+        result = backfill_script.backfill_historical_market_data(
+            symbols=["P4COMMIT"],
+            start_date="2000-01-01",
+            end_date="2000-01-31",
+        )
+
+    assert result.stored_count == 2
+    with session_factory() as session:
+        rows = list(
+            session.scalars(
+                select(MarketData)
+                .where(MarketData.symbol == "P4COMMIT")
+                .order_by(MarketData.date)
+            ).all()
+        )
+    assert [row.date for row in rows] == [
+        date(2000, 1, 3),
+        date(2000, 1, 4),
+    ]
+
+
+def test_cli_failed_workflow_commits_no_rows(
+    postgres_engine: Engine,
+    session_factory: sessionmaker[Session],
+) -> None:
+    raw_data = _raw_data(
+        [("P4VALID", "2001-01-03", 20.0, 200, "phase-4-cli")]
+    )
+    raw_data.attrs["failed_symbols"] = ("P4FAILED",)
+    with (
+        patch.object(
+            backfill_service_module,
+            "fetch_historical_prices",
+            return_value=raw_data,
+        ),
+        patch.object(
+            backfill_script,
+            "create_database_engine",
+            return_value=postgres_engine,
+        ),
+    ):
+        with pytest.raises(ValueError, match="P4FAILED"):
+            backfill_script.backfill_historical_market_data(
+                symbols=["P4VALID", "P4FAILED"],
+                start_date="2001-01-01",
+                end_date="2001-01-31",
+            )
+
+    with session_factory() as session:
+        count = session.scalar(
+            select(sa.func.count()).select_from(MarketData).where(
+                MarketData.symbol.in_(["P4VALID", "P4FAILED"])
+            )
+        )
+    assert count == 0
+
+
+def test_cli_backfill_preserves_existing_newer_row(
+    postgres_engine: Engine,
+    session_factory: sessionmaker[Session],
+) -> None:
+    newer = _canonical_data(
+        [("P4OLDER", "2026-01-05", 105.0, 1_005, "existing")]
+    )
+    with session_factory() as session:
+        MarketDataService(session).store(newer)
+        session.commit()
+
+    raw_data = _raw_data(
+        [("P4OLDER", "2002-01-03", 30.0, 300, "phase-4-cli")]
+    )
+    with (
+        patch.object(
+            backfill_service_module,
+            "fetch_historical_prices",
+            return_value=raw_data,
+        ),
+        patch.object(
+            backfill_script,
+            "create_database_engine",
+            return_value=postgres_engine,
+        ),
+    ):
+        backfill_script.backfill_historical_market_data(
+            symbols=["P4OLDER"],
+            start_date="2002-01-01",
+            end_date="2002-01-31",
+        )
+
+    with session_factory() as session:
+        rows = list(
+            session.scalars(
+                select(MarketData)
+                .where(MarketData.symbol == "P4OLDER")
+                .order_by(MarketData.date)
+            ).all()
+        )
+    assert [row.date for row in rows] == [
+        date(2002, 1, 3),
+        date(2026, 1, 5),
+    ]
+    assert rows[-1].source == "existing"
