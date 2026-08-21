@@ -691,13 +691,13 @@ simulation-history persistence, or dependency change. At this workstream's
 completion, Simulation History was a separate later workstream; it has since
 been completed as documented below.
 
-Aura currently supports only the two predefined scenarios above. The planned
-`feat/backend-market-data-historical-backfill` workstream may extend verified
-historical coverage toward year 2000 where asset data permits. The later
-`feat/backend-historical-scenario-catalog` workstream depends on that verified
-coverage and may expand the educational event catalogue. Neither workstream was
-part of this completed branch, and neither was required by the completed
-Allocation Simulator.
+Aura currently supports only the two predefined scenarios above. The completed
+`feat/backend-market-data-historical-backfill` workstream extended verified
+historical coverage toward year 2000 where provider and asset history permit.
+The unimplemented `feat/backend-historical-scenario-catalog` workstream may now
+expand the educational event catalogue. Neither expansion was part of this
+completed branch, and neither was required by the completed Allocation
+Simulator.
 
 ### Final verification
 
@@ -812,9 +812,10 @@ session, persist a simulation, or persist an Analysis snapshot.
 
 This workstream added no Simulation ORM model, Simulation repository, Alembic
 migration, simulation snapshot/history persistence, or dependency change.
-Combined Simulation and Simulation History were completed later as separate
-workstreams. Historical backfill and the dependent scenario-catalog expansion
-remain future work and were not prerequisites for Allocation Simulation.
+Combined Simulation, Simulation History, and Historical Market-Data Backfill
+were completed later as separate workstreams. The dependent scenario-catalog
+expansion remains future work and was not a prerequisite for Allocation
+Simulation.
 
 ### Final verification
 
@@ -989,6 +990,62 @@ Combined Simulation.
 - Existing warning: one non-blocking Starlette/httpx TestClient deprecation
   warning
 
+## Historical Market-Data Backfill
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-market-data-historical-backfill`
+
+### Completed scope and production behavior
+
+- Added a pure historical-coverage audit helper with deterministic per-symbol
+  coverage reporting and complete requested-symbol accounting.
+- Added `MarketDataBackfillService` and a dedicated manual PostgreSQL
+  historical-backfill CLI.
+- Enforced the strict production sequence: fetch, clean, validate, complete
+  historical coverage audit, then PostgreSQL persistence. Unresolved requested
+  symbols block all persistence instead of producing silent partial success.
+- Reused the existing `MarketDataService`, 1,000-row batching, and
+  `(symbol, date)` PostgreSQL upsert identity.
+- Preserved caller-owned service and repository transactions. The manual CLI
+  commits exactly once after a successful complete workflow.
+- Verified safe reruns without duplicate identities and preservation of
+  existing or newer market-data rows.
+- Kept the backfill independent from canonical raw and processed CSV
+  replacement.
+
+### Historical-data integrity boundary
+
+The completed backfill reports observed provider coverage without fabricating
+prices, forward-filling, backward-filling, interpolating missing history,
+synthesizing pre-history, silently removing unresolved assets, or treating an
+observed first provider date as a guaranteed asset inception date. Symbols may
+legitimately have different available historical ranges.
+
+### Real Yahoo Finance verification
+
+A controlled run for `2000-01-01` through `2026-08-21` requested all 17 Aura
+symbols and resolved all 17. It processed and upserted 95,488 rows representing
+95,488 unique requested-range `(symbol, date)` identities, with 0 duplicate
+identity groups, 0 unresolved symbols, and 25,884 observations earlier than
+2010.
+
+An identical rerun retained the same identity count, and an existing newer
+AAPL sentinel row survived. The canonical raw and processed CSV files remained
+unchanged. Observed first provider dates varied by symbol; these boundaries are
+evidence from that run only and may change with Yahoo Finance availability and
+coverage.
+
+### Final verification
+
+- Full backend suite: 2,079 passed, 0 failed, 0 errors, 0 skipped
+- Historical-backfill helper, service, CLI, and data-pipeline regressions:
+  passed
+- Complete live PostgreSQL, simulation, and analytics regressions: passed
+- Manual analytics engine, Python compilation, dependency consistency,
+  application/import, and Git diff/whitespace/scope checks: passed
+- Existing warning: one non-blocking Starlette/httpx TestClient deprecation
+  warning
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -1003,11 +1060,11 @@ cause test failures.
 
 ### Recommended next workstream
 
-- Begin the planned, unimplemented
-  `feat/backend-market-data-historical-backfill` workstream. Its purpose is to
-  extend verified historical market-data coverage farther back toward
-  approximately year 2000 where provider and asset history permit; this does
-  not imply that every Aura asset has data back to 2000.
+- Begin the unimplemented `feat/backend-historical-scenario-catalog`
+  workstream. Its verified historical-backfill dependency is now satisfied;
+  the workstream may expand the educational event catalogue without changing
+  the completed simulator calculations. The detailed event reference and exact
+  event list remain future work.
 
 ### Other ready follow-on work
 
@@ -1017,10 +1074,6 @@ cause test failures.
 
 ### Still deferred or dependency-blocked
 
-- `feat/backend-historical-scenario-catalog` is planned/deferred after the
-  historical backfill is successfully verified. It may then expand the
-  educational event catalogue without changing the completed simulator; the
-  detailed event reference and exact event list remain future work.
 - Automatic market-data scheduling remains a separate deferred workstream.
 - AI behavior/persistence, full backend API integration, frontend/mobile
   integration, and deployment remain unfinished.
