@@ -7,7 +7,6 @@ from collections.abc import Sequence
 from pathlib import Path
 import sys
 
-import pandas as pd
 from sqlalchemy.exc import SQLAlchemyError
 
 
@@ -18,15 +17,9 @@ if str(BACKEND_DIR) not in sys.path:
 from app.data_pipeline.fetcher import DEFAULT_START_DATE, DEFAULT_SYMBOLS
 from app.data_pipeline.updater import (
     MarketDataUpdateResult,
-    _update_market_data_with_frame,
     update_market_data,
 )
-from app.database.connection import (
-    create_database_engine,
-    create_session_factory,
-    session_scope,
-)
-from app.services.market_data_service import MarketDataService
+from app.services.market_data_update_service import update_market_data_and_persist
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -60,19 +53,6 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _persist_market_data(data: pd.DataFrame) -> int:
-    """Persist validated rows in one caller-controlled transaction."""
-    engine = create_database_engine()
-    try:
-        session_factory = create_session_factory(engine)
-        with session_scope(session_factory) as session:
-            stored_count = MarketDataService(session).store(data)
-            session.commit()
-        return stored_count
-    finally:
-        engine.dispose()
-
-
 def _print_update_result(result: MarketDataUpdateResult) -> None:
     """Print the existing updater summary."""
     print("Aura market-data update completed.")
@@ -100,12 +80,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         stored_count: int | None = None
         if args.persist_database:
-            result, data = _update_market_data_with_frame(
+            persisted_result = update_market_data_and_persist(
                 symbols=symbols,
                 start_date=args.start_date,
                 end_date=args.end_date,
             )
-            stored_count = _persist_market_data(data)
+            result = persisted_result.update_result
+            stored_count = persisted_result.stored_count
         else:
             result = update_market_data(
                 symbols=symbols,
