@@ -460,6 +460,50 @@ def test_orchestration_preserves_holdings_dates_alignment_and_simulator_inputs()
     _assert_session_lifecycle_untouched(session)
 
 
+def test_new_q4_scenario_runs_through_existing_service_path() -> None:
+    service, session, portfolio_service, market_data_service, _, _ = (
+        _service_with_dependencies()
+    )
+    portfolio_service.get.return_value = _portfolio(
+        holdings=(("ALPHA", "1.0"),)
+    )
+    market_data_service.get_range.return_value = [
+        _record("ALPHA", "2018-10-01", "100.000000000000"),
+        _record("ALPHA", "2018-10-02", "80.000000000000"),
+        _record("ALPHA", "2018-10-03", "90.000000000000"),
+        _record("ALPHA", "2018-12-31", "95.000000000000"),
+    ]
+    request = service_module.HistoricalScenarioSimulationRequest(
+        scenario_id="q4-market-selloff-2018"
+    )
+
+    response = service.run(
+        user_id=_USER_ID,
+        portfolio_id=_PORTFOLIO_ID,
+        request=request,
+    )
+
+    assert isinstance(response, HistoricalScenarioSimulationResponse)
+    assert response.scenario.model_dump() == {
+        "id": "q4-market-selloff-2018",
+        "display_name": "Q4 2018 Market Selloff",
+        "description": (
+            "A sharp late-2018 market selloff marked by elevated volatility."
+        ),
+        "requested_start_date": date(2018, 10, 1),
+        "requested_end_date": date(2018, 12, 31),
+    }
+    assert response.metadata.effective_start_date == date(2018, 10, 1)
+    assert response.metadata.effective_end_date == date(2018, 12, 31)
+    assert response.metrics.normalized_starting_value == 1.0
+    market_data_service.get_range.assert_called_once_with(
+        ["ALPHA"],
+        date(2018, 10, 1),
+        date(2018, 12, 31),
+    )
+    _assert_session_lifecycle_untouched(session)
+
+
 def test_service_reuses_analysis_exact_alignment_helper_by_identity() -> None:
     assert (
         service_module._build_price_frame
