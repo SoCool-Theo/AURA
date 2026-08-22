@@ -984,8 +984,10 @@ buy/sell recommendations.
   - ID: `inflation-rate-shock-2022`
   - Requested period: `2022-01-01` through `2022-12-31`
 
-The catalogue is immutable, deterministic, code-owned, and not stored in
-PostgreSQL. These are the only currently implemented scenarios.
+At this simulator workstream's completion, the catalogue was immutable,
+deterministic, code-owned, not stored in PostgreSQL, and limited to these two
+scenarios. The completed Historical Scenario Catalogue workstream later
+appended three events without changing these original definitions.
 
 ### Completed Contracts and Calculation Behavior
 
@@ -1066,8 +1068,8 @@ Allocation Simulation, and Combined Simulation were separate future
 workstreams at this branch's completion and have since been completed.
 Historical coverage expansion has also been completed under
 `feat/backend-market-data-historical-backfill`; the dependent educational event
-expansion remains unimplemented under
-`feat/backend-historical-scenario-catalog`. Neither expansion changes the
+expansion was subsequently completed under
+`feat/backend-historical-scenario-catalog`. Neither expansion changed the
 completed simulator's calculations.
 
 ### Final Verification
@@ -1188,7 +1190,7 @@ This workstream added no Simulation ORM model, Simulation repository, Alembic
 migration, simulation snapshot/history persistence, or dependency change.
 Combined Simulation, Simulation History, and Historical Market-Data Backfill
 were completed later as separate workstreams. The dependent scenario-catalog
-expansion remains future work and was not a prerequisite for Allocation
+expansion was also completed later and was not a prerequisite for Allocation
 Simulation.
 
 ### Final Verification
@@ -1405,11 +1407,20 @@ stable in `develop`.
 | `feat/backend-combined-simulator` | Compare original and modified allocations during one event | Completed Historical Scenario Simulator + completed Allocation Simulator | Completed and merged into `develop` |
 | `feat/backend-simulation-history` | Save and retrieve simulation results | Completed simulators + schemas + database | Completed and merged into `develop` |
 | `feat/backend-market-data-historical-backfill` | Extend verified historical market-data coverage toward year 2000 where provider and asset history permit | Completed market-data pipeline + storage/PostgreSQL infrastructure | Completed and merged into `develop` |
-| `feat/backend-historical-scenario-catalog` | Expand the predefined educational historical-event catalogue | Historical-simulation foundation + verified historical backfill/coverage | Recommended next backend workstream; dependency satisfied, implementation not begun |
-| `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Prerequisites are complete; automatic scheduling remains unimplemented and deferred |
-| `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Planned later; reporting and all three core simulator modes are complete, but AI requirements remain unfinished |
-| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; AI and other integration work remain incomplete |
+| `feat/backend-historical-scenario-catalog` | Expand the predefined educational historical-event catalogue | Historical-simulation foundation + verified historical backfill/coverage | Completed and merged into `develop` |
+| `feat/backend-market-data-scheduler` | Automate the existing market-data update/storage workflow | Completed market-data pipeline + PostgreSQL database/storage | Recommended next workstream; prerequisites complete, planned and unimplemented |
+| `feat/react-web-backend-integration` | Connect the customer React web frontend to completed non-AI backend capabilities | Authentication + Portfolio API + AnalysisService/reporting + all three simulator modes + Simulation History + stable API contracts | Planned after scheduler; non-AI backend prerequisites are substantially complete |
+| `feat/backend-ai-agent` | Explain stable analysis, report, and simulation results | Stable analytics + reports + simulations + schemas + database/backend context | Planned after non-AI React/backend integration; unimplemented |
+| `feat/react-web-ai-integration` | Connect React AI/chat/explanation experiences to the backend AI Agent | Completed backend AI Agent + React integration foundation | Not ready until the backend AI Agent is complete |
+| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent behavior for final integration | Completed major backend feature work including AI + stable integration boundaries | Later/final integration; not ready |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
+
+`feat/react-web-backend-integration` covers login/register, portfolio
+management, risk analysis, analysis/report history, Historical Scenario,
+Allocation, and Combined simulations, and Simulation History. It explicitly
+excludes AI/chat integration and does not assume placeholder AI APIs or fake AI
+responses. `feat/react-web-ai-integration` remains separate and begins only
+after the backend AI Agent exists.
 
 ---
 
@@ -1460,10 +1471,9 @@ Simulation workflow without duplicating simulation logic.
 
 # Historical Coverage and Catalogue Expansion
 
-Historical Market-Data Backfill is completed and merged into `develop`. Its
-verified coverage satisfies the prerequisite for the Historical Scenario
-Catalogue, which is now the recommended next backend workstream and remains
-unimplemented.
+Historical Market-Data Backfill and Historical Scenario Catalogue are both
+completed and merged into `develop`. The verified backfill coverage satisfied
+the catalogue's historical-data prerequisite.
 
 ## `feat/backend-market-data-historical-backfill`
 
@@ -1516,28 +1526,80 @@ non-blocking, and normal external provider availability and coverage may vary.
 
 ## `feat/backend-historical-scenario-catalog`
 
-**Status:** Recommended next backend workstream; unimplemented
+**Status:** Completed and merged into `develop`
 
-The verified historical-backfill dependency is satisfied. This future
-workstream may expand Aura's predefined educational historical-event catalogue
-without changing the completed simulator calculations.
+The completed workstream appended three events to the original two without
+changing their definitions. Aura's immutable, deterministic, code-owned
+catalogue now contains exactly:
 
-The exact event list and dates are intentionally not defined here. This future
-workstream may introduce a dedicated historical-events Markdown reference when
-it begins; no such document is created or named by this update.
+1. `covid-19-shock-2020` — COVID-19 Market Shock,
+   `2020-02-01` through `2020-04-30`
+2. `inflation-rate-shock-2022` — 2022 Inflation and Rate Shock,
+   `2022-01-01` through `2022-12-31`
+3. `dot-com-bust-2000-2002` — Dot-Com Bust,
+   `2000-03-10` through `2002-10-09`
+4. `global-financial-crisis-2007-2009` — Global Financial Crisis,
+   `2007-10-09` through `2009-03-09`
+5. `q4-market-selloff-2018` — Q4 2018 Market Selloff,
+   `2018-10-01` through `2018-12-31`
+
+The workstream added `docs/historical_events.md` for educational context,
+rationale, requested-versus-effective date semantics, and observed coverage
+limitations. Category, extended rationale, historical context, and coverage
+notes remain documentation-only metadata; production definitions, schemas,
+and public API responses were not expanded with those fields.
+
+The expansion preserved simulator and analytics formulas, periodically
+rebalanced fixed-weight semantics, normalized starting value,
+cumulative-return, annualized-volatility, Sharpe, signed maximum-drawdown, and
+peak/trough behavior; exact common-date alignment; requested/effective date
+separation; minimum observations; missing-data behavior; validation behavior
+and order; result structures; production schemas; authentication; privacy;
+HTTP contracts; service/repository transaction ownership; Simulation History
+persistence; database models; repositories; migrations; and dependencies.
+Listing and exact-ID resolution remain database-independent and
+network-independent.
+
+Older scenarios intentionally may fail for a portfolio containing a
+later-starting asset. Aura does not drop holdings, alter allocations, shorten
+events, or fabricate, forward-fill, backfill, interpolate, or synthesize
+historical prices.
+
+Controlled PostgreSQL verification used a restored `aura_test` dataset with
+95,488 rows, all 17 canonical symbols, 25,884 observations before 2010, and 0
+duplicate `(symbol, date)` groups. AAPL and MSFT had observed coverage from
+`2000-01-03` through `2026-08-21`; ETH-USD began on `2017-11-09`. These are
+observations from the controlled run, not permanent provider guarantees.
+
+Four dedicated live tests verified Dot-Com and Global Financial Crisis success
+with AAPL plus MSFT, the established `422` with no committed Simulation History
+for an old ETH-USD scenario, COVID requested/effective date separation,
+successful history persistence and fresh-session retrieval, and unchanged
+historical `market_data`.
+
+Final readiness verification passed 13 catalogue-definition tests, 22
+Historical Scenario service tests, 57 Simulation API tests, 59 scenario tests,
+109 Simulation History tests, 4 dedicated live PostgreSQL tests, 820 analytics
+tests, and the broadest safe 2,027-test backend suite. Nine application,
+health, OpenAPI, and schema-export checks plus the manual engine, compilation,
+dependency, and Git checks passed. Earlier pre-live compatibility verification
+also passed the 2,084-test full backend suite. Eight destructive PostgreSQL
+modules were intentionally omitted from the preserved-data run because their
+fixtures truncate `market_data` and/or downgrade Alembic; this is not a feature
+defect.
 
 ```text
 ✅ feat/backend-market-data-historical-backfill
                 ↓ verified historical coverage
-feat/backend-historical-scenario-catalog  ← recommended next; unimplemented
+✅ feat/backend-historical-scenario-catalog
 ```
 
-The completed Historical Scenario Simulator did not require either expansion
-workstream; catalogue expansion remains a separate follow-on feature.
+Both expansion workstreams remained separate from the completed Historical
+Scenario Simulator and did not alter its calculations.
 
 ---
 
-# Recommended Backend Dependency Flow
+# Recommended Backend Development and Dependency Flow
 
 ```text
 feat/backend-analytics-core ────────────────┐
@@ -1555,8 +1617,6 @@ feat/backend-market-data-pipeline
 feat/backend-database-foundation
                 ↓
 ✅ feat/backend-market-data-storage
-                ↓
-market-data scheduler / later historical-data consumers
 
 AnalysisService + Portfolio API + Analysis persistence
                 ↓
@@ -1574,13 +1634,19 @@ AnalysisService + Portfolio API + Analysis persistence
                 ↓
 ✅ feat/backend-market-data-historical-backfill
                 ↓
-feat/backend-historical-scenario-catalog  ← recommended next; unimplemented
+✅ feat/backend-historical-scenario-catalog
                 ↓
-AI agent
+feat/backend-market-data-scheduler  ← recommended next; planned and unimplemented
                 ↓
-full backend API integration
+feat/react-web-backend-integration  # integrate existing non-AI capabilities
                 ↓
-deployment
+feat/backend-ai-agent
+                ↓
+feat/react-web-ai-integration
+                ↓
+feat/backend-api-integration
+                ↓
+feat/backend-deployment
 ```
 
 The completed analytics-validation refactor supports the analytics branch
@@ -1590,10 +1656,16 @@ The completed schemas-contract branch remains in the flow as a stable
 dependency for later services, APIs, reporting, simulations, and AI
 integration. AnalysisService, the Portfolio API, analysis reporting,
 authentication, all three core simulator modes, Simulation History, and
-Historical Market-Data Backfill are complete. The Historical Scenario
-Catalogue is the recommended next backend workstream; its backfill dependency
-is satisfied, but catalogue implementation has not begun. AI behavior and full
-integration remain separate unfinished workstreams.
+Historical Market-Data Backfill and Historical Scenario Catalogue are
+complete. The scheduler is the recommended next workstream, followed by
+non-AI React/backend integration, the backend AI Agent, React AI integration,
+final backend/API integration, and deployment.
+
+This sequence is the approved development order, not a hard dependency claim.
+The scheduler is not a technical prerequisite for the AI Agent. Non-AI React
+integration is intentionally earlier so the team can validate authentication,
+API communication and contracts, CORS, loading/error behavior, real portfolio
+workflows, analysis/report display, and simulation flows before adding AI.
 
 ---
 
@@ -1601,16 +1673,35 @@ integration remain separate unfinished workstreams.
 
 The analytics, schema, database, historical market-data, AnalysisService,
 Portfolio API, analysis-reporting, authentication, all three simulator modes,
-Simulation History, and Historical Market-Data Backfill workstreams are
-complete. The recommended next backend workstream is the unimplemented:
+Simulation History, Historical Market-Data Backfill, and Historical Scenario
+Catalogue workstreams are complete. The recommended next core backend
+workstream is the planned, unimplemented:
 
 ```text
-feat/backend-historical-scenario-catalog
+feat/backend-market-data-scheduler
 ```
 
-Its verified historical-coverage dependency is now satisfied. The exact event
-list and dates remain intentionally undefined until the catalogue workstream
-begins, and the completed simulator calculations must remain unchanged.
+Its market-data pipeline and PostgreSQL storage prerequisites are complete. It
+will add only a scheduled trigger around the existing fetch, clean, validate,
+database upsert, transaction, logging, and failure-reporting workflow; it does
+not add provider logic, analytics, simulation formulas, AI, or frontend
+behavior.
+
+The approved follow-on order is:
+
+```text
+feat/backend-market-data-scheduler
+        ↓
+feat/react-web-backend-integration   # non-AI product workflows
+        ↓
+feat/backend-ai-agent
+        ↓
+feat/react-web-ai-integration
+        ↓
+feat/backend-api-integration
+        ↓
+feat/backend-deployment
+```
 
 ---
 
@@ -1635,7 +1726,13 @@ develop
 ├── feat/backend-combined-simulator               # completed
 ├── feat/backend-simulation-history               # completed
 ├── feat/backend-market-data-historical-backfill  # completed
-├── feat/backend-historical-scenario-catalog      # recommended next; unimplemented
+├── feat/backend-historical-scenario-catalog      # completed
+├── feat/backend-market-data-scheduler            # recommended next; unimplemented
+├── feat/react-web-backend-integration             # planned non-AI integration
+├── feat/backend-ai-agent                         # planned
+├── feat/react-web-ai-integration                  # planned after backend AI
+├── feat/backend-api-integration                  # later final integration
+├── feat/backend-deployment                       # later
 └── feat/backend-quality-ci                       # optional
 ```
 
@@ -1660,7 +1757,9 @@ develop
 ├── feat/frontend-dashboard
 ├── feat/frontend-portfolio-management
 ├── feat/frontend-risk-report
-└── feat/frontend-simulation
+├── feat/frontend-simulation
+├── feat/react-web-backend-integration  # planned non-AI integration
+└── feat/react-web-ai-integration       # planned after backend AI Agent
 ```
 
 A permanent `frontend` or `backend` integration branch is unnecessary because
@@ -1752,20 +1851,27 @@ Documentation changes should not be added to `main` directly.
 ✅ feat/backend-combined-simulator              # completed
 ✅ feat/backend-simulation-history              # completed
 ✅ feat/backend-market-data-historical-backfill # completed
-feat/backend-historical-scenario-catalog       # recommended next; unimplemented
-feat/backend-market-data-scheduler             # scheduling deferred
+✅ feat/backend-historical-scenario-catalog     # completed
 ```
 
-## AI and Full Integration Stage
+## Scheduled Data and Non-AI Product Integration Stage
 
 ```text
-feat/backend-ai-agent
+feat/backend-market-data-scheduler             # recommended next; unimplemented
+feat/react-web-backend-integration              # planned; excludes AI/chat
+```
+
+## AI Integration Stage
+
+```text
+feat/backend-ai-agent                          # planned and unimplemented
+feat/react-web-ai-integration                  # after backend AI Agent
+```
+
+## Final Integration and Deployment Stage
+
+```text
 feat/backend-api-integration
-```
-
-## Final Stage
-
-```text
 feat/backend-deployment
 final backend integration tests
 develop → main release Pull Request
@@ -1778,14 +1884,15 @@ develop → main release Pull Request
 With analytics, schemas, the market-data pipeline, the database foundation,
 market-data storage, AnalysisService, the Portfolio API, analysis reporting,
 authentication, all three core simulator modes, Simulation History, and
-Historical Market-Data Backfill merged into `develop`, the recommended next
-backend workstream is the unimplemented:
+Historical Market-Data Backfill and Historical Scenario Catalogue merged into
+`develop`, the recommended next backend workstream is the planned,
+unimplemented:
 
 ```text
-feat/backend-historical-scenario-catalog
+feat/backend-market-data-scheduler
 ```
 
-The catalogue's verified historical-backfill dependency is satisfied, but do
-not treat `feat/backend-historical-scenario-catalog`, automatic market-data
-scheduling, AI, full integration, frontend/mobile integration, or deployment
-as completed.
+It deliberately precedes non-AI React/backend integration, the backend AI
+Agent, React AI integration, final backend/API integration, and deployment.
+This is project-management order rather than a new technical dependency for
+AI. Do not treat any of these planned workstreams as completed.

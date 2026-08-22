@@ -611,8 +611,10 @@ buy-and-hold share-count semantics, or provide buy/sell recommendations.
   - ID: `inflation-rate-shock-2022`
   - Requested period: `2022-01-01` through `2022-12-31`
 
-This two-scenario catalogue is immutable, deterministic, code-owned, and not
-stored in PostgreSQL.
+At this workstream's completion, this two-scenario catalogue was immutable,
+deterministic, code-owned, and not stored in PostgreSQL. The completed
+Historical Scenario Catalogue workstream documented below later appended
+three events without changing these original definitions.
 
 ### Contracts and calculation behavior
 
@@ -691,13 +693,12 @@ simulation-history persistence, or dependency change. At this workstream's
 completion, Simulation History was a separate later workstream; it has since
 been completed as documented below.
 
-Aura currently supports only the two predefined scenarios above. The completed
-`feat/backend-market-data-historical-backfill` workstream extended verified
-historical coverage toward year 2000 where provider and asset history permit.
-The unimplemented `feat/backend-historical-scenario-catalog` workstream may now
-expand the educational event catalogue. Neither expansion was part of this
-completed branch, and neither was required by the completed Allocation
-Simulator.
+The completed `feat/backend-market-data-historical-backfill` workstream later
+extended verified historical coverage toward year 2000 where provider and
+asset history permit. The completed
+`feat/backend-historical-scenario-catalog` workstream then expanded the
+educational event catalogue to five scenarios. Neither follow-on workstream
+changed this completed simulator's calculations.
 
 ### Final verification
 
@@ -813,8 +814,8 @@ session, persist a simulation, or persist an Analysis snapshot.
 This workstream added no Simulation ORM model, Simulation repository, Alembic
 migration, simulation snapshot/history persistence, or dependency change.
 Combined Simulation, Simulation History, and Historical Market-Data Backfill
-were completed later as separate workstreams. The dependent scenario-catalog
-expansion remains future work and was not a prerequisite for Allocation
+were completed later as separate workstreams. Historical Scenario Catalogue
+expansion was also completed later and was not a prerequisite for Allocation
 Simulation.
 
 ### Final verification
@@ -1046,6 +1047,87 @@ coverage.
 - Existing warning: one non-blocking Starlette/httpx TestClient deprecation
   warning
 
+## Historical Scenario Catalogue
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-historical-scenario-catalog`
+
+### Completed catalogue and reference
+
+Aura's immutable, deterministic, code-owned catalogue now contains exactly
+five scenarios in this order:
+
+1. `covid-19-shock-2020` — COVID-19 Market Shock,
+   `2020-02-01` through `2020-04-30`
+2. `inflation-rate-shock-2022` — 2022 Inflation and Rate Shock,
+   `2022-01-01` through `2022-12-31`
+3. `dot-com-bust-2000-2002` — Dot-Com Bust,
+   `2000-03-10` through `2002-10-09`
+4. `global-financial-crisis-2007-2009` — Global Financial Crisis,
+   `2007-10-09` through `2009-03-09`
+5. `q4-market-selloff-2018` — Q4 2018 Market Selloff,
+   `2018-10-01` through `2018-12-31`
+
+The original first two definitions remain unchanged; the three new events
+were appended in the approved order. Listing and exact-ID resolution remain
+database-independent and network-independent.
+
+The workstream added `docs/historical_events.md` as an educational reference
+for historical context, rationale, requested-versus-effective date semantics,
+and observed coverage limitations. Category, extended rationale, context, and
+coverage notes remain documentation-only metadata and were not added to
+production schemas or public API responses.
+
+### Compatibility and historical-data boundaries
+
+The catalogue expansion did not change simulator or analytics formulas,
+fixed-weight periodically rebalanced semantics, normalized starting value,
+cumulative-return, annualized-volatility, Sharpe, signed maximum-drawdown, or
+peak/trough behavior; exact common-date alignment; requested/effective date
+separation; minimum observations; missing-data behavior; validation behavior
+or order; result structures; production schemas; authentication;
+ownership/privacy; HTTP contracts; service/repository transaction ownership;
+Simulation History persistence; database models; repositories; migrations; or
+dependencies.
+
+Older events intentionally may fail for portfolios containing later-starting
+assets. Aura retains the established historical-data failure behavior without
+dropping holdings, altering allocations, shortening scenarios, or fabricating,
+forward-filling, backfilling, interpolating, or synthesizing prices.
+
+### Controlled live PostgreSQL verification
+
+The guarded `aura_test` database was restored to migration head and populated
+through the completed historical-backfill workflow. The observed dataset had
+95,488 rows across all 17 canonical symbols, 25,884 observations before 2010,
+and 0 duplicate `(symbol, date)` groups. Observed coverage included AAPL and
+MSFT from `2000-01-03` through `2026-08-21`, while ETH-USD began on
+`2017-11-09`; provider coverage is not a permanent guarantee.
+
+Dedicated live tests verified Dot-Com and Global Financial Crisis success
+with AAPL plus MSFT, the existing `422` and no committed history for an old
+ETH-USD scenario, COVID requested/effective date separation, successful
+Simulation History persistence and fresh-session retrieval, and unchanged
+historical `market_data` after cleanup.
+
+### Final verification
+
+- Catalogue definitions: 13 passed
+- Historical Scenario service: 22 passed
+- Simulation API: 57 passed
+- Scenario suite: 59 passed
+- Simulation History: 109 passed
+- Dedicated catalogue live PostgreSQL: 4 passed
+- Analytics: 820 passed
+- Broadest safe backend suite: 2,027 passed
+- Application, health, OpenAPI, and schema-export checks: 9 passed
+- Manual analytics engine, Python compilation, dependency consistency, and
+  Git diff/whitespace/scope checks: passed
+- Earlier pre-live compatibility verification: full backend suite 2,084 passed
+- Eight destructive PostgreSQL modules were intentionally omitted from the
+  preserved-data run because their fixtures truncate `market_data` and/or
+  downgrade Alembic; this is not a catalogue defect
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -1060,20 +1142,46 @@ cause test failures.
 
 ### Recommended next workstream
 
-- Begin the unimplemented `feat/backend-historical-scenario-catalog`
-  workstream. Its verified historical-backfill dependency is now satisfied;
-  the workstream may expand the educational event catalogue without changing
-  the completed simulator calculations. The detailed event reference and exact
-  event list remain future work.
+- Begin the planned, unimplemented `feat/backend-market-data-scheduler`
+  workstream. Its market-data pipeline, PostgreSQL database/storage, and
+  historical-backfill prerequisites are complete. It is ready to automate the
+  existing update/storage workflow without adding provider logic, analytics,
+  simulation formulas, AI behavior, or frontend behavior:
 
-### Other ready follow-on work
+```text
+scheduled trigger
+        ↓
+existing market-data updater
+        ↓
+provider fetch → clean → validate
+        ↓
+PostgreSQL persistence/upsert
+        ↓
+transaction handling → logging/failure reporting
+```
 
-- `feat/backend-market-data-scheduler`: its pipeline, database, and storage
-  prerequisites are complete; automatic scheduling itself remains unimplemented
-  and deferred.
+### Approved follow-on development order
 
-### Still deferred or dependency-blocked
+1. `feat/react-web-backend-integration` — planned after the scheduler to connect
+   the customer React web frontend to completed non-AI authentication,
+   portfolio, analysis/report, simulation, and Simulation History APIs. This
+   stage explicitly excludes AI/chat integration.
+2. `feat/backend-ai-agent` — planned after non-AI frontend/backend integration
+   to explain stable Aura analysis, report, and simulation results in simple
+   educational language without inventing calculations or financial advice.
+3. `feat/react-web-ai-integration` — planned after the backend AI Agent to
+   connect the React AI/chat/explanation experience to that completed backend.
+4. `feat/backend-api-integration` — later final integration after the major
+   backend features, including AI, are stable.
+5. `feat/backend-deployment` — planned only after stable final integration.
 
-- Automatic market-data scheduling remains a separate deferred workstream.
-- AI behavior/persistence, full backend API integration, frontend/mobile
-  integration, and deployment remain unfinished.
+This is an approved development order, not a claim that the scheduler or
+non-AI React integration is a technical prerequisite for the AI Agent. The
+non-AI integration stage is intentionally earlier so authentication, API
+communication and contracts, CORS, loading/error behavior, portfolio and
+analysis/report workflows, and simulation flows can be validated before AI
+integration begins.
+
+All six planned workstreams remain unimplemented. AI endpoints and chat
+integration do not yet exist, final backend integration is not ready, and
+deployment remains later work.
