@@ -1408,10 +1408,19 @@ stable in `develop`.
 | `feat/backend-simulation-history` | Save and retrieve simulation results | Completed simulators + schemas + database | Completed and merged into `develop` |
 | `feat/backend-market-data-historical-backfill` | Extend verified historical market-data coverage toward year 2000 where provider and asset history permit | Completed market-data pipeline + storage/PostgreSQL infrastructure | Completed and merged into `develop` |
 | `feat/backend-historical-scenario-catalog` | Expand the predefined educational historical-event catalogue | Historical-simulation foundation + verified historical backfill/coverage | Completed and merged into `develop` |
-| `feat/backend-market-data-scheduler` | Automate market-data updates | Data pipeline + database/storage | Prerequisites are complete; automatic scheduling remains unimplemented and deferred |
-| `feat/backend-ai-agent` | Explain stable analysis and simulation results | Stable reports and simulations + schemas + database | Recommended next core backend workstream; planned and unimplemented |
-| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent | Completed feature branches | Not ready; AI and other integration work remain incomplete |
+| `feat/backend-market-data-scheduler` | Automate the existing market-data update/storage workflow | Completed market-data pipeline + PostgreSQL database/storage | Recommended next workstream; prerequisites complete, planned and unimplemented |
+| `feat/react-web-backend-integration` | Connect the customer React web frontend to completed non-AI backend capabilities | Authentication + Portfolio API + AnalysisService/reporting + all three simulator modes + Simulation History + stable API contracts | Planned after scheduler; non-AI backend prerequisites are substantially complete |
+| `feat/backend-ai-agent` | Explain stable analysis, report, and simulation results | Stable analytics + reports + simulations + schemas + database/backend context | Planned after non-AI React/backend integration; unimplemented |
+| `feat/react-web-ai-integration` | Connect React AI/chat/explanation experiences to the backend AI Agent | Completed backend AI Agent + React integration foundation | Not ready until the backend AI Agent is complete |
+| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent behavior for final integration | Completed major backend feature work including AI + stable integration boundaries | Later/final integration; not ready |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
+
+`feat/react-web-backend-integration` covers login/register, portfolio
+management, risk analysis, analysis/report history, Historical Scenario,
+Allocation, and Combined simulations, and Simulation History. It explicitly
+excludes AI/chat integration and does not assume placeholder AI APIs or fake AI
+responses. `feat/react-web-ai-integration` remains separate and begins only
+after the backend AI Agent exists.
 
 ---
 
@@ -1590,7 +1599,7 @@ Scenario Simulator and did not alter its calculations.
 
 ---
 
-# Recommended Backend Dependency Flow
+# Recommended Backend Development and Dependency Flow
 
 ```text
 feat/backend-analytics-core ────────────────┐
@@ -1608,8 +1617,6 @@ feat/backend-market-data-pipeline
 feat/backend-database-foundation
                 ↓
 ✅ feat/backend-market-data-storage
-                ↓
-market-data scheduler / later historical-data consumers
 
 AnalysisService + Portfolio API + Analysis persistence
                 ↓
@@ -1629,11 +1636,17 @@ AnalysisService + Portfolio API + Analysis persistence
                 ↓
 ✅ feat/backend-historical-scenario-catalog
                 ↓
-feat/backend-ai-agent  ← recommended next; planned and unimplemented
+feat/backend-market-data-scheduler  ← recommended next; planned and unimplemented
                 ↓
-full backend API integration
+feat/react-web-backend-integration  # integrate existing non-AI capabilities
                 ↓
-deployment
+feat/backend-ai-agent
+                ↓
+feat/react-web-ai-integration
+                ↓
+feat/backend-api-integration
+                ↓
+feat/backend-deployment
 ```
 
 The completed analytics-validation refactor supports the analytics branch
@@ -1644,8 +1657,15 @@ dependency for later services, APIs, reporting, simulations, and AI
 integration. AnalysisService, the Portfolio API, analysis reporting,
 authentication, all three core simulator modes, Simulation History, and
 Historical Market-Data Backfill and Historical Scenario Catalogue are
-complete. AI behavior is the recommended next core backend workstream, while
-full integration remains a separate unfinished workstream.
+complete. The scheduler is the recommended next workstream, followed by
+non-AI React/backend integration, the backend AI Agent, React AI integration,
+final backend/API integration, and deployment.
+
+This sequence is the approved development order, not a hard dependency claim.
+The scheduler is not a technical prerequisite for the AI Agent. Non-AI React
+integration is intentionally earlier so the team can validate authentication,
+API communication and contracts, CORS, loading/error behavior, real portfolio
+workflows, analysis/report display, and simulation flows before adding AI.
 
 ---
 
@@ -1658,12 +1678,30 @@ Catalogue workstreams are complete. The recommended next core backend
 workstream is the planned, unimplemented:
 
 ```text
-feat/backend-ai-agent
+feat/backend-market-data-scheduler
 ```
 
-Its analytics, schemas, persistence, reporting, authentication, simulation,
-history, backfill, and catalogue prerequisites are complete. Automatic
-market-data scheduling remains a separate deferred workstream.
+Its market-data pipeline and PostgreSQL storage prerequisites are complete. It
+will add only a scheduled trigger around the existing fetch, clean, validate,
+database upsert, transaction, logging, and failure-reporting workflow; it does
+not add provider logic, analytics, simulation formulas, AI, or frontend
+behavior.
+
+The approved follow-on order is:
+
+```text
+feat/backend-market-data-scheduler
+        ↓
+feat/react-web-backend-integration   # non-AI product workflows
+        ↓
+feat/backend-ai-agent
+        ↓
+feat/react-web-ai-integration
+        ↓
+feat/backend-api-integration
+        ↓
+feat/backend-deployment
+```
 
 ---
 
@@ -1689,6 +1727,12 @@ develop
 ├── feat/backend-simulation-history               # completed
 ├── feat/backend-market-data-historical-backfill  # completed
 ├── feat/backend-historical-scenario-catalog      # completed
+├── feat/backend-market-data-scheduler            # recommended next; unimplemented
+├── feat/react-web-backend-integration             # planned non-AI integration
+├── feat/backend-ai-agent                         # planned
+├── feat/react-web-ai-integration                  # planned after backend AI
+├── feat/backend-api-integration                  # later final integration
+├── feat/backend-deployment                       # later
 └── feat/backend-quality-ci                       # optional
 ```
 
@@ -1713,7 +1757,9 @@ develop
 ├── feat/frontend-dashboard
 ├── feat/frontend-portfolio-management
 ├── feat/frontend-risk-report
-└── feat/frontend-simulation
+├── feat/frontend-simulation
+├── feat/react-web-backend-integration  # planned non-AI integration
+└── feat/react-web-ai-integration       # planned after backend AI Agent
 ```
 
 A permanent `frontend` or `backend` integration branch is unnecessary because
@@ -1806,19 +1852,26 @@ Documentation changes should not be added to `main` directly.
 ✅ feat/backend-simulation-history              # completed
 ✅ feat/backend-market-data-historical-backfill # completed
 ✅ feat/backend-historical-scenario-catalog     # completed
-feat/backend-market-data-scheduler             # scheduling deferred
 ```
 
-## AI and Full Integration Stage
+## Scheduled Data and Non-AI Product Integration Stage
 
 ```text
-feat/backend-ai-agent                           # recommended next; unimplemented
+feat/backend-market-data-scheduler             # recommended next; unimplemented
+feat/react-web-backend-integration              # planned; excludes AI/chat
+```
+
+## AI Integration Stage
+
+```text
+feat/backend-ai-agent                          # planned and unimplemented
+feat/react-web-ai-integration                  # after backend AI Agent
+```
+
+## Final Integration and Deployment Stage
+
+```text
 feat/backend-api-integration
-```
-
-## Final Stage
-
-```text
 feat/backend-deployment
 final backend integration tests
 develop → main release Pull Request
@@ -1832,12 +1885,14 @@ With analytics, schemas, the market-data pipeline, the database foundation,
 market-data storage, AnalysisService, the Portfolio API, analysis reporting,
 authentication, all three core simulator modes, Simulation History, and
 Historical Market-Data Backfill and Historical Scenario Catalogue merged into
-`develop`, the recommended next core backend workstream is the planned,
+`develop`, the recommended next backend workstream is the planned,
 unimplemented:
 
 ```text
-feat/backend-ai-agent
+feat/backend-market-data-scheduler
 ```
 
-Automatic market-data scheduling remains deferred. Do not treat AI, full
-integration, frontend/mobile integration, or deployment as completed.
+It deliberately precedes non-AI React/backend integration, the backend AI
+Agent, React AI integration, final backend/API integration, and deployment.
+This is project-management order rather than a new technical dependency for
+AI. Do not treat any of these planned workstreams as completed.

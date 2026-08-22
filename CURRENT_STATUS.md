@@ -1142,21 +1142,46 @@ cause test failures.
 
 ### Recommended next workstream
 
-- Begin the planned, unimplemented `feat/backend-ai-agent` workstream. Stable
-  analytics, schemas, PostgreSQL persistence, reports, authentication, all
-  three simulator modes, Simulation History, Historical Market-Data Backfill,
-  and Historical Scenario Catalogue are complete prerequisites. The agent must
-  explain deterministic Aura results rather than invent calculations or offer
-  financial advice.
+- Begin the planned, unimplemented `feat/backend-market-data-scheduler`
+  workstream. Its market-data pipeline, PostgreSQL database/storage, and
+  historical-backfill prerequisites are complete. It is ready to automate the
+  existing update/storage workflow without adding provider logic, analytics,
+  simulation formulas, AI behavior, or frontend behavior:
 
-### Other ready follow-on work
+```text
+scheduled trigger
+        ↓
+existing market-data updater
+        ↓
+provider fetch → clean → validate
+        ↓
+PostgreSQL persistence/upsert
+        ↓
+transaction handling → logging/failure reporting
+```
 
-- `feat/backend-market-data-scheduler`: its pipeline, database, and storage
-  prerequisites are complete; automatic scheduling itself remains unimplemented
-  and deferred.
+### Approved follow-on development order
 
-### Still deferred or dependency-blocked
+1. `feat/react-web-backend-integration` — planned after the scheduler to connect
+   the customer React web frontend to completed non-AI authentication,
+   portfolio, analysis/report, simulation, and Simulation History APIs. This
+   stage explicitly excludes AI/chat integration.
+2. `feat/backend-ai-agent` — planned after non-AI frontend/backend integration
+   to explain stable Aura analysis, report, and simulation results in simple
+   educational language without inventing calculations or financial advice.
+3. `feat/react-web-ai-integration` — planned after the backend AI Agent to
+   connect the React AI/chat/explanation experience to that completed backend.
+4. `feat/backend-api-integration` — later final integration after the major
+   backend features, including AI, are stable.
+5. `feat/backend-deployment` — planned only after stable final integration.
 
-- Automatic market-data scheduling remains a separate deferred workstream.
-- Full backend API integration remains dependent on the planned AI workstream.
-  Frontend/mobile integration and deployment also remain unfinished.
+This is an approved development order, not a claim that the scheduler or
+non-AI React integration is a technical prerequisite for the AI Agent. The
+non-AI integration stage is intentionally earlier so authentication, API
+communication and contracts, CORS, loading/error behavior, portfolio and
+analysis/report workflows, and simulation flows can be validated before AI
+integration begins.
+
+All six planned workstreams remain unimplemented. AI endpoints and chat
+integration do not yet exist, final backend integration is not ready, and
+deployment remains later work.
