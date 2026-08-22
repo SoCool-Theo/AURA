@@ -1128,6 +1128,71 @@ historical `market_data` after cleanup.
   preserved-data run because their fixtures truncate `market_data` and/or
   downgrade Alembic; this is not a catalogue defect
 
+## Backend Market-Data Scheduler
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/backend-market-data-scheduler`
+
+### Completed scope and production flow
+
+- Added one reusable service-layer market-data update and PostgreSQL
+  persistence workflow. It completes the existing pipeline before creating
+  database resources, reuses the canonical validated DataFrame,
+  `MarketDataService`, `MarketDataRepository`, 1,000-row batching, and the
+  `(symbol, date)` upsert identity, and commits once at the outer workflow
+  boundary while preserving rollback, session-close, and engine-disposal
+  behavior.
+- Migrated `backend/scripts/update_market_data.py --persist-database` to the
+  reusable helper and removed duplicate database orchestration from the CLI.
+  CSV-only behavior, existing arguments, output/error behavior,
+  partial-provider reporting, and stored-row reporting remain compatible.
+- Added APScheduler `3.11.3` with a standalone UTC `BlockingScheduler`, a
+  strict `MARKET_DATA_UPDATE_TIME_UTC` setting defaulting to `02:00`, and one
+  daily `CronTrigger` configured with `coalesce=True`, `max_instances=1`, and
+  `misfire_grace_time=None`.
+- Added the production scheduled-job wrapper, explicit standard-library INFO
+  console logging, and the side-effect-free standalone runner:
+
+```text
+python -m backend.scripts.run_market_data_scheduler
+```
+
+The scheduler does not run the job at startup, add a custom retry loop, use a
+persistent scheduler job store, or perform downtime catch-up after restart. It
+is not integrated into FastAPI startup or lifespan. Job failures are logged
+and re-raised to APScheduler while the scheduler process remains available for
+future executions.
+
+### Guarded PostgreSQL and compatibility verification
+
+Dedicated deterministic live tests verified the real scheduled job through
+the reusable helper, service, repository, and PostgreSQL, including successful
+persistence, fresh-session retrieval, repeat-safe upsert, partial-provider
+persistence, transaction rollback, exact synthetic-record cleanup, and
+preservation of unrelated `market_data`. The live scheduler tests replaced the
+pipeline handoff with synthetic canonical data and did not call Yahoo Finance.
+
+The workstream did not change analytics or simulation formulas, historical
+scenario definitions, authentication, portfolio/report APIs, schemas/result
+structures, database models, Alembic migrations, provider or historical
+backfill behavior, FastAPI startup/router behavior, AI behavior, or
+frontend/mobile/admin behavior.
+
+Final verification passed 33 targeted scheduler tests, 4 guarded PostgreSQL
+scheduler tests, 85 market-data regression tests, 405 non-destructive
+simulation regression tests, 820 analytics tests, the broad safe backend suite
+with 2,048 passed and 52 skipped, and 1 Health API test. Python compilation,
+`pip check`, APScheduler `3.11.3`, runner import safety, application/OpenAPI
+compatibility, the bounded standalone-runner smoke, and final readiness and
+17-file branch-scope checks also passed.
+
+The existing Starlette/httpx TestClient deprecation warning remains unrelated
+and non-blocking. Yahoo Finance production execution was outside the
+deterministic live integration test. Deployment and long-running process
+supervision remain later work; production deployment must run one scheduler
+process replica because `max_instances=1` prevents overlap only within one
+process.
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -1142,30 +1207,32 @@ cause test failures.
 
 ### Recommended next workstream
 
-- Begin the planned, unimplemented `feat/backend-market-data-scheduler`
-  workstream. Its market-data pipeline, PostgreSQL database/storage, and
-  historical-backfill prerequisites are complete. It is ready to automate the
-  existing update/storage workflow without adding provider logic, analytics,
-  simulation formulas, AI behavior, or frontend behavior:
+- Begin the planned, unimplemented `feat/react-web-backend-integration`
+  workstream to connect the customer React web frontend to completed non-AI
+  authentication, portfolio, analysis/report, simulation, and Simulation
+  History APIs. This stage explicitly excludes AI/chat integration and does
+  not require placeholder AI APIs or fake AI responses.
 
 ```text
-scheduled trigger
+✅ feat/backend-market-data-scheduler
         ↓
-existing market-data updater
+feat/react-web-backend-integration
         ↓
-provider fetch → clean → validate
+feat/backend-ai-agent
         ↓
-PostgreSQL persistence/upsert
+feat/react-web-ai-integration
         ↓
-transaction handling → logging/failure reporting
+feat/backend-api-integration
+        ↓
+feat/backend-deployment
 ```
 
 ### Approved follow-on development order
 
-1. `feat/react-web-backend-integration` — planned after the scheduler to connect
-   the customer React web frontend to completed non-AI authentication,
-   portfolio, analysis/report, simulation, and Simulation History APIs. This
-   stage explicitly excludes AI/chat integration.
+1. `feat/react-web-backend-integration` — recommended next after the completed
+   scheduler workstream to connect the customer React web frontend to non-AI
+   authentication, portfolio, analysis/report, simulation, and Simulation
+   History APIs. This stage explicitly excludes AI/chat integration.
 2. `feat/backend-ai-agent` — planned after non-AI frontend/backend integration
    to explain stable Aura analysis, report, and simulation results in simple
    educational language without inventing calculations or financial advice.
@@ -1182,6 +1249,6 @@ communication and contracts, CORS, loading/error behavior, portfolio and
 analysis/report workflows, and simulation flows can be validated before AI
 integration begins.
 
-All six planned workstreams remain unimplemented. AI endpoints and chat
-integration do not yet exist, final backend integration is not ready, and
-deployment remains later work.
+The five follow-on workstreams remain planned and unimplemented. AI endpoints
+and chat integration do not yet exist, final backend integration is not ready,
+and deployment remains later work.
