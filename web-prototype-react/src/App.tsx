@@ -1,24 +1,19 @@
 // @ts-nocheck
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   correlation,
   defaultPortfolios,
-  marketOverview,
   reportsSeed,
   scenarioOptions,
   watchlistSeed
 } from './data/mockData';
-import { backendReady } from './services';
-
 const navItems = [
-  ['dashboard', '⌂', 'Dashboard'],
-  ['portfolios', '▣', 'Portfolios'],
-  ['analytics', '◈', 'Analytics'],
-  ['simulations', '◫', 'Simulations'],
-  ['assistant', '◎', 'AI Assistant'],
-  ['reports', '▤', 'Reports'],
-  ['watchlist', '☆', 'Watchlist'],
-  ['learn', '▥', 'Learn']
+  ['dashboard', 'dashboard', 'Dashboard'],
+  ['portfolios', 'portfolios', 'Portfolios'],
+  ['analytics', 'analytics', 'Analytics'],
+  ['simulations', 'simulations', 'Simulations'],
+  ['assistant', 'assistant', 'AI Assistant'],
+  ['reports', 'reports', 'Reports']
 ];
 
 const lineA = [18, 16, 20, 17, 24, 25, 29, 33, 31, 36, 39, 43, 40, 45, 49, 44, 50, 54, 58, 55, 61, 64, 67, 73, 69, 76, 81, 78, 85, 91];
@@ -104,42 +99,85 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar route={route} />
+      <TopNavigation route={route} settings={settings} />
       <main className="main-area">
-        <div className="top-strip">
-          <div className="demo-badge">{backendReady ? 'API connected' : 'Interactive frontend demo'}</div>
-          <button className="icon-btn" aria-label="notifications">🔔<span className="notification-dot" /></button>
-        </div>
         {content}
       </main>
     </div>
   );
 }
 
-function Sidebar({ route }) {
+function Icon({ name, size = 20 }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true
+  };
+
+  switch (name) {
+    case 'dashboard': return <svg {...common}><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5M9 21v-7h6v7"/></svg>;
+    case 'portfolios': return <svg {...common}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>;
+    case 'analytics': return <svg {...common}><path d="m12 3 9 9-9 9-9-9 9-9Z"/><circle cx="12" cy="12" r="3"/></svg>;
+    case 'simulations': return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M15 4v16"/></svg>;
+    case 'assistant': return <svg {...common}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3"/></svg>;
+    case 'reports': return <svg {...common}><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h8"/></svg>;
+    case 'search': return <svg {...common}><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>;
+    case 'bell': return <svg {...common}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>;
+    case 'wallet': return <svg {...common}><path d="M4 7h16v12H4zM7 7V4h9v3M16 12h4"/></svg>;
+    case 'calendar': return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>;
+    case 'trend': return <svg {...common}><path d="m3 17 6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg>;
+    case 'shield': return <svg {...common}><path d="M12 3 4.5 6v5c0 5 3.2 8.3 7.5 10 4.3-1.7 7.5-5 7.5-10V6L12 3Z"/><path d="m9 12 2 2 4-5"/></svg>;
+    case 'drawdown': return <svg {...common}><path d="m3 7 6 6 4-4 8 8"/><path d="M15 17h6v-6"/></svg>;
+    case 'spark': return <svg {...common}><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/></svg>;
+    case 'analysis': return <svg {...common}><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="2"/></svg>;
+    default: return null;
+  }
+}
+
+function TopNavigation({ route, settings }) {
+  const [open, setOpen] = useState(false);
+  const initials = settings?.name?.split(/\s+/).map(part => part[0]).slice(0, 2).join('').toUpperCase() || 'YL';
+  const isActive = key => route.page === key || (key === 'portfolios' && ['portfolio', 'create'].includes(route.page));
+
   return (
-    <aside className="sidebar">
-      <button className="brand" onClick={() => go('dashboard')}><span className="brand-mark">A</span><span>AURA</span></button>
-      <nav className="nav-list">
-        {navItems.map(([key, icon, label]) => (
-          <button key={key} className={`nav-item ${route.page === key || (key === 'portfolios' && route.page === 'portfolio') ? 'active' : ''}`} onClick={() => go(key)}>
-            <span>{icon}</span><span>{label}</span>
+    <header className="top-nav">
+      <div className="top-nav-inner">
+        <button className="brand" onClick={() => go('dashboard')} aria-label="Go to dashboard">
+          <span className="brand-mark">A</span><span>AURA</span>
+        </button>
+        <nav className="nav-list" aria-label="Primary navigation">
+          {navItems.map(([key, icon, label]) => (
+            <button key={key} className={`nav-item ${isActive(key) ? 'active' : ''}`} onClick={() => go(key)}>
+              <span className="nav-icon"><Icon name={icon} size={18}/></span><span>{label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="top-nav-actions">
+          <button className="nav-action" aria-label="Search"><Icon name="search" size={21}/></button>
+          <button className="nav-action notification-button" aria-label="Notifications">
+            <Icon name="bell" size={21}/><span className="notification-dot" />
           </button>
-        ))}
-      </nav>
-      <div className="sidebar-spacer" />
-      <div className="quick-actions">
-        <div className="quick-title">QUICK ACTIONS</div>
-        <button onClick={() => go('create')}>＋ New Portfolio</button>
-        <button onClick={() => go('simulations')}>▶ Run Simulation</button>
-        <button onClick={() => go('assistant')}>✦ Ask AI Assistant</button>
+          <div className="profile-menu-wrap">
+            <button className="profile-trigger" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="menu">
+              <span className="avatar">{initials}</span><span className="chevron">⌄</span>
+            </button>
+            {open && <div className="profile-menu" role="menu">
+              <strong>{settings?.name || 'Aura User'}</strong>
+              <small>{settings?.email || 'Portfolio owner'}</small>
+              <button onClick={() => { setOpen(false); go('settings'); }}>Settings</button>
+              <button onClick={() => { setOpen(false); go('watchlist'); }}>Watchlist</button>
+              <button onClick={() => { setOpen(false); go('learn'); }}>Learn</button>
+            </div>}
+          </div>
+        </div>
       </div>
-      <button className="user-card" onClick={() => go('settings')}>
-        <div className="avatar">YL</div>
-        <div><strong>Yan Lin Oo</strong><small>Premium Plan</small></div>
-        <span>⌃</span>
-      </button>
-    </aside>
+    </header>
   );
 }
 
@@ -170,7 +208,7 @@ function svgPoints(values, width, height, pad = 8) {
   }).join(' ');
 }
 
-function LineChart({ primary = lineA, secondary, labels = ['Jan 21', 'Nov 21', 'Sep 22', 'Jul 23', 'May 24', 'May 26'], height = 210, negative = false }) {
+function LineChart({ primary = lineA, secondary, labels = ['Jan 21', 'Nov 21', 'Sep 22', 'Jul 23', 'May 24', 'May 26'], height = 210, negative = false, area = false }) {
   const all = secondary ? [...primary, ...secondary] : primary;
   const min = Math.min(...all, negative ? -50 : 0), max = Math.max(...all, 10);
   const normalized = arr => arr.map((v, i) => {
@@ -181,8 +219,10 @@ function LineChart({ primary = lineA, secondary, labels = ['Jan 21', 'Nov 21', '
   return (
     <div className="chart-wrap">
       <svg viewBox={`0 0 700 ${height}`} className="line-chart" preserveAspectRatio="none">
+        {area && <defs><linearGradient id="performance-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#765CFF" stopOpacity=".34"/><stop offset="100%" stopColor="#765CFF" stopOpacity=".02"/></linearGradient></defs>}
         {[0.25, 0.5, 0.75].map(n => <line key={n} x1="14" y1={height*n} x2="686" y2={height*n} className="grid-line" />)}
         {negative && <line x1="14" y1={14 + (max / (max - min)) * (height - 42)} x2="686" y2={14 + (max / (max - min)) * (height - 42)} className="zero-line" />}
+        {area && <polygon points={`14,${height - 28} ${normalized(primary)} 686,${height - 28}`} fill="url(#performance-area)" />}
         {secondary && <polyline points={normalized(secondary)} fill="none" className="secondary-line" strokeWidth="2.2" vectorEffect="non-scaling-stroke" />}
         <polyline points={normalized(primary)} fill="none" className="primary-line" strokeWidth="3" vectorEffect="non-scaling-stroke" />
       </svg>
@@ -197,7 +237,7 @@ function RiskGauge({ score = 65, label = 'Moderate' }) {
 }
 
 function Donut({ holdings }) {
-  const colors = ['#633cff', '#1f73ff', '#14b8a6', '#ff9f1c', '#f04fb3', '#8b5cf6'];
+  const colors = ['#5844E5', '#1160F8', '#11B89D', '#F2A121', '#A855F7', '#3B82F6'];
   let offset = 0;
   const circles = holdings.slice(0, 6).map((h, i) => {
     const dash = `${h.weight} ${100 - h.weight}`;
@@ -205,7 +245,7 @@ function Donut({ holdings }) {
     offset += h.weight;
     return node;
   });
-  return <svg className="donut" viewBox="0 0 100 100" transform="rotate(-90)">{circles}<circle cx="50" cy="50" r="24" fill="white" /></svg>;
+  return <svg className="donut" viewBox="0 0 100 100" transform="rotate(-90)">{circles}<circle cx="50" cy="50" r="24" fill="var(--bg-card)" /></svg>;
 }
 
 function RiskPill({ score }) {
@@ -213,42 +253,121 @@ function RiskPill({ score }) {
   return <span className={`pill ${level}`}>{score} · {level === 'high' ? 'High' : level === 'moderate' ? 'Moderate' : 'Low'}</span>;
 }
 
-function Dashboard({ portfolios }) {
-  const total = portfolios.reduce((s, p) => s + p.value, 0);
-  const tech = portfolios.find(p => p.id === 'tech') || portfolios[0];
+function Dashboard({ portfolios, settings }) {
+  const [selectedId, setSelectedId] = useState(portfolios[0]?.id || '');
+  const portfolio = portfolios.find(item => item.id === selectedId) || portfolios[0];
+  if (!portfolio) return null;
+
+  const firstName = settings?.name?.split(/\s+/)[0] || 'Yan';
+  const annualizedReturn = Number(portfolio.annualizedReturn ?? portfolio.totalReturn ?? 0);
+  const riskLabel = String(portfolio.riskLevel || 'Moderate').replace(/\s+Risk$/i, '');
+  const riskDrivers = portfolio.holdings.filter(item => item.symbol !== 'CASH').slice(0, 3);
+  const allocation = Object.values(portfolio.holdings.reduce((groups, holding) => {
+    const label = holding.type === 'Cash' ? 'Cash' : holding.type.includes('Bond') ? 'Bonds' : holding.type.includes('Crypto') ? 'Crypto' : 'Equity';
+    groups[label] = groups[label] || { symbol: label, type: label, weight: 0 };
+    groups[label].weight += Number(holding.weight || 0);
+    return groups;
+  }, {}));
+
   return (
     <div className="page dashboard-page">
-      <PageHeader title="Good evening, Yan! 👋" subtitle="Here's what's happening with your portfolios today." actions={<button className="select-btn">Jan 1, 2021 - May 11, 2026⌄</button>} />
-      <div className="stat-grid five">
-        <StatCard label="Total Portfolio Value" value={money(total)} sub="▲ $14,200 (6.4%)" tone="green" />
-        <Card className="stat-card risk-stat"><small>Overall Risk Score</small><div className="risk-inline"><div><strong>65</strong><span className="stat-sub orange">Moderate</span></div><RiskGauge score={65} label="" /></div></Card>
-        <StatCard label="Daily Volatility" value="15.32%" sub="Annualized" />
-        <StatCard label="Max Drawdown" value="-21.45%" sub="Mar 2020" tone="red" spark={downturnA.slice(0, 12)} />
-        <StatCard label="Sharpe Ratio" value="1.24" sub="Good" tone="blue" spark={lineB.slice(0, 12)} />
+      <section className="dashboard-hero">
+        <svg className="dashboard-wave" viewBox="0 0 900 120" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 77 C80 31 125 105 205 60 S330 28 395 68 510 96 580 48 690 28 760 58 900 35" />
+          <path className="wave-dots" d="M0 92 C95 45 145 116 230 72 S360 42 430 79 555 105 630 62 740 45 900 57" />
+        </svg>
+        <div className="dashboard-greeting">
+          <h1>Good evening, {firstName}! <span aria-hidden="true">👋</span></h1>
+          <p>Here's your portfolio overview and key insights.</p>
+        </div>
+        <div className="dashboard-selectors">
+          <label className="dashboard-selector">
+            <Icon name="wallet" size={19}/>
+            <span className="sr-only">Portfolio</span>
+            <select value={portfolio.id} onChange={event => setSelectedId(event.target.value)}>
+              {portfolios.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+          <button className="dashboard-selector date-selector"><Icon name="calendar" size={19}/><span>May 11, 2026</span><span className="selector-chevron">⌄</span></button>
+        </div>
+      </section>
+
+      <div className="dashboard-kpis">
+        <DashboardKpi title="Total Portfolio Value" icon="wallet" tone="purple" visual={<MiniLine values={lineA.slice(12)} />}>
+          <strong>{money(portfolio.value)}</strong>
+          <span className="metric-change positive">▲ {money(portfolio.value * .064)} (6.4%)</span>
+        </DashboardKpi>
+        <DashboardKpi title="Risk Score" icon="shield" tone="amber" visual={<RiskGauge score={portfolio.riskScore} label="" />}>
+          <strong>{portfolio.riskScore}</strong>
+          <span className="metric-change warning">{riskLabel}</span>
+        </DashboardKpi>
+        <DashboardKpi title="Annualized Return" icon="trend" tone="purple" visual={<MiniLine values={lineA.slice(8)} />}>
+          <strong>{pct(annualizedReturn)}</strong>
+          <span className="metric-change purple-text">Annualized</span>
+        </DashboardKpi>
+        <DashboardKpi title="Maximum Drawdown" icon="drawdown" tone="red" visual={<MiniLine values={downturnA.slice(6)} />}>
+          <strong>-21.45%</strong>
+          <span className="metric-change negative">Mar 2020</span>
+        </DashboardKpi>
       </div>
 
-      <div className="dashboard-grid top">
-        <Card className="allocation-card"><CardTitle title="Portfolio Allocation" /><div className="allocation-body"><Donut holdings={tech.holdings} /><div className="legend">{tech.holdings.slice(0,4).map((h,i)=><div key={h.symbol}><span className={`legend-dot c${i}`}/><strong>{h.type}</strong><b>{h.weight}%</b><small>{money(h.value)}</small></div>)}</div></div></Card>
-        <Card className="value-card"><CardTitle title="Portfolio Value Over Time" right={<div className="range-tabs"><button>1M</button><button>6M</button><button>1Y</button><button>3Y</button><button className="active">All</button></div>} /><LineChart primary={lineA} height={205}/></Card>
-        <Card><CardTitle title="Top Risk Drivers" right={<button className="text-btn" onClick={() => go('analytics')}>View all</button>} /><div className="risk-list">{tech.holdings.slice(0,4).map((h,i)=><div key={h.symbol}><SymbolBadge symbol={h.symbol}/><div><strong>{h.name}</strong><small>{h.symbol}</small></div><b>{h.weight}%</b><span className={`mini-risk ${i < 2 ? 'high' : i === 2 ? 'moderate' : 'low'}`}>{i<2?'High':i===2?'Medium':'Low'}</span></div>)}</div></Card>
+      <div className="dashboard-primary-grid">
+        <Card className="dashboard-performance-card">
+          <div className="dashboard-card-header performance-header">
+            <div className="dashboard-card-title"><span className="title-icon"><Icon name="trend" size={22}/></span><h2>Portfolio Performance</h2></div>
+            <div className="range-tabs"><button>1M</button><button>6M</button><button>1Y</button><button>3Y</button><button className="active">All</button></div>
+            <div className="performance-return"><strong>{pct(annualizedReturn)}</strong><small>Annualized Return</small></div>
+          </div>
+          <div className="dashboard-chart-axis"><span>$120K</span><span>$100K</span><span>$80K</span><span>$60K</span><span>$40K</span></div>
+          <LineChart primary={lineA} height={245} area />
+        </Card>
+
+        <Card className="dashboard-risk-card">
+          <div className="dashboard-card-header"><div className="dashboard-card-title"><h2>Top Risk Drivers</h2></div><button className="text-btn" onClick={() => go(`analytics/${portfolio.id}`)}>View all</button></div>
+          <div className="dashboard-risk-list">
+            {riskDrivers.map((holding, index) => <div key={holding.symbol}>
+              <SymbolBadge symbol={holding.symbol}/>
+              <div><strong>{holding.name}</strong><small>{holding.symbol}</small></div>
+              <b>{holding.weight}%</b>
+              <span className={`mini-risk ${index < 2 ? 'high' : 'moderate'}`}>{index < 2 ? 'High' : 'Medium'}</span>
+            </div>)}
+          </div>
+        </Card>
       </div>
 
-      <div className="feature-strip">
-        <FeatureCard icon="◉" title="Analyze Portfolio" text="Get comprehensive risk analysis and performance metrics." button="Analyze Now →" onClick={()=>go('analytics')} />
-        <FeatureCard icon="◫" title="What-If Simulator" text="Test your portfolio in historical market scenarios." button="Run Simulation →" onClick={()=>go('simulations')} tone="blue" />
-        <FeatureCard icon="••" title="AI Assistant" text="Ask questions and get simple explanations about your portfolio." button="Ask AI →" onClick={()=>go('assistant')} tone="pink" />
-        <FeatureCard icon="▤" title="View Reports" text="Review your previous analysis reports and export data." button="View Reports →" onClick={()=>go('reports')} tone="green" />
-        <FeatureCard icon="◷" title="Recent Simulation" text="See your recent what-if simulations and results." button="View All →" onClick={()=>go('simulations')} tone="orange" />
-      </div>
+      <div className="dashboard-bottom-grid">
+        <Card className="dashboard-allocation-card">
+          <div className="dashboard-card-header"><div className="dashboard-card-title"><span className="title-icon allocation-icon">◔</span><h2>Portfolio Allocation</h2></div></div>
+          <div className="dashboard-allocation-body">
+            <Donut holdings={allocation}/>
+            <div className="dashboard-legend">{allocation.map((item, index) => <div key={item.symbol}><span className={`legend-dot c${index}`}/><span>{item.type}</span><strong>{item.weight.toFixed(1)}%</strong></div>)}</div>
+          </div>
+        </Card>
 
-      <div className="dashboard-grid bottom">
-        <Card><CardTitle title="Recent Portfolios" right={<button className="text-btn" onClick={()=>go('portfolios')}>View all</button>} /><div className="portfolio-list">{portfolios.slice(0,4).map(p=><button key={p.id} onClick={()=>go(`portfolio/${p.id}`)}><SymbolBadge symbol={p.name.slice(0,2).toUpperCase()} /><div><strong>{p.name}</strong><small>{new Date(p.created).toLocaleDateString()}</small></div><b>{money(p.value)}</b><RiskPill score={p.riskScore}/></button>)}</div></Card>
-        <Card><CardTitle title="Market Overview" right={<button className="text-btn" onClick={()=>go('watchlist')}>View more</button>} /><div className="market-list">{marketOverview.map((m,i)=><div key={m.symbol}><div><strong>{m.symbol}</strong><small>{m.price}</small></div><MiniLine values={i===2?downturnA.slice(0,10):lineB.slice(i, i+10)} /><span className={m.change>=0?'green-text':'red-text'}>{pct(m.change)}</span></div>)}</div></Card>
-        <Card><CardTitle title="Asset Correlation (Heatmap)" right={<button className="text-btn" onClick={()=>go('analytics')}>View full</button>} /><Heatmap compact /></Card>
-        <Card className="insight-card"><CardTitle title="✦ AI Insight" right={<button className="text-btn" onClick={()=>go('assistant')}>View all</button>} /><p>Your portfolio risk score is <strong>72 (Moderate)</strong>, mainly because NVDA and TSLA have a high combined weight and move together often.</p><p>Adding more bonds or defensive assets may reduce historical volatility.</p><button className="primary-btn wide" onClick={()=>go('assistant')}>Ask AI for details →</button></Card>
+        <Card className="dashboard-insight-card">
+          <div className="dashboard-card-header"><div className="dashboard-card-title"><span className="title-icon"><Icon name="spark" size={21}/></span><h2>AI Insight</h2></div></div>
+          <p>Your portfolio risk score is <strong>{portfolio.riskScore} ({riskLabel})</strong>. Concentration in the largest holdings increases historical drawdown risk. Broader diversification may improve long-term resilience.</p>
+          <button className="primary-btn insight-action" onClick={() => go('assistant')}>Ask Aura <span>→</span></button>
+        </Card>
+
+        <Card className="dashboard-analysis-card">
+          <div className="dashboard-card-header"><div className="dashboard-card-title"><span className="title-icon"><Icon name="analysis" size={22}/></span><h2>Portfolio Analysis</h2></div></div>
+          <div className="analysis-status"><p>Last analyzed: May 11, 2026</p><p>Risk score: <strong>{portfolio.riskScore}</strong><span>•</span><b>{riskLabel}</b></p></div>
+          <div className="analysis-card-actions">
+            <button className="primary-btn" onClick={() => go(`analytics/${portfolio.id}`)}>View Analysis <span>→</span></button>
+            <button className="secondary-btn" onClick={() => go(`analytics/${portfolio.id}`)}>Re-analyze <span>↻</span></button>
+          </div>
+        </Card>
       </div>
     </div>
   );
+}
+
+function DashboardKpi({ title, icon, tone, visual, children }) {
+  return <Card className={`dashboard-kpi ${tone}`}>
+    <div className="metric-heading"><span className="metric-icon"><Icon name={icon} size={21}/></span><span>{title}</span></div>
+    <div className="metric-body"><div className="metric-copy">{children}</div><div className="metric-visual">{visual}</div></div>
+  </Card>;
 }
 
 function CardTitle({ title, right }) {
