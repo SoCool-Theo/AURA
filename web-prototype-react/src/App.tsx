@@ -611,6 +611,8 @@ function CreatePortfolio({ portfolios, setPortfolios }) {
   ]);
   const total=holdings.reduce((s,h)=>s+h.price*h.shares,0);
   const totalWeight=holdings.reduce((s,h)=>s+Number(h.weight),0);
+  const steps=[['1','Basic Info','Name and preferences'],['2','Add Holdings','Build your allocation'],['3','Review','Confirm and create']];
+  const currentStep=steps[step-1];
   function addHolding() {
     const symbol=prompt('Asset symbol'); if(!symbol)return;
     const amount=Number(prompt('Amount invested in USD','1000'))||1000;
@@ -628,7 +630,49 @@ function CreatePortfolio({ portfolios, setPortfolios }) {
     const p={id,name:name.trim(),created:new Date().toISOString().slice(0,10),value,totalReturn:0,riskScore:55,riskLevel:'Moderate',cash:holdings.find(h=>h.symbol==='CASH')?.price*holdings.find(h=>h.symbol==='CASH')?.shares||0,holdings:holdings.map(h=>({...h,value:h.price*h.shares,dailyChange:0}))};
     setPortfolios([...portfolios,p]);go(`portfolio/${id}`);
   }
-  return <div className="page create-page"><PageHeader title="Create New Portfolio" subtitle="Set up your portfolio details." /><div className="wizard-layout"><Card className="wizard-steps">{[['1','Basic Info'],['2','Add Holdings'],['3','Review']].map(([n,label])=><button key={n} className={step===Number(n)?'active':''} onClick={()=>setStep(Number(n))}><span>{n}</span>{label}</button>)}</Card><Card className="wizard-main">{step===1&&<><h2>Basic Info</h2><label>Portfolio Name<input value={name} onChange={e=>setName(e.target.value)}/></label><label>Description (optional)<textarea rows="4" value={description} onChange={e=>setDescription(e.target.value)}/></label><label>Currency<select><option>USD - US Dollar</option></select></label><div className="wizard-art"><div className="fake-pie">◔</div><span>Build a portfolio, then analyze its historical risk.</span></div><div className="wizard-footer"><span/><button className="primary-btn" onClick={()=>setStep(2)}>Next: Add Holdings →</button></div></>}{step===2&&<><div className="wizard-title-row"><h2>Add Holdings</h2><button className="primary-btn" onClick={addHolding}>Add Manually</button></div><input className="asset-search" placeholder="Search assets (e.g., AAPL, Microsoft, etc.)"/><div className="table-scroll"><table><thead><tr><th>Asset</th><th>Type</th><th>Price</th><th>Shares / Amount</th><th>Allocation</th><th>Action</th></tr></thead><tbody>{holdings.map(h=><tr key={h.symbol}><td><div className="asset-cell"><SymbolBadge symbol={h.symbol}/><div><strong>{h.symbol}</strong><small>{h.name}</small></div></div></td><td>{h.type}</td><td>{money(h.price)}</td><td><input className="table-input" type="number" value={h.shares} onChange={e=>setHoldings(holdings.map(x=>x.symbol===h.symbol?{...x,shares:Number(e.target.value)}:x))}/></td><td>{h.weight}%</td><td><button className="table-action" onClick={()=>removeHolding(h.symbol)}>×</button></td></tr>)}</tbody></table></div><div className="allocation-total">Total Allocation <strong className={Math.abs(totalWeight-100)<.2?'green-text':'orange-text'}>{totalWeight.toFixed(1)}%</strong></div><div className="wizard-footer"><button className="secondary-btn" onClick={()=>setStep(1)}>← Back</button><button className="primary-btn" onClick={()=>setStep(3)}>Next: Review →</button></div></>}{step===3&&<><h2>Review Portfolio</h2><div className="review-summary"><div><small>Name</small><strong>{name}</strong></div><div><small>Total Value</small><strong>{money(total)}</strong></div><div><small>Holdings</small><strong>{holdings.length}</strong></div><div><small>Allocation</small><strong>{totalWeight.toFixed(1)}%</strong></div></div><HoldingsReview holdings={holdings}/><p className="note">After creation, Aura can analyze the portfolio once the frontend is connected to the backend analysis service.</p><div className="wizard-footer"><button className="secondary-btn" onClick={()=>setStep(2)}>← Back</button><button className="primary-btn" onClick={create}>Create Portfolio ✓</button></div></>}</Card></div></div>;
+  return <div className="page create-page">
+    <button className="create-back-link" onClick={()=>go('portfolios')}>← Back to Portfolios</button>
+    <section className="create-header"><div><h1>Create New Portfolio</h1><p>Build a portfolio to explore its historical performance and risk.</p></div><span>Step {step} of {steps.length}</span></section>
+
+    <Card className="create-stepper">{steps.map(([number,label,detail],index)=><React.Fragment key={number}>
+      <button className={`${step===Number(number)?'active':''} ${step>Number(number)?'complete':''}`} onClick={()=>setStep(Number(number))} aria-current={step===Number(number)?'step':undefined}>
+        <span className="step-number">{step>Number(number)?'✓':number}</span><span className="step-copy"><strong>{label}</strong><small>{detail}</small></span>
+      </button>{index<steps.length-1&&<span className={`step-connector ${step>index+1?'complete':''}`}/>} 
+    </React.Fragment>)}</Card>
+
+    <div className="create-workspace">
+      <Card className="wizard-main">
+        <div className="wizard-section-header"><span>STEP {currentStep[0]}</span><h2>{step===1?'Portfolio Information':step===2?'Add Your Holdings':'Review Your Portfolio'}</h2><p>{step===1?'Give this portfolio a clear name and description.':step===2?'Add the assets and amounts you want Aura to analyze.':'Check the portfolio details before creating it.'}</p></div>
+
+        {step===1&&<div className="wizard-step-content basic-info-step">
+          <div className="wizard-form-grid">
+            <label className="wizard-field"><span>Portfolio Name</span><small>Use a name that helps you recognize this portfolio.</small><input value={name} onChange={event=>setName(event.target.value)} placeholder="e.g. Long-Term Growth"/></label>
+            <label className="wizard-field"><span>Currency</span><small>Values and reports will use this currency.</small><span className="wizard-select"><select><option>USD - US Dollar</option></select><Icon name="chevron-down" size={16}/></span></label>
+            <label className="wizard-field full"><span>Description <em>Optional</em></span><small>Add a short note about the portfolio's purpose.</small><textarea rows="5" value={description} onChange={event=>setDescription(event.target.value)} placeholder="Describe your investment goal..."/></label>
+          </div>
+        </div>}
+
+        {step===2&&<div className="wizard-step-content holdings-step">
+          <div className="wizard-title-row"><label className="asset-search"><Icon name="search" size={18}/><span className="sr-only">Search assets</span><input placeholder="Search assets by symbol or company name..."/></label><button className="primary-btn" onClick={addHolding}>＋ Add Manually</button></div>
+          <div className="wizard-holdings-table table-scroll"><table><thead><tr><th>Asset</th><th>Type</th><th>Price</th><th>Shares / Amount</th><th>Allocation</th><th><span className="sr-only">Action</span></th></tr></thead><tbody>{holdings.map(holding=><tr key={holding.symbol}><td><div className="asset-cell"><SymbolBadge symbol={holding.symbol}/><div><strong>{holding.symbol}</strong><small>{holding.name}</small></div></div></td><td><span className="asset-type">{holding.type}</span></td><td>{money(holding.price)}</td><td><input className="table-input" aria-label={`${holding.symbol} shares`} type="number" value={holding.shares} onChange={event=>setHoldings(holdings.map(item=>item.symbol===holding.symbol?{...item,shares:Number(event.target.value)}:item))}/></td><td><strong>{holding.weight}%</strong></td><td><button className="remove-holding" aria-label={`Remove ${holding.symbol}`} onClick={()=>removeHolding(holding.symbol)}>×</button></td></tr>)}</tbody></table></div>
+          <div className="allocation-status"><div><span>Total allocation</span><small>Portfolio weights should total 100%.</small></div><div className="allocation-progress"><span style={{width:`${Math.min(100,totalWeight)}%`}}/><b className={Math.abs(totalWeight-100)<.2?'green-text':'orange-text'}>{totalWeight.toFixed(1)}%</b></div></div>
+        </div>}
+
+        {step===3&&<div className="wizard-step-content review-step">
+          <div className="review-summary"><div><small>Portfolio Name</small><strong>{name}</strong></div><div><small>Total Value</small><strong>{money(total)}</strong></div><div><small>Holdings</small><strong>{holdings.length}</strong></div><div><small>Allocation</small><strong className={Math.abs(totalWeight-100)<.2?'green-text':'orange-text'}>{totalWeight.toFixed(1)}%</strong></div></div>
+          <div className="review-holdings-card"><div className="review-holdings-title"><h3>Holdings</h3><button onClick={()=>setStep(2)}>Edit holdings</button></div><HoldingsReview holdings={holdings}/></div>
+          <div className="educational-notice"><Icon name="shield" size={19}/><p>Aura analyzes historical portfolio risk for educational purposes. It does not provide buy or sell recommendations.</p></div>
+        </div>}
+
+        <div className="wizard-footer"><button className="secondary-btn" onClick={()=>step===1?go('portfolios'):setStep(step-1)}>{step===1?'Cancel':'← Back'}</button>{step<3?<button className="primary-btn" onClick={()=>setStep(step+1)}>{step===1?'Continue to Holdings':'Review Portfolio'} <span>→</span></button>:<button className="primary-btn create-confirm-btn" onClick={create}>Create Portfolio <span>✓</span></button>}</div>
+      </Card>
+
+      <aside className="create-sidebar">
+        <Card className="portfolio-preview-card"><div className="preview-icon"><Icon name="portfolios" size={22}/></div><small>PORTFOLIO PREVIEW</small><h3>{name.trim()||'Untitled Portfolio'}</h3><p>{description.trim()||'No description added.'}</p><dl><div><dt>Estimated value</dt><dd>{money(total)}</dd></div><div><dt>Holdings</dt><dd>{holdings.length}</dd></div><div><dt>Allocation</dt><dd className={Math.abs(totalWeight-100)<.2?'green-text':'orange-text'}>{totalWeight.toFixed(1)}%</dd></div></dl></Card>
+        <Card className="after-create-card"><h3>What happens next?</h3><div><span>1</span><p><strong>Create portfolio</strong><small>Save these holdings in your Aura workspace.</small></p></div><div><span>2</span><p><strong>Run analysis</strong><small>Calculate historical risk and performance metrics.</small></p></div><div><span>3</span><p><strong>Explore insights</strong><small>Understand the results in beginner-friendly language.</small></p></div></Card>
+      </aside>
+    </div>
+  </div>;
 }
 
 function HoldingsReview({ holdings }) {return <div className="holding-review">{holdings.map(h=><div key={h.symbol}><div className="asset-cell"><SymbolBadge symbol={h.symbol}/><div><strong>{h.symbol}</strong><small>{h.name}</small></div></div><strong>{h.weight}%</strong><span>{money(h.price*h.shares)}</span></div>)}</div>}
