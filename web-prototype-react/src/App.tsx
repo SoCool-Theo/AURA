@@ -129,6 +129,7 @@ function Icon({ name, size = 20 }) {
     case 'reports': return <svg {...common}><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h8"/></svg>;
     case 'search': return <svg {...common}><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>;
     case 'bell': return <svg {...common}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>;
+    case 'chevron-down': return <svg {...common}><path d="m7 9.5 5 5 5-5"/></svg>;
     case 'wallet': return <svg {...common}><path d="M4 7h16v12H4zM7 7V4h9v3M16 12h4"/></svg>;
     case 'calendar': return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>;
     case 'trend': return <svg {...common}><path d="m3 17 6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg>;
@@ -165,7 +166,7 @@ function TopNavigation({ route, settings }) {
           </button>
           <div className="profile-menu-wrap">
             <button className="profile-trigger" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="menu">
-              <span className="avatar">{initials}</span><span className="chevron">⌄</span>
+              <span className="avatar">{initials}</span><span className="chevron"><Icon name="chevron-down" size={17}/></span>
             </button>
             {open && <div className="profile-menu" role="menu">
               <strong>{settings?.name || 'Aura User'}</strong>
@@ -287,8 +288,9 @@ function Dashboard({ portfolios, settings }) {
             <select value={portfolio.id} onChange={event => setSelectedId(event.target.value)}>
               {portfolios.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
+            <span className="selector-chevron"><Icon name="chevron-down" size={17}/></span>
           </label>
-          <button className="dashboard-selector date-selector"><Icon name="calendar" size={19}/><span>May 11, 2026</span><span className="selector-chevron">⌄</span></button>
+          <button className="dashboard-selector date-selector"><Icon name="calendar" size={19}/><span>May 11, 2026</span><span className="selector-chevron"><Icon name="chevron-down" size={17}/></span></button>
         </div>
       </section>
 
@@ -384,8 +386,23 @@ function SymbolBadge({ symbol }) {
 
 function Portfolios({ portfolios, setPortfolios }) {
   const [query, setQuery] = useState('');
+  const [riskFilter, setRiskFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('recent');
   const [editing, setEditing] = useState(null);
-  const visible = portfolios.filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
+  const riskLevel = portfolio => portfolio.riskScore >= 70 ? 'high' : portfolio.riskScore >= 55 ? 'moderate' : 'low';
+  const visible = portfolios
+    .filter(portfolio => portfolio.name.toLowerCase().includes(query.toLowerCase()))
+    .filter(portfolio => riskFilter === 'all' || riskLevel(portfolio) === riskFilter)
+    .sort((left, right) => {
+      if (sortBy === 'value') return right.value - left.value;
+      if (sortBy === 'risk') return right.riskScore - left.riskScore;
+      if (sortBy === 'return') return right.totalReturn - left.totalReturn;
+      return new Date(right.created).getTime() - new Date(left.created).getTime();
+    });
+  const combinedValue = portfolios.reduce((sum, portfolio) => sum + portfolio.value, 0);
+  const averageReturn = portfolios.length ? portfolios.reduce((sum, portfolio) => sum + portfolio.totalReturn, 0) / portfolios.length : 0;
+  const averageRisk = portfolios.length ? Math.round(portfolios.reduce((sum, portfolio) => sum + portfolio.riskScore, 0) / portfolios.length) : 0;
+  const trackedAssets = new Set(portfolios.flatMap(portfolio => portfolio.holdings.map(holding => holding.symbol))).size;
 
   function duplicate(p) {
     const copy = { ...p, id: `${slug(p.name)}-${Date.now()}`, name: `${p.name} Copy`, created: new Date().toISOString().slice(0,10), holdings: p.holdings.map(h=>({...h})) };
@@ -399,11 +416,45 @@ function Portfolios({ portfolios, setPortfolios }) {
     if (name?.trim()) setPortfolios(prev=>prev.map(x=>x.id===p.id?{...x,name:name.trim()}:x));
   }
 
-  return <div className="page">
-    <PageHeader title="Portfolios" subtitle="Create and manage your investment portfolios." actions={<button className="primary-btn" onClick={()=>go('create')}>＋ New Portfolio</button>} />
-    <Card className="toolbar"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search portfolios..."/><select><option>All risk levels</option><option>Low</option><option>Moderate</option><option>High</option></select></Card>
-    <div className="portfolio-grid">{visible.map(p=><Card key={p.id} className="portfolio-card"><div className="portfolio-card-head"><div><SymbolBadge symbol={p.name.slice(0,2).toUpperCase()} /><div><h3>{p.name}</h3><small>Created {new Date(p.created).toLocaleDateString()}</small></div></div><button onClick={()=>setEditing(editing===p.id?null:p.id)}>•••</button>{editing===p.id&&<div className="menu-pop"><button onClick={()=>rename(p)}>Rename</button><button onClick={()=>duplicate(p)}>Duplicate</button><button className="danger" onClick={()=>remove(p)}>Delete</button></div>}</div><div className="portfolio-card-metrics"><div><small>Portfolio Value</small><strong>{money(p.value)}</strong></div><div><small>Total Return</small><strong className="green-text">{pct(p.totalReturn)}</strong></div><div><small>Risk Score</small><strong>{p.riskScore}</strong></div></div><div className="portfolio-card-allocation">{p.holdings.slice(0,5).map(h=><span key={h.symbol} style={{width:`${h.weight}%`}} title={`${h.symbol} ${h.weight}%`}/>)}</div><div className="holding-chips">{p.holdings.slice(0,4).map(h=><span key={h.symbol}>{h.symbol} {h.weight}%</span>)}</div><div className="portfolio-card-actions"><button className="secondary-btn" onClick={()=>go(`portfolio/${p.id}`)}>Open Portfolio</button><button className="primary-btn" onClick={()=>go(`analytics/${p.id}`)}>Analyze</button></div></Card>)}</div>
+  return <div className="page portfolios-page">
+    <section className="portfolios-hero">
+      <div><h1>Portfolios</h1><p>Create, organize, and monitor the portfolios you use for risk analysis.</p></div>
+      <button className="primary-btn new-portfolio-btn" onClick={()=>go('create')}><span>＋</span> New Portfolio</button>
+    </section>
+
+    <div className="portfolio-summary-grid">
+      <PortfolioSummary label="Total Portfolios" value={portfolios.length} detail="Active portfolios" icon="portfolios" tone="purple" />
+      <PortfolioSummary label="Combined Value" value={money(combinedValue)} detail="Across all portfolios" icon="wallet" tone="blue" />
+      <PortfolioSummary label="Average Return" value={pct(averageReturn)} detail="Historical annualized" icon="trend" tone="green" />
+      <PortfolioSummary label="Average Risk" value={`${averageRisk}/100`} detail={`${trackedAssets} unique assets tracked`} icon="shield" tone="amber" />
+    </div>
+
+    <Card className="portfolio-toolbar">
+      <label className="portfolio-search"><Icon name="search" size={19}/><span className="sr-only">Search portfolios</span><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search portfolios..."/></label>
+      <div className="portfolio-toolbar-controls">
+        <label className="portfolio-filter"><span className="sr-only">Filter by risk</span><select value={riskFilter} onChange={event=>setRiskFilter(event.target.value)}><option value="all">All risk levels</option><option value="low">Low risk</option><option value="moderate">Moderate risk</option><option value="high">High risk</option></select><Icon name="chevron-down" size={16}/></label>
+        <label className="portfolio-filter"><span className="sr-only">Sort portfolios</span><select value={sortBy} onChange={event=>setSortBy(event.target.value)}><option value="recent">Recently created</option><option value="value">Highest value</option><option value="return">Highest return</option><option value="risk">Highest risk</option></select><Icon name="chevron-down" size={16}/></label>
+      </div>
+    </Card>
+
+    <div className="portfolio-section-heading"><div><h2>Your Portfolios</h2><p>{visible.length} of {portfolios.length} portfolios</p></div></div>
+    {visible.length ? <div className="portfolio-grid">{visible.map(portfolio=><Card key={portfolio.id} className="portfolio-card">
+      <div className="portfolio-card-head">
+        <div className="portfolio-identity"><SymbolBadge symbol={portfolio.name.slice(0,2).toUpperCase()} /><div><h3>{portfolio.name}</h3><small>Created {new Date(portfolio.created).toLocaleDateString()}</small></div></div>
+        <div className="portfolio-card-head-actions"><RiskPill score={portfolio.riskScore}/><button className="portfolio-menu-button" aria-label={`Actions for ${portfolio.name}`} onClick={()=>setEditing(editing===portfolio.id?null:portfolio.id)}>•••</button></div>
+        {editing===portfolio.id&&<div className="menu-pop portfolio-menu"><button onClick={()=>{rename(portfolio);setEditing(null)}}>Rename</button><button onClick={()=>{duplicate(portfolio);setEditing(null)}}>Duplicate</button><button className="danger" onClick={()=>{remove(portfolio);setEditing(null)}}>Delete</button></div>}
+      </div>
+      <div className="portfolio-card-metrics"><div><small>Portfolio Value</small><strong>{money(portfolio.value)}</strong></div><div><small>Annualized Return</small><strong className="green-text">{pct(portfolio.totalReturn)}</strong></div><div><small>Risk Score</small><strong>{portfolio.riskScore}<span>/100</span></strong></div></div>
+      <div className="portfolio-allocation-heading"><span>Allocation</span><small>{portfolio.holdings.length} holdings</small></div>
+      <div className="portfolio-card-allocation">{portfolio.holdings.slice(0,5).map(holding=><span key={holding.symbol} style={{width:`${holding.weight}%`}} title={`${holding.symbol} ${holding.weight}%`}/>)}</div>
+      <div className="holding-chips">{portfolio.holdings.slice(0,4).map(holding=><span key={holding.symbol}><b>{holding.symbol}</b>{holding.weight}%</span>)}{portfolio.holdings.length>4&&<span className="more-holdings">+{portfolio.holdings.length-4} more</span>}</div>
+      <div className="portfolio-card-actions"><button className="secondary-btn" onClick={()=>go(`portfolio/${portfolio.id}`)}>Open Portfolio <span>→</span></button><button className="primary-btn" onClick={()=>go(`analytics/${portfolio.id}`)}>View Analysis</button></div>
+    </Card>)}</div> : <Card className="portfolio-empty-state"><span><Icon name="search" size={25}/></span><h3>No portfolios found</h3><p>Try a different search term or risk filter.</p><button className="secondary-btn" onClick={()=>{setQuery('');setRiskFilter('all')}}>Clear filters</button></Card>}
   </div>;
+}
+
+function PortfolioSummary({ label, value, detail, icon, tone }) {
+  return <Card className={`portfolio-summary-card ${tone}`}><span className="summary-icon"><Icon name={icon} size={21}/></span><div><small>{label}</small><strong>{value}</strong><span>{detail}</span></div></Card>;
 }
 
 function PortfolioDetail({ portfolio, setPortfolios }) {
