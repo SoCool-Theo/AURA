@@ -1,6 +1,13 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
+import { DonutChart } from '../components/charts/DonutChart';
+import { GaugeChart } from '../components/charts/GaugeChart';
+import { LineChart } from '../components/charts/LineChart';
+import { MiniLineChart } from '../components/charts/MiniLineChart';
+import { Card } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
+import { RiskPill } from '../components/ui/RiskPill';
+import { SymbolBadge } from '../components/ui/SymbolBadge';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { correlation } from '../mocks/analytics.mock';
 import { downturnA, downturnB, lineA, lineB } from '../mocks/dashboard.mock';
@@ -10,7 +17,7 @@ import { defaultSettings } from '../mocks/settings.mock';
 import { scenarioOptions } from '../mocks/simulations.mock';
 import { watchlistSeed } from '../mocks/watchlist.mock';
 import { money, pct } from '../utils/formatting';
-import { clamp, slug } from '../utils/uiCalculations';
+import { slug } from '../utils/uiCalculations';
 import { AppLayout } from './AppLayout';
 import { go, routeFromHash } from './routes';
 
@@ -48,78 +55,6 @@ function App() {
   }
 
   return <AppLayout route={route} settings={settings}>{content}</AppLayout>;
-}
-
-function PageHeader({ title, subtitle, actions }) {
-  return <header className="page-header"><div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div><div className="header-actions">{actions}</div></header>;
-}
-
-function Card({ children, className = '' }) {
-  return <section className={`card ${className}`}>{children}</section>;
-}
-
-function StatCard({ label, value, sub, tone = 'purple', spark = lineA.slice(0, 12) }) {
-  return <Card className="stat-card"><small>{label}</small><strong>{value}</strong><span className={`stat-sub ${tone}`}>{sub}</span><MiniLine values={spark} /></Card>;
-}
-
-function MiniLine({ values }) {
-  const points = svgPoints(values, 160, 36, 4);
-  return <svg className="mini-line" viewBox="0 0 160 36" preserveAspectRatio="none"><polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>;
-}
-
-function svgPoints(values, width, height, pad = 8) {
-  const min = Math.min(...values), max = Math.max(...values);
-  const span = max - min || 1;
-  return values.map((v, i) => {
-    const x = pad + (i / Math.max(1, values.length - 1)) * (width - pad * 2);
-    const y = height - pad - ((v - min) / span) * (height - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-}
-
-function LineChart({ primary = lineA, secondary, labels = ['Jan 21', 'Nov 21', 'Sep 22', 'Jul 23', 'May 24', 'May 26'], height = 210, negative = false, area = false }) {
-  const all = secondary ? [...primary, ...secondary] : primary;
-  const min = Math.min(...all, negative ? -50 : 0), max = Math.max(...all, 10);
-  const normalized = arr => arr.map((v, i) => {
-    const x = 14 + (i / Math.max(1, arr.length - 1)) * 672;
-    const y = 14 + ((max - v) / (max - min || 1)) * (height - 42);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-  return (
-    <div className="chart-wrap">
-      <svg viewBox={`0 0 700 ${height}`} className="line-chart" preserveAspectRatio="none">
-        {area && <defs><linearGradient id="performance-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#765CFF" stopOpacity=".34"/><stop offset="100%" stopColor="#765CFF" stopOpacity=".02"/></linearGradient></defs>}
-        {[0.25, 0.5, 0.75].map(n => <line key={n} x1="14" y1={height*n} x2="686" y2={height*n} className="grid-line" />)}
-        {negative && <line x1="14" y1={14 + (max / (max - min)) * (height - 42)} x2="686" y2={14 + (max / (max - min)) * (height - 42)} className="zero-line" />}
-        {area && <polygon points={`14,${height - 28} ${normalized(primary)} 686,${height - 28}`} fill="url(#performance-area)" />}
-        {secondary && <polyline points={normalized(secondary)} fill="none" className="secondary-line" strokeWidth="2.2" vectorEffect="non-scaling-stroke" />}
-        <polyline points={normalized(primary)} fill="none" className="primary-line" strokeWidth="3" vectorEffect="non-scaling-stroke" />
-      </svg>
-      <div className="chart-labels">{labels.map(l => <span key={l}>{l}</span>)}</div>
-    </div>
-  );
-}
-
-function RiskGauge({ score = 65, label = 'Moderate' }) {
-  const deg = clamp(score, 0, 100) * 1.8;
-  return <div className="gauge-block"><div className="gauge" style={{'--score-deg': `${deg}deg`}}><div className="gauge-inner"><strong>{score}</strong><small>{label}</small></div></div></div>;
-}
-
-function Donut({ holdings }) {
-  const colors = ['#5844E5', '#1160F8', '#11B89D', '#F2A121', '#A855F7', '#3B82F6'];
-  let offset = 0;
-  const circles = holdings.slice(0, 6).map((h, i) => {
-    const dash = `${h.weight} ${100 - h.weight}`;
-    const node = <circle key={h.symbol} cx="50" cy="50" r="34" fill="none" stroke={colors[i % colors.length]} strokeWidth="15" strokeDasharray={dash} strokeDashoffset={-offset} pathLength="100" />;
-    offset += h.weight;
-    return node;
-  });
-  return <svg className="donut" viewBox="0 0 100 100" transform="rotate(-90)">{circles}<circle cx="50" cy="50" r="24" fill="var(--bg-card)" /></svg>;
-}
-
-function RiskPill({ score }) {
-  const level = score >= 70 ? 'high' : score >= 55 ? 'moderate' : 'low';
-  return <span className={`pill ${level}`}>{score} · {level === 'high' ? 'High' : level === 'moderate' ? 'Moderate' : 'Low'}</span>;
 }
 
 function Dashboard({ portfolios, settings }) {
@@ -163,19 +98,19 @@ function Dashboard({ portfolios, settings }) {
       </section>
 
       <div className="dashboard-kpis">
-        <DashboardKpi title="Total Portfolio Value" icon="wallet" tone="purple" visual={<MiniLine values={lineA.slice(12)} />}>
+        <DashboardKpi title="Total Portfolio Value" icon="wallet" tone="purple" visual={<MiniLineChart values={lineA.slice(12)} />}>
           <strong>{money(portfolio.value)}</strong>
           <span className="metric-change positive">▲ {money(portfolio.value * .064)} (6.4%)</span>
         </DashboardKpi>
-        <DashboardKpi title="Risk Score" icon="shield" tone="amber" visual={<RiskGauge score={portfolio.riskScore} label="" />}>
+        <DashboardKpi title="Risk Score" icon="shield" tone="amber" visual={<GaugeChart score={portfolio.riskScore} label="" />}>
           <strong>{portfolio.riskScore}</strong>
           <span className="metric-change warning">{riskLabel}</span>
         </DashboardKpi>
-        <DashboardKpi title="Annualized Return" icon="trend" tone="purple" visual={<MiniLine values={lineA.slice(8)} />}>
+        <DashboardKpi title="Annualized Return" icon="trend" tone="purple" visual={<MiniLineChart values={lineA.slice(8)} />}>
           <strong>{pct(annualizedReturn)}</strong>
           <span className="metric-change purple-text">Annualized</span>
         </DashboardKpi>
-        <DashboardKpi title="Maximum Drawdown" icon="drawdown" tone="red" visual={<MiniLine values={downturnA.slice(6)} />}>
+        <DashboardKpi title="Maximum Drawdown" icon="drawdown" tone="red" visual={<MiniLineChart values={downturnA.slice(6)} />}>
           <strong>-21.45%</strong>
           <span className="metric-change negative">Mar 2020</span>
         </DashboardKpi>
@@ -209,7 +144,7 @@ function Dashboard({ portfolios, settings }) {
         <Card className="dashboard-allocation-card">
           <div className="dashboard-card-header"><div className="dashboard-card-title"><span className="title-icon allocation-icon">◔</span><h2>Portfolio Allocation</h2></div></div>
           <div className="dashboard-allocation-body">
-            <Donut holdings={allocation}/>
+            <DonutChart holdings={allocation}/>
             <div className="dashboard-legend">{allocation.map((item, index) => <div key={item.symbol}><span className={`legend-dot c${index}`}/><span>{item.type}</span><strong>{item.weight.toFixed(1)}%</strong></div>)}</div>
           </div>
         </Card>
@@ -246,10 +181,6 @@ function CardTitle({ title, right }) {
 
 function FeatureCard({ icon, title, text, button, onClick, tone = 'purple' }) {
   return <Card className={`feature-card ${tone}`}><div className="feature-icon">{icon}</div><div><h3>{title}</h3><p>{text}</p><button onClick={onClick}>{button}</button></div></Card>;
-}
-
-function SymbolBadge({ symbol }) {
-  return <span className={`symbol-badge s-${symbol.replace(/[^a-zA-Z]/g,'').slice(0,3).toLowerCase()}`}>{symbol.slice(0,4)}</span>;
 }
 
 function Portfolios({ portfolios, setPortfolios }) {
@@ -393,7 +324,7 @@ function Analytics({ portfolio, setReports }) {
 
     <Card className="analysis-summary-hero">
       <div className="analysis-summary-copy"><span className="analysis-eyebrow"><Icon name="analysis" size={15}/> OVERALL RISK SUMMARY</span><div className="analysis-score-line"><strong>{portfolio.riskScore}<small>/100</small></strong><span>{riskLabel}</span></div><h2>Your portfolio has a {riskLabel.toLowerCase()} historical risk profile.</h2><p>The largest risk comes from concentrated exposure to high-volatility assets and positive correlation between the largest positions. These observations explain historical behavior and are not investment recommendations.</p><div className="analysis-summary-actions"><button className="primary-btn" onClick={()=>go('assistant')}>Ask Aura About This <span>→</span></button><button className="secondary-btn" onClick={()=>go(`simulations/${portfolio.id}`)}>Run What-If Simulation</button></div></div>
-      <div className="analysis-gauge-panel"><RiskGauge score={portfolio.riskScore} label={riskLabel}/><div><span>Last analyzed</span><strong>May 11, 2026</strong></div><small>Based on historical portfolio data</small></div>
+      <div className="analysis-gauge-panel"><GaugeChart score={portfolio.riskScore} label={riskLabel}/><div><span>Last analyzed</span><strong>May 11, 2026</strong></div><small>Based on historical portfolio data</small></div>
     </Card>
 
     <div className="analytics-metric-grid">
@@ -580,7 +511,7 @@ function Watchlist({ watchlist, setWatchlist }) {
       <div className="watchlist-library-heading"><div><h2>Tracked Assets</h2><p>Market values shown here are prototype data for portfolio-risk education.</p></div><div className="market-status"><i/><span>Market data available</span></div></div>
       <div className="watchlist-toolbar"><label><Icon name="search" size={17}/><input placeholder="Search by symbol or company name..." value={query} onChange={event=>setQuery(event.target.value)}/>{query&&<button onClick={()=>setQuery('')} aria-label="Clear search">×</button>}</label><div className="watchlist-view-controls"><button className="active"><Icon name="reports" size={15}/> List</button><span>Last updated May 11, 2026</span></div></div>
 
-      {visible.length?<div className="watchlist-table-wrap" role="region" aria-label="Tracked assets" tabIndex={0}><table className="watchlist-table"><thead><tr><th>Asset</th><th>Price</th><th>Daily Change</th><th>YTD Change</th><th>Market Cap</th><th>Trend</th><th aria-label="Actions"/></tr></thead><tbody>{visible.map((asset,index)=><tr key={asset.symbol}><td><div className="watchlist-asset-cell"><SymbolBadge symbol={asset.symbol}/><div><strong>{asset.symbol}</strong><small>{asset.name}</small></div></div></td><td><div className="watchlist-price"><strong>{money(asset.price)}</strong><small>USD</small></div></td><td><span className={`watchlist-change ${asset.daily>=0?'positive':'negative'}`}>{asset.daily>=0?'↑':'↓'} {pct(asset.daily)}</span></td><td><span className={asset.yearly>=0?'green-text':'red-text'}>{pct(asset.yearly)}</span></td><td><strong className="watchlist-cap">{asset.cap}</strong></td><td><div className={`watchlist-spark ${asset.daily>=0?'positive':'negative'}`}><MiniLine values={(asset.daily>=0?lineA:downturnA).slice(index,index+10)}/></div></td><td><button className="watchlist-remove" onClick={()=>setWatchlist(previous=>previous.filter(item=>item.symbol!==asset.symbol))} aria-label={`Remove ${asset.symbol} from watchlist`} title="Remove from watchlist">×</button></td></tr>)}</tbody></table></div>:<div className="watchlist-empty-state"><span><Icon name="search" size={27}/></span><h3>{watchlist.length?'No matching assets':'Your watchlist is empty'}</h3><p>{watchlist.length?'Try a different symbol or company name.':'Add an asset to begin tracking market movements.'}</p><button className="secondary-btn" onClick={watchlist.length?()=>setQuery(''):addAsset}>{watchlist.length?'Clear Search':'Add Your First Asset'}</button></div>}
+      {visible.length?<div className="watchlist-table-wrap" role="region" aria-label="Tracked assets" tabIndex={0}><table className="watchlist-table"><thead><tr><th>Asset</th><th>Price</th><th>Daily Change</th><th>YTD Change</th><th>Market Cap</th><th>Trend</th><th aria-label="Actions"/></tr></thead><tbody>{visible.map((asset,index)=><tr key={asset.symbol}><td><div className="watchlist-asset-cell"><SymbolBadge symbol={asset.symbol}/><div><strong>{asset.symbol}</strong><small>{asset.name}</small></div></div></td><td><div className="watchlist-price"><strong>{money(asset.price)}</strong><small>USD</small></div></td><td><span className={`watchlist-change ${asset.daily>=0?'positive':'negative'}`}>{asset.daily>=0?'↑':'↓'} {pct(asset.daily)}</span></td><td><span className={asset.yearly>=0?'green-text':'red-text'}>{pct(asset.yearly)}</span></td><td><strong className="watchlist-cap">{asset.cap}</strong></td><td><div className={`watchlist-spark ${asset.daily>=0?'positive':'negative'}`}><MiniLineChart values={(asset.daily>=0?lineA:downturnA).slice(index,index+10)}/></div></td><td><button className="watchlist-remove" onClick={()=>setWatchlist(previous=>previous.filter(item=>item.symbol!==asset.symbol))} aria-label={`Remove ${asset.symbol} from watchlist`} title="Remove from watchlist">×</button></td></tr>)}</tbody></table></div>:<div className="watchlist-empty-state"><span><Icon name="search" size={27}/></span><h3>{watchlist.length?'No matching assets':'Your watchlist is empty'}</h3><p>{watchlist.length?'Try a different symbol or company name.':'Add an asset to begin tracking market movements.'}</p><button className="secondary-btn" onClick={watchlist.length?()=>setQuery(''):addAsset}>{watchlist.length?'Clear Search':'Add Your First Asset'}</button></div>}
       <div className="watchlist-footer"><span>Showing <strong>{visible.length}</strong> of <strong>{watchlist.length}</strong> tracked assets</span><button onClick={addAsset}>＋ Add another asset</button></div>
     </Card>
     <div className="watchlist-education-note"><Icon name="shield" size={16}/><p>Watchlist performance is historical market information for education and does not represent a recommendation to buy or sell.</p></div>
