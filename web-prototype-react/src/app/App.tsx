@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
+import { Icon } from '../components/ui/Icon';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { correlation } from '../mocks/analytics.mock';
 import { downturnA, downturnB, lineA, lineB } from '../mocks/dashboard.mock';
@@ -10,7 +11,7 @@ import { scenarioOptions } from '../mocks/simulations.mock';
 import { watchlistSeed } from '../mocks/watchlist.mock';
 import { money, pct } from '../utils/formatting';
 import { clamp, slug } from '../utils/uiCalculations';
-import { navItems } from './navigation';
+import { AppLayout } from './AppLayout';
 import { go, routeFromHash } from './routes';
 
 function App() {
@@ -46,90 +47,7 @@ function App() {
     default: content = <Dashboard {...shared} />;
   }
 
-  return (
-    <div className="app-shell">
-      <TopNavigation route={route} settings={settings} />
-      <main className="main-area">
-        {content}
-      </main>
-    </div>
-  );
-}
-
-function Icon({ name, size = 20 }) {
-  const common = {
-    width: size,
-    height: size,
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 1.8,
-    strokeLinecap: 'round',
-    strokeLinejoin: 'round',
-    'aria-hidden': true
-  };
-
-  switch (name) {
-    case 'dashboard': return <svg {...common}><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5M9 21v-7h6v7"/></svg>;
-    case 'portfolios': return <svg {...common}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>;
-    case 'analytics': return <svg {...common}><path d="m12 3 9 9-9 9-9-9 9-9Z"/><circle cx="12" cy="12" r="3"/></svg>;
-    case 'simulations': return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M15 4v16"/></svg>;
-    case 'assistant': return <svg {...common}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3"/></svg>;
-    case 'reports': return <svg {...common}><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h8"/></svg>;
-    case 'search': return <svg {...common}><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>;
-    case 'bell': return <svg {...common}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>;
-    case 'chevron-down': return <svg {...common}><path d="m7 9.5 5 5 5-5"/></svg>;
-    case 'wallet': return <svg {...common}><path d="M4 7h16v12H4zM7 7V4h9v3M16 12h4"/></svg>;
-    case 'calendar': return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>;
-    case 'trend': return <svg {...common}><path d="m3 17 6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg>;
-    case 'shield': return <svg {...common}><path d="M12 3 4.5 6v5c0 5 3.2 8.3 7.5 10 4.3-1.7 7.5-5 7.5-10V6L12 3Z"/><path d="m9 12 2 2 4-5"/></svg>;
-    case 'drawdown': return <svg {...common}><path d="m3 7 6 6 4-4 8 8"/><path d="M15 17h6v-6"/></svg>;
-    case 'spark': return <svg {...common}><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/></svg>;
-    case 'analysis': return <svg {...common}><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="2"/></svg>;
-    default: return null;
-  }
-}
-
-function TopNavigation({ route, settings }) {
-  const [open, setOpen] = useState(false);
-  const initials = settings?.name?.split(/\s+/).map(part => part[0]).slice(0, 2).join('').toUpperCase() || 'YL';
-  const isActive = key => route.page === key || (key === 'portfolios' && ['portfolio', 'create'].includes(route.page));
-
-  return (
-    <header className="top-nav">
-      <div className="top-nav-inner">
-        <button className="brand" onClick={() => go('dashboard')} aria-label="Go to dashboard">
-          <span className="brand-mark">A</span><span>AURA</span>
-        </button>
-        <nav className="nav-list" aria-label="Primary navigation">
-          {navItems.map(([key, icon, label]) => {
-            const active = isActive(key);
-            return <button key={key} className={`nav-item ${active ? 'active' : ''}`} aria-current={active?'page':undefined} onClick={() => go(key)}>
-              <span className="nav-icon"><Icon name={icon} size={18}/></span><span>{label}</span>
-            </button>;
-          })}
-        </nav>
-        <div className="top-nav-actions">
-          <button className="nav-action" aria-label="Search"><Icon name="search" size={21}/></button>
-          <button className="nav-action notification-button" aria-label="Notifications">
-            <Icon name="bell" size={21}/><span className="notification-dot" aria-hidden="true" />
-          </button>
-          <div className="profile-menu-wrap">
-            <button className="profile-trigger" onClick={() => setOpen(value => !value)} aria-label="Open user menu" aria-expanded={open} aria-haspopup="menu">
-              <span className="avatar">{initials}</span><span className="chevron"><Icon name="chevron-down" size={17}/></span>
-            </button>
-            {open && <div className="profile-menu" role="menu">
-              <strong>{settings?.name || 'Aura User'}</strong>
-              <small>{settings?.email || 'Portfolio owner'}</small>
-              <button role="menuitem" onClick={() => { setOpen(false); go('settings'); }}>Settings</button>
-              <button role="menuitem" onClick={() => { setOpen(false); go('watchlist'); }}>Watchlist</button>
-              <button role="menuitem" onClick={() => { setOpen(false); go('learn'); }}>Learn</button>
-            </div>}
-          </div>
-        </div>
-      </div>
-    </header>
-  );
+  return <AppLayout route={route} settings={settings}>{content}</AppLayout>;
 }
 
 function PageHeader({ title, subtitle, actions }) {
