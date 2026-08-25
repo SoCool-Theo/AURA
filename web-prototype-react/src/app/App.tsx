@@ -4,6 +4,9 @@ import { DonutChart } from '../components/charts/DonutChart';
 import { GaugeChart } from '../components/charts/GaugeChart';
 import { LineChart } from '../components/charts/LineChart';
 import { MiniLineChart } from '../components/charts/MiniLineChart';
+import { HoldingsTable } from '../components/portfolio/HoldingsTable';
+import { PortfolioCard } from '../components/portfolio/PortfolioCard';
+import { PortfolioMetric } from '../components/portfolio/PortfolioMetric';
 import { Card } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
 import { RiskPill } from '../components/ui/RiskPill';
@@ -17,7 +20,7 @@ import { defaultSettings } from '../mocks/settings.mock';
 import { scenarioOptions } from '../mocks/simulations.mock';
 import { watchlistSeed } from '../mocks/watchlist.mock';
 import { money, pct } from '../utils/formatting';
-import { slug } from '../utils/uiCalculations';
+import { clamp, slug } from '../utils/uiCalculations';
 import { AppLayout } from './AppLayout';
 import { go, routeFromHash } from './routes';
 
@@ -237,18 +240,19 @@ function Portfolios({ portfolios, setPortfolios }) {
     </Card>
 
     <div className="portfolio-section-heading"><div><h2>Your Portfolios</h2><p>{visible.length} of {portfolios.length} portfolios</p></div></div>
-    {visible.length ? <div className="portfolio-grid">{visible.map(portfolio=><Card key={portfolio.id} className="portfolio-card">
-      <div className="portfolio-card-head">
-        <div className="portfolio-identity"><SymbolBadge symbol={portfolio.name.slice(0,2).toUpperCase()} /><div><h3>{portfolio.name}</h3><small>Created {new Date(portfolio.created).toLocaleDateString()}</small></div></div>
-        <div className="portfolio-card-head-actions"><RiskPill score={portfolio.riskScore}/><button className="portfolio-menu-button" aria-label={`Actions for ${portfolio.name}`} onClick={()=>setEditing(editing===portfolio.id?null:portfolio.id)}>•••</button></div>
-        {editing===portfolio.id&&<div className="menu-pop portfolio-menu"><button onClick={()=>{rename(portfolio);setEditing(null)}}>Rename</button><button onClick={()=>{duplicate(portfolio);setEditing(null)}}>Duplicate</button><button className="danger" onClick={()=>{remove(portfolio);setEditing(null)}}>Delete</button></div>}
-      </div>
-      <div className="portfolio-card-metrics"><div><small>Portfolio Value</small><strong>{money(portfolio.value)}</strong></div><div><small>Annualized Return</small><strong className="green-text">{pct(portfolio.totalReturn)}</strong></div><div><small>Risk Score</small><strong>{portfolio.riskScore}<span>/100</span></strong></div></div>
-      <div className="portfolio-allocation-heading"><span>Allocation</span><small>{portfolio.holdings.length} holdings</small></div>
-      <div className="portfolio-card-allocation">{portfolio.holdings.slice(0,5).map(holding=><span key={holding.symbol} style={{width:`${holding.weight}%`}} title={`${holding.symbol} ${holding.weight}%`}/>)}</div>
-      <div className="holding-chips">{portfolio.holdings.slice(0,4).map(holding=><span key={holding.symbol}><b>{holding.symbol}</b>{holding.weight}%</span>)}{portfolio.holdings.length>4&&<span className="more-holdings">+{portfolio.holdings.length-4} more</span>}</div>
-      <div className="portfolio-card-actions"><button className="secondary-btn" onClick={()=>go(`portfolio/${portfolio.id}`)}>Open Portfolio <span>→</span></button><button className="primary-btn" onClick={()=>go(`analytics/${portfolio.id}`)}>View Analysis</button></div>
-    </Card>)}</div> : <Card className="portfolio-empty-state"><span><Icon name="search" size={25}/></span><h3>No portfolios found</h3><p>Try a different search term or risk filter.</p><button className="secondary-btn" onClick={()=>{setQuery('');setRiskFilter('all')}}>Clear filters</button></Card>}
+    {visible.length ? <div className="portfolio-grid">{visible.map(portfolio => (
+      <PortfolioCard
+        key={portfolio.id}
+        portfolio={portfolio}
+        menuOpen={editing === portfolio.id}
+        onToggleMenu={() => setEditing(editing === portfolio.id ? null : portfolio.id)}
+        onRename={() => { rename(portfolio); setEditing(null); }}
+        onDuplicate={() => { duplicate(portfolio); setEditing(null); }}
+        onDelete={() => { remove(portfolio); setEditing(null); }}
+        onOpenPortfolio={() => go(`portfolio/${portfolio.id}`)}
+        onViewAnalysis={() => go(`analytics/${portfolio.id}`)}
+      />
+    ))}</div> : <Card className="portfolio-empty-state"><span><Icon name="search" size={25}/></span><h3>No portfolios found</h3><p>Try a different search term or risk filter.</p><button className="secondary-btn" onClick={()=>{setQuery('');setRiskFilter('all')}}>Clear filters</button></Card>}
   </div>;
 }
 
@@ -300,14 +304,6 @@ function PortfolioDetail({ portfolio, setPortfolios }) {
 
     {tab==='Activity' && <div className="detail-tab-panel activity-tab-layout"><Card className="detail-activity-card"><div className="detail-card-heading"><div><h2>Recent Activity</h2><p>Portfolio changes, analyses, and simulations.</p></div></div><Timeline items={['Portfolio analyzed — risk score 72','2008 Financial Crisis simulation completed','Holding weight updated for NVDA','Portfolio created']} /></Card><Card className="activity-summary-card"><div className="detail-card-heading"><div><h2>Portfolio History</h2><p>Current record summary</p></div></div><dl><div><dt>Created</dt><dd>{new Date(portfolio.created).toLocaleDateString()}</dd></div><div><dt>Last analyzed</dt><dd>May 11, 2026</dd></div><div><dt>Saved reports</dt><dd>2</dd></div><div><dt>Simulations</dt><dd>1</dd></div></dl><button className="secondary-btn" onClick={()=>go('reports')}>View Reports <span>→</span></button></Card></div>}
   </div>;
-}
-
-function HoldingsTable({ portfolio, onViewAll }) {
-  return <Card className="detail-holdings-card"><div className="detail-card-heading"><div><h2>Holdings</h2><p>{portfolio.holdings.length} assets in this portfolio</p></div>{onViewAll&&<button onClick={onViewAll}>View all</button>}</div><div className="table-scroll"><table className="detail-holdings-table"><thead><tr><th>Asset</th><th>Weight</th><th>Value</th><th>Daily Change</th></tr></thead><tbody>{portfolio.holdings.map(holding=><tr key={holding.symbol}><td><div className="asset-cell"><SymbolBadge symbol={holding.symbol}/><div><strong>{holding.symbol}</strong><small>{holding.name}</small></div></div></td><td><strong>{holding.weight}%</strong></td><td>{money(holding.value)}</td><td className={holding.dailyChange>0?'green-text':holding.dailyChange<0?'red-text':''}>{holding.dailyChange===0?'—':pct(holding.dailyChange)}</td></tr>)}</tbody><tfoot><tr><td>Total</td><td>{portfolio.holdings.reduce((sum,holding)=>sum+Number(holding.weight||0),0).toFixed(1)}%</td><td>{money(portfolio.value)}</td><td/></tr></tfoot></table></div></Card>;
-}
-
-function PortfolioMetric({ label, value, detail, icon, tone }) {
-  return <Card className={`detail-metric-card ${tone}`}><span className="detail-metric-icon"><Icon name={icon} size={20}/></span><div><small>{label}</small><strong>{value}</strong><span>{detail}</span></div></Card>;
 }
 
 function Analytics({ portfolio, setReports }) {
