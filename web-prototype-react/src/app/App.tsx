@@ -3,8 +3,6 @@ import React, { useEffect, useState } from 'react';
 import { GaugeChart } from '../components/charts/GaugeChart';
 import { LineChart } from '../components/charts/LineChart';
 import { MiniLineChart } from '../components/charts/MiniLineChart';
-import { HoldingsTable } from '../components/portfolio/HoldingsTable';
-import { PortfolioCard } from '../components/portfolio/PortfolioCard';
 import { PortfolioMetric } from '../components/portfolio/PortfolioMetric';
 import { Card } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
@@ -19,8 +17,11 @@ import { defaultSettings } from '../mocks/settings.mock';
 import { scenarioOptions } from '../mocks/simulations.mock';
 import { watchlistSeed } from '../mocks/watchlist.mock';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
+import { CreatePortfolioPage } from '../pages/portfolios/CreatePortfolioPage';
+import { PortfolioDetailPage } from '../pages/portfolios/PortfolioDetailPage';
+import { PortfoliosPage } from '../pages/portfolios/PortfoliosPage';
 import { money, pct } from '../utils/formatting';
-import { clamp, slug } from '../utils/uiCalculations';
+import { slug } from '../utils/uiCalculations';
 import { AppLayout } from './AppLayout';
 import { go, routeFromHash } from './routes';
 
@@ -44,15 +45,15 @@ function App() {
   let content;
   switch (route.page) {
     case 'dashboard': content = <DashboardPage portfolios={portfolios} settings={settings} />; break;
-    case 'portfolios': content = <Portfolios {...shared} />; break;
-    case 'portfolio': content = <PortfolioDetail portfolio={activePortfolio} {...shared} />; break;
+    case 'portfolios': content = <PortfoliosPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
+    case 'portfolio': content = <PortfolioDetailPage portfolio={activePortfolio} setPortfolios={setPortfolios} />; break;
     case 'analytics': content = <Analytics portfolio={activePortfolio} {...shared} />; break;
     case 'simulations': content = <Simulations portfolio={activePortfolio} {...shared} />; break;
     case 'assistant': content = <Assistant portfolio={activePortfolio} />; break;
     case 'reports': content = <Reports reports={reports} setReports={setReports} />; break;
     case 'watchlist': content = <Watchlist watchlist={watchlist} setWatchlist={setWatchlist} />; break;
     case 'learn': content = <Learn />; break;
-    case 'create': content = <CreatePortfolio portfolios={portfolios} setPortfolios={setPortfolios} />; break;
+    case 'create': content = <CreatePortfolioPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
     case 'settings': content = <Settings settings={settings} setSettings={setSettings} />; break;
     default: content = <DashboardPage portfolios={portfolios} settings={settings} />;
   }
@@ -66,126 +67,6 @@ function CardTitle({ title, right }) {
 
 function FeatureCard({ icon, title, text, button, onClick, tone = 'purple' }) {
   return <Card className={`feature-card ${tone}`}><div className="feature-icon">{icon}</div><div><h3>{title}</h3><p>{text}</p><button onClick={onClick}>{button}</button></div></Card>;
-}
-
-function Portfolios({ portfolios, setPortfolios }) {
-  const [query, setQuery] = useState('');
-  const [riskFilter, setRiskFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('recent');
-  const [editing, setEditing] = useState(null);
-  const riskLevel = portfolio => portfolio.riskScore >= 70 ? 'high' : portfolio.riskScore >= 55 ? 'moderate' : 'low';
-  const visible = portfolios
-    .filter(portfolio => portfolio.name.toLowerCase().includes(query.toLowerCase()))
-    .filter(portfolio => riskFilter === 'all' || riskLevel(portfolio) === riskFilter)
-    .sort((left, right) => {
-      if (sortBy === 'value') return right.value - left.value;
-      if (sortBy === 'risk') return right.riskScore - left.riskScore;
-      if (sortBy === 'return') return right.totalReturn - left.totalReturn;
-      return new Date(right.created).getTime() - new Date(left.created).getTime();
-    });
-  const combinedValue = portfolios.reduce((sum, portfolio) => sum + portfolio.value, 0);
-  const averageReturn = portfolios.length ? portfolios.reduce((sum, portfolio) => sum + portfolio.totalReturn, 0) / portfolios.length : 0;
-  const averageRisk = portfolios.length ? Math.round(portfolios.reduce((sum, portfolio) => sum + portfolio.riskScore, 0) / portfolios.length) : 0;
-  const trackedAssets = new Set(portfolios.flatMap(portfolio => portfolio.holdings.map(holding => holding.symbol))).size;
-
-  function duplicate(p) {
-    const copy = { ...p, id: `${slug(p.name)}-${Date.now()}`, name: `${p.name} Copy`, created: new Date().toISOString().slice(0,10), holdings: p.holdings.map(h=>({...h})) };
-    setPortfolios(prev => [...prev, copy]);
-  }
-  function remove(p) {
-    if (confirm(`Delete ${p.name}?`)) setPortfolios(prev => prev.filter(x=>x.id!==p.id));
-  }
-  function rename(p) {
-    const name = prompt('New portfolio name', p.name);
-    if (name?.trim()) setPortfolios(prev=>prev.map(x=>x.id===p.id?{...x,name:name.trim()}:x));
-  }
-
-  return <div className="page portfolios-page">
-    <section className="portfolios-hero">
-      <div><h1>Portfolios</h1><p>Create, organize, and monitor the portfolios you use for risk analysis.</p></div>
-      <button className="primary-btn new-portfolio-btn" onClick={()=>go('create')}><span>＋</span> New Portfolio</button>
-    </section>
-
-    <div className="portfolio-summary-grid">
-      <PortfolioSummary label="Total Portfolios" value={portfolios.length} detail="Active portfolios" icon="portfolios" tone="purple" />
-      <PortfolioSummary label="Combined Value" value={money(combinedValue)} detail="Across all portfolios" icon="wallet" tone="blue" />
-      <PortfolioSummary label="Average Return" value={pct(averageReturn)} detail="Historical annualized" icon="trend" tone="green" />
-      <PortfolioSummary label="Average Risk" value={`${averageRisk}/100`} detail={`${trackedAssets} unique assets tracked`} icon="shield" tone="amber" />
-    </div>
-
-    <Card className="portfolio-toolbar">
-      <label className="portfolio-search"><Icon name="search" size={19}/><span className="sr-only">Search portfolios</span><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search portfolios..."/></label>
-      <div className="portfolio-toolbar-controls">
-        <label className="portfolio-filter"><span className="sr-only">Filter by risk</span><select value={riskFilter} onChange={event=>setRiskFilter(event.target.value)}><option value="all">All risk levels</option><option value="low">Low risk</option><option value="moderate">Moderate risk</option><option value="high">High risk</option></select><Icon name="chevron-down" size={16}/></label>
-        <label className="portfolio-filter"><span className="sr-only">Sort portfolios</span><select value={sortBy} onChange={event=>setSortBy(event.target.value)}><option value="recent">Recently created</option><option value="value">Highest value</option><option value="return">Highest return</option><option value="risk">Highest risk</option></select><Icon name="chevron-down" size={16}/></label>
-      </div>
-    </Card>
-
-    <div className="portfolio-section-heading"><div><h2>Your Portfolios</h2><p>{visible.length} of {portfolios.length} portfolios</p></div></div>
-    {visible.length ? <div className="portfolio-grid">{visible.map(portfolio => (
-      <PortfolioCard
-        key={portfolio.id}
-        portfolio={portfolio}
-        menuOpen={editing === portfolio.id}
-        onToggleMenu={() => setEditing(editing === portfolio.id ? null : portfolio.id)}
-        onRename={() => { rename(portfolio); setEditing(null); }}
-        onDuplicate={() => { duplicate(portfolio); setEditing(null); }}
-        onDelete={() => { remove(portfolio); setEditing(null); }}
-        onOpenPortfolio={() => go(`portfolio/${portfolio.id}`)}
-        onViewAnalysis={() => go(`analytics/${portfolio.id}`)}
-      />
-    ))}</div> : <Card className="portfolio-empty-state"><span><Icon name="search" size={25}/></span><h3>No portfolios found</h3><p>Try a different search term or risk filter.</p><button className="secondary-btn" onClick={()=>{setQuery('');setRiskFilter('all')}}>Clear filters</button></Card>}
-  </div>;
-}
-
-function PortfolioSummary({ label, value, detail, icon, tone }) {
-  return <Card className={`portfolio-summary-card ${tone}`}><span className="summary-icon"><Icon name={icon} size={21}/></span><div><small>{label}</small><strong>{value}</strong><span>{detail}</span></div></Card>;
-}
-
-function PortfolioDetail({ portfolio, setPortfolios }) {
-  const [tab, setTab] = useState('Overview');
-  const [menu, setMenu] = useState(false);
-  if (!portfolio) return null;
-  const totalWeight = portfolio.holdings.reduce((sum, holding) => sum + Number(holding.weight || 0), 0);
-  const riskLabel = String(portfolio.riskLevel || 'Moderate').replace(/\s+Risk$/i, '');
-  const cashPercentage = ((portfolio.cash / portfolio.value) * 100 || 0).toFixed(1);
-
-  function rename() {
-    const name = prompt('New portfolio name', portfolio.name);
-    if (name?.trim()) setPortfolios(prev=>prev.map(x=>x.id===portfolio.id?{...x,name:name.trim()}:x));
-  }
-  function updateWeight(symbol, next) {
-    const n = clamp(Number(next)||0,0,100);
-    setPortfolios(prev=>prev.map(p=>p.id!==portfolio.id?p:{...p,holdings:p.holdings.map(h=>h.symbol===symbol?{...h,weight:n}:h)}));
-  }
-  return <div className="page portfolio-detail-page">
-    <button className="detail-back-link" onClick={()=>go('portfolios')}>← Back to Portfolios</button>
-    <section className="portfolio-detail-header">
-      <div className="detail-identity"><SymbolBadge symbol={portfolio.name.slice(0,2).toUpperCase()}/><div><div className="detail-title-row"><h1>{portfolio.name}</h1><button aria-label="Rename portfolio" onClick={rename}>✎</button><RiskPill score={portfolio.riskScore}/></div><p>Created {new Date(portfolio.created).toLocaleDateString()} <span>•</span> Last analyzed May 11, 2026</p></div></div>
-      <div className="detail-header-actions"><button className="primary-btn" onClick={()=>go(`analytics/${portfolio.id}`)}>View Analysis <span>→</span></button><div className="relative"><button className="secondary-btn detail-more-btn" onClick={()=>setMenu(!menu)} aria-expanded={menu}>More <Icon name="chevron-down" size={16}/></button>{menu&&<div className="menu-pop detail-menu"><button onClick={()=>{rename();setMenu(false)}}>Rename portfolio</button><button onClick={()=>go(`simulations/${portfolio.id}`)}>Run simulation</button><button onClick={()=>go('reports')}>View reports</button></div>}</div></div>
-    </section>
-
-    <nav className="detail-tabs" aria-label="Portfolio sections" role="tablist">{['Overview','Holdings','Performance','Activity'].map(item=><button role="tab" aria-selected={tab===item} className={tab===item?'active':''} onClick={()=>setTab(item)} key={item}>{item}{item==='Holdings'&&<span>{portfolio.holdings.length}</span>}</button>)}</nav>
-
-    {tab==='Overview' && <div className="detail-tab-panel">
-      <div className="detail-metric-grid">
-        <PortfolioMetric label="Total Value" value={money(portfolio.value)} detail="Current portfolio value" icon="wallet" tone="purple" />
-        <PortfolioMetric label="Annualized Return" value={pct(portfolio.totalReturn)} detail="Historical annualized" icon="trend" tone="green" />
-        <PortfolioMetric label="Risk Score" value={`${portfolio.riskScore}/100`} detail={riskLabel} icon="shield" tone="amber" />
-        <PortfolioMetric label="Cash Position" value={money(portfolio.cash)} detail={`${cashPercentage}% of portfolio`} icon="wallet" tone="blue" />
-      </div>
-      <div className="detail-overview-grid">
-        <HoldingsTable portfolio={portfolio} onViewAll={()=>setTab('Holdings')}/>
-        <Card className="detail-performance-card"><div className="detail-card-heading"><div><h2>Portfolio Performance</h2><p>Cumulative historical return</p></div><div className="range-tabs"><button>1M</button><button>6M</button><button>1Y</button><button>3Y</button><button className="active">All</button></div></div><div className="detail-chart-legend"><span className="p-dot"/>Your Portfolio <span className="b-dot"/>S&amp;P 500</div><LineChart primary={lineA} secondary={lineB} height={235} area/><div className="detail-performance-kpis"><div><small>Best Month</small><strong className="green-text">+8.32%</strong><span>Apr 2023</span></div><div><small>Worst Month</small><strong className="red-text">-6.91%</strong><span>Mar 2020</span></div><div><small>Positive Months</small><strong>62%</strong><span>Historical</span></div><div><small>Beta</small><strong>1.08</strong><span>vs S&amp;P 500</span></div></div></Card>
-      </div>
-    </div>}
-
-    {tab==='Holdings' && <div className="detail-tab-panel"><Card className="detail-section-card"><div className="detail-section-header"><div><h2>Portfolio Holdings</h2><p>Review assets and adjust their prototype allocation weights.</p></div><div className={`allocation-total-badge ${Math.abs(totalWeight-100)<.2?'valid':'invalid'}`}><small>Total allocation</small><strong>{totalWeight.toFixed(1)}%</strong></div></div><div className="detail-edit-holdings"><div className="edit-holdings-head"><span>Asset</span><span>Type</span><span>Weight</span><span>Market Value</span></div>{portfolio.holdings.map(holding=><div className="edit-holding-row" key={holding.symbol}><div className="asset-cell"><SymbolBadge symbol={holding.symbol}/><div><strong>{holding.symbol}</strong><small>{holding.name}</small></div></div><span className="asset-type">{holding.type}</span><label><span className="sr-only">{holding.symbol} weight</span><input type="number" min="0" max="100" value={holding.weight} onChange={event=>updateWeight(holding.symbol,event.target.value)}/><b>%</b></label><strong>{money(holding.value)}</strong></div>)}</div><div className="detail-section-footer"><p>Changing weights updates this frontend prototype only. Portfolio calculations will use backend data after API integration.</p><button className="primary-btn" onClick={()=>go(`analytics/${portfolio.id}`)}>Analyze Allocation</button></div></Card></div>}
-
-    {tab==='Performance' && <div className="detail-tab-panel performance-tab-layout"><Card className="historical-performance-card"><div className="detail-card-heading"><div><h2>Historical Performance</h2><p>Portfolio performance compared with the S&amp;P 500 benchmark.</p></div><div className="range-tabs"><button>1Y</button><button>3Y</button><button className="active">All</button></div></div><div className="detail-chart-legend"><span className="p-dot"/>Your Portfolio <span className="b-dot"/>S&amp;P 500</div><LineChart primary={lineA} secondary={lineB} height={330} area/></Card><Card className="performance-summary-card"><div className="detail-card-heading"><div><h2>Performance Summary</h2><p>Historical risk and return</p></div></div><dl><div><dt>Annualized return</dt><dd className="green-text">{pct(portfolio.totalReturn)}</dd></div><div><dt>Annualized volatility</dt><dd>15.32%</dd></div><div><dt>Maximum drawdown</dt><dd className="red-text">-21.45%</dd></div><div><dt>Sharpe ratio</dt><dd>1.24</dd></div><div><dt>Beta</dt><dd>1.08</dd></div></dl><p>This prototype uses deterministic demo series. Final values will come from Aura's analytics API.</p></Card></div>}
-
-    {tab==='Activity' && <div className="detail-tab-panel activity-tab-layout"><Card className="detail-activity-card"><div className="detail-card-heading"><div><h2>Recent Activity</h2><p>Portfolio changes, analyses, and simulations.</p></div></div><Timeline items={['Portfolio analyzed — risk score 72','2008 Financial Crisis simulation completed','Holding weight updated for NVDA','Portfolio created']} /></Card><Card className="activity-summary-card"><div className="detail-card-heading"><div><h2>Portfolio History</h2><p>Current record summary</p></div></div><dl><div><dt>Created</dt><dd>{new Date(portfolio.created).toLocaleDateString()}</dd></div><div><dt>Last analyzed</dt><dd>May 11, 2026</dd></div><div><dt>Saved reports</dt><dd>2</dd></div><div><dt>Simulations</dt><dd>1</dd></div></dl><button className="secondary-btn" onClick={()=>go('reports')}>View Reports <span>→</span></button></Card></div>}
-  </div>;
 }
 
 function Analytics({ portfolio, setReports }) {
@@ -423,85 +304,6 @@ function Learn() {
   </div>;
 }
 
-function CreatePortfolio({ portfolios, setPortfolios }) {
-  const [step,setStep]=useState(1);
-  const [name,setName]=useState('My New Portfolio');
-  const [description,setDescription]=useState('My long term investment portfolio.');
-  const [holdings,setHoldings]=useState([
-    {symbol:'NVDA',name:'NVIDIA Corporation',type:'Equity',price:181.63,shares:58,weight:57.1},
-    {symbol:'TSLA',name:'Tesla, Inc.',type:'Equity',price:177.74,shares:15,weight:14.4},
-    {symbol:'AAPL',name:'Apple Inc.',type:'Equity',price:191.45,shares:10,weight:10.4},
-    {symbol:'BND',name:'Vanguard Total Bond Market ETF',type:'Bond',price:72.16,shares:40,weight:15.4},
-    {symbol:'CASH',name:'Cash',type:'Cash',price:1,shares:484.9,weight:2.7}
-  ]);
-  const total=holdings.reduce((s,h)=>s+h.price*h.shares,0);
-  const totalWeight=holdings.reduce((s,h)=>s+Number(h.weight),0);
-  const steps=[['1','Basic Info','Name and preferences'],['2','Add Holdings','Build your allocation'],['3','Review','Confirm and create']];
-  const currentStep=steps[step-1];
-  function addHolding() {
-    const symbol=prompt('Asset symbol'); if(!symbol)return;
-    const amount=Number(prompt('Amount invested in USD','1000'))||1000;
-    const price=100;
-    const newH={symbol:symbol.toUpperCase(),name:`${symbol.toUpperCase()} Asset`,type:'Equity',price,shares:amount/price,weight:0};
-    const next=[...holdings,newH]; const nextTotal=next.reduce((s,h)=>s+h.price*h.shares,0);
-    setHoldings(next.map(h=>({...h,weight:Number(((h.price*h.shares/nextTotal)*100).toFixed(1))})));
-  }
-  function removeHolding(symbol){const next=holdings.filter(h=>h.symbol!==symbol);const t=next.reduce((s,h)=>s+h.price*h.shares,0);setHoldings(next.map(h=>({...h,weight:Number(((h.price*h.shares/t)*100).toFixed(1))})));}
-  function create() {
-    if(!name.trim()) return alert('Please enter a portfolio name.');
-    if(!holdings.length) return alert('Add at least one holding.');
-    const id=`${slug(name)}-${Date.now()}`;
-    const value=holdings.reduce((s,h)=>s+h.price*h.shares,0);
-    const p={id,name:name.trim(),created:new Date().toISOString().slice(0,10),value,totalReturn:0,riskScore:55,riskLevel:'Moderate',cash:holdings.find(h=>h.symbol==='CASH')?.price*holdings.find(h=>h.symbol==='CASH')?.shares||0,holdings:holdings.map(h=>({...h,value:h.price*h.shares,dailyChange:0}))};
-    setPortfolios([...portfolios,p]);go(`portfolio/${id}`);
-  }
-  return <div className="page create-page">
-    <button className="create-back-link" onClick={()=>go('portfolios')}>← Back to Portfolios</button>
-    <section className="create-header"><div><h1>Create New Portfolio</h1><p>Build a portfolio to explore its historical performance and risk.</p></div><span>Step {step} of {steps.length}</span></section>
-
-    <Card className="create-stepper">{steps.map(([number,label,detail],index)=><React.Fragment key={number}>
-      <button className={`${step===Number(number)?'active':''} ${step>Number(number)?'complete':''}`} onClick={()=>setStep(Number(number))} aria-current={step===Number(number)?'step':undefined}>
-        <span className="step-number">{step>Number(number)?'✓':number}</span><span className="step-copy"><strong>{label}</strong><small>{detail}</small></span>
-      </button>{index<steps.length-1&&<span className={`step-connector ${step>index+1?'complete':''}`}/>}
-    </React.Fragment>)}</Card>
-
-    <div className="create-workspace">
-      <Card className="wizard-main">
-        <div className="wizard-section-header"><span>STEP {currentStep[0]}</span><h2>{step===1?'Portfolio Information':step===2?'Add Your Holdings':'Review Your Portfolio'}</h2><p>{step===1?'Give this portfolio a clear name and description.':step===2?'Add the assets and amounts you want Aura to analyze.':'Check the portfolio details before creating it.'}</p></div>
-
-        {step===1&&<div className="wizard-step-content basic-info-step">
-          <div className="wizard-form-grid">
-            <label className="wizard-field"><span>Portfolio Name</span><small>Use a name that helps you recognize this portfolio.</small><input value={name} onChange={event=>setName(event.target.value)} placeholder="e.g. Long-Term Growth"/></label>
-            <label className="wizard-field"><span>Currency</span><small>Values and reports will use this currency.</small><span className="wizard-select"><select><option>USD - US Dollar</option></select><Icon name="chevron-down" size={16}/></span></label>
-            <label className="wizard-field full"><span>Description <em>Optional</em></span><small>Add a short note about the portfolio's purpose.</small><textarea rows="5" value={description} onChange={event=>setDescription(event.target.value)} placeholder="Describe your investment goal..."/></label>
-          </div>
-        </div>}
-
-        {step===2&&<div className="wizard-step-content holdings-step">
-          <div className="wizard-title-row"><label className="asset-search"><Icon name="search" size={18}/><span className="sr-only">Search assets</span><input placeholder="Search assets by symbol or company name..."/></label><button className="primary-btn" onClick={addHolding}>＋ Add Manually</button></div>
-          <div className="wizard-holdings-table table-scroll"><table><thead><tr><th>Asset</th><th>Type</th><th>Price</th><th>Shares / Amount</th><th>Allocation</th><th><span className="sr-only">Action</span></th></tr></thead><tbody>{holdings.map(holding=><tr key={holding.symbol}><td><div className="asset-cell"><SymbolBadge symbol={holding.symbol}/><div><strong>{holding.symbol}</strong><small>{holding.name}</small></div></div></td><td><span className="asset-type">{holding.type}</span></td><td>{money(holding.price)}</td><td><input className="table-input" aria-label={`${holding.symbol} shares`} type="number" value={holding.shares} onChange={event=>setHoldings(holdings.map(item=>item.symbol===holding.symbol?{...item,shares:Number(event.target.value)}:item))}/></td><td><strong>{holding.weight}%</strong></td><td><button className="remove-holding" aria-label={`Remove ${holding.symbol}`} onClick={()=>removeHolding(holding.symbol)}>×</button></td></tr>)}</tbody></table></div>
-          <div className="allocation-status"><div><span>Total allocation</span><small>Portfolio weights should total 100%.</small></div><div className="allocation-progress"><span style={{width:`${Math.min(100,totalWeight)}%`}}/><b className={Math.abs(totalWeight-100)<.2?'green-text':'orange-text'}>{totalWeight.toFixed(1)}%</b></div></div>
-        </div>}
-
-        {step===3&&<div className="wizard-step-content review-step">
-          <div className="review-summary"><div><small>Portfolio Name</small><strong>{name}</strong></div><div><small>Total Value</small><strong>{money(total)}</strong></div><div><small>Holdings</small><strong>{holdings.length}</strong></div><div><small>Allocation</small><strong className={Math.abs(totalWeight-100)<.2?'green-text':'orange-text'}>{totalWeight.toFixed(1)}%</strong></div></div>
-          <div className="review-holdings-card"><div className="review-holdings-title"><h3>Holdings</h3><button onClick={()=>setStep(2)}>Edit holdings</button></div><HoldingsReview holdings={holdings}/></div>
-          <div className="educational-notice"><Icon name="shield" size={19}/><p>Aura analyzes historical portfolio risk for educational purposes. It does not provide buy or sell recommendations.</p></div>
-        </div>}
-
-        <div className="wizard-footer"><button className="secondary-btn" onClick={()=>step===1?go('portfolios'):setStep(step-1)}>{step===1?'Cancel':'← Back'}</button>{step<3?<button className="primary-btn" onClick={()=>setStep(step+1)}>{step===1?'Continue to Holdings':'Review Portfolio'} <span>→</span></button>:<button className="primary-btn create-confirm-btn" onClick={create}>Create Portfolio <span>✓</span></button>}</div>
-      </Card>
-
-      <aside className="create-sidebar">
-        <Card className="portfolio-preview-card"><div className="preview-icon"><Icon name="portfolios" size={22}/></div><small>PORTFOLIO PREVIEW</small><h3>{name.trim()||'Untitled Portfolio'}</h3><p>{description.trim()||'No description added.'}</p><dl><div><dt>Estimated value</dt><dd>{money(total)}</dd></div><div><dt>Holdings</dt><dd>{holdings.length}</dd></div><div><dt>Allocation</dt><dd className={Math.abs(totalWeight-100)<.2?'green-text':'orange-text'}>{totalWeight.toFixed(1)}%</dd></div></dl></Card>
-        <Card className="after-create-card"><h3>What happens next?</h3><div><span>1</span><p><strong>Create portfolio</strong><small>Save these holdings in your Aura workspace.</small></p></div><div><span>2</span><p><strong>Run analysis</strong><small>Calculate historical risk and performance metrics.</small></p></div><div><span>3</span><p><strong>Explore insights</strong><small>Understand the results in beginner-friendly language.</small></p></div></Card>
-      </aside>
-    </div>
-  </div>;
-}
-
-function HoldingsReview({ holdings }) {return <div className="holding-review">{holdings.map(h=><div key={h.symbol}><div className="asset-cell"><SymbolBadge symbol={h.symbol}/><div><strong>{h.symbol}</strong><small>{h.name}</small></div></div><strong>{h.weight}%</strong><span>{money(h.price*h.shares)}</span></div>)}</div>}
-
 function Settings({ settings, setSettings }) {
   const [form,setForm]=useState(settings); const [tab,setTab]=useState('Profile');
   function save(){setSettings(form);alert('Settings saved.');}
@@ -522,7 +324,5 @@ function Settings({ settings, setSettings }) {
     </div>
   </div>;
 }
-
-function Timeline({ items }) {return <div className="timeline">{items.map((x,i)=><div key={x}><span>{i+1}</span><div><strong>{x}</strong><small>{i===0?'Today':`${i} day${i>1?'s':''} ago`}</small></div></div>)}</div>}
 
 export default App;
