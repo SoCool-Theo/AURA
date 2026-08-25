@@ -6,61 +6,17 @@ import {
   reportsSeed,
   scenarioOptions,
   watchlistSeed
-} from './data/mockData';
-const navItems = [
-  ['dashboard', 'dashboard', 'Dashboard'],
-  ['portfolios', 'portfolios', 'Portfolios'],
-  ['analytics', 'analytics', 'Analytics'],
-  ['simulations', 'simulations', 'Simulations'],
-  ['assistant', 'assistant', 'AI Assistant'],
-  ['reports', 'reports', 'Reports']
-];
+} from '../data/mockData';
+import { usePersistedState } from '../hooks/usePersistedState';
+import { money, pct } from '../utils/formatting';
+import { clamp, slug } from '../utils/uiCalculations';
+import { navItems } from './navigation';
+import { go, routeFromHash } from './routes';
 
 const lineA = [18, 16, 20, 17, 24, 25, 29, 33, 31, 36, 39, 43, 40, 45, 49, 44, 50, 54, 58, 55, 61, 64, 67, 73, 69, 76, 81, 78, 85, 91];
 const lineB = [12, 11, 13, 10, 14, 17, 16, 20, 22, 24, 22, 27, 29, 26, 31, 30, 34, 37, 35, 39, 41, 40, 44, 48, 47, 51, 53, 55, 57, 60];
 const downturnA = [5, 0, -3, -8, -12, -16, -19, -22, -24, -27, -31, -35, -37, -34, -40, -43, -39, -36, -34, -37, -33, -31, -28, -30];
 const downturnB = [5, 3, -1, -4, -7, -10, -12, -15, -18, -19, -21, -24, -25, -23, -28, -31, -29, -26, -24, -22, -20, -18, -16, -15];
-
-function money(value) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
-}
-
-function pct(value, digits = 2) {
-  return `${value >= 0 ? '+' : ''}${Number(value).toFixed(digits)}%`;
-}
-
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
-}
-
-function slug(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
-
-function routeFromHash() {
-  const raw = window.location.hash.replace(/^#\/?/, '') || 'dashboard';
-  const [page, id] = raw.split('/');
-  return { page, id };
-}
-
-function go(path) {
-  window.location.hash = `#/${path}`;
-}
-
-function usePersistedState(key, seed) {
-  const [value, setValue] = useState(() => {
-    try {
-      const found = localStorage.getItem(key);
-      return found ? JSON.parse(found) : seed;
-    } catch {
-      return seed;
-    }
-  });
-  useEffect(() => {
-    localStorage.setItem(key, JSON.stringify(value));
-  }, [key, value]);
-  return [value, setValue];
-}
 
 function App() {
   const [route, setRoute] = useState(routeFromHash());
@@ -786,7 +742,7 @@ function CreatePortfolio({ portfolios, setPortfolios }) {
     <Card className="create-stepper">{steps.map(([number,label,detail],index)=><React.Fragment key={number}>
       <button className={`${step===Number(number)?'active':''} ${step>Number(number)?'complete':''}`} onClick={()=>setStep(Number(number))} aria-current={step===Number(number)?'step':undefined}>
         <span className="step-number">{step>Number(number)?'✓':number}</span><span className="step-copy"><strong>{label}</strong><small>{detail}</small></span>
-      </button>{index<steps.length-1&&<span className={`step-connector ${step>index+1?'complete':''}`}/>} 
+      </button>{index<steps.length-1&&<span className={`step-connector ${step>index+1?'complete':''}`}/>}
     </React.Fragment>)}</Card>
 
     <div className="create-workspace">
