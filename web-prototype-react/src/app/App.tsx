@@ -1,6 +1,5 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
-import { DonutChart } from '../components/charts/DonutChart';
 import { GaugeChart } from '../components/charts/GaugeChart';
 import { LineChart } from '../components/charts/LineChart';
 import { MiniLineChart } from '../components/charts/MiniLineChart';
@@ -19,6 +18,7 @@ import { reportsSeed } from '../mocks/reports.mock';
 import { defaultSettings } from '../mocks/settings.mock';
 import { scenarioOptions } from '../mocks/simulations.mock';
 import { watchlistSeed } from '../mocks/watchlist.mock';
+import { DashboardPage } from '../pages/dashboard/DashboardPage';
 import { money, pct } from '../utils/formatting';
 import { clamp, slug } from '../utils/uiCalculations';
 import { AppLayout } from './AppLayout';
@@ -43,7 +43,7 @@ function App() {
 
   let content;
   switch (route.page) {
-    case 'dashboard': content = <Dashboard {...shared} />; break;
+    case 'dashboard': content = <DashboardPage portfolios={portfolios} settings={settings} />; break;
     case 'portfolios': content = <Portfolios {...shared} />; break;
     case 'portfolio': content = <PortfolioDetail portfolio={activePortfolio} {...shared} />; break;
     case 'analytics': content = <Analytics portfolio={activePortfolio} {...shared} />; break;
@@ -54,128 +54,10 @@ function App() {
     case 'learn': content = <Learn />; break;
     case 'create': content = <CreatePortfolio portfolios={portfolios} setPortfolios={setPortfolios} />; break;
     case 'settings': content = <Settings settings={settings} setSettings={setSettings} />; break;
-    default: content = <Dashboard {...shared} />;
+    default: content = <DashboardPage portfolios={portfolios} settings={settings} />;
   }
 
   return <AppLayout route={route} settings={settings}>{content}</AppLayout>;
-}
-
-function Dashboard({ portfolios, settings }) {
-  const [selectedId, setSelectedId] = useState(portfolios[0]?.id || '');
-  const portfolio = portfolios.find(item => item.id === selectedId) || portfolios[0];
-  if (!portfolio) return null;
-
-  const firstName = settings?.name?.split(/\s+/)[0] || 'Yan';
-  const annualizedReturn = Number(portfolio.annualizedReturn ?? portfolio.totalReturn ?? 0);
-  const riskLabel = String(portfolio.riskLevel || 'Moderate').replace(/\s+Risk$/i, '');
-  const riskDrivers = portfolio.holdings.filter(item => item.symbol !== 'CASH').slice(0, 3);
-  const allocation = Object.values(portfolio.holdings.reduce((groups, holding) => {
-    const label = holding.type === 'Cash' ? 'Cash' : holding.type.includes('Bond') ? 'Bonds' : holding.type.includes('Crypto') ? 'Crypto' : 'Equity';
-    groups[label] = groups[label] || { symbol: label, type: label, weight: 0 };
-    groups[label].weight += Number(holding.weight || 0);
-    return groups;
-  }, {}));
-
-  return (
-    <div className="page dashboard-page">
-      <section className="dashboard-hero">
-        <svg className="dashboard-wave" viewBox="0 0 900 120" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M0 77 C80 31 125 105 205 60 S330 28 395 68 510 96 580 48 690 28 760 58 900 35" />
-          <path className="wave-dots" d="M0 92 C95 45 145 116 230 72 S360 42 430 79 555 105 630 62 740 45 900 57" />
-        </svg>
-        <div className="dashboard-greeting">
-          <h1>Good evening, {firstName}! <span aria-hidden="true">👋</span></h1>
-          <p>Here's your portfolio overview and key insights.</p>
-        </div>
-        <div className="dashboard-selectors">
-          <label className="dashboard-selector">
-            <Icon name="wallet" size={19}/>
-            <span className="sr-only">Portfolio</span>
-            <select value={portfolio.id} onChange={event => setSelectedId(event.target.value)}>
-              {portfolios.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-            <span className="selector-chevron"><Icon name="chevron-down" size={17}/></span>
-          </label>
-          <button className="dashboard-selector date-selector" aria-label="Selected date: May 11, 2026"><Icon name="calendar" size={19}/><span>May 11, 2026</span><span className="selector-chevron"><Icon name="chevron-down" size={17}/></span></button>
-        </div>
-      </section>
-
-      <div className="dashboard-kpis">
-        <DashboardKpi title="Total Portfolio Value" icon="wallet" tone="purple" visual={<MiniLineChart values={lineA.slice(12)} />}>
-          <strong>{money(portfolio.value)}</strong>
-          <span className="metric-change positive">▲ {money(portfolio.value * .064)} (6.4%)</span>
-        </DashboardKpi>
-        <DashboardKpi title="Risk Score" icon="shield" tone="amber" visual={<GaugeChart score={portfolio.riskScore} label="" />}>
-          <strong>{portfolio.riskScore}</strong>
-          <span className="metric-change warning">{riskLabel}</span>
-        </DashboardKpi>
-        <DashboardKpi title="Annualized Return" icon="trend" tone="purple" visual={<MiniLineChart values={lineA.slice(8)} />}>
-          <strong>{pct(annualizedReturn)}</strong>
-          <span className="metric-change purple-text">Annualized</span>
-        </DashboardKpi>
-        <DashboardKpi title="Maximum Drawdown" icon="drawdown" tone="red" visual={<MiniLineChart values={downturnA.slice(6)} />}>
-          <strong>-21.45%</strong>
-          <span className="metric-change negative">Mar 2020</span>
-        </DashboardKpi>
-      </div>
-
-      <div className="dashboard-primary-grid">
-        <Card className="dashboard-performance-card">
-          <div className="dashboard-card-header performance-header">
-            <div className="dashboard-card-title"><span className="title-icon"><Icon name="trend" size={22}/></span><h2>Portfolio Performance</h2></div>
-            <div className="range-tabs"><button>1M</button><button>6M</button><button>1Y</button><button>3Y</button><button className="active">All</button></div>
-            <div className="performance-return"><strong>{pct(annualizedReturn)}</strong><small>Annualized Return</small></div>
-          </div>
-          <div className="dashboard-chart-axis"><span>$120K</span><span>$100K</span><span>$80K</span><span>$60K</span><span>$40K</span></div>
-          <LineChart primary={lineA} height={245} area />
-        </Card>
-
-        <Card className="dashboard-risk-card">
-          <div className="dashboard-card-header"><div className="dashboard-card-title"><h2>Top Risk Drivers</h2></div><button className="text-btn" onClick={() => go(`analytics/${portfolio.id}`)}>View all</button></div>
-          <div className="dashboard-risk-list">
-            {riskDrivers.map((holding, index) => <div key={holding.symbol}>
-              <SymbolBadge symbol={holding.symbol}/>
-              <div><strong>{holding.name}</strong><small>{holding.symbol}</small></div>
-              <b>{holding.weight}%</b>
-              <span className={`mini-risk ${index < 2 ? 'high' : 'moderate'}`}>{index < 2 ? 'High' : 'Medium'}</span>
-            </div>)}
-          </div>
-        </Card>
-      </div>
-
-      <div className="dashboard-bottom-grid">
-        <Card className="dashboard-allocation-card">
-          <div className="dashboard-card-header"><div className="dashboard-card-title"><span className="title-icon allocation-icon">◔</span><h2>Portfolio Allocation</h2></div></div>
-          <div className="dashboard-allocation-body">
-            <DonutChart holdings={allocation}/>
-            <div className="dashboard-legend">{allocation.map((item, index) => <div key={item.symbol}><span className={`legend-dot c${index}`}/><span>{item.type}</span><strong>{item.weight.toFixed(1)}%</strong></div>)}</div>
-          </div>
-        </Card>
-
-        <Card className="dashboard-insight-card">
-          <div className="dashboard-card-header"><div className="dashboard-card-title"><span className="title-icon"><Icon name="spark" size={21}/></span><h2>AI Insight</h2></div></div>
-          <p>Your portfolio risk score is <strong>{portfolio.riskScore} ({riskLabel})</strong>. Concentration in the largest holdings increases historical drawdown risk. Broader diversification may improve long-term resilience.</p>
-          <button className="primary-btn insight-action" onClick={() => go('assistant')}>Ask Aura <span>→</span></button>
-        </Card>
-
-        <Card className="dashboard-analysis-card">
-          <div className="dashboard-card-header"><div className="dashboard-card-title"><span className="title-icon"><Icon name="analysis" size={22}/></span><h2>Portfolio Analysis</h2></div></div>
-          <div className="analysis-status"><p>Last analyzed: May 11, 2026</p><p>Risk score: <strong>{portfolio.riskScore}</strong><span>•</span><b>{riskLabel}</b></p></div>
-          <div className="analysis-card-actions">
-            <button className="primary-btn" onClick={() => go(`analytics/${portfolio.id}`)}>View Analysis <span>→</span></button>
-            <button className="secondary-btn" onClick={() => go(`analytics/${portfolio.id}`)}>Re-analyze <span>↻</span></button>
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function DashboardKpi({ title, icon, tone, visual, children }) {
-  return <Card className={`dashboard-kpi ${tone}`}>
-    <div className="metric-heading"><span className="metric-icon"><Icon name={icon} size={21}/></span><span>{title}</span></div>
-    <div className="metric-body"><div className="metric-copy">{children}</div><div className="metric-visual">{visual}</div></div>
-  </Card>;
 }
 
 function CardTitle({ title, right }) {
