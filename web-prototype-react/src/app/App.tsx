@@ -1,31 +1,24 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
-import {
-  correlation,
-  defaultPortfolios,
-  reportsSeed,
-  scenarioOptions,
-  watchlistSeed
-} from '../data/mockData';
 import { usePersistedState } from '../hooks/usePersistedState';
+import { correlation } from '../mocks/analytics.mock';
+import { downturnA, downturnB, lineA, lineB } from '../mocks/dashboard.mock';
+import { defaultPortfolios } from '../mocks/portfolios.mock';
+import { reportsSeed } from '../mocks/reports.mock';
+import { defaultSettings } from '../mocks/settings.mock';
+import { scenarioOptions } from '../mocks/simulations.mock';
+import { watchlistSeed } from '../mocks/watchlist.mock';
 import { money, pct } from '../utils/formatting';
 import { clamp, slug } from '../utils/uiCalculations';
 import { navItems } from './navigation';
 import { go, routeFromHash } from './routes';
-
-const lineA = [18, 16, 20, 17, 24, 25, 29, 33, 31, 36, 39, 43, 40, 45, 49, 44, 50, 54, 58, 55, 61, 64, 67, 73, 69, 76, 81, 78, 85, 91];
-const lineB = [12, 11, 13, 10, 14, 17, 16, 20, 22, 24, 22, 27, 29, 26, 31, 30, 34, 37, 35, 39, 41, 40, 44, 48, 47, 51, 53, 55, 57, 60];
-const downturnA = [5, 0, -3, -8, -12, -16, -19, -22, -24, -27, -31, -35, -37, -34, -40, -43, -39, -36, -34, -37, -33, -31, -28, -30];
-const downturnB = [5, 3, -1, -4, -7, -10, -12, -15, -18, -19, -21, -24, -25, -23, -28, -31, -29, -26, -24, -22, -20, -18, -16, -15];
 
 function App() {
   const [route, setRoute] = useState(routeFromHash());
   const [portfolios, setPortfolios] = usePersistedState('aura-portfolios', defaultPortfolios);
   const [reports, setReports] = usePersistedState('aura-reports', reportsSeed);
   const [watchlist, setWatchlist] = usePersistedState('aura-watchlist', watchlistSeed);
-  const [settings, setSettings] = usePersistedState('aura-settings', {
-    name: 'Yan Lin Oo', email: 'yan@example.com', phone: '+1 (888) 123-4567', language: 'English', timezone: 'UTC+06:30 Yangon'
-  });
+  const [settings, setSettings] = usePersistedState('aura-settings', defaultSettings);
 
   useEffect(() => {
     const handler = () => setRoute(routeFromHash());
