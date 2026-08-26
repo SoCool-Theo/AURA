@@ -10,6 +10,7 @@ import { LoginPage } from '../pages/auth/LoginPage';
 import { RegisterPage } from '../pages/auth/RegisterPage';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
 import { LearnPage } from '../pages/learn/LearnPage';
+import { NotFoundPage } from '../pages/not-found/NotFoundPage';
 import { CreatePortfolioPage } from '../pages/portfolios/CreatePortfolioPage';
 import { PortfolioDetailPage } from '../pages/portfolios/PortfolioDetailPage';
 import { PortfoliosPage } from '../pages/portfolios/PortfoliosPage';
@@ -44,7 +45,8 @@ function App() {
     case 'learn': content = <LearnPage />; break;
     case 'create': content = <CreatePortfolioPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
     case 'settings': content = <SettingsPage settings={settings} setSettings={setSettings} />; break;
-    default: content = <DashboardPage portfolios={portfolios} settings={settings} />;
+    case '404': content = <NotFoundPage />; break;
+    default: content = <NotFoundPage />;
   }
 
   return <AppLayout route={route} settings={settings}>{content}</AppLayout>;
