@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import { MiniLineChart } from '../components/charts/MiniLineChart';
 import { Card } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
-import { RiskPill } from '../components/ui/RiskPill';
 import { SymbolBadge } from '../components/ui/SymbolBadge';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { downturnA, lineA } from '../mocks/dashboard.mock';
@@ -17,9 +16,9 @@ import { DashboardPage } from '../pages/dashboard/DashboardPage';
 import { CreatePortfolioPage } from '../pages/portfolios/CreatePortfolioPage';
 import { PortfolioDetailPage } from '../pages/portfolios/PortfolioDetailPage';
 import { PortfoliosPage } from '../pages/portfolios/PortfoliosPage';
+import { ReportsPage } from '../pages/reports/ReportsPage';
 import { SimulationsPage } from '../pages/simulations/SimulationsPage';
 import { money, pct } from '../utils/formatting';
-import { slug } from '../utils/uiCalculations';
 import { AppLayout } from './AppLayout';
 import { go, routeFromHash } from './routes';
 
@@ -48,7 +47,7 @@ function App() {
     case 'analytics': content = <AnalyticsPage portfolio={activePortfolio} setReports={setReports} />; break;
     case 'simulations': content = <SimulationsPage portfolio={activePortfolio} setReports={setReports} />; break;
     case 'assistant': content = <AssistantPage portfolio={activePortfolio} />; break;
-    case 'reports': content = <Reports reports={reports} setReports={setReports} />; break;
+    case 'reports': content = <ReportsPage reports={reports} setReports={setReports} />; break;
     case 'watchlist': content = <Watchlist watchlist={watchlist} setWatchlist={setWatchlist} />; break;
     case 'learn': content = <Learn />; break;
     case 'create': content = <CreatePortfolioPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
@@ -65,43 +64,6 @@ function CardTitle({ title, right }) {
 
 function FeatureCard({ icon, title, text, button, onClick, tone = 'purple' }) {
   return <Card className={`feature-card ${tone}`}><div className="feature-icon">{icon}</div><div><h3>{title}</h3><p>{text}</p><button onClick={onClick}>{button}</button></div></Card>;
-}
-
-function Reports({ reports, setReports }) {
-  const [query,setQuery]=useState('');
-  const [type,setType]=useState('All Types');
-  const visible=reports.filter(r=>(type==='All Types'||r.type===type)&&r.name.toLowerCase().includes(query.toLowerCase()));
-  const reportCounts = {
-    analysis: reports.filter(report=>report.type==='Analysis').length,
-    simulation: reports.filter(report=>report.type==='Simulation').length,
-    comparison: reports.filter(report=>report.type==='Comparison').length
-  };
-  const reportIcon = report => report.type==='Simulation'?'simulations':report.type==='Comparison'?'analytics':'reports';
-  function download(r) {
-    const body = `AURA REPORT\n\n${r.name}\nPortfolio: ${r.portfolio}\nType: ${r.type}\nDate: ${r.date}\nRisk Score: ${r.riskScore ?? 'N/A'}\n\nEducational portfolio risk report prototype.`;
-    const blob = new Blob([body], {type:'text/plain'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${slug(r.name)}.txt`;a.click();URL.revokeObjectURL(a.href);
-  }
-  return <div className="page reports-page">
-    <header className="reports-header"><div><span>PORTFOLIO DOCUMENTS</span><h1>Reports</h1><p>Review, filter, and download your saved portfolio analyses and simulations.</p></div><button className="primary-btn" onClick={()=>go('analytics')}><Icon name="analysis" size={17}/> Create New Analysis</button></header>
-
-    <div className="report-summary-grid">
-      <Card className="report-summary-card purple"><span><Icon name="reports" size={19}/></span><div><small>Total Reports</small><strong>{reports.length}</strong><p>Saved in your library</p></div></Card>
-      <Card className="report-summary-card blue"><span><Icon name="analysis" size={19}/></span><div><small>Portfolio Analyses</small><strong>{reportCounts.analysis}</strong><p>Risk analysis reports</p></div></Card>
-      <Card className="report-summary-card amber"><span><Icon name="simulations" size={19}/></span><div><small>Simulations</small><strong>{reportCounts.simulation}</strong><p>Historical scenario results</p></div></Card>
-      <Card className="report-summary-card green"><span><Icon name="analytics" size={19}/></span><div><small>Comparisons</small><strong>{reportCounts.comparison}</strong><p>Portfolio comparisons</p></div></Card>
-    </div>
-
-    <Card className="reports-library-card">
-      <div className="reports-library-heading"><div><h2>Report Library</h2><p>All generated reports are stored here for future reference.</p></div><span>{visible.length} {visible.length===1?'report':'reports'}</span></div>
-      <div className="report-filters"><label className="report-search"><Icon name="search" size={17}/><input placeholder="Search by report name..." value={query} onChange={event=>setQuery(event.target.value)}/>{query&&<button onClick={()=>setQuery('')} aria-label="Clear search">×</button>}</label><label className="report-select"><Icon name="wallet" size={16}/><select aria-label="Filter by portfolio"><option>All Portfolios</option></select><Icon name="chevron-down" size={14}/></label><label className="report-select"><Icon name="reports" size={16}/><select value={type} onChange={event=>setType(event.target.value)} aria-label="Filter by report type"><option>All Types</option><option>Analysis</option><option>Simulation</option><option>Comparison</option></select><Icon name="chevron-down" size={14}/></label>{(query||type!=='All Types')&&<button className="clear-report-filters" onClick={()=>{setQuery('');setType('All Types')}}>Clear filters</button>}</div>
-
-      {visible.length>0?<div className="reports-table-wrap" role="region" aria-label="Saved reports" tabIndex={0}><table className="reports-table"><thead><tr><th>Report</th><th>Portfolio</th><th>Type</th><th>Created</th><th>Risk Score</th><th aria-label="Actions"/></tr></thead><tbody>{visible.map(report=><tr key={report.id}><td><div className={`report-name-cell ${report.type.toLowerCase()}`}><span><Icon name={reportIcon(report)} size={18}/></span><div><strong>{report.name}</strong><small>Educational portfolio risk report</small></div></div></td><td><div className="report-portfolio-cell"><span>{report.portfolio.slice(0,2).toUpperCase()}</span><strong>{report.portfolio}</strong></div></td><td><span className={`report-type-badge ${report.type.toLowerCase()}`}>{report.type}</span></td><td><div className="report-date-cell"><Icon name="calendar" size={15}/><span>{report.date}</span></div></td><td>{report.riskScore?<div className="report-risk-score"><strong>{report.riskScore}</strong><RiskPill score={report.riskScore}/></div>:<span className="not-applicable">Not applicable</span>}</td><td><div className="report-row-actions"><button onClick={()=>download(report)} aria-label={`Download ${report.name}`} title="Download report"><span>↓</span></button><button className="delete" onClick={()=>setReports(previous=>previous.filter(item=>item.id!==report.id))} aria-label={`Delete ${report.name}`} title="Delete report">×</button></div></td></tr>)}</tbody></table></div>:<div className="reports-empty-state"><span><Icon name="reports" size={28}/></span><h3>No reports found</h3><p>Try changing your search or report-type filter.</p><button className="secondary-btn" onClick={()=>{setQuery('');setType('All Types')}}>Reset Filters</button></div>}
-
-      <div className="table-footer"><span>Showing <strong>{visible.length}</strong> of <strong>{reports.length}</strong> reports</span><div><button aria-label="Previous page">‹</button><button className="active">1</button><button aria-label="Next page">›</button></div></div>
-    </Card>
-    <div className="reports-education-note"><Icon name="shield" size={16}/><p>Reports summarize calculated and historical portfolio risk for educational use. They are not investment recommendations.</p></div>
-  </div>;
 }
 
 function Watchlist({ watchlist, setWatchlist }) {
