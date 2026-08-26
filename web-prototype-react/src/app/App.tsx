@@ -1,24 +1,22 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
-import { LineChart } from '../components/charts/LineChart';
 import { MiniLineChart } from '../components/charts/MiniLineChart';
-import { PortfolioMetric } from '../components/portfolio/PortfolioMetric';
 import { Card } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
 import { RiskPill } from '../components/ui/RiskPill';
 import { SymbolBadge } from '../components/ui/SymbolBadge';
 import { usePersistedState } from '../hooks/usePersistedState';
-import { downturnA, downturnB, lineA, lineB } from '../mocks/dashboard.mock';
+import { downturnA, lineA } from '../mocks/dashboard.mock';
 import { defaultPortfolios } from '../mocks/portfolios.mock';
 import { reportsSeed } from '../mocks/reports.mock';
 import { defaultSettings } from '../mocks/settings.mock';
-import { scenarioOptions } from '../mocks/simulations.mock';
 import { watchlistSeed } from '../mocks/watchlist.mock';
 import { AnalyticsPage } from '../pages/analytics/AnalyticsPage';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
 import { CreatePortfolioPage } from '../pages/portfolios/CreatePortfolioPage';
 import { PortfolioDetailPage } from '../pages/portfolios/PortfolioDetailPage';
 import { PortfoliosPage } from '../pages/portfolios/PortfoliosPage';
+import { SimulationsPage } from '../pages/simulations/SimulationsPage';
 import { money, pct } from '../utils/formatting';
 import { slug } from '../utils/uiCalculations';
 import { AppLayout } from './AppLayout';
@@ -47,7 +45,7 @@ function App() {
     case 'portfolios': content = <PortfoliosPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
     case 'portfolio': content = <PortfolioDetailPage portfolio={activePortfolio} setPortfolios={setPortfolios} />; break;
     case 'analytics': content = <AnalyticsPage portfolio={activePortfolio} setReports={setReports} />; break;
-    case 'simulations': content = <Simulations portfolio={activePortfolio} {...shared} />; break;
+    case 'simulations': content = <SimulationsPage portfolio={activePortfolio} setReports={setReports} />; break;
     case 'assistant': content = <Assistant portfolio={activePortfolio} />; break;
     case 'reports': content = <Reports reports={reports} setReports={setReports} />; break;
     case 'watchlist': content = <Watchlist watchlist={watchlist} setWatchlist={setWatchlist} />; break;
@@ -66,54 +64,6 @@ function CardTitle({ title, right }) {
 
 function FeatureCard({ icon, title, text, button, onClick, tone = 'purple' }) {
   return <Card className={`feature-card ${tone}`}><div className="feature-icon">{icon}</div><div><h3>{title}</h3><p>{text}</p><button onClick={onClick}>{button}</button></div></Card>;
-}
-
-function Simulations({ portfolio, setReports }) {
-  const [mode, setMode] = useState('Historical Scenario');
-  const [scenarioId, setScenarioId] = useState('gfc');
-  const [ran, setRan] = useState(true);
-  const [allocation, setAllocation] = useState(() => Object.fromEntries(portfolio.holdings.map(h=>[h.symbol,h.weight])));
-  const scenario = scenarioOptions.find(s=>s.id===scenarioId);
-  const totalAllocation = Object.values(allocation).reduce((s,n)=>s+Number(n||0),0);
-  const allocationEffect = (100-totalAllocation)*0.02 + (Number(allocation.BND||0)-15)*0.18 - (Number(allocation.NVDA||0)-57)*0.12;
-  const simulatedReturn = scenario.returnPct + (mode==='Historical Scenario'?0:allocationEffect);
-  const modes = [
-    ['Historical Scenario','reports','Replay a historical market event'],
-    ['Allocation Change','trend','Test a different asset allocation'],
-    ['Combined Simulation','simulations','Change allocation within a scenario']
-  ];
-
-  function run() {
-    if (mode!=='Historical Scenario' && Math.abs(totalAllocation-100)>0.01) return alert('Allocation must total 100%.');
-    setRan(true);
-  }
-  function save() {
-    setReports(prev=>[{id:Date.now(),name:`${scenario.label} ${mode}`,portfolio:portfolio.name,type:'Simulation',date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),riskScore:null},...prev]);
-    alert('Simulation saved to Reports.');
-  }
-  function resetAllocation() {
-    setAllocation(Object.fromEntries(portfolio.holdings.map(holding=>[holding.symbol,holding.weight])));
-    setRan(false);
-  }
-
-  return <div className="page simulations-page">
-    <header className="simulations-header"><div><h1>Simulations</h1><p>Explore how your portfolio might have behaved during historical market conditions.</p></div><button className="secondary-btn" onClick={()=>go('reports')}><Icon name="reports" size={17}/> Simulation History</button></header>
-
-    <Card className="simulation-mode-card"><div className="simulation-mode-heading"><h2>Choose a simulation type</h2><p>Select what you want to test before configuring the scenario.</p></div><div className="simulation-mode-options">{modes.map(([label,icon,description])=><button key={label} aria-pressed={mode===label} className={mode===label?'active':''} onClick={()=>{setMode(label);setRan(false)}}><span className="simulation-mode-icon"><Icon name={icon} size={20}/></span><span><strong>{label}</strong><small>{description}</small></span><i>{mode===label?'✓':''}</i></button>)}</div></Card>
-
-    <Card className="simulation-setup-card"><div className="simulation-setup-heading"><div><span>SIMULATION SETUP</span><h2>Configure your test</h2></div><small>Historical results are educational, not predictive.</small></div><div className="simulation-controls-grid"><label><span>Portfolio</span><small>Portfolio to simulate</small><span className="simulation-select"><Icon name="wallet" size={18}/><select value={portfolio.id} onChange={event=>go(`simulations/${event.target.value}`)}><option value={portfolio.id}>{portfolio.name}</option></select><Icon name="chevron-down" size={16}/></span></label><label><span>Historical scenario</span><small>Market period to replay</small><span className="simulation-select"><Icon name="calendar" size={18}/><select value={scenarioId} onChange={event=>{setScenarioId(event.target.value);setRan(false)}}>{scenarioOptions.map(option=><option value={option.id} key={option.id}>{option.label} — {option.dates}</option>)}</select><Icon name="chevron-down" size={16}/></span></label><button className="primary-btn run-simulation-btn" onClick={run}><span>▶</span> Run Simulation</button></div></Card>
-
-    {mode!=='Historical Scenario' && <Card className="simulation-allocation-card"><div className="simulation-allocation-header"><div><h2>{mode==='Allocation Change'?'Test a Different Allocation':'Modified Allocation for This Scenario'}</h2><p>Adjust weights while keeping the total allocation at 100%.</p></div><div><button onClick={resetAllocation}>Reset</button><span className={Math.abs(totalAllocation-100)<.01?'valid':'invalid'}><small>Total</small><strong>{totalAllocation.toFixed(1)}%</strong></span></div></div><div className="simulation-allocation-grid">{portfolio.holdings.map(holding=><label key={holding.symbol}><span className="allocation-asset"><SymbolBadge symbol={holding.symbol}/><span><strong>{holding.symbol}</strong><small>{holding.type}</small></span></span><span className="allocation-input"><input type="number" min="0" max="100" step="0.1" value={allocation[holding.symbol]} onChange={event=>{setAllocation({...allocation,[holding.symbol]:Number(event.target.value)});setRan(false)}}/><b>%</b></span></label>)}</div><div className="simulation-allocation-progress"><span><i style={{width:`${Math.min(100,totalAllocation)}%`}}/></span><p className={Math.abs(totalAllocation-100)<.01?'green-text':'orange-text'}>{Math.abs(totalAllocation-100)<.01?'Allocation is ready to simulate.':'Allocation must total 100% before running.'}</p></div></Card>}
-
-    {!ran&&<Card className="simulation-ready-state"><span><Icon name="simulations" size={27}/></span><div><h2>Ready to run {mode.toLowerCase()}</h2><p>Review the setup above, then run the simulation to generate historical results.</p></div><button className="primary-btn" onClick={run}>Run Simulation <span>→</span></button></Card>}
-
-    {ran && <section className="simulation-results">
-      <div className="simulation-results-heading"><div><span>SIMULATION RESULTS</span><h2>{scenario.label}</h2><p>{mode} · {portfolio.name}</p></div><span className="results-status"><i/> Completed</span></div>
-      <div className="simulation-metric-grid"><PortfolioMetric label="Total Return" value={pct(simulatedReturn)} detail={scenario.label} icon="trend" tone={simulatedReturn<0?'red':'green'}/><PortfolioMetric label="Maximum Drawdown" value={`${(scenario.drawdown+allocationEffect*0.7).toFixed(2)}%`} detail="Peak-to-trough decline" icon="drawdown" tone="red"/><PortfolioMetric label="Annualized Volatility" value={`${Math.max(8,scenario.volatility-allocationEffect*0.25).toFixed(2)}%`} detail="Historical variation" icon="trend" tone="purple"/><PortfolioMetric label="Recovery Time" value={`${Math.max(1,Math.round(scenario.recovery-allocationEffect*0.1))} months`} detail="Estimated historical recovery" icon="calendar" tone="blue"/></div>
-      <div className="simulation-results-grid"><Card className="simulation-chart-card"><div className="simulation-card-heading"><div><h2>Portfolio Value Over Time</h2><p>Historical portfolio and benchmark paths</p></div><div className="detail-chart-legend"><span className="p-dot"/>Your Portfolio <span className="b-dot"/>Benchmark</div></div><LineChart primary={scenario.returnPct<0?downturnA:lineA} secondary={scenario.returnPct<0?downturnB:lineB} negative={scenario.returnPct<0} height={285} area/></Card><Card className="simulation-scenario-card"><div className="simulation-card-heading"><div><h2>Scenario Details</h2><p>Inputs used for this result</p></div></div><div className="scenario-summary-icon"><Icon name="reports" size={22}/></div><p>This simulation applies historical market movements from <strong>{scenario.label}</strong> to the selected portfolio.</p><dl><div><dt>Event period</dt><dd>{scenario.dates}</dd></div><div><dt>Simulation mode</dt><dd>{mode}</dd></div><div><dt>Data basis</dt><dd>Historical prices</dd></div></dl><div className="scenario-actions"><button className="secondary-btn" onClick={save}>Save Result</button><button className="primary-btn" onClick={()=>go('assistant')}>Ask Aura <span>→</span></button></div></Card></div>
-      {mode==='Combined Simulation' && <Card className="simulation-comparison-card"><div className="simulation-card-heading"><div><h2>Original vs Modified Allocation</h2><p>How the allocation adjustment changed the historical result.</p></div></div><div className="simulation-comparison-grid"><div><small>Original allocation</small><strong>{pct(scenario.returnPct)}</strong><span>Historical return</span></div><span className="comparison-arrow">→</span><div className="highlight"><small>Modified allocation</small><strong className={simulatedReturn>scenario.returnPct?'green-text':'red-text'}>{pct(simulatedReturn)}</strong><span>Historical return</span></div><div><small>Difference</small><strong className={simulatedReturn-scenario.returnPct>=0?'green-text':'red-text'}>{pct(simulatedReturn-scenario.returnPct)}</strong><span>Allocation effect</span></div></div></Card>}
-    </section>}
-  </div>;
 }
 
 function Assistant({ portfolio }) {
