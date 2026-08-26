@@ -6,6 +6,7 @@ import { defaultSettings } from '../mocks/settings.mock';
 import { watchlistSeed } from '../mocks/watchlist.mock';
 import { AnalyticsPage } from '../pages/analytics/AnalyticsPage';
 import { AssistantPage } from '../pages/assistant/AssistantPage';
+import { LoginPage } from '../pages/auth/LoginPage';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
 import { LearnPage } from '../pages/learn/LearnPage';
 import { CreatePortfolioPage } from '../pages/portfolios/CreatePortfolioPage';
@@ -23,6 +24,8 @@ function App() {
   const [reports, setReports] = usePersistedState('aura-reports', reportsSeed);
   const [watchlist, setWatchlist] = usePersistedState('aura-watchlist', watchlistSeed);
   const [settings, setSettings] = usePersistedState('aura-settings', defaultSettings);
+
+  if (route.page === 'login') return <LoginPage />;
 
   const activePortfolio = portfolios.find(p => p.id === (route.id || 'tech')) || portfolios[0];
 
