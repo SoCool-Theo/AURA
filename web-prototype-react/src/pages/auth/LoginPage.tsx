@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { go } from '../../app/routes';
 import { AuthField } from './AuthField';
 import { AuthLayout } from './AuthLayout';
 import styles from './AuthPage.module.css';
@@ -111,7 +112,7 @@ export function LoginPage() {
 
       <p className={styles.authSwitch}>
         Don’t have an account?{' '}
-        <button type="button" onClick={() => showPrototypeNotice('Account registration')}>Sign up</button>
+        <button type="button" onClick={() => go('signup')}>Sign up</button>
       </p>
     </AuthLayout>
   );

@@ -5,7 +5,7 @@ interface AuthFieldProps {
   value: string;
   placeholder: string;
   autoComplete: string;
-  icon: 'email' | 'password';
+  icon: 'email' | 'password' | 'user';
   error?: string;
   onChange: (value: string) => void;
   onToggleVisibility?: () => void;
@@ -13,6 +13,15 @@ interface AuthFieldProps {
 }
 
 function FieldIcon({ icon }: Pick<AuthFieldProps, 'icon'>) {
+  if (icon === 'user') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4.5 21a7.5 7.5 0 0 1 15 0" />
+      </svg>
+    );
+  }
+
   if (icon === 'email') {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">

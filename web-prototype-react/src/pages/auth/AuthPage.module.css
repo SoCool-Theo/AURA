@@ -297,8 +297,160 @@
   cursor: pointer;
 }
 
+.registerHeading {
+  margin-top: 27px;
+}
+
+.registerForm {
+  margin-top: 29px;
+  gap: 18px;
+}
+
+.passwordGroup > label {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.passwordGroup > label > span:first-child {
+  display: block;
+  margin-bottom: 9px;
+}
+
+.passwordStrength {
+  margin-top: 9px;
+}
+
+.passwordStrength > div {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.passwordStrength i {
+  height: 5px;
+  border-radius: 99px;
+  background: var(--border-divider);
+  transition: background .16s ease;
+}
+
+.passwordStrength[data-strength='1'] i.active {
+  background: var(--red-bright);
+}
+
+.passwordStrength[data-strength='2'] i.active {
+  background: var(--amber-primary);
+}
+
+.passwordStrength[data-strength='3'] i.active {
+  background: #e9c94c;
+}
+
+.passwordStrength[data-strength='4'] i.active,
+.passwordStrength[data-strength='5'] i.active {
+  background: var(--green-bright);
+}
+
+.passwordStrength p {
+  margin: 7px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.passwordStrength strong {
+  color: var(--red-bright);
+}
+
+.passwordStrength[data-strength='2'] strong {
+  color: var(--amber-primary);
+}
+
+.passwordStrength[data-strength='3'] strong {
+  color: #e9c94c;
+}
+
+.passwordStrength[data-strength='4'] strong,
+.passwordStrength[data-strength='5'] strong {
+  color: var(--green-bright);
+}
+
+.termsGroup {
+  margin-top: -2px;
+}
+
+.termsRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.termsRow input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin: 0;
+  appearance: none;
+  border: 1px solid var(--border-control);
+  border-radius: 4px;
+  background: rgba(4, 20, 35, .78);
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+}
+
+.termsRow input::before {
+  content: '';
+  width: 10px;
+  height: 6px;
+  border-left: 2px solid #021713;
+  border-bottom: 2px solid #021713;
+  opacity: 0;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.termsRow input:checked {
+  border-color: var(--purple-primary);
+  background: var(--purple-primary);
+}
+
+.termsRow input:checked::before {
+  opacity: 1;
+}
+
+.termsRow button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--purple-light);
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.termsRow button:hover {
+  color: var(--purple-bright);
+}
+
+.termsError {
+  display: block;
+  margin-top: 7px;
+  color: var(--red-bright);
+  font-size: 12px;
+}
+
+.registerSwitch {
+  margin-top: 28px;
+}
+
+.authForm :global(.auth-input-shell input:focus-visible) {
+  outline: none;
+}
+
 .authShell button:focus-visible,
-.authShell input:focus-visible {
+.termsRow input:focus-visible {
   outline: 2px solid var(--purple-bright);
   outline-offset: 3px;
 }
@@ -349,6 +501,10 @@
   .socialButtons {
     grid-template-columns: 1fr;
     gap: 11px;
+  }
+
+  .registerForm {
+    margin-top: 25px;
   }
 }
 
