@@ -1,6 +1,5 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
-import { GaugeChart } from '../components/charts/GaugeChart';
 import { LineChart } from '../components/charts/LineChart';
 import { MiniLineChart } from '../components/charts/MiniLineChart';
 import { PortfolioMetric } from '../components/portfolio/PortfolioMetric';
@@ -9,13 +8,13 @@ import { Icon } from '../components/ui/Icon';
 import { RiskPill } from '../components/ui/RiskPill';
 import { SymbolBadge } from '../components/ui/SymbolBadge';
 import { usePersistedState } from '../hooks/usePersistedState';
-import { correlation } from '../mocks/analytics.mock';
 import { downturnA, downturnB, lineA, lineB } from '../mocks/dashboard.mock';
 import { defaultPortfolios } from '../mocks/portfolios.mock';
 import { reportsSeed } from '../mocks/reports.mock';
 import { defaultSettings } from '../mocks/settings.mock';
 import { scenarioOptions } from '../mocks/simulations.mock';
 import { watchlistSeed } from '../mocks/watchlist.mock';
+import { AnalyticsPage } from '../pages/analytics/AnalyticsPage';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
 import { CreatePortfolioPage } from '../pages/portfolios/CreatePortfolioPage';
 import { PortfolioDetailPage } from '../pages/portfolios/PortfolioDetailPage';
@@ -47,7 +46,7 @@ function App() {
     case 'dashboard': content = <DashboardPage portfolios={portfolios} settings={settings} />; break;
     case 'portfolios': content = <PortfoliosPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
     case 'portfolio': content = <PortfolioDetailPage portfolio={activePortfolio} setPortfolios={setPortfolios} />; break;
-    case 'analytics': content = <Analytics portfolio={activePortfolio} {...shared} />; break;
+    case 'analytics': content = <AnalyticsPage portfolio={activePortfolio} setReports={setReports} />; break;
     case 'simulations': content = <Simulations portfolio={activePortfolio} {...shared} />; break;
     case 'assistant': content = <Assistant portfolio={activePortfolio} />; break;
     case 'reports': content = <Reports reports={reports} setReports={setReports} />; break;
@@ -67,44 +66,6 @@ function CardTitle({ title, right }) {
 
 function FeatureCard({ icon, title, text, button, onClick, tone = 'purple' }) {
   return <Card className={`feature-card ${tone}`}><div className="feature-icon">{icon}</div><div><h3>{title}</h3><p>{text}</p><button onClick={onClick}>{button}</button></div></Card>;
-}
-
-function Analytics({ portfolio, setReports }) {
-  const riskDrivers = portfolio.holdings.filter(holding=>holding.symbol!=='CASH').map((holding,index)=>({ ...holding, contribution: Math.max(2, (holding.weight*(index===0?1.1:index===1?0.9:0.55))).toFixed(1), level: index<2?'High':index===2?'Moderate':'Low' }));
-  const riskLabel = String(portfolio.riskLevel || 'Moderate').replace(/\s+Risk$/i, '');
-  function saveReport() {
-    const report = {id:Date.now(),name:`${portfolio.name} Analysis`,portfolio:portfolio.name,type:'Analysis',date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),riskScore:portfolio.riskScore};
-    setReports(prev=>[report,...prev]);
-    alert('Analysis snapshot saved to Reports.');
-  }
-  return <div className="page analytics-page">
-    <button className="analytics-back-link" onClick={()=>go(`portfolio/${portfolio.id}`)}>← Back to {portfolio.name}</button>
-    <header className="analytics-header"><div><h1>Portfolio Analysis</h1><p>Historical risk report for <strong>{portfolio.name}</strong>.</p></div><div><button className="secondary-btn" onClick={()=>go('assistant')}><Icon name="spark" size={17}/> Ask Aura</button><button className="primary-btn" onClick={saveReport}>Save Report <span>↓</span></button></div></header>
-
-    <Card className="analysis-summary-hero">
-      <div className="analysis-summary-copy"><span className="analysis-eyebrow"><Icon name="analysis" size={15}/> OVERALL RISK SUMMARY</span><div className="analysis-score-line"><strong>{portfolio.riskScore}<small>/100</small></strong><span>{riskLabel}</span></div><h2>Your portfolio has a {riskLabel.toLowerCase()} historical risk profile.</h2><p>The largest risk comes from concentrated exposure to high-volatility assets and positive correlation between the largest positions. These observations explain historical behavior and are not investment recommendations.</p><div className="analysis-summary-actions"><button className="primary-btn" onClick={()=>go('assistant')}>Ask Aura About This <span>→</span></button><button className="secondary-btn" onClick={()=>go(`simulations/${portfolio.id}`)}>Run What-If Simulation</button></div></div>
-      <div className="analysis-gauge-panel"><GaugeChart score={portfolio.riskScore} label={riskLabel}/><div><span>Last analyzed</span><strong>May 11, 2026</strong></div><small>Based on historical portfolio data</small></div>
-    </Card>
-
-    <div className="analytics-metric-grid">
-      <PortfolioMetric label="Annualized Volatility" value="15.32%" detail="Moderate historical variation" icon="trend" tone="purple" />
-      <PortfolioMetric label="Maximum Drawdown" value="-21.45%" detail="Historical peak-to-trough" icon="drawdown" tone="red" />
-      <PortfolioMetric label="Sharpe Ratio" value="1.24" detail="Good risk-adjusted return" icon="trend" tone="green" />
-      <PortfolioMetric label="Diversification" value="56/100" detail="Moderate diversification" icon="shield" tone="amber" />
-    </div>
-
-    <div className="analytics-content-grid">
-      <Card className="risk-drivers-card"><div className="analytics-card-heading"><div><h2>Main Risk Drivers</h2><p>Assets contributing most to historical portfolio risk.</p></div><span>{riskDrivers.length} assets</span></div><div className="analytics-driver-table"><div className="analytics-driver-head"><span>Asset</span><span>Weight</span><span>Risk contribution</span><span>Level</span></div>{riskDrivers.map(driver=><div className="analytics-driver-row" key={driver.symbol}><div className="asset-cell"><SymbolBadge symbol={driver.symbol}/><div><strong>{driver.symbol}</strong><small>{driver.name}</small></div></div><b>{driver.weight}%</b><div className="driver-contribution"><div><span style={{width:`${Math.min(100,Number(driver.contribution))}%`}}/></div><small>{driver.contribution}%</small></div><span className={`mini-risk ${driver.level.toLowerCase()}`}>{driver.level}</span></div>)}</div></Card>
-      <Card className="correlation-card"><div className="analytics-card-heading"><div><h2>Asset Relationships</h2><p>Historical return correlation</p></div><span className="correlation-scale"><i/> Lower <i/> Higher</span></div><Heatmap/><div className="correlation-note"><Icon name="analysis" size={17}/><p>Higher positive values mean assets historically moved together. Lower or negative relationships may improve diversification.</p></div></Card>
-    </div>
-
-    <section className="asset-analysis-section"><div className="asset-analysis-heading"><div><h2>Individual Asset Analysis</h2><p>Historical risk and performance details for each invested asset.</p></div><button className="secondary-btn" onClick={()=>go(`portfolio/${portfolio.id}`)}>View Holdings</button></div><div className="asset-analysis-grid">{portfolio.holdings.filter(holding=>holding.symbol!=='CASH').map((holding,index)=><Card key={holding.symbol} className="asset-analysis-card"><div className="asset-analysis-card-head"><div className="asset-cell"><SymbolBadge symbol={holding.symbol}/><div><strong>{holding.symbol}</strong><small>{holding.name}</small></div></div><RiskPill score={Math.max(25,portfolio.riskScore-index*9)}/></div><div className="asset-weight-row"><span>Portfolio weight</span><strong>{holding.weight}%</strong></div><div className="asset-weight-bar"><span style={{width:`${holding.weight}%`}}/></div><dl><div><dt>Annualized return</dt><dd className="green-text">{pct(8+index*2.1)}</dd></div><div><dt>Volatility</dt><dd>{(14+index*4.2).toFixed(1)}%</dd></div><div><dt>Maximum drawdown</dt><dd className="red-text">-{(18+index*7.3).toFixed(1)}%</dd></div><div><dt>Sharpe ratio</dt><dd>{(1.4-index*0.17).toFixed(2)}</dd></div></dl></Card>)}</div></section>
-  </div>;
-}
-
-function Heatmap({ compact=false }) {
-  const labels = ['NVDA','TSLA','AAPL','BND','GLD'];
-  return <div className={`heatmap ${compact?'compact':''}`}><div className="heat-empty" />{labels.map(l=><b key={l}>{l}</b>)}{labels.map((row,ri)=><React.Fragment key={row}><b>{row}</b>{correlation[ri].map((v,ci)=><span key={`${ri}-${ci}`} style={{'--heat':Math.abs(v)}} className={v<0?'negative':''}>{v.toFixed(2)}</span>)}</React.Fragment>)}</div>;
 }
 
 function Simulations({ portfolio, setReports }) {
