@@ -10,6 +10,7 @@ import { watchlistSeed } from '../mocks/watchlist.mock';
 import { AnalyticsPage } from '../pages/analytics/AnalyticsPage';
 import { AssistantPage } from '../pages/assistant/AssistantPage';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
+import { LearnPage } from '../pages/learn/LearnPage';
 import { CreatePortfolioPage } from '../pages/portfolios/CreatePortfolioPage';
 import { PortfolioDetailPage } from '../pages/portfolios/PortfolioDetailPage';
 import { PortfoliosPage } from '../pages/portfolios/PortfoliosPage';
@@ -46,7 +47,7 @@ function App() {
     case 'assistant': content = <AssistantPage portfolio={activePortfolio} />; break;
     case 'reports': content = <ReportsPage reports={reports} setReports={setReports} />; break;
     case 'watchlist': content = <WatchlistPage watchlist={watchlist} setWatchlist={setWatchlist} />; break;
-    case 'learn': content = <Learn />; break;
+    case 'learn': content = <LearnPage />; break;
     case 'create': content = <CreatePortfolioPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
     case 'settings': content = <Settings settings={settings} setSettings={setSettings} />; break;
     default: content = <DashboardPage portfolios={portfolios} settings={settings} />;
@@ -61,33 +62,6 @@ function CardTitle({ title, right }) {
 
 function FeatureCard({ icon, title, text, button, onClick, tone = 'purple' }) {
   return <Card className={`feature-card ${tone}`}><div className="feature-icon">{icon}</div><div><h3>{title}</h3><p>{text}</p><button onClick={onClick}>{button}</button></div></Card>;
-}
-
-function Learn() {
-  const lessons=[
-    {title:'Understanding Risk Score',text:'How Aura combines volatility, drawdown, concentration, and diversification.',icon:'shield',topic:'Risk basics',time:'5 min',level:'Beginner'},
-    {title:'Volatility',text:'Learn what historical price fluctuations mean for a portfolio.',icon:'trend',topic:'Market behavior',time:'4 min',level:'Beginner'},
-    {title:'Maximum Drawdown',text:'Understand the largest peak-to-trough decline.',icon:'drawdown',topic:'Loss awareness',time:'6 min',level:'Beginner'},
-    {title:'Sharpe Ratio',text:'Learn about return relative to historical volatility.',icon:'analytics',topic:'Risk-adjusted return',time:'7 min',level:'Intermediate'},
-    {title:'Correlation',text:'See why assets moving together can increase concentration risk.',icon:'analysis',topic:'Diversification',time:'6 min',level:'Intermediate'},
-    {title:'Historical What-If',text:'Learn how scenario simulations use past market periods.',icon:'simulations',topic:'Scenarios',time:'8 min',level:'Intermediate'}
-  ];
-  function openLesson(lesson) {
-    alert(`${lesson.title}\n\n${lesson.text}\n\nThis learning module can later be connected to your course content or Aura knowledge base.`);
-  }
-  return <div className="page learn-page">
-    <header className="learn-header"><div><span>AURA LEARNING CENTER</span><h1>Learn Portfolio Risk</h1><p>Build confidence with clear, beginner-friendly lessons about portfolio behavior.</p></div><div className="learn-progress-pill"><span><Icon name="reports" size={18}/></span><div><strong>{lessons.length} lessons</strong><small>About 36 minutes total</small></div></div></header>
-
-    <div className="learn-feature-grid">
-      <Card className="learn-feature-card"><div className="learn-feature-copy"><span className="learn-feature-label"><Icon name="spark" size={13}/> RECOMMENDED START</span><h2>Understand what your risk score is really telling you</h2><p>Learn how Aura brings several historical risk measures together without turning them into investment advice.</p><div className="learn-feature-meta"><span><Icon name="calendar" size={14}/> 5 minutes</span><span><Icon name="shield" size={14}/> Beginner</span></div><button className="primary-btn" onClick={()=>openLesson(lessons[0])}>Start First Lesson <span>→</span></button></div><div className="learn-feature-visual"><div className="learning-orbit"><span><Icon name="shield" size={32}/></span><i className="orbit-one"><Icon name="trend" size={16}/></i><i className="orbit-two"><Icon name="drawdown" size={16}/></i><i className="orbit-three"><Icon name="analysis" size={16}/></i></div><small>Risk is more than one number</small></div></Card>
-      <Card className="learning-path-card"><div className="learning-path-heading"><span>YOUR LEARNING PATH</span><h2>From foundations to scenarios</h2><p>Follow the modules in order or explore any topic.</p></div><div className="learning-path-steps"><div className="active"><span>1</span><div><strong>Risk Foundations</strong><small>Score, volatility, and drawdown</small></div><b>3 lessons</b></div><div><span>2</span><div><strong>Portfolio Relationships</strong><small>Return, correlation, diversification</small></div><b>2 lessons</b></div><div><span>3</span><div><strong>Historical Scenarios</strong><small>Understand what-if simulations</small></div><b>1 lesson</b></div></div></Card>
-    </div>
-
-    <section className="learning-library"><div className="learning-library-heading"><div><span>LEARNING LIBRARY</span><h2>Explore all lessons</h2><p>Short explanations designed to make portfolio-risk metrics easier to understand.</p></div><span className="lesson-count">{lessons.length} modules</span></div><div className="lesson-grid">{lessons.map((lesson,index)=><Card key={lesson.title} className={`lesson-card lesson-tone-${index%3}`}><div className="lesson-card-top"><span><Icon name={lesson.icon} size={21}/></span><b>{String(index+1).padStart(2,'0')}</b></div><span className="lesson-topic">{lesson.topic}</span><h3>{lesson.title}</h3><p>{lesson.text}</p><div className="lesson-meta"><span><Icon name="calendar" size={13}/>{lesson.time}</span><span><Icon name="analysis" size={13}/>{lesson.level}</span></div><button onClick={()=>openLesson(lesson)}>Open Lesson <span>→</span></button></Card>)}</div></section>
-
-    <Card className="learn-aura-card"><span><Icon name="spark" size={22}/></span><div><h2>Have a question while learning?</h2><p>Ask Aura to explain a portfolio-risk concept using the context of your current portfolio.</p></div><button className="secondary-btn" onClick={()=>go('assistant')}>Ask AI Assistant <span>→</span></button></Card>
-    <div className="learn-education-note"><Icon name="shield" size={16}/><p>Learning content explains historical portfolio-risk concepts and is not financial or investment advice.</p></div>
-  </div>;
 }
 
 function Settings({ settings, setSettings }) {
