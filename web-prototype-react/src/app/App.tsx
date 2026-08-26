@@ -12,6 +12,7 @@ import { reportsSeed } from '../mocks/reports.mock';
 import { defaultSettings } from '../mocks/settings.mock';
 import { watchlistSeed } from '../mocks/watchlist.mock';
 import { AnalyticsPage } from '../pages/analytics/AnalyticsPage';
+import { AssistantPage } from '../pages/assistant/AssistantPage';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
 import { CreatePortfolioPage } from '../pages/portfolios/CreatePortfolioPage';
 import { PortfolioDetailPage } from '../pages/portfolios/PortfolioDetailPage';
@@ -46,7 +47,7 @@ function App() {
     case 'portfolio': content = <PortfolioDetailPage portfolio={activePortfolio} setPortfolios={setPortfolios} />; break;
     case 'analytics': content = <AnalyticsPage portfolio={activePortfolio} setReports={setReports} />; break;
     case 'simulations': content = <SimulationsPage portfolio={activePortfolio} setReports={setReports} />; break;
-    case 'assistant': content = <Assistant portfolio={activePortfolio} />; break;
+    case 'assistant': content = <AssistantPage portfolio={activePortfolio} />; break;
     case 'reports': content = <Reports reports={reports} setReports={setReports} />; break;
     case 'watchlist': content = <Watchlist watchlist={watchlist} setWatchlist={setWatchlist} />; break;
     case 'learn': content = <Learn />; break;
@@ -64,58 +65,6 @@ function CardTitle({ title, right }) {
 
 function FeatureCard({ icon, title, text, button, onClick, tone = 'purple' }) {
   return <Card className={`feature-card ${tone}`}><div className="feature-icon">{icon}</div><div><h3>{title}</h3><p>{text}</p><button onClick={onClick}>{button}</button></div></Card>;
-}
-
-function Assistant({ portfolio }) {
-  const [messages, setMessages] = useState([
-    {role:'assistant',text:`Hi! I can explain ${portfolio.name} in simple language. What would you like to know?`}
-  ]);
-  const [text, setText] = useState('');
-  const prompts = ['Why is my portfolio risk score 72?','How can I reduce risk?','What is diversification?','Why is correlation important?'];
-  function answer(q) {
-    const lower=q.toLowerCase();
-    if (lower.includes('why') && lower.includes('risk')) return `Your portfolio is around ${portfolio.riskScore}/100 mainly because the biggest positions are concentrated in technology assets. NVDA and TSLA also have relatively high volatility, so large moves in those holdings can affect the whole portfolio more strongly.`;
-    if (lower.includes('reduce')) return `Historically, risk could be reduced by lowering concentration in the largest volatile holdings and increasing the share of assets that behave differently, such as broad bond exposure. Aura is explaining historical risk patterns, not telling you what to buy or sell.`;
-    if (lower.includes('divers')) return `Diversification means spreading exposure so the portfolio is not controlled by one asset, sector, or type of market behavior. Aura looks at both weights and how assets historically moved together.`;
-    if (lower.includes('correlation')) return `Correlation measures how closely two assets moved together historically. Values near +1 mean they often moved in the same direction, while lower or negative values can provide more diversification.`;
-    if (lower.includes('drawdown')) return `Maximum drawdown is the largest historical drop from a portfolio peak to a later trough before a new high. It helps show how severe a past decline was.`;
-    return `For ${portfolio.name}, Aura focuses on calculated metrics such as volatility, maximum drawdown, Sharpe ratio, concentration, diversification, and risk drivers. Ask me about one of those and I’ll explain it in simpler terms.`;
-  }
-  function send(q=text) {
-    const clean=q.trim(); if(!clean) return;
-    setMessages(prev=>[...prev,{role:'user',text:clean},{role:'assistant',text:answer(clean)}]);
-    setText('');
-  }
-  const conversations = [
-    ['Why is my risk high?','11:23 PM'],
-    ['How did I perform?','9:14 PM'],
-    ['Which asset affects risk?','7:08 PM']
-  ];
-  return <div className="page assistant-page">
-    <header className="assistant-header"><div><span>PORTFOLIO INTELLIGENCE</span><h1>AI Assistant</h1><p>Understand your portfolio risk through clear, educational explanations.</p></div><div className="assistant-header-status"><i/><span><strong>Aura is ready</strong><small>Using {portfolio.name} context</small></span></div></header>
-    <div className="assistant-layout">
-      <Card className="conversation-list">
-        <div className="conversation-heading"><div><h2>Conversations</h2><small>Your recent questions</small></div><button aria-label="Search conversations"><Icon name="search" size={17}/></button></div>
-        <button className="primary-btn new-conversation-btn" onClick={()=>setMessages([{role:'assistant',text:'New conversation started. What would you like to understand?'}])}><span>＋</span> New Conversation</button>
-        <div className="conversation-group"><small>TODAY</small>{conversations.map(([title,time],i)=><button key={title} className={i===0?'active':''} onClick={()=>send(title)}><span className="conversation-icon"><Icon name="assistant" size={15}/></span><span><strong>{title}</strong><small>{time}</small></span><i>›</i></button>)}</div>
-        <div className="conversation-group"><small>YESTERDAY</small>{['Explain correlation','How to reduce drawdown?'].map(title=><button key={title} onClick={()=>send(title)}><span className="conversation-icon"><Icon name="assistant" size={15}/></span><span><strong>{title}</strong><small>Yesterday</small></span><i>›</i></button>)}</div>
-        <div className="conversation-foot"><Icon name="shield" size={17}/><p>Your conversations use portfolio metrics from this educational prototype.</p></div>
-      </Card>
-
-      <Card className="chat-card">
-        <div className="chat-head"><div className="aura-chat-identity"><span><Icon name="spark" size={20}/></span><div><strong>Aura</strong><small><i className="online-dot"/> Portfolio risk assistant</small></div></div><div className="chat-context-pill"><Icon name="wallet" size={15}/><span>{portfolio.name}</span><Icon name="chevron-down" size={14}/></div></div>
-        <div className="messages" aria-live="polite">{messages.map((message,index)=><div key={index} className={`message ${message.role}`}><span className="message-avatar">{message.role==='assistant'?<Icon name="spark" size={15}/>: 'Y'}</span><div className="message-content"><small>{message.role==='assistant'?'Aura':'You'}</small><p>{message.text}</p><time>{message.role==='assistant'?'Now':'Just now'}</time></div></div>)}</div>
-        <div className="assistant-suggestions"><span>Suggested questions</span><div className="prompt-chips">{prompts.map(prompt=><button key={prompt} onClick={()=>send(prompt)}><Icon name="spark" size={12}/>{prompt}</button>)}</div></div>
-        <div className="chat-composer"><div className="chat-input"><button className="composer-add" aria-label="Add context">＋</button><input value={text} onChange={event=>setText(event.target.value)} onKeyDown={event=>event.key==='Enter'&&send()} placeholder="Ask Aura about risk, performance, or diversification..."/><button className="composer-send" onClick={()=>send()} aria-label="Send message">↑</button></div><div className="composer-meta"><span>Press Enter to send</span><span><Icon name="shield" size={12}/> Educational explanations only</span></div></div>
-      </Card>
-
-      <aside className="assistant-context-column">
-        <Card className="context-card"><div className="context-card-heading"><div><span>PORTFOLIO CONTEXT</span><h2>Currently analyzing</h2></div><Icon name="wallet" size={19}/></div><div className="context-portfolio"><SymbolBadge symbol="TP"/><div><strong>{portfolio.name}</strong><small>{money(portfolio.value)} total value</small></div></div><div className="context-risk"><div><span>Risk Score</span><strong>{portfolio.riskScore}<small>/100</small></strong><b>Moderate</b></div><div className="context-risk-ring" style={{'--risk-score':`${portfolio.riskScore*3.6}deg`}}><span>{portfolio.riskScore}</span></div></div><dl><div><dt>Annualized return</dt><dd className="green-text">+12.45%</dd></div><div><dt>Volatility</dt><dd>15.32%</dd></div><div><dt>Max drawdown</dt><dd className="red-text">-21.45%</dd></div><div><dt>Sharpe ratio</dt><dd>1.24</dd></div></dl><button className="secondary-btn context-analysis-btn" onClick={()=>go(`analytics/${portfolio.id}`)}>View Full Analysis <span>→</span></button></Card>
-        <Card className="assistant-drivers-card"><div className="context-card-heading"><div><span>TOP RISK DRIVERS</span><h2>What Aura can explain</h2></div></div><div className="assistant-driver"><SymbolBadge symbol="NVDA"/><span><strong>NVIDIA</strong><small>57.1% concentration</small></span><b className="high">High</b></div><div className="assistant-driver"><SymbolBadge symbol="TSLA"/><span><strong>Tesla</strong><small>14.4% concentration</small></span><b className="high">High</b></div><button onClick={()=>send('Which asset affects my risk the most?')}>Ask about risk drivers <span>→</span></button></Card>
-        <Card className="assistant-safety-card"><Icon name="shield" size={20}/><div><strong>Educational guidance</strong><p>Aura explains historical metrics and does not provide investment recommendations.</p></div></Card>
-      </aside>
-    </div>
-  </div>;
 }
 
 function Reports({ reports, setReports }) {
