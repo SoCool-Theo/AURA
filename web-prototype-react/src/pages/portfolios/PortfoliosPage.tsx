@@ -5,6 +5,8 @@ import { go } from '../../app/routes';
 import { PortfolioCard } from '../../components/portfolio/PortfolioCard';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
+import { AuraSelect } from '../../components/ui/AuraSelect';
+import type { AuraSelectOption } from '../../components/ui/AuraSelect';
 import { money, pct } from '../../utils/formatting';
 import { slug } from '../../utils/uiCalculations';
 
@@ -20,6 +22,20 @@ interface PortfolioSummaryProps {
   icon: string;
   tone: string;
 }
+
+const riskFilterOptions: ReadonlyArray<AuraSelectOption<string>> = [
+  { value: 'all', label: 'All risk levels', description: 'Show every portfolio risk level', icon: 'shield', tone: 'teal' },
+  { value: 'low', label: 'Low risk', description: 'Lower historical volatility and risk', icon: 'shield', tone: 'green' },
+  { value: 'moderate', label: 'Moderate risk', description: 'Balanced historical risk and return', icon: 'shield', tone: 'amber' },
+  { value: 'high', label: 'High risk', description: 'Higher historical volatility and risk', icon: 'shield', tone: 'red' },
+];
+
+const sortOptions: ReadonlyArray<AuraSelectOption<string>> = [
+  { value: 'recent', label: 'Recently created', description: 'Newest portfolios appear first', icon: 'calendar', tone: 'teal' },
+  { value: 'value', label: 'Highest value', description: 'Largest saved portfolio value first', icon: 'wallet', tone: 'blue' },
+  { value: 'return', label: 'Highest return', description: 'Strongest historical return first', icon: 'trend', tone: 'green' },
+  { value: 'risk', label: 'Highest risk', description: 'Largest saved risk score first', icon: 'shield', tone: 'red' },
+];
 
 function PortfolioSummary({ label, value, detail, icon, tone }: PortfolioSummaryProps) {
   return (
@@ -112,26 +128,8 @@ export function PortfoliosPage({ portfolios, setPortfolios }: PortfoliosPageProp
           <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search portfolios..." />
         </label>
         <div className="portfolio-toolbar-controls">
-          <label className="portfolio-filter">
-            <span className="sr-only">Filter by risk</span>
-            <select value={riskFilter} onChange={event => setRiskFilter(event.target.value)}>
-              <option value="all">All risk levels</option>
-              <option value="low">Low risk</option>
-              <option value="moderate">Moderate risk</option>
-              <option value="high">High risk</option>
-            </select>
-            <Icon name="chevron-down" size={16} />
-          </label>
-          <label className="portfolio-filter">
-            <span className="sr-only">Sort portfolios</span>
-            <select value={sortBy} onChange={event => setSortBy(event.target.value)}>
-              <option value="recent">Recently created</option>
-              <option value="value">Highest value</option>
-              <option value="return">Highest return</option>
-              <option value="risk">Highest risk</option>
-            </select>
-            <Icon name="chevron-down" size={16} />
-          </label>
+          <AuraSelect className="portfolio-filter" ariaLabel="Filter by risk" value={riskFilter} options={riskFilterOptions} onChange={setRiskFilter} />
+          <AuraSelect className="portfolio-filter" ariaLabel="Sort portfolios" value={sortBy} options={sortOptions} onChange={setSortBy} />
         </div>
       </Card>
 

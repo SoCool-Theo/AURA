@@ -14,10 +14,11 @@ import { SimulationSetup } from './components/SimulationSetup';
 
 interface SimulationsPageProps {
   portfolio: Portfolio;
+  portfolios: Portfolio[];
   setReports: Dispatch<SetStateAction<ReportSummary[]>>;
 }
 
-export function SimulationsPage({ portfolio, setReports }: SimulationsPageProps) {
+export function SimulationsPage({ portfolio, portfolios, setReports }: SimulationsPageProps) {
   const [mode, setMode] = useState<SimulationMode>('Historical Scenario');
   const [scenarioId, setScenarioId] = useState('gfc');
   const [ran, setRan] = useState(true);
@@ -99,6 +100,7 @@ export function SimulationsPage({ portfolio, setReports }: SimulationsPageProps)
       <SimulationModeSelector mode={mode} onChange={changeMode} />
       <SimulationSetup
         portfolio={portfolio}
+        portfolios={portfolios}
         scenarioId={scenarioId}
         onScenarioChange={changeScenario}
         onRun={run}

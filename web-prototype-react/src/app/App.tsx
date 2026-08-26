@@ -39,7 +39,7 @@ function App() {
     case 'portfolios': content = <PortfoliosPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
     case 'portfolio': content = <PortfolioDetailPage portfolio={activePortfolio} setPortfolios={setPortfolios} />; break;
     case 'analytics': content = <AnalyticsPage portfolio={activePortfolio} setReports={setReports} />; break;
-    case 'simulations': content = <SimulationsPage portfolio={activePortfolio} setReports={setReports} />; break;
+    case 'simulations': content = <SimulationsPage portfolio={activePortfolio} portfolios={portfolios} setReports={setReports} />; break;
     case 'assistant': content = <AssistantPage portfolio={activePortfolio} />; break;
     case 'reports': content = route.id && route.reportId
       ? <ReportDetailPage portfolioId={route.id} reportId={route.reportId} />

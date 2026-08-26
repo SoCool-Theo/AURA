@@ -1,5 +1,7 @@
 import type { Portfolio } from '../../../types/portfolio';
-import { Icon } from '../../../components/ui/Icon';
+import { AuraSelect } from '../../../components/ui/AuraSelect';
+import type { AuraSelectOption, AuraSelectTone } from '../../../components/ui/AuraSelect';
+import { money } from '../../../utils/formatting';
 
 interface PortfolioSelectorProps {
   portfolios: Portfolio[];
@@ -8,16 +10,30 @@ interface PortfolioSelectorProps {
 }
 
 export function PortfolioSelector({ portfolios, selectedId, onSelect }: PortfolioSelectorProps) {
+  const options: AuraSelectOption<string>[] = portfolios.map(portfolio => {
+    const risk = portfolio.riskLevel.toLowerCase();
+    const tone: AuraSelectTone = risk.includes('high')
+      ? 'red'
+      : risk.includes('low')
+        ? 'green'
+        : 'amber';
+
+    return {
+      value: portfolio.id,
+      label: portfolio.name,
+      description: `${money(portfolio.value)} · ${portfolio.riskLevel}`,
+      icon: 'wallet',
+      tone,
+    };
+  });
+
   return (
-    <label className="dashboard-selector">
-      <Icon name="wallet" size={19} />
-      <span className="sr-only">Portfolio</span>
-      <select value={selectedId} onChange={event => onSelect(event.target.value)}>
-        {portfolios.map(portfolio => (
-          <option key={portfolio.id} value={portfolio.id}>{portfolio.name}</option>
-        ))}
-      </select>
-      <span className="selector-chevron"><Icon name="chevron-down" size={17} /></span>
-    </label>
+    <AuraSelect
+      className="dashboard-selector dashboard-aura-select"
+      ariaLabel="Select portfolio"
+      value={selectedId}
+      options={options}
+      onChange={onSelect}
+    />
   );
 }

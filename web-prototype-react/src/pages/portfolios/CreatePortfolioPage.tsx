@@ -4,6 +4,8 @@ import type { Holding, Portfolio } from '../../types/portfolio';
 import { go } from '../../app/routes';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
+import { AuraSelect } from '../../components/ui/AuraSelect';
+import type { AuraSelectOption } from '../../components/ui/AuraSelect';
 import { SymbolBadge } from '../../components/ui/SymbolBadge';
 import { money } from '../../utils/formatting';
 import { slug } from '../../utils/uiCalculations';
@@ -27,6 +29,10 @@ const INITIAL_HOLDINGS: DraftHolding[] = [
   { symbol: 'AAPL', name: 'Apple Inc.', type: 'Equity', price: 191.45, shares: 10, weight: 10.4 },
   { symbol: 'BND', name: 'Vanguard Total Bond Market ETF', type: 'Bond', price: 72.16, shares: 40, weight: 15.4 },
   { symbol: 'CASH', name: 'Cash', type: 'Cash', price: 1, shares: 484.9, weight: 2.7 },
+];
+
+const currencyOptions: ReadonlyArray<AuraSelectOption<string>> = [
+  { value: 'USD', label: 'USD — US Dollar', description: 'Base currency for portfolio values and reports', icon: 'wallet', tone: 'green' },
 ];
 
 function HoldingsReview({ holdings }: { holdings: DraftHolding[] }) {
@@ -150,10 +156,10 @@ export function CreatePortfolioPage({ portfolios, setPortfolios }: CreatePortfol
                   <span>Portfolio Name</span><small>Use a name that helps you recognize this portfolio.</small>
                   <input value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Long-Term Growth" />
                 </label>
-                <label className="wizard-field">
+                <div className="wizard-field">
                   <span>Currency</span><small>Values and reports will use this currency.</small>
-                  <span className="wizard-select"><select><option>USD - US Dollar</option></select><Icon name="chevron-down" size={16} /></span>
-                </label>
+                  <AuraSelect className="wizard-select wizard-aura-select" ariaLabel="Portfolio currency" value="USD" options={currencyOptions} onChange={() => undefined} />
+                </div>
                 <label className="wizard-field full">
                   <span>Description <em>Optional</em></span><small>Add a short note about the portfolio's purpose.</small>
                   <textarea rows={5} value={description} onChange={event => setDescription(event.target.value)} placeholder="Describe your investment goal..." />

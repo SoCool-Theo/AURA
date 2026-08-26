@@ -1,5 +1,6 @@
 import { scenarioOptions } from '../../../mocks/simulations.mock';
-import { Icon } from '../../../components/ui/Icon';
+import { AuraSelect } from '../../../components/ui/AuraSelect';
+import type { AuraSelectOption } from '../../../components/ui/AuraSelect';
 
 interface HistoricalScenarioSelectorProps {
   scenarioId: string;
@@ -10,19 +11,19 @@ export function HistoricalScenarioSelector({
   scenarioId,
   onChange,
 }: HistoricalScenarioSelectorProps) {
+  const options: AuraSelectOption<string>[] = scenarioOptions.map(option => ({
+    value: option.id,
+    label: option.label,
+    description: option.dates,
+    icon: 'calendar',
+    tone: option.returnPct < 0 ? 'red' : 'green',
+  }));
+
   return (
-    <label>
+    <div className="simulation-control-field">
       <span>Historical scenario</span>
       <small>Market period to replay</small>
-      <span className="simulation-select">
-        <Icon name="calendar" size={18} />
-        <select value={scenarioId} onChange={event => onChange(event.target.value)}>
-          {scenarioOptions.map(option => (
-            <option value={option.id} key={option.id}>{option.label} — {option.dates}</option>
-          ))}
-        </select>
-        <Icon name="chevron-down" size={16} />
-      </span>
-    </label>
+      <AuraSelect className="simulation-select simulation-aura-select" ariaLabel="Historical scenario" value={scenarioId} options={options} onChange={onChange} />
+    </div>
   );
 }

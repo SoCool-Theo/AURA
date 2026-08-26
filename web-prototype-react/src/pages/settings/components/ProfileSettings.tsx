@@ -1,6 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Icon } from '../../../components/ui/Icon';
+import { AuraSelect } from '../../../components/ui/AuraSelect';
+import type { AuraSelectOption } from '../../../components/ui/AuraSelect';
 import type { UserSettings } from '../../../types/settings';
 
 interface ProfileSettingsProps {
@@ -10,6 +12,16 @@ interface ProfileSettingsProps {
   onFormChange: Dispatch<SetStateAction<UserSettings>>;
   onSave: () => void;
 }
+
+const languageOptions: ReadonlyArray<AuraSelectOption<string>> = [
+  { value: 'English', label: 'English', description: 'Use Aura in English', icon: 'reports', tone: 'teal' },
+  { value: 'Thai', label: 'Thai', description: 'Use Aura in Thai', icon: 'reports', tone: 'blue' },
+];
+
+const timezoneOptions: ReadonlyArray<AuraSelectOption<string>> = [
+  { value: 'UTC+06:30 Yangon', label: 'UTC+06:30 Yangon', description: 'Myanmar Standard Time', icon: 'calendar', tone: 'teal' },
+  { value: 'UTC+07:00 Bangkok', label: 'UTC+07:00 Bangkok', description: 'Indochina Time', icon: 'calendar', tone: 'blue' },
+];
 
 export function ProfileSettings({
   form,
@@ -83,36 +95,28 @@ export function ProfileSettings({
               />
             </span>
           </label>
-          <label>
+          <div className="settings-form-control">
             <span>Language</span>
             <small>Interface language preference</small>
-            <span className="settings-field settings-select-field">
-              <Icon name="reports" size={16} />
-              <select
-                value={form.language}
-                onChange={event => onFormChange({ ...form, language: event.target.value })}
-              >
-                <option>English</option>
-                <option>Thai</option>
-              </select>
-              <Icon name="chevron-down" size={14} />
-            </span>
-          </label>
-          <label className="timezone-field">
+            <AuraSelect
+              className="settings-field settings-aura-select"
+              ariaLabel="Language"
+              value={form.language}
+              options={languageOptions}
+              onChange={language => onFormChange({ ...form, language })}
+            />
+          </div>
+          <div className="settings-form-control timezone-field">
             <span>Timezone</span>
             <small>Used for dates and report timestamps</small>
-            <span className="settings-field settings-select-field">
-              <Icon name="calendar" size={16} />
-              <select
-                value={form.timezone}
-                onChange={event => onFormChange({ ...form, timezone: event.target.value })}
-              >
-                <option>UTC+06:30 Yangon</option>
-                <option>UTC+07:00 Bangkok</option>
-              </select>
-              <Icon name="chevron-down" size={14} />
-            </span>
-          </label>
+            <AuraSelect
+              className="settings-field settings-aura-select"
+              ariaLabel="Timezone"
+              value={form.timezone}
+              options={timezoneOptions}
+              onChange={timezone => onFormChange({ ...form, timezone })}
+            />
+          </div>
         </div>
         <div className="settings-form-footer">
           <div><Icon name="shield" size={15} /><span>Changes are stored only in this frontend prototype.</span></div>

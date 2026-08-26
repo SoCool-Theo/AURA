@@ -17,14 +17,18 @@ interface ReportsPageProps {
 
 export function ReportsPage({ reports, setReports }: ReportsPageProps) {
   const [query, setQuery] = useState('');
+  const [portfolio, setPortfolio] = useState('All Portfolios');
   const [type, setType] = useState<ReportTypeFilter>('All Types');
   const visible = reports.filter(report => (
+    (portfolio === 'All Portfolios' || report.portfolio === portfolio)
+    &&
     (type === 'All Types' || report.type === type)
     && report.name.toLowerCase().includes(query.toLowerCase())
   ));
 
   function resetFilters() {
     setQuery('');
+    setPortfolio('All Portfolios');
     setType('All Types');
   }
 
@@ -76,8 +80,11 @@ export function ReportsPage({ reports, setReports }: ReportsPageProps) {
         </div>
         <ReportFilters
           query={query}
+          portfolio={portfolio}
+          portfolios={[...new Set(reports.map(report => report.portfolio))]}
           type={type}
           onQueryChange={setQuery}
+          onPortfolioChange={setPortfolio}
           onTypeChange={setType}
           onReset={resetFilters}
         />
