@@ -1,11 +1,8 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
-import { MiniLineChart } from '../components/charts/MiniLineChart';
 import { Card } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
-import { SymbolBadge } from '../components/ui/SymbolBadge';
 import { usePersistedState } from '../hooks/usePersistedState';
-import { downturnA, lineA } from '../mocks/dashboard.mock';
 import { defaultPortfolios } from '../mocks/portfolios.mock';
 import { reportsSeed } from '../mocks/reports.mock';
 import { defaultSettings } from '../mocks/settings.mock';
@@ -18,7 +15,7 @@ import { PortfolioDetailPage } from '../pages/portfolios/PortfolioDetailPage';
 import { PortfoliosPage } from '../pages/portfolios/PortfoliosPage';
 import { ReportsPage } from '../pages/reports/ReportsPage';
 import { SimulationsPage } from '../pages/simulations/SimulationsPage';
-import { money, pct } from '../utils/formatting';
+import { WatchlistPage } from '../pages/watchlist/WatchlistPage';
 import { AppLayout } from './AppLayout';
 import { go, routeFromHash } from './routes';
 
@@ -48,7 +45,7 @@ function App() {
     case 'simulations': content = <SimulationsPage portfolio={activePortfolio} setReports={setReports} />; break;
     case 'assistant': content = <AssistantPage portfolio={activePortfolio} />; break;
     case 'reports': content = <ReportsPage reports={reports} setReports={setReports} />; break;
-    case 'watchlist': content = <Watchlist watchlist={watchlist} setWatchlist={setWatchlist} />; break;
+    case 'watchlist': content = <WatchlistPage watchlist={watchlist} setWatchlist={setWatchlist} />; break;
     case 'learn': content = <Learn />; break;
     case 'create': content = <CreatePortfolioPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
     case 'settings': content = <Settings settings={settings} setSettings={setSettings} />; break;
@@ -64,39 +61,6 @@ function CardTitle({ title, right }) {
 
 function FeatureCard({ icon, title, text, button, onClick, tone = 'purple' }) {
   return <Card className={`feature-card ${tone}`}><div className="feature-icon">{icon}</div><div><h3>{title}</h3><p>{text}</p><button onClick={onClick}>{button}</button></div></Card>;
-}
-
-function Watchlist({ watchlist, setWatchlist }) {
-  const [query,setQuery]=useState('');
-  const visible=watchlist.filter(x=>x.symbol.toLowerCase().includes(query.toLowerCase())||x.name.toLowerCase().includes(query.toLowerCase()));
-  const positiveCount=watchlist.filter(asset=>asset.daily>0).length;
-  const averageDaily=watchlist.length?watchlist.reduce((sum,asset)=>sum+Number(asset.daily),0)/watchlist.length:0;
-  const topMover=watchlist.length?[...watchlist].sort((a,b)=>b.daily-a.daily)[0]:null;
-  function addAsset() {
-    const symbol=prompt('Symbol (e.g. AMZN)'); if(!symbol) return;
-    const clean=symbol.trim().toUpperCase();
-    if(watchlist.some(x=>x.symbol===clean)) return alert('Already in watchlist.');
-    setWatchlist(prev=>[...prev,{symbol:clean,name:`${clean} demo asset`,price:100,daily:0,yearly:0,cap:'—'}]);
-  }
-  return <div className="page watchlist-page">
-    <header className="watchlist-header"><div><span>MARKET MONITOR</span><h1>Watchlist</h1><p>Track assets you are interested in and review their recent market movement.</p></div><button className="primary-btn" onClick={addAsset}><span>＋</span> Add Asset</button></header>
-
-    <div className="watchlist-summary-grid">
-      <Card className="watchlist-summary-card"><span className="purple"><Icon name="wallet" size={19}/></span><div><small>Tracked Assets</small><strong>{watchlist.length}</strong><p>Saved to your watchlist</p></div></Card>
-      <Card className="watchlist-summary-card"><span className="green"><Icon name="trend" size={19}/></span><div><small>Positive Today</small><strong>{positiveCount}</strong><p>{watchlist.length?`${Math.round(positiveCount/watchlist.length*100)}% of tracked assets`:'No tracked assets'}</p></div></Card>
-      <Card className="watchlist-summary-card"><span className={averageDaily>=0?'blue':'red'}><Icon name={averageDaily>=0?'trend':'drawdown'} size={19}/></span><div><small>Average Daily Move</small><strong className={averageDaily>=0?'green-text':'red-text'}>{pct(averageDaily)}</strong><p>Across the current list</p></div></Card>
-      <Card className="watchlist-summary-card"><span className="amber"><Icon name="spark" size={19}/></span><div><small>Top Daily Mover</small><strong>{topMover?.symbol||'—'}</strong><p className={topMover?.daily>=0?'green-text':'red-text'}>{topMover?pct(topMover.daily):'No market data'}</p></div></Card>
-    </div>
-
-    <Card className="watchlist-library-card">
-      <div className="watchlist-library-heading"><div><h2>Tracked Assets</h2><p>Market values shown here are prototype data for portfolio-risk education.</p></div><div className="market-status"><i/><span>Market data available</span></div></div>
-      <div className="watchlist-toolbar"><label><Icon name="search" size={17}/><input placeholder="Search by symbol or company name..." value={query} onChange={event=>setQuery(event.target.value)}/>{query&&<button onClick={()=>setQuery('')} aria-label="Clear search">×</button>}</label><div className="watchlist-view-controls"><button className="active"><Icon name="reports" size={15}/> List</button><span>Last updated May 11, 2026</span></div></div>
-
-      {visible.length?<div className="watchlist-table-wrap" role="region" aria-label="Tracked assets" tabIndex={0}><table className="watchlist-table"><thead><tr><th>Asset</th><th>Price</th><th>Daily Change</th><th>YTD Change</th><th>Market Cap</th><th>Trend</th><th aria-label="Actions"/></tr></thead><tbody>{visible.map((asset,index)=><tr key={asset.symbol}><td><div className="watchlist-asset-cell"><SymbolBadge symbol={asset.symbol}/><div><strong>{asset.symbol}</strong><small>{asset.name}</small></div></div></td><td><div className="watchlist-price"><strong>{money(asset.price)}</strong><small>USD</small></div></td><td><span className={`watchlist-change ${asset.daily>=0?'positive':'negative'}`}>{asset.daily>=0?'↑':'↓'} {pct(asset.daily)}</span></td><td><span className={asset.yearly>=0?'green-text':'red-text'}>{pct(asset.yearly)}</span></td><td><strong className="watchlist-cap">{asset.cap}</strong></td><td><div className={`watchlist-spark ${asset.daily>=0?'positive':'negative'}`}><MiniLineChart values={(asset.daily>=0?lineA:downturnA).slice(index,index+10)}/></div></td><td><button className="watchlist-remove" onClick={()=>setWatchlist(previous=>previous.filter(item=>item.symbol!==asset.symbol))} aria-label={`Remove ${asset.symbol} from watchlist`} title="Remove from watchlist">×</button></td></tr>)}</tbody></table></div>:<div className="watchlist-empty-state"><span><Icon name="search" size={27}/></span><h3>{watchlist.length?'No matching assets':'Your watchlist is empty'}</h3><p>{watchlist.length?'Try a different symbol or company name.':'Add an asset to begin tracking market movements.'}</p><button className="secondary-btn" onClick={watchlist.length?()=>setQuery(''):addAsset}>{watchlist.length?'Clear Search':'Add Your First Asset'}</button></div>}
-      <div className="watchlist-footer"><span>Showing <strong>{visible.length}</strong> of <strong>{watchlist.length}</strong> tracked assets</span><button onClick={addAsset}>＋ Add another asset</button></div>
-    </Card>
-    <div className="watchlist-education-note"><Icon name="shield" size={16}/><p>Watchlist performance is historical market information for education and does not represent a recommendation to buy or sell.</p></div>
-  </div>;
 }
 
 function Learn() {
