@@ -20,6 +20,7 @@ export function AnalyticsPage({ portfolio, setReports }: AnalyticsPageProps) {
   function saveReport() {
     const report: ReportSummary = {
       id: Date.now(),
+      portfolioId: portfolio.id,
       name: `${portfolio.name} Analysis`,
       portfolio: portfolio.name,
       type: 'Analysis',

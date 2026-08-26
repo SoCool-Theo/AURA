@@ -42,6 +42,18 @@ export function ReportsPage({ reports, setReports }: ReportsPageProps) {
     setReports(previous => previous.filter(report => report.id !== reportId));
   }
 
+  function openReport(report: ReportSummaryType) {
+    if (report.type !== 'Analysis') return;
+    const legacyPortfolioIds: Record<string, string> = {
+      'Tech Portfolio': 'tech',
+      'Balanced Portfolio': 'balanced',
+      'Retirement Fund': 'retirement',
+      'Long Term Growth': 'growth',
+    };
+    const portfolioId = report.portfolioId || legacyPortfolioIds[report.portfolio] || 'unknown';
+    go(`reports/${portfolioId}/${report.id}`);
+  }
+
   return (
     <div className="page reports-page">
       <header className="reports-header">
@@ -73,6 +85,7 @@ export function ReportsPage({ reports, setReports }: ReportsPageProps) {
           reports={visible}
           onDownload={download}
           onDelete={remove}
+          onOpen={openReport}
           onResetFilters={resetFilters}
         />
         <div className="table-footer">

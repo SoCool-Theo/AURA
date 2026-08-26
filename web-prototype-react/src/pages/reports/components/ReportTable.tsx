@@ -6,6 +6,7 @@ interface ReportTableProps {
   reports: ReportSummary[];
   onDownload: (report: ReportSummary) => void;
   onDelete: (reportId: number) => void;
+  onOpen: (report: ReportSummary) => void;
   onResetFilters: () => void;
 }
 
@@ -21,6 +22,7 @@ export function ReportTable({
   reports,
   onDownload,
   onDelete,
+  onOpen,
   onResetFilters,
 }: ReportTableProps) {
   if (!reports.length) {
@@ -48,7 +50,12 @@ export function ReportTable({
               <td>
                 <div className={`report-name-cell ${report.type.toLowerCase()}`}>
                   <span><Icon name={reportIcon(report)} size={18} /></span>
-                  <div><strong>{report.name}</strong><small>Educational portfolio risk report</small></div>
+                  <div>
+                    {report.type === 'Analysis'
+                      ? <button className="report-open-button" onClick={() => onOpen(report)}>{report.name}</button>
+                      : <strong>{report.name}</strong>}
+                    <small>{report.type === 'Analysis' ? 'Open saved analysis snapshot' : 'Educational portfolio risk report'}</small>
+                  </div>
                 </div>
               </td>
               <td>

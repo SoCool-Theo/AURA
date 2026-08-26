@@ -49,6 +49,7 @@ export function SimulationsPage({ portfolio, setReports }: SimulationsPageProps)
   function save() {
     const report: ReportSummary = {
       id: Date.now(),
+      portfolioId: portfolio.id,
       name: `${currentScenario.label} ${mode}`,
       portfolio: portfolio.name,
       type: 'Simulation',

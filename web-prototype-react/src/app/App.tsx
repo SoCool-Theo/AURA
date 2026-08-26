@@ -15,6 +15,7 @@ import { CreatePortfolioPage } from '../pages/portfolios/CreatePortfolioPage';
 import { PortfolioDetailPage } from '../pages/portfolios/PortfolioDetailPage';
 import { PortfoliosPage } from '../pages/portfolios/PortfoliosPage';
 import { ReportsPage } from '../pages/reports/ReportsPage';
+import { ReportDetailPage } from '../pages/reports/ReportDetailPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
 import { SimulationsPage } from '../pages/simulations/SimulationsPage';
 import { WatchlistPage } from '../pages/watchlist/WatchlistPage';
@@ -40,7 +41,9 @@ function App() {
     case 'analytics': content = <AnalyticsPage portfolio={activePortfolio} setReports={setReports} />; break;
     case 'simulations': content = <SimulationsPage portfolio={activePortfolio} setReports={setReports} />; break;
     case 'assistant': content = <AssistantPage portfolio={activePortfolio} />; break;
-    case 'reports': content = <ReportsPage reports={reports} setReports={setReports} />; break;
+    case 'reports': content = route.id && route.reportId
+      ? <ReportDetailPage portfolioId={route.id} reportId={route.reportId} />
+      : <ReportsPage reports={reports} setReports={setReports} />; break;
     case 'watchlist': content = <WatchlistPage watchlist={watchlist} setWatchlist={setWatchlist} />; break;
     case 'learn': content = <LearnPage />; break;
     case 'create': content = <CreatePortfolioPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
