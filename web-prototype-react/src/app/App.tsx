@@ -1,7 +1,4 @@
-// @ts-nocheck
-import React, { useEffect, useState } from 'react';
-import { Card } from '../components/ui/Card';
-import { Icon } from '../components/ui/Icon';
+import { useHashRoute } from '../hooks/useHashRoute';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { defaultPortfolios } from '../mocks/portfolios.mock';
 import { reportsSeed } from '../mocks/reports.mock';
@@ -19,24 +16,15 @@ import { SettingsPage } from '../pages/settings/SettingsPage';
 import { SimulationsPage } from '../pages/simulations/SimulationsPage';
 import { WatchlistPage } from '../pages/watchlist/WatchlistPage';
 import { AppLayout } from './AppLayout';
-import { go, routeFromHash } from './routes';
 
 function App() {
-  const [route, setRoute] = useState(routeFromHash());
+  const route = useHashRoute();
   const [portfolios, setPortfolios] = usePersistedState('aura-portfolios', defaultPortfolios);
   const [reports, setReports] = usePersistedState('aura-reports', reportsSeed);
   const [watchlist, setWatchlist] = usePersistedState('aura-watchlist', watchlistSeed);
   const [settings, setSettings] = usePersistedState('aura-settings', defaultSettings);
 
-  useEffect(() => {
-    const handler = () => setRoute(routeFromHash());
-    window.addEventListener('hashchange', handler);
-    if (!window.location.hash) go('dashboard');
-    return () => window.removeEventListener('hashchange', handler);
-  }, []);
-
   const activePortfolio = portfolios.find(p => p.id === (route.id || 'tech')) || portfolios[0];
-  const shared = { portfolios, setPortfolios, reports, setReports, watchlist, setWatchlist, settings, setSettings };
 
   let content;
   switch (route.page) {
@@ -55,14 +43,6 @@ function App() {
   }
 
   return <AppLayout route={route} settings={settings}>{content}</AppLayout>;
-}
-
-function CardTitle({ title, right }) {
-  return <div className="card-title"><h3>{title}</h3>{right}</div>;
-}
-
-function FeatureCard({ icon, title, text, button, onClick, tone = 'purple' }) {
-  return <Card className={`feature-card ${tone}`}><div className="feature-icon">{icon}</div><div><h3>{title}</h3><p>{text}</p><button onClick={onClick}>{button}</button></div></Card>;
 }
 
 export default App;
