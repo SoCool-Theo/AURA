@@ -30,11 +30,12 @@ htmlcov/
 
 
 # ==========================================
-# WEB FRONTEND
+# REACT WEB FRONTEND
 # ==========================================
 
-web/node_modules/
-web/dist/
+web-prototype-react/dist/
+web-prototype-react/coverage/
+web-prototype-react/.vite/
 
 
 # ==========================================
@@ -70,8 +71,10 @@ desktop.ini
 *.temp
 ~$*
 
-# Node dependencies
+# Shared Node dependencies
 node_modules/
+*.tsbuildinfo
+.eslintcache
 
 # ==========================================
 # GENERATED MARKET DATA
