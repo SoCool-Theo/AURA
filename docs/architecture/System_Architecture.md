@@ -1,5 +1,16 @@
 # Aura System Architecture
 
+This document defines Aura's backend, customer web, planned mobile, and shared client-backend architecture. Proposed structures are targets unless current repository evidence explicitly identifies them as implemented.
+
+## Quick Navigation
+
+- [Backend Architecture](#backend-architecture)
+- [Frontend Web Architecture](#frontend-web-architecture)
+- [Mobile App Architecture](#mobile-app-architecture)
+- [Shared Client-Backend Architecture](#shared-client-backend-architecture)
+- [Project Folder Definitions](#project-folder-definitions)
+- [Architecture Decisions](#architecture-decisions)
+
 ## Project Structure
 
 ```text
@@ -9,28 +20,40 @@ AURA/
 ├── AGENTS.md                      ← Tells Codex how to work on Aura
 ├── PROJECT_CONTEXT.md             ← What Aura is and why it is being built
 ├── CURRENT_STATUS.md              ← Tells Codex what has actually been completed
-├── backend/                       ← Analytics engine, database, AI agent
-├── web/                           ← Website frontend
-├── mobile/                        ← Mobile app later
+├── backend/                       ← FastAPI backend, analytics, database, simulations, AI later
+├── web-prototype-react/            ← Customer React web application
+├── mobile/                        ← Customer mobile application / later work
 ├── data/                          ← Shared market data
-├── docs/                          ← Team documentation
+├── docs/                          ← Project documentation
 ├── .gitignore
 └── README.md
 ```
 
-## Main Decisions Reflected Here
+# Architecture Decisions
 
-- Website first, mobile later.
-- FastAPI backend.
+- Customer website uses React and TypeScript and lives under `web-prototype-react/`.
+- The planned customer mobile application uses React Native and TypeScript and lives under `mobile/`.
+- Website first, mobile application later.
+- FastAPI remains the shared backend for the React web and React Native clients; there is no separate mobile backend.
+- PostgreSQL remains the backend persistence layer.
 - Clean historical data is used directly for calculations.
 - Automatic market-data updates.
-- Database support.
+- Backend analytics and simulation calculations are the source of truth; web and mobile clients do not duplicate financial formulas.
+- Both customer clients use dedicated API layers rather than scattered network calls in pages or screens.
+- Bearer authentication is shared through the backend and handled through dedicated client authentication layers, with the backend remaining authoritative.
+- Web and mobile may use different backend URLs during local development while preserving the same API contracts.
 - Analytics engine first.
 - Historical simulator after core analytics.
 - AI agent later.
+- The dashboard remains concise while detailed analytics live on dedicated pages.
+- Web and mobile mock data is development/test data and remains separate from production API data.
+- Shared components, charts, styles, and types are separated from feature-specific pages.
+- Client AI interfaces may be planned, but real AI integration is not complete until the backend AI Agent is implemented.
 - No ML training folder yet.
 
 ---
+
+# Backend Architecture
 
 ## Detailed Backend Folder Structure
 
@@ -181,7 +204,7 @@ AURA/
 │   ├── requirements.txt
 │   └── README.md
 │
-├── web/
+├── web-prototype-react/            ← Customer React web application
 │
 ├── mobile/
 │
@@ -216,7 +239,650 @@ AURA/
 | `core/` | Global settings and constants |
 | `utils/` | Small reusable helper functions |
 
+[↑ Back to Quick Navigation](#quick-navigation)
+
 ---
+
+# Frontend Web Architecture
+
+The customer website uses React and TypeScript under `web-prototype-react/`. The structure below is the **target frontend architecture** agreed for the application. It describes intended responsibilities and planned separation; it does not claim that every listed file, integration, or feature is already implemented.
+
+```text
+web-prototype-react/
+├─ public/
+│  └─ favicon.svg
+│
+├─ src/
+│  ├─ app/
+│  │  ├─ App.tsx
+│  │  ├─ AppLayout.tsx
+│  │  ├─ navigation.ts
+│  │  └─ routes.ts
+│  │
+│  ├─ api/
+│  │  ├─ apiClient.ts
+│  │  ├─ authApi.ts
+│  │  ├─ portfoliosApi.ts
+│  │  ├─ analyticsApi.ts
+│  │  ├─ reportsApi.ts
+│  │  └─ simulationsApi.ts
+│  │
+│  ├─ auth/
+│  │  ├─ AuthContext.tsx
+│  │  ├─ useAuth.ts
+│  │  ├─ authStorage.ts
+│  │  └─ ProtectedRoute.tsx
+│  │
+│  ├─ config/
+│  │  └─ environment.ts
+│  │
+│  ├─ assets/
+│  │  ├─ images/
+│  │  │  └─ aura-market-background.png
+│  │  └─ icons/
+│  │
+│  ├─ components/
+│  │  ├─ navigation/
+│  │  │  ├─ TopNavigation.tsx
+│  │  │  ├─ ProfileMenu.tsx
+│  │  │  └─ TopNavigation.module.css
+│  │  │
+│  │  ├─ ui/
+│  │  │  ├─ Button.tsx
+│  │  │  ├─ Card.tsx
+│  │  │  ├─ Icon.tsx
+│  │  │  ├─ Input.tsx
+│  │  │  ├─ Select.tsx
+│  │  │  ├─ Modal.tsx
+│  │  │  ├─ Spinner.tsx
+│  │  │  ├─ EmptyState.tsx
+│  │  │  ├─ ErrorState.tsx
+│  │  │  ├─ PageHeader.tsx
+│  │  │  ├─ RiskPill.tsx
+│  │  │  ├─ SymbolBadge.tsx
+│  │  │  └─ ui.module.css
+│  │  │
+│  │  ├─ charts/
+│  │  │  ├─ DonutChart.tsx
+│  │  │  ├─ GaugeChart.tsx
+│  │  │  ├─ LineChart.tsx
+│  │  │  ├─ MiniLineChart.tsx
+│  │  │  └─ charts.module.css
+│  │  │
+│  │  └─ portfolio/
+│  │     ├─ PortfolioMetric.tsx
+│  │     ├─ PortfolioCard.tsx
+│  │     ├─ HoldingsTable.tsx
+│  │     └─ AllocationLegend.tsx
+│  │
+│  ├─ pages/
+│  │  ├─ auth/
+│  │  │  ├─ LoginPage.tsx
+│  │  │  ├─ RegisterPage.tsx
+│  │  │  └─ AuthPage.module.css
+│  │  │
+│  │  ├─ dashboard/
+│  │  │  ├─ DashboardPage.tsx
+│  │  │  ├─ DashboardPage.module.css
+│  │  │  └─ components/
+│  │  │     ├─ DashboardHeader.tsx
+│  │  │     ├─ DashboardKpiGrid.tsx
+│  │  │     ├─ PortfolioPerformance.tsx
+│  │  │     ├─ RiskDrivers.tsx
+│  │  │     ├─ PortfolioAllocation.tsx
+│  │  │     ├─ AiInsight.tsx
+│  │  │     ├─ PortfolioAnalysisCard.tsx
+│  │  │     ├─ PortfolioSelector.tsx
+│  │  │     └─ DateRangeSelector.tsx
+│  │  │
+│  │  ├─ portfolios/
+│  │  │  ├─ PortfoliosPage.tsx
+│  │  │  ├─ PortfolioDetailPage.tsx
+│  │  │  ├─ CreatePortfolioPage.tsx
+│  │  │  ├─ portfolios.module.css
+│  │  │  └─ components/
+│  │  │     ├─ PortfolioListCard.tsx
+│  │  │     ├─ PortfolioOverviewTab.tsx
+│  │  │     ├─ HoldingsTab.tsx
+│  │  │     ├─ PerformanceTab.tsx
+│  │  │     └─ ActivityTab.tsx
+│  │  │
+│  │  ├─ analytics/
+│  │  │  ├─ AnalyticsPage.tsx
+│  │  │  ├─ AnalyticsPage.module.css
+│  │  │  └─ components/
+│  │  │     ├─ AnalysisSummary.tsx
+│  │  │     ├─ RiskDriverTable.tsx
+│  │  │     ├─ CorrelationHeatmap.tsx
+│  │  │     └─ AssetAnalysisCard.tsx
+│  │  │
+│  │  ├─ simulations/
+│  │  │  ├─ SimulationsPage.tsx
+│  │  │  ├─ SimulationsPage.module.css
+│  │  │  └─ components/
+│  │  │     ├─ SimulationModeSelector.tsx
+│  │  │     ├─ HistoricalScenarioSelector.tsx
+│  │  │     ├─ SimulationSetup.tsx
+│  │  │     ├─ AllocationEditor.tsx
+│  │  │     ├─ SimulationResults.tsx
+│  │  │     ├─ SimulationComparison.tsx
+│  │  │     └─ SimulationHistory.tsx
+│  │  │
+│  │  ├─ assistant/
+│  │  │  ├─ AssistantPage.tsx
+│  │  │  ├─ AssistantPage.module.css
+│  │  │  └─ components/
+│  │  │     ├─ ConversationList.tsx
+│  │  │     ├─ ChatWorkspace.tsx
+│  │  │     └─ PortfolioContext.tsx
+│  │  │
+│  │  ├─ reports/
+│  │  │  ├─ ReportsPage.tsx
+│  │  │  ├─ ReportDetailPage.tsx
+│  │  │  ├─ ReportsPage.module.css
+│  │  │  └─ components/
+│  │  │     ├─ ReportSummary.tsx
+│  │  │     ├─ ReportFilters.tsx
+│  │  │     └─ ReportTable.tsx
+│  │  │
+│  │  ├─ watchlist/
+│  │  ├─ learn/
+│  │  └─ settings/
+│  │
+│  ├─ hooks/
+│  │  ├─ useHashRoute.ts
+│  │  └─ usePersistedState.ts
+│  │
+│  ├─ mocks/
+│  │  ├─ dashboard.mock.ts
+│  │  ├─ portfolios.mock.ts
+│  │  ├─ analytics.mock.ts
+│  │  └─ simulations.mock.ts
+│  │
+│  ├─ types/
+│  │  ├─ api.ts
+│  │  ├─ auth.ts
+│  │  ├─ portfolio.ts
+│  │  ├─ analytics.ts
+│  │  ├─ report.ts
+│  │  ├─ simulation.ts
+│  │  └─ settings.ts
+│  │
+│  ├─ utils/
+│  │  ├─ formatting.ts
+│  │  └─ uiCalculations.ts
+│  │
+│  ├─ styles/
+│  │  ├─ tokens.css
+│  │  ├─ globals.css
+│  │  ├─ accessibility.css
+│  │  └─ responsive.css
+│  │
+│  └─ main.tsx
+│
+├─ index.html
+├─ package.json
+├─ tsconfig.json
+└─ vite.config.ts
+```
+
+## Frontend Web Folder Definitions
+
+| Folder | Simple Meaning |
+|---|---|
+| `app/` | Controls the overall React application structure, routing, navigation configuration, and shared page layout. |
+| `api/` | Handles communication between the React frontend and the FastAPI backend. |
+| `auth/` | Manages frontend authentication state, Bearer token handling, current-user access, and protected routes. |
+| `config/` | Stores frontend environment and application configuration such as the backend API base URL. |
+| `assets/` | Stores visual resources such as images, the Aura market background, and custom icons. |
+| `components/` | Contains reusable UI, navigation, chart, and portfolio components shared across multiple pages. |
+| `pages/` | Contains Aura's main user-facing screens organized by product feature. |
+| `hooks/` | Contains reusable React state and behavior logic that does not directly render UI. |
+| `mocks/` | Contains temporary/demo frontend data used during UI development and testing; it is not production backend data. |
+| `types/` | Defines TypeScript interfaces and types for frontend data and backend API contracts. |
+| `utils/` | Contains small frontend helper functions such as formatting and UI-only calculations. |
+| `styles/` | Defines Aura's shared design tokens, global styling, accessibility rules, and responsive behavior. |
+
+| Shared Component Folder | Simple Meaning |
+|---|---|
+| `components/navigation/` | Shared top navigation and profile-menu components. |
+| `components/ui/` | Generic reusable UI components such as buttons, cards, inputs, selectors, loading states, and risk badges. |
+| `components/charts/` | Reusable chart-rendering components such as line, donut, gauge, and mini charts. |
+| `components/portfolio/` | Reusable components that specifically represent portfolios, holdings, metrics, and allocation information. |
+
+## Frontend-to-Backend Responsibility Boundary
+
+```text
+React Page
+    ↓
+Reusable Component
+    ↓
+Frontend API Module
+    ↓
+FastAPI REST API
+    ↓
+Backend Service
+    ↓
+Repository / Analytics / Simulation
+    ↓
+PostgreSQL
+```
+
+React is responsible for presentation, interaction, navigation, form handling, loading and error states, and displaying results returned by the backend. FastAPI remains responsible for portfolio ownership rules, analytics calculations, simulation calculations, reporting behavior, authentication verification, and database operations.
+
+Backend calculations are the source of truth. The frontend must not independently calculate or duplicate Aura's official:
+
+- risk score;
+- volatility;
+- Sharpe ratio;
+- maximum drawdown;
+- diversification score;
+- correlation;
+- risk drivers; or
+- historical simulation results.
+
+Frontend utilities may perform display-only work such as currency formatting, percentage formatting, chart display transformations, and basic visual or UI derivations. Portfolio-specific financial formulas remain in the backend.
+
+## Frontend API Layer
+
+`src/api/` is the single frontend integration boundary for the FastAPI backend. It owns API base URL handling, HTTP requests, JSON request and response handling, Bearer authentication headers, and standardized frontend API errors.
+
+Feature API modules remain separated by responsibility:
+
+```text
+authApi.ts
+portfoliosApi.ts
+analyticsApi.ts
+reportsApi.ts
+simulationsApi.ts
+```
+
+React pages should use these modules rather than scattering hard-coded `fetch()` calls throughout page components.
+
+## Frontend Authentication Architecture
+
+The intended frontend authentication flow is:
+
+```text
+Login / Register Page
+        ↓
+authApi
+        ↓
+FastAPI Authentication API
+        ↓
+Bearer JWT received
+        ↓
+Frontend Auth State
+        ↓
+Protected Routes
+        ↓
+Authenticated API Requests
+```
+
+- `AuthContext.tsx` manages frontend authentication state.
+- `useAuth.ts` exposes authentication behavior to React components.
+- `authStorage.ts` owns the agreed frontend token or session persistence behavior.
+- `ProtectedRoute.tsx` prevents unauthenticated access to protected frontend pages.
+- Backend authentication remains authoritative.
+- The frontend must not use `X-User-ID` as authentication.
+
+This is a target architecture. It does not imply that refresh tokens, OAuth, MFA, password reset, logout revocation, or every authentication screen is already implemented.
+
+## Page Responsibilities
+
+| Page | Main Responsibility |
+|---|---|
+| Dashboard | Shows a concise portfolio overview, performance, risk summary, top risk drivers, allocation, AI insight preview, and current analysis state. |
+| Portfolios | Creates, lists, opens, renames, edits, duplicates, and deletes user portfolios and holdings. |
+| Analytics | Shows detailed portfolio risk analysis including volatility, drawdown, Sharpe ratio, correlation, diversification, risk drivers, and individual asset analysis. |
+| Simulations | Runs Historical Scenario, Allocation Change, and Combined Simulation workflows and displays simulation history. |
+| AI Assistant | Provides the conversational explanation interface once the backend AI Agent is implemented. |
+| Reports | Lists and displays saved immutable portfolio-analysis reports. |
+| Settings | Handles frontend profile and application settings. |
+| Watchlist | Optional or later market watchlist functionality. |
+| Learn | Optional or later educational content functionality. |
+
+Watchlist and Learn may exist as routes or frontend features without appearing in the current primary top navigation.
+
+## Dashboard Design Boundary
+
+The Dashboard remains intentionally concise:
+
+```text
+Top Navigation
+        ↓
+Dashboard Header
+        ↓
+4 KPI Cards
+        ↓
+Portfolio Performance + Top Risk Drivers
+        ↓
+Portfolio Allocation + AI Insight + Portfolio Analysis
+```
+
+The four Dashboard KPI cards are:
+
+1. Total Portfolio Value
+2. Risk Score
+3. Annualized Return
+4. Maximum Drawdown
+
+Detailed volatility, Sharpe ratio, correlation, diversification, complete risk-driver tables, and individual asset analysis belong on Analytics rather than the main Dashboard. Simulation history belongs to Simulations, report history belongs to Reports, and portfolio management belongs to Portfolios.
+
+## Reusable UI and Chart Architecture
+
+Generic UI components remain independent from feature-specific business logic:
+
+```text
+Button
+Card
+Input
+Select
+Modal
+Spinner
+EmptyState
+ErrorState
+RiskPill
+SymbolBadge
+```
+
+Generic chart components are:
+
+```text
+LineChart
+MiniLineChart
+DonutChart
+GaugeChart
+```
+
+Feature components compose these shared primitives:
+
+```text
+PortfolioPerformance
+        ↓
+LineChart
+
+PortfolioAllocation
+        ↓
+DonutChart
+
+Risk Score KPI
+        ↓
+GaugeChart
+```
+
+Generic charts render data but do not contain portfolio-specific business calculations.
+
+## Frontend Styling Architecture
+
+```text
+styles/
+├─ tokens.css
+├─ globals.css
+├─ accessibility.css
+└─ responsive.css
+```
+
+- `tokens.css` — Aura design tokens such as colors, spacing, typography, borders, and shared visual constants.
+- `globals.css` — global page, body, and default application styling.
+- `accessibility.css` — focus states, reduced motion, visibility, and accessibility-related rules.
+- `responsive.css` — shared breakpoint and responsive-layout behavior.
+
+Feature and page-specific styling remains in CSS modules near the related component or page. Reusable design values should use tokens rather than being hard-coded across unrelated components.
+
+The agreed customer-web design direction is a professional dark fintech theme with a dark navy and blue background, teal and cyan primary accents, restrained amber and red risk-state colors, and subtle financial-market background imagery. Information hierarchy remains stronger than decoration. Large decorative cryptocurrency artwork and childish visual themes are not part of this direction.
+
+## Frontend Assets
+
+`src/assets/images/aura-market-background.png` is the approved subtle financial-market background visual for the React web interface. It remains secondary to content and must not interfere with text readability or dashboard cards.
+
+## Frontend Mock-Data Boundary
+
+`mocks/` contains frontend development and test data only. It is not the production source of portfolio, analysis, report, simulation, or authentication data.
+
+During real backend integration:
+
+```text
+Mock data
+   ↓ replaced by
+src/api/*
+   ↓
+FastAPI
+```
+
+Mocks may remain for deterministic frontend testing or isolated UI development. Production data and official calculations come from FastAPI and its backend services.
+
+## Frontend Implementation Status Boundary
+
+This section documents the planned architecture. Individual frontend pages or prototype interactions may already exist, but the target folder split, production API integration, authentication layer, protected routes, and backend AI Agent integration must not be treated as complete until repository evidence and status documentation confirm them.
+
+[↑ Back to Quick Navigation](#quick-navigation)
+
+---
+
+# Mobile App Architecture
+
+Aura's planned customer mobile application uses React Native and TypeScript under `mobile/`. It connects to the same FastAPI backend as the React web application and does not introduce a separate mobile backend. The structure below is the **target mobile architecture**; it does not claim that every listed file, screen, integration, or capability is implemented.
+
+## Target Mobile Structure
+
+```text
+mobile/
+├─ assets/
+│  ├─ images/
+│  └─ icons/
+│
+├─ src/
+│  ├─ app/
+│  │  ├─ App.tsx
+│  │  └─ AppProviders.tsx
+│  │
+│  ├─ navigation/
+│  │  ├─ RootNavigator.tsx
+│  │  ├─ AuthNavigator.tsx
+│  │  ├─ MainTabNavigator.tsx
+│  │  └─ navigationTypes.ts
+│  │
+│  ├─ api/
+│  │  ├─ apiClient.ts
+│  │  ├─ authApi.ts
+│  │  ├─ portfoliosApi.ts
+│  │  ├─ analyticsApi.ts
+│  │  ├─ reportsApi.ts
+│  │  └─ simulationsApi.ts
+│  │
+│  ├─ auth/
+│  │  ├─ AuthProvider.tsx
+│  │  ├─ useAuth.ts
+│  │  └─ authStorage.ts
+│  │
+│  ├─ config/
+│  │  └─ environment.ts
+│  │
+│  ├─ components/
+│  │  ├─ ui/
+│  │  ├─ charts/
+│  │  └─ portfolio/
+│  │
+│  ├─ screens/
+│  │  ├─ auth/
+│  │  ├─ dashboard/
+│  │  ├─ portfolios/
+│  │  ├─ analytics/
+│  │  ├─ simulations/
+│  │  ├─ reports/
+│  │  ├─ assistant/
+│  │  └─ settings/
+│  │
+│  ├─ hooks/
+│  ├─ storage/
+│  ├─ types/
+│  ├─ utils/
+│  ├─ theme/
+│  └─ mocks/
+│
+├─ app.json
+├─ package.json
+├─ tsconfig.json
+└─ .env.example
+```
+
+## Mobile App Folder Definitions
+
+| Folder | Simple Meaning |
+|---|---|
+| `app/` | Starts the React Native application and installs global providers. |
+| `navigation/` | Controls authentication flow, screen navigation, and bottom-tab navigation. |
+| `api/` | Communicates with the shared Aura FastAPI backend. |
+| `auth/` | Manages login state, JWT authentication, and current-user state. |
+| `config/` | Stores environment configuration such as the backend API URL. |
+| `components/` | Contains reusable mobile UI, charts, and portfolio components. |
+| `screens/` | Contains the main mobile screens shown to the user. |
+| `hooks/` | Contains reusable React Native logic and state behavior. |
+| `storage/` | Handles device-local and secure authentication storage. |
+| `types/` | Contains TypeScript structures matching backend API contracts. |
+| `utils/` | Contains formatting and UI-only helper functions. |
+| `theme/` | Defines Aura mobile colors, typography, spacing, and shared visual rules. |
+| `mocks/` | Contains temporary frontend development/test data only. |
+| `assets/` | Stores mobile images, icons, and visual resources. |
+
+## Mobile Authentication and Secure Storage
+
+The intended mobile authentication flow is:
+
+```text
+Login / Register Screen
+        ↓
+authApi
+        ↓
+FastAPI
+        ↓
+Bearer JWT
+        ↓
+Secure Mobile Storage
+        ↓
+Authenticated API Requests
+```
+
+- `AuthProvider.tsx` manages current-user and authentication state for the React Native application.
+- `useAuth.ts` exposes authentication behavior to screens and components.
+- `authStorage.ts` coordinates the agreed persistence behavior with secure device storage where appropriate.
+- Authentication tokens or other sensitive session material must not be placed in ordinary mock data or hard-coded in source files.
+- FastAPI remains authoritative for authentication, portfolio ownership, and access control.
+
+This is an intended boundary. It does not imply that registration, secure token persistence, refresh tokens, OAuth, MFA, password reset, logout revocation, or mobile/backend authentication integration is already complete.
+
+## Mobile Financial Calculation Boundary
+
+React Native is responsible for mobile presentation, interaction, navigation, form handling, loading and error states, and displaying backend results. It must not independently calculate or duplicate Aura's official:
+
+- risk score;
+- volatility;
+- Sharpe ratio;
+- maximum drawdown;
+- correlation;
+- diversification score;
+- risk drivers; or
+- historical, allocation, or combined simulation results.
+
+The mobile app receives these values from FastAPI. Mobile utilities may perform presentation-only work such as currency, percentage, and date formatting, chart presentation transformations, and basic visual derivations. Backend analytics and simulation services remain the financial source of truth.
+
+## Mobile Navigation
+
+Mobile navigation should be optimized for phone interaction rather than copying the web application's top navigation. The recommended primary bottom navigation is:
+
+```text
+Home
+Portfolio
+Simulate
+AI
+More
+```
+
+Additional destinations may be grouped under `More` or reached through feature-specific screens:
+
+```text
+Analytics
+Reports
+Settings
+Learn
+Watchlist
+```
+
+Navigation placement does not claim that every listed screen or its backend functionality is currently implemented. In particular, the AI interface remains planned until the backend AI Agent exists.
+
+## Mobile Environment Configuration
+
+Web and mobile may use different backend URLs during local development while connecting to the same FastAPI application and using the same API contracts:
+
+```text
+Web development:
+http://localhost:8000
+
+Physical mobile device:
+http://<development-PC-LAN-IP>:8000
+
+Production:
+https://<Aura-API-domain>
+```
+
+Backend URLs must not be hard-coded inside screens. `src/config/environment.ts` and environment variables provide the mobile configuration boundary.
+
+## Mobile Mock-Data and Implementation Status Boundary
+
+Mobile `mocks/` data is limited to development, testing, and isolated screen work. It is not a production source for authentication, portfolios, analysis, reports, simulations, or AI responses.
+
+The mobile tree documents a planned architecture. It does not claim that all mobile screens, mobile/backend integration, secure storage, deployment, or AI Assistant backend integration is complete.
+
+[↑ Back to Quick Navigation](#quick-navigation)
+
+---
+
+# Shared Client-Backend Architecture
+
+Aura's React web application and planned React Native application use the same FastAPI backend and PostgreSQL persistence layer:
+
+```text
+React Web App ───────────┐
+                         │
+                         ▼
+                  FastAPI Backend
+                         │
+                         ▼
+                     PostgreSQL
+                         ▲
+                         │
+React Native App ────────┘
+```
+
+Both clients use the same backend API contracts for:
+
+- authentication;
+- portfolios;
+- holdings;
+- analysis;
+- reports;
+- historical simulations;
+- allocation simulations;
+- combined simulations;
+- simulation history; and
+- future AI functionality once the backend AI Agent is implemented.
+
+Separate `/api/web/...` and `/api/mobile/...` endpoint families should not be created without a real technical requirement. Both applications should receive consistent ownership decisions, financial calculations, simulation results, reports, and authentication outcomes from the shared backend.
+
+Each client may adapt backend responses for its presentation needs, but neither client replaces backend business rules or official calculations. Different local-development API URLs identify how each device reaches the same FastAPI application; they do not create different backend architectures or contracts.
+
+[↑ Back to Quick Navigation](#quick-navigation)
+
+---
+
+# Project Folder Definitions
+
+Platform-specific folder definitions are available in their corresponding sections:
+
+- [Backend Folder Definitions](#backend-folder-definitions)
+- [Frontend Web Folder Definitions](#frontend-web-folder-definitions)
+- [Mobile App Folder Definitions](#mobile-app-folder-definitions)
 
 ## Important File and Folder Roles
 
