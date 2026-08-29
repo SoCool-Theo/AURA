@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { ApiError } from '../../api/apiClient';
 import { go } from '../../app/routes';
+import { useAuth } from '../../auth/useAuth';
 import { AuthField } from './AuthField';
 import { AuthLayout } from './AuthLayout';
 import styles from './AuthPage.module.css';
 
 interface RegisterErrors {
-  name?: string;
   email?: string;
   password?: string;
   confirmPassword?: string;
-  terms?: string;
 }
 
 function getPasswordStrength(password: string) {
@@ -27,25 +27,26 @@ function getPasswordStrength(password: string) {
 }
 
 export function RegisterPage() {
-  const [name, setName] = useState('');
+  const { register } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
-  const [termsAccepted, setTermsAccepted] = useState(false);
   const [errors, setErrors] = useState<RegisterErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
   const passwordStrength = getPasswordStrength(password);
 
   function clearError(field: keyof RegisterErrors) {
     if (errors[field]) setErrors(current => ({ ...current, [field]: undefined }));
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const nextErrors: RegisterErrors = {};
-    if (name.trim().length < 2) nextErrors.name = 'Enter your full name.';
     if (!email.trim()) {
       nextErrors.email = 'Enter your email address.';
     } else if (!/^\S+@\S+\.\S+$/.test(email)) {
@@ -57,16 +58,39 @@ export function RegisterPage() {
     } else if (confirmPassword !== password) {
       nextErrors.confirmPassword = 'Passwords do not match.';
     }
-    if (!termsAccepted) nextErrors.terms = 'Accept the Terms of Service and Privacy Policy to continue.';
-
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
-    alert('The sign-up interface is ready. Account creation will be connected when backend authentication is implemented.');
+    setFormError(null);
+    setIsSubmitting(true);
+    try {
+      await register({ email: email.trim(), password });
+      setPassword('');
+      setConfirmPassword('');
+      setRegistrationComplete(true);
+    } catch (error) {
+      setFormError(
+        error instanceof ApiError
+          ? error.message
+          : 'Aura could not create the account. Please try again.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function showPolicyNotice(policy: string) {
-    alert(`${policy} content will be connected when Aura account services are implemented.`);
+  if (registrationComplete) {
+    return (
+      <AuthLayout>
+        <div className={`${styles.authHeading} ${styles.registrationComplete}`} role="status">
+          <h1>Account created</h1>
+          <p>Your Aura account is ready. Sign in with your email and password to continue.</p>
+          <button type="button" className={styles.submitButton} onClick={() => go('login')}>
+            Continue to sign in
+          </button>
+        </div>
+      </AuthLayout>
+    );
   }
 
   return (
@@ -78,21 +102,6 @@ export function RegisterPage() {
 
       <form className={`${styles.authForm} ${styles.registerForm}`} onSubmit={submit} noValidate>
         <AuthField
-          id="register-name"
-          label="Full name"
-          type="text"
-          value={name}
-          placeholder="Enter your full name"
-          autoComplete="name"
-          icon="user"
-          error={errors.name}
-          onChange={value => {
-            setName(value);
-            clearError('name');
-          }}
-        />
-
-        <AuthField
           id="register-email"
           label="Email address"
           type="email"
@@ -103,6 +112,7 @@ export function RegisterPage() {
           error={errors.email}
           onChange={value => {
             setEmail(value);
+            setFormError(null);
             clearError('email');
           }}
         />
@@ -121,6 +131,7 @@ export function RegisterPage() {
             onToggleVisibility={() => setPasswordVisible(visible => !visible)}
             onChange={value => {
               setPassword(value);
+              setFormError(null);
               clearError('password');
               if (errors.confirmPassword) clearError('confirmPassword');
             }}
@@ -146,31 +157,16 @@ export function RegisterPage() {
           onToggleVisibility={() => setConfirmPasswordVisible(visible => !visible)}
           onChange={value => {
             setConfirmPassword(value);
+            setFormError(null);
             clearError('confirmPassword');
           }}
         />
 
-        <div className={styles.termsGroup}>
-          <label className={styles.termsRow}>
-            <input
-              type="checkbox"
-              checked={termsAccepted}
-              onChange={event => {
-                setTermsAccepted(event.target.checked);
-                clearError('terms');
-              }}
-            />
-            <span>
-              I agree to the{' '}
-              <button type="button" onClick={() => showPolicyNotice('Terms of Service')}>Terms of Service</button>
-              {' '}and{' '}
-              <button type="button" onClick={() => showPolicyNotice('Privacy Policy')}>Privacy Policy</button>
-            </span>
-          </label>
-          {errors.terms && <small className={styles.termsError}>{errors.terms}</small>}
-        </div>
+        {formError && <p className={styles.formError} role="alert">{formError}</p>}
 
-        <button type="submit" className={styles.submitButton}>Create Account</button>
+        <button type="submit" className={styles.submitButton} disabled={isSubmitting}>
+          {isSubmitting ? 'Creating account…' : 'Create Account'}
+        </button>
       </form>
 
       <p className={`${styles.authSwitch} ${styles.registerSwitch}`}>

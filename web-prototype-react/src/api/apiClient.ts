@@ -7,6 +7,22 @@ import type {
 
 type ParsedResponseBody = JsonValue | string | null;
 
+type ApiAuthentication = {
+  getAccessToken: () => string | null;
+  onUnauthorized: (rejectedToken: string) => void;
+};
+
+let apiAuthentication: ApiAuthentication | null = null;
+
+export function configureApiAuthentication(
+  authentication: ApiAuthentication,
+): () => void {
+  apiAuthentication = authentication;
+  return () => {
+    if (apiAuthentication === authentication) apiAuthentication = null;
+  };
+}
+
 export class ApiError extends Error {
   readonly kind: ApiErrorKind;
   readonly status: number | null;
@@ -114,13 +130,16 @@ export async function apiRequest<TResponse, TBody = never>(
   options: ApiRequestOptions<TBody> = {},
 ): Promise<TResponse> {
   const { body, headers: suppliedHeaders, token, ...requestOptions } = options;
+  const accessToken = token === undefined
+    ? apiAuthentication?.getAccessToken() ?? null
+    : token;
   const headers = new Headers(suppliedHeaders);
   headers.set('Accept', 'application/json');
 
   if (body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
 
   let response: Response;
   try {
@@ -144,6 +163,9 @@ export async function apiRequest<TResponse, TBody = never>(
 
   if (!response.ok) {
     const detail = extractDetail(responseBody);
+    if (response.status === 401 && accessToken) {
+      apiAuthentication?.onUnauthorized(accessToken);
+    }
     throw new ApiError({
       kind: 'http',
       message: httpErrorMessage(response, detail),

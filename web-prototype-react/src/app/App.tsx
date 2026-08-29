@@ -1,3 +1,6 @@
+import { useEffect } from 'react';
+import { ProtectedRoute } from '../auth/ProtectedRoute';
+import { useAuth } from '../auth/useAuth';
 import { useHashRoute } from '../hooks/useHashRoute';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { defaultPortfolios } from '../mocks/portfolios.mock';
@@ -20,16 +23,25 @@ import { SettingsPage } from '../pages/settings/SettingsPage';
 import { SimulationsPage } from '../pages/simulations/SimulationsPage';
 import { WatchlistPage } from '../pages/watchlist/WatchlistPage';
 import { AppLayout } from './AppLayout';
+import { go } from './routes';
 
 function App() {
   const route = useHashRoute();
+  const { status } = useAuth();
   const [portfolios, setPortfolios] = usePersistedState('aura-portfolios', defaultPortfolios);
   const [reports, setReports] = usePersistedState('aura-reports', reportsSeed);
   const [watchlist, setWatchlist] = usePersistedState('aura-watchlist', watchlistSeed);
   const [settings, setSettings] = usePersistedState('aura-settings', defaultSettings);
+  const isPublicAuthRoute = route.page === 'login' || route.page === 'signup';
 
-  if (route.page === 'login') return <LoginPage />;
-  if (route.page === 'signup') return <RegisterPage />;
+  useEffect(() => {
+    if (isPublicAuthRoute && status === 'authenticated') go('dashboard');
+  }, [isPublicAuthRoute, status]);
+
+  if (isPublicAuthRoute) {
+    if (status === 'authenticated') return null;
+    return route.page === 'login' ? <LoginPage /> : <RegisterPage />;
+  }
 
   const activePortfolio = portfolios.find(p => p.id === (route.id || 'tech')) || portfolios[0];
 
@@ -52,7 +64,11 @@ function App() {
     default: content = <NotFoundPage />;
   }
 
-  return <AppLayout route={route} settings={settings}>{content}</AppLayout>;
+  return (
+    <ProtectedRoute>
+      <AppLayout route={route}>{content}</AppLayout>
+    </ProtectedRoute>
+  );
 }
 
 export default App;

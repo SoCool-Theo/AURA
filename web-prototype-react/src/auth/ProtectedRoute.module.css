@@ -1,0 +1,53 @@
+.boundary {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: var(--bg-app);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.boundary section {
+  width: min(460px, 100%);
+  padding: 30px;
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  background: var(--bg-card);
+}
+
+.boundary h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 22px;
+}
+
+.boundary p {
+  margin: 12px 0 0;
+  line-height: 1.6;
+}
+
+.boundary section div {
+  margin-top: 22px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.boundary button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--border-control);
+  border-radius: 8px;
+  background: var(--control-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.boundary button:first-child {
+  border-color: var(--purple-primary);
+  background: var(--purple-primary);
+  color: #021713;
+  font-weight: 750;
+}

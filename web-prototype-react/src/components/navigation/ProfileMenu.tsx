@@ -1,24 +1,22 @@
 import { useState } from 'react';
-import type { UserSettings } from '../../types/settings';
 import { go } from '../../app/routes';
+import { useAuth } from '../../auth/useAuth';
 import { Icon } from '../ui/Icon';
 
-type ProfileMenuProps = {
-  settings: UserSettings;
-};
-
-export function ProfileMenu({ settings }: ProfileMenuProps) {
+export function ProfileMenu() {
   const [open, setOpen] = useState(false);
-  const initials = settings.name
-    ?.split(/\s+/)
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || 'YL';
+  const { logout, user } = useAuth();
+  const initials = user?.email.slice(0, 2).toUpperCase() || 'AU';
 
   function openPage(path: string) {
     setOpen(false);
     go(path);
+  }
+
+  function signOut() {
+    setOpen(false);
+    logout();
+    go('login');
   }
 
   return (
@@ -35,11 +33,12 @@ export function ProfileMenu({ settings }: ProfileMenuProps) {
       </button>
       {open && (
         <div className="profile-menu" role="menu">
-          <strong>{settings.name || 'Aura User'}</strong>
-          <small>{settings.email || 'Portfolio owner'}</small>
+          <strong>{user?.email}</strong>
+          <small>Authenticated Aura account</small>
           <button role="menuitem" onClick={() => openPage('settings')}>Settings</button>
           <button role="menuitem" onClick={() => openPage('watchlist')}>Watchlist</button>
           <button role="menuitem" onClick={() => openPage('learn')}>Learn</button>
+          <button role="menuitem" onClick={signOut}>Sign out</button>
         </div>
       )}
     </div>

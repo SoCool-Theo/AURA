@@ -13,7 +13,7 @@ export function registerUser(
 ): Promise<AuthenticatedUserResponse> {
   return apiRequest<AuthenticatedUserResponse, RegistrationRequest>(
     '/api/auth/register',
-    { method: 'POST', body: request, signal },
+    { method: 'POST', body: request, signal, token: null },
   );
 }
 
@@ -25,6 +25,7 @@ export function loginUser(
     method: 'POST',
     body: request,
     signal,
+    token: null,
   });
 }
 
