@@ -1,29 +1,12 @@
-import { scenarioOptions } from '../../../mocks/simulations.mock';
+import type { HistoricalScenarioResponse } from '../../../types/simulation';
 import { AuraSelect } from '../../../components/ui/AuraSelect';
 import type { AuraSelectOption } from '../../../components/ui/AuraSelect';
 
-interface HistoricalScenarioSelectorProps {
-  scenarioId: string;
-  onChange: (scenarioId: string) => void;
-}
+interface Props { scenarios: HistoricalScenarioResponse[]; scenarioId: string; disabled?: boolean; onChange: (id: string) => void }
 
-export function HistoricalScenarioSelector({
-  scenarioId,
-  onChange,
-}: HistoricalScenarioSelectorProps) {
-  const options: AuraSelectOption<string>[] = scenarioOptions.map(option => ({
-    value: option.id,
-    label: option.label,
-    description: option.dates,
-    icon: 'calendar',
-    tone: option.returnPct < 0 ? 'red' : 'green',
-  }));
-
-  return (
-    <div className="simulation-control-field">
-      <span>Historical scenario</span>
-      <small>Market period to replay</small>
-      <AuraSelect className="simulation-select simulation-aura-select" ariaLabel="Historical scenario" value={scenarioId} options={options} onChange={onChange} />
-    </div>
-  );
+export function HistoricalScenarioSelector({ scenarios, scenarioId, disabled, onChange }: Props) {
+  const options: AuraSelectOption<string>[] = scenarios.map(item => ({ value: item.id, label: item.display_name, description: `${item.requested_start_date} to ${item.requested_end_date}`, icon: 'calendar', tone: 'amber' }));
+  return <div className="simulation-control-field"><span>Historical scenario</span><small>Backend catalogue and requested calendar period</small>
+    {disabled ? <div className="simulation-select">Loading scenarios…</div> : <AuraSelect className="simulation-select simulation-aura-select" ariaLabel="Historical scenario" value={scenarioId} options={options} onChange={onChange} />}
+  </div>;
 }

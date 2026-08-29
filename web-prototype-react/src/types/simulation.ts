@@ -134,8 +134,8 @@ export type SimulationHistoryDetailResponse =
     result: CombinedSimulationResponse;
   });
 
-// Legacy prototype view models retained until the approved simulation caller
-// migration phase.
+// Legacy scenario view model retained for mock-backed pages outside the
+// production simulation route.
 export type ScenarioOption = {
   id: string;
   label: string;
@@ -146,6 +146,11 @@ export type ScenarioOption = {
   recovery: number;
 };
 
-export type SimulationMode = 'Historical Scenario' | 'Allocation Change' | 'Combined Simulation';
+export type SimulationMode = SimulationType;
 
-export type SimulationAllocation = Record<string, number>;
+export type SimulationAllocation = Record<string, string>;
+
+export type SimulationRunResult =
+  | { type: 'historical-scenario'; response: HistoricalScenarioSimulationResponse }
+  | { type: 'allocation'; response: AllocationSimulationResponse }
+  | { type: 'combined'; response: CombinedSimulationResponse };
