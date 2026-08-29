@@ -1,46 +1,43 @@
-import { Fragment } from 'react';
-import type { CSSProperties } from 'react';
-import { correlation } from '../../../mocks/analytics.mock';
 import { Card } from '../../../components/ui/Card';
-import { Icon } from '../../../components/ui/Icon';
+import type { CorrelationMatrixResponse, CorrelationPair } from '../../../types/analytics';
+import { formatNumber } from '../analyticsUi';
+import styles from '../AnalyticsIntegration.module.css';
 
-const HEATMAP_LABELS = ['NVDA', 'TSLA', 'AAPL', 'BND', 'GLD'];
-
-function Heatmap() {
-  return (
-    <div className="heatmap ">
-      <div className="heat-empty" />
-      {HEATMAP_LABELS.map(label => <b key={label}>{label}</b>)}
-      {HEATMAP_LABELS.map((row, rowIndex) => (
-        <Fragment key={row}>
-          <b>{row}</b>
-          {correlation[rowIndex].map((value, columnIndex) => (
-            <span
-              key={`${rowIndex}-${columnIndex}`}
-              style={{ '--heat': Math.abs(value) } as CSSProperties}
-              className={value < 0 ? 'negative' : ''}
-            >
-              {value.toFixed(2)}
-            </span>
-          ))}
-        </Fragment>
-      ))}
-    </div>
-  );
+interface CorrelationHeatmapProps {
+  matrix: CorrelationMatrixResponse;
+  pairs: CorrelationPair[];
 }
 
-export function CorrelationHeatmap() {
+export function CorrelationHeatmap({ matrix, pairs }: CorrelationHeatmapProps) {
   return (
-    <Card className="correlation-card">
-      <div className="analytics-card-heading">
-        <div><h2>Asset Relationships</h2><p>Historical return correlation</p></div>
-        <span className="correlation-scale"><i /> Lower <i /> Higher</span>
+    <Card className={styles.section}>
+      <div className={styles.sectionHeading}>
+        <div><h2>Asset Correlations</h2><p>Nullable values remain unavailable rather than becoming zero.</p></div>
+        <span className={styles.badge}>{pairs.length} defined pair records</span>
       </div>
-      <Heatmap />
-      <div className="correlation-note">
-        <Icon name="analysis" size={17} />
-        <p>Higher positive values mean assets historically moved together. Lower or negative relationships may improve diversification.</p>
+      <div className={styles.tableWrap} role="region" aria-label="Asset correlation matrix" tabIndex={0}>
+        <table className={styles.matrix}>
+          <thead><tr><th aria-label="Asset" />{matrix.symbols.map(symbol => <th key={symbol}>{symbol}</th>)}</tr></thead>
+          <tbody>{matrix.values.map((row, rowIndex) => (
+            <tr key={matrix.symbols[rowIndex]}>
+              <th scope="row">{matrix.symbols[rowIndex]}</th>
+              {row.map((value, columnIndex) => (
+                <td key={matrix.symbols[columnIndex]} className={value === null ? styles.nullCell : ''}>
+                  {formatNumber(value)}
+                </td>
+              ))}
+            </tr>
+          ))}</tbody>
+        </table>
       </div>
+      {pairs.length > 0 && <div className={styles.tableWrap}>
+        <table className={styles.dataTable}>
+          <thead><tr><th>Asset A</th><th>Asset B</th><th>Correlation</th></tr></thead>
+          <tbody>{pairs.map(pair => (
+            <tr key={`${pair.asset_a}/${pair.asset_b}`}><td><strong>{pair.asset_a}</strong></td><td><strong>{pair.asset_b}</strong></td><td>{formatNumber(pair.correlation)}</td></tr>
+          ))}</tbody>
+        </table>
+      </div>}
     </Card>
   );
 }

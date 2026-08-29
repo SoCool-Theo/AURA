@@ -1,47 +1,34 @@
-import type { Holding } from '../../../types/portfolio';
 import { Card } from '../../../components/ui/Card';
-import { SymbolBadge } from '../../../components/ui/SymbolBadge';
+import type { RiskDriverAnalysis } from '../../../types/analytics';
+import { formatPercent } from '../analyticsUi';
+import styles from '../AnalyticsIntegration.module.css';
 
 interface RiskDriverTableProps {
-  holdings: Holding[];
+  riskDrivers: RiskDriverAnalysis;
 }
 
-export function RiskDriverTable({ holdings }: RiskDriverTableProps) {
-  const riskDrivers = holdings
-    .filter(holding => holding.symbol !== 'CASH')
-    .map((holding, index) => ({
-      ...holding,
-      contribution: Math.max(
-        2,
-        holding.weight * (index === 0 ? 1.1 : index === 1 ? .9 : .55),
-      ).toFixed(1),
-      level: index < 2 ? 'High' : index === 2 ? 'Moderate' : 'Low',
-    }));
-
+export function RiskDriverTable({ riskDrivers }: RiskDriverTableProps) {
   return (
-    <Card className="risk-drivers-card">
-      <div className="analytics-card-heading">
-        <div><h2>Main Risk Drivers</h2><p>Assets contributing most to historical portfolio risk.</p></div>
-        <span>{riskDrivers.length} assets</span>
+    <Card className={styles.section}>
+      <div className={styles.sectionHeading}>
+        <div><h2>Risk Drivers</h2><p>Backend-ranked, signed volatility contributions.</p></div>
+        <span className={styles.badge}>Top driver: {riskDrivers.top_driver}</span>
       </div>
-      <div className="analytics-driver-table">
-        <div className="analytics-driver-head">
-          <span>Asset</span><span>Weight</span><span>Risk contribution</span><span>Level</span>
-        </div>
-        {riskDrivers.map(driver => (
-          <div className="analytics-driver-row" key={driver.symbol}>
-            <div className="asset-cell">
-              <SymbolBadge symbol={driver.symbol} />
-              <div><strong>{driver.symbol}</strong><small>{driver.name}</small></div>
-            </div>
-            <b>{driver.weight}%</b>
-            <div className="driver-contribution">
-              <div><span style={{ width: `${Math.min(100, Number(driver.contribution))}%` }} /></div>
-              <small>{driver.contribution}%</small>
-            </div>
-            <span className={`mini-risk ${driver.level.toLowerCase()}`}>{driver.level}</span>
-          </div>
-        ))}
+      <div className={styles.tableWrap}>
+        <table className={styles.dataTable}>
+          <thead><tr><th>Rank</th><th>Symbol</th><th>Weight</th><th>Asset volatility</th><th>Marginal contribution</th><th>Component contribution</th><th>Portfolio contribution</th></tr></thead>
+          <tbody>{riskDrivers.entries.map(driver => (
+            <tr key={driver.symbol}>
+              <td>{driver.rank}</td>
+              <td><strong>{driver.symbol}</strong></td>
+              <td>{formatPercent(driver.weight)}</td>
+              <td>{formatPercent(driver.annualized_asset_volatility)}</td>
+              <td className={driver.marginal_volatility_contribution < 0 ? styles.signedNegative : ''}>{formatPercent(driver.marginal_volatility_contribution)}</td>
+              <td className={driver.component_volatility_contribution < 0 ? styles.signedNegative : ''}>{formatPercent(driver.component_volatility_contribution)}</td>
+              <td className={driver.percentage_volatility_contribution < 0 ? styles.signedNegative : ''}>{formatPercent(driver.percentage_volatility_contribution)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
       </div>
     </Card>
   );

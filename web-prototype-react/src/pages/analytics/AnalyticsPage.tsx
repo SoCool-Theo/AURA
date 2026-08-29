@@ -1,85 +1,140 @@
-import type { Dispatch, SetStateAction } from 'react';
-import type { Portfolio } from '../../types/portfolio';
-import type { ReportSummary } from '../../types/report';
+import { useEffect, useState } from 'react';
+import { createPortfolioReport } from '../../api/reportsApi';
+import { listPortfolios } from '../../api/portfoliosApi';
 import { go } from '../../app/routes';
-import { PortfolioMetric } from '../../components/portfolio/PortfolioMetric';
+import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
-import { AnalysisSummary } from './components/AnalysisSummary';
-import { AssetAnalysisCard } from './components/AssetAnalysisCard';
-import { CorrelationHeatmap } from './components/CorrelationHeatmap';
-import { RiskDriverTable } from './components/RiskDriverTable';
+import type { PortfolioSummaryResponse } from '../../types/portfolio';
+import type { PortfolioReportResponse } from '../../types/report';
+import { analysisErrorMessage, formatReportTimestamp } from './analyticsUi';
+import styles from './AnalyticsIntegration.module.css';
+import { AnalysisResults } from './components/AnalysisResults';
 
 interface AnalyticsPageProps {
-  portfolio: Portfolio;
-  setReports: Dispatch<SetStateAction<ReportSummary[]>>;
+  portfolioId?: string;
 }
 
-export function AnalyticsPage({ portfolio, setReports }: AnalyticsPageProps) {
-  const riskLabel = String(portfolio.riskLevel || 'Moderate').replace(/\s+Risk$/i, '');
+function localIsoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
-  function saveReport() {
-    const report: ReportSummary = {
-      id: Date.now(),
-      portfolioId: portfolio.id,
-      name: `${portfolio.name} Analysis`,
-      portfolio: portfolio.name,
-      type: 'Analysis',
-      date: new Date().toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      }),
-      riskScore: portfolio.riskScore,
-    };
-    setReports(previous => [report, ...previous]);
-    alert('Analysis snapshot saved to Reports.');
+function defaultPeriod() {
+  const end = new Date();
+  const start = new Date(end);
+  start.setFullYear(start.getFullYear() - 1);
+  return { start: localIsoDate(start), end: localIsoDate(end) };
+}
+
+export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
+  const initialPeriod = defaultPeriod();
+  const [portfolios, setPortfolios] = useState<PortfolioSummaryResponse[]>([]);
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState('');
+  const [startDate, setStartDate] = useState(initialPeriod.start);
+  const [endDate, setEndDate] = useState(initialPeriod.end);
+  const [report, setReport] = useState<PortfolioReportResponse | null>(null);
+  const [loadingPortfolios, setLoadingPortfolios] = useState(true);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoadingPortfolios(true);
+    setError(null);
+    void listPortfolios({ signal: controller.signal })
+      .then(response => {
+        setPortfolios(response.portfolios);
+        const requestedPortfolioExists = portfolioId
+          ? response.portfolios.some(item => item.id === portfolioId)
+          : false;
+        if (portfolioId && !requestedPortfolioExists) setError('Portfolio not found');
+        setSelectedPortfolioId(current => {
+          if (portfolioId) {
+            return requestedPortfolioExists ? portfolioId : '';
+          }
+          if (current && response.portfolios.some(item => item.id === current)) return current;
+          return response.portfolios[0]?.id ?? '';
+        });
+      })
+      .catch(requestError => {
+        if (!controller.signal.aborted) setError(analysisErrorMessage(requestError, 'Unable to load portfolios.'));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingPortfolios(false);
+      });
+    return () => controller.abort();
+  }, [portfolioId, reloadKey]);
+
+  async function analyze() {
+    if (!selectedPortfolioId || !startDate || !endDate) {
+      setError('Choose a portfolio, start date, and end date.');
+      return;
+    }
+    if (startDate > endDate) {
+      setError('Start date must be on or before end date.');
+      return;
+    }
+
+    setAnalyzing(true);
+    setError(null);
+    setReport(null);
+    try {
+      setReport(await createPortfolioReport(selectedPortfolioId, {
+        start_date: startDate,
+        end_date: endDate,
+      }));
+    } catch (requestError) {
+      setError(analysisErrorMessage(requestError, 'Unable to analyze this portfolio.'));
+    } finally {
+      setAnalyzing(false);
+    }
   }
+
+  const selectedPortfolio = portfolios.find(item => item.id === selectedPortfolioId);
 
   return (
     <div className="page analytics-page">
-      <button className="analytics-back-link" onClick={() => go(`portfolio/${portfolio.id}`)}>
-        ← Back to {portfolio.name}
-      </button>
       <header className="analytics-header">
-        <div><h1>Portfolio Analysis</h1><p>Historical risk report for <strong>{portfolio.name}</strong>.</p></div>
+        <div><h1>Portfolio Analysis</h1><p>Run Aura’s backend analysis and save an immutable report snapshot.</p></div>
         <div>
-          <button className="secondary-btn" onClick={() => go('assistant')}><Icon name="spark" size={17} /> Ask Aura</button>
-          <button className="primary-btn" onClick={saveReport}>Save Report <span>↓</span></button>
+          <button className="secondary-btn" onClick={() => go('reports')}><Icon name="reports" size={17} /> Report History</button>
+          {selectedPortfolio && <button className="secondary-btn" onClick={() => go(`portfolio/${selectedPortfolio.id}`)}>View Portfolio</button>}
         </div>
       </header>
 
-      <AnalysisSummary portfolio={portfolio} riskLabel={riskLabel} />
-
-      <div className="analytics-metric-grid">
-        <PortfolioMetric label="Annualized Volatility" value="15.32%" detail="Moderate historical variation" icon="trend" tone="purple" />
-        <PortfolioMetric label="Maximum Drawdown" value="-21.45%" detail="Historical peak-to-trough" icon="drawdown" tone="red" />
-        <PortfolioMetric label="Sharpe Ratio" value="1.24" detail="Good risk-adjusted return" icon="trend" tone="green" />
-        <PortfolioMetric label="Diversification" value="56/100" detail="Moderate diversification" icon="shield" tone="amber" />
-      </div>
-
-      <div className="analytics-content-grid">
-        <RiskDriverTable holdings={portfolio.holdings} />
-        <CorrelationHeatmap />
-      </div>
-
-      <section className="asset-analysis-section">
-        <div className="asset-analysis-heading">
-          <div><h2>Individual Asset Analysis</h2><p>Historical risk and performance details for each invested asset.</p></div>
-          <button className="secondary-btn" onClick={() => go(`portfolio/${portfolio.id}`)}>View Holdings</button>
+      <Card className={styles.controls}>
+        <div className={styles.controlsHeading}>
+          <div><h2>Analysis period</h2><p>The exact requested calendar dates are sent to the reporting endpoint without trading-day adjustment.</p></div>
+          <span className={styles.badge}>Creates one saved report</span>
         </div>
-        <div className="asset-analysis-grid">
-          {portfolio.holdings
-            .filter(holding => holding.symbol !== 'CASH')
-            .map((holding, index) => (
-              <AssetAnalysisCard
-                key={holding.symbol}
-                holding={holding}
-                index={index}
-                portfolioRiskScore={portfolio.riskScore}
-              />
-            ))}
+        <div className={styles.controlGrid}>
+          <label className={styles.field}>Portfolio
+            <select value={selectedPortfolioId} onChange={event => { setSelectedPortfolioId(event.target.value); setReport(null); setError(null); }} disabled={loadingPortfolios || analyzing}>
+              <option value="" disabled>{portfolios.length ? 'Select a portfolio' : 'No portfolios available'}</option>
+              {portfolios.map(portfolio => <option value={portfolio.id} key={portfolio.id}>{portfolio.name}</option>)}
+            </select>
+          </label>
+          <label className={styles.field}>Start date<input type="date" value={startDate} onChange={event => { setStartDate(event.target.value); setReport(null); setError(null); }} disabled={analyzing} /></label>
+          <label className={styles.field}>End date<input type="date" value={endDate} onChange={event => { setEndDate(event.target.value); setReport(null); setError(null); }} disabled={analyzing} /></label>
+          <button className="primary-btn" onClick={() => void analyze()} disabled={loadingPortfolios || analyzing || !selectedPortfolioId}>{analyzing ? 'Analyzing…' : 'Analyze Portfolio'}</button>
         </div>
-      </section>
+      </Card>
+
+      {error && <p className={styles.error} role="alert">{error}</p>}
+      {loadingPortfolios && <Card className={styles.stateCard}><h2>Loading portfolios</h2><p role="status">Retrieving your real portfolio list.</p></Card>}
+      {!loadingPortfolios && error && !portfolios.length && <Card className={styles.stateCard}><h2>Portfolios unavailable</h2><p>Analysis cannot begin until the portfolio list loads.</p><button className="primary-btn" onClick={() => setReloadKey(key => key + 1)}>Try again</button></Card>}
+      {!loadingPortfolios && !error && !portfolios.length && <Card className={styles.stateCard}><h2>No portfolios to analyze</h2><p>Create a portfolio with an ordered allocation before running analysis.</p><button className="primary-btn" onClick={() => go('create')}>Create Portfolio</button></Card>}
+      {analyzing && <Card className={styles.stateCard}><h2>Running portfolio analysis</h2><p role="status">Aura is calculating the requested period and saving the report snapshot.</p></Card>}
+      {report && !analyzing && <>
+        <div className={styles.savedBar}>
+          <span><strong>Report saved.</strong> Created {formatReportTimestamp(report.created_at)} with ID {report.id}.</span>
+          <div><button className="secondary-btn" onClick={() => go(`reports/${report.portfolio_id}/${report.id}`)}>Open Saved Report</button><button className="secondary-btn" onClick={() => go('reports')}>All Reports</button></div>
+        </div>
+        <AnalysisResults analysis={report.analysis} />
+      </>}
     </div>
   );
 }

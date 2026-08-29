@@ -1,39 +1,28 @@
 import { Icon } from '../../../components/ui/Icon';
 import { AuraSelect } from '../../../components/ui/AuraSelect';
 import type { AuraSelectOption } from '../../../components/ui/AuraSelect';
-
-export type ReportTypeFilter = 'All Types' | 'Analysis' | 'Simulation' | 'Comparison';
+import type { PortfolioSummaryResponse } from '../../../types/portfolio';
 
 interface ReportFiltersProps {
   query: string;
-  portfolio: string;
-  portfolios: string[];
-  type: ReportTypeFilter;
+  portfolioId: string;
+  portfolios: PortfolioSummaryResponse[];
   onQueryChange: (query: string) => void;
-  onPortfolioChange: (portfolio: string) => void;
-  onTypeChange: (type: ReportTypeFilter) => void;
+  onPortfolioChange: (portfolioId: string) => void;
   onReset: () => void;
 }
 
 export function ReportFilters({
   query,
-  portfolio,
+  portfolioId,
   portfolios,
-  type,
   onQueryChange,
   onPortfolioChange,
-  onTypeChange,
   onReset,
 }: ReportFiltersProps) {
   const portfolioOptions: AuraSelectOption<string>[] = [
-    { value: 'All Portfolios', label: 'All Portfolios', description: 'Reports from every portfolio', icon: 'wallet', tone: 'teal' },
-    ...portfolios.map(name => ({ value: name, label: name, description: `Only reports for ${name}`, icon: 'wallet', tone: 'blue' as const })),
-  ];
-  const typeOptions: ReadonlyArray<AuraSelectOption<ReportTypeFilter>> = [
-    { value: 'All Types', label: 'All report types', description: 'Analysis, simulations, and comparisons', icon: 'reports', tone: 'teal' },
-    { value: 'Analysis', label: 'Analysis', description: 'Saved portfolio risk snapshots', icon: 'analysis', tone: 'green' },
-    { value: 'Simulation', label: 'Simulation', description: 'Historical what-if scenario reports', icon: 'simulations', tone: 'amber' },
-    { value: 'Comparison', label: 'Comparison', description: 'Side-by-side portfolio reports', icon: 'analytics', tone: 'blue' },
+    { value: '', label: 'All Portfolios', description: 'Saved analyses from every owned portfolio', icon: 'wallet', tone: 'teal' },
+    ...portfolios.map(portfolio => ({ value: portfolio.id, label: portfolio.name, description: 'Only this portfolio’s saved reports', icon: 'wallet', tone: 'blue' as const })),
   ];
 
   return (
@@ -41,15 +30,14 @@ export function ReportFilters({
       <label className="report-search">
         <Icon name="search" size={17} />
         <input
-          placeholder="Search by report name..."
+          placeholder="Search by portfolio or report ID..."
           value={query}
           onChange={event => onQueryChange(event.target.value)}
         />
         {query && <button onClick={() => onQueryChange('')} aria-label="Clear search">×</button>}
       </label>
-      <AuraSelect className="report-select" ariaLabel="Filter by portfolio" value={portfolio} options={portfolioOptions} onChange={onPortfolioChange} />
-      <AuraSelect className="report-select" ariaLabel="Filter by report type" value={type} options={typeOptions} onChange={onTypeChange} />
-      {(query || portfolio !== 'All Portfolios' || type !== 'All Types') && (
+      <AuraSelect className="report-select" ariaLabel="Filter by portfolio" value={portfolioId} options={portfolioOptions} onChange={onPortfolioChange} />
+      {(query || portfolioId) && (
         <button className="clear-report-filters" onClick={onReset}>Clear filters</button>
       )}
     </div>

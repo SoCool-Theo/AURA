@@ -18,8 +18,12 @@ export type PortfolioReportListResponse = {
   reports: PortfolioReportSummary[];
 };
 
-// Legacy prototype view models retained until the approved report caller
-// migration phase.
+export type PortfolioReportHistoryItem = PortfolioReportSummary & {
+  portfolio_name: string;
+};
+
+// Legacy prototype view models retained only for deferred mock-backed
+// simulation/demo code. Production Analytics and Reports use the API types.
 export type ReportSummary = {
   id: number;
   portfolioId: string;
