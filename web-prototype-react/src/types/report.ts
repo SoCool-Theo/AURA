@@ -1,3 +1,25 @@
+import type { IsoDateTime, Uuid } from './api';
+import type { AnalysisPeriod, PortfolioAnalysisResponse } from './analytics';
+
+export type PortfolioReportResponse = {
+  id: Uuid;
+  portfolio_id: Uuid;
+  created_at: IsoDateTime;
+  analysis: PortfolioAnalysisResponse;
+};
+
+export type PortfolioReportSummary = AnalysisPeriod & {
+  id: Uuid;
+  portfolio_id: Uuid;
+  created_at: IsoDateTime;
+};
+
+export type PortfolioReportListResponse = {
+  reports: PortfolioReportSummary[];
+};
+
+// Legacy prototype view models retained until the approved report caller
+// migration phase.
 export type ReportSummary = {
   id: number;
   portfolioId: string;
