@@ -58,6 +58,7 @@ export function SimulationsPage({ portfolioId }: Props) {
   function resetAllocation() { if (portfolio) setAllocation(allocationFromPortfolio(portfolio)); clearOutput(); }
 
   async function run() {
+    if (running) return;
     if (!selectedPortfolioId || !portfolio) { setError('Choose a portfolio before running a simulation.'); return; }
     if (!portfolio.holdings.length) { setError('This portfolio has no saved holdings to simulate.'); return; }
     if (mode === 'allocation' && (!startDate || !endDate)) { setError('Choose both requested dates.'); return; }
@@ -78,7 +79,7 @@ export function SimulationsPage({ portfolioId }: Props) {
 
   return <div className="page simulations-page">
     <header className="simulations-header"><div><h1>Simulations</h1><p>Run Aura’s real historical, allocation, and combined backend workflows.</p></div>{selectedPortfolioId && <button className="secondary-btn" onClick={() => document.getElementById('simulation-history')?.scrollIntoView({ behavior: 'smooth' })}>Simulation History</button>}</header>
-    <SimulationModeSelector mode={mode} onChange={next => { setMode(next); clearOutput(); }} />
+    <SimulationModeSelector mode={mode} disabled={running} onChange={next => { setMode(next); clearOutput(); }} />
     <SimulationSetup portfolios={portfolios} portfolioId={selectedPortfolioId} mode={mode} scenarios={scenarios} scenarioId={scenarioId} startDate={startDate} endDate={endDate} loading={loading} running={running} onScenarioChange={value => { setScenarioId(value); clearOutput(); }} onStartDateChange={value => { setStartDate(value); clearOutput(); }} onEndDateChange={value => { setEndDate(value); clearOutput(); }} onRun={() => void run()} />
     {mode !== 'historical-scenario' && portfolio && <AllocationEditor mode={mode} portfolio={portfolio} allocation={allocation} totalAllocation={totalAllocation} disabled={running} onReset={resetAllocation} onChange={(symbol, value) => { setAllocation(current => ({ ...current, [symbol]: value })); clearOutput(); }} />}
     {error && <p className={styles.error} role="alert">{error}</p>}

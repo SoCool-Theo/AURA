@@ -99,6 +99,7 @@ export function PortfoliosPage() {
     : '—';
 
   async function rename(portfolio: PortfolioSummaryResponse) {
+    if (busyId) return;
     const name = prompt('New portfolio name', portfolio.name);
     if (!name?.trim() || name.trim() === portfolio.name) return;
 
@@ -117,6 +118,7 @@ export function PortfoliosPage() {
   }
 
   async function duplicate(portfolio: PortfolioSummaryResponse) {
+    if (busyId) return;
     const name = prompt('Name for duplicated portfolio', `${portfolio.name} Copy`);
     if (!name?.trim()) return;
 
@@ -133,6 +135,7 @@ export function PortfoliosPage() {
   }
 
   async function remove(portfolio: PortfolioSummaryResponse) {
+    if (busyId) return;
     if (!confirm(`Delete ${portfolio.name}? This cannot be undone.`)) return;
 
     setBusyId(portfolio.id);
@@ -206,7 +209,7 @@ export function PortfoliosPage() {
             <PortfolioCard
               key={portfolio.id}
               portfolio={portfolio}
-              busy={busyId === portfolio.id}
+              busy={Boolean(busyId)}
               menuOpen={editing === portfolio.id}
               onToggleMenu={() => setEditing(editing === portfolio.id ? null : portfolio.id)}
               onRename={() => { void rename(portfolio); setEditing(null); }}

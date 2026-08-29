@@ -81,6 +81,7 @@ export function PortfolioHoldingsEditor({
   }
 
   async function save() {
+    if (saving) return;
     const invalid = validationError(holdings);
     if (invalid) {
       setError(invalid);
@@ -122,12 +123,12 @@ export function PortfolioHoldingsEditor({
             <tbody>{holdings.map((holding, index) => (
               <tr key={holding.id}>
                 <td>{index + 1}</td>
-                <td><input aria-label={`Holding ${index + 1} symbol`} value={holding.symbol} onChange={event => updateHolding(holding.id, { symbol: event.target.value })} /></td>
-                <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} allocation percentage`} type="number" min="0" max="100" step="0.01" value={holding.percentage} onChange={event => updateHolding(holding.id, { percentage: event.target.value })} /></td>
+                <td><input aria-label={`Holding ${index + 1} symbol`} value={holding.symbol} onChange={event => updateHolding(holding.id, { symbol: event.target.value })} disabled={saving} /></td>
+                <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} allocation percentage`} type="number" min="0" max="100" step="0.01" value={holding.percentage} onChange={event => updateHolding(holding.id, { percentage: event.target.value })} disabled={saving} /></td>
                 <td><div className={styles.orderActions}>
-                  <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={index === 0}>↑</button>
-                  <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={index === holdings.length - 1}>↓</button>
-                  <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => { setHoldings(previous => previous.filter(item => item.id !== holding.id)); setError(null); }}>×</button>
+                  <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={saving || index === 0}>↑</button>
+                  <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={saving || index === holdings.length - 1}>↓</button>
+                  <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => { setHoldings(previous => previous.filter(item => item.id !== holding.id)); setError(null); }} disabled={saving}>×</button>
                 </div></td>
               </tr>
             ))}</tbody>
@@ -137,7 +138,7 @@ export function PortfolioHoldingsEditor({
         <div className="detail-section-footer">
           <p>Displayed percentages are divided by 100 once at the request boundary. Backend normalization and validation remain authoritative.</p>
           <div className={styles.editorActions}>
-            <button className="secondary-btn" onClick={() => {
+            <button className="secondary-btn" disabled={saving} onClick={() => {
               const id = nextId.current;
               nextId.current += 1;
               setHoldings(previous => [...previous, { id, symbol: '', percentage: '0' }]);

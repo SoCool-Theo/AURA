@@ -71,6 +71,7 @@ export function PortfolioCreateFlow() {
   }
 
   async function savePortfolio() {
+    if (saving) return;
     if (!name.trim()) {
       setError('Enter a portfolio name.');
       return;
@@ -115,7 +116,7 @@ export function PortfolioCreateFlow() {
 
   return (
     <div className="page create-page">
-      <button className="create-back-link" onClick={() => go('portfolios')}>← Back to Portfolios</button>
+      <button className="create-back-link" onClick={() => go('portfolios')} disabled={saving}>← Back to Portfolios</button>
       <section className="create-header">
         <div><h1>Create New Portfolio</h1><p>Save a name and an ordered symbol-and-weight allocation.</p></div>
       </section>
@@ -126,7 +127,7 @@ export function PortfolioCreateFlow() {
           <p>“{createdPortfolio.name}” exists as an empty portfolio, but the separate holdings request failed: {partialError}</p>
           <div className={styles.partialActions}>
             <button className="primary-btn" onClick={() => void savePortfolio()} disabled={saving}>Retry holdings</button>
-            <button className="secondary-btn" onClick={() => go(`portfolio/${createdPortfolio.id}`)}>Open empty portfolio</button>
+            <button className="secondary-btn" onClick={() => go(`portfolio/${createdPortfolio.id}`)} disabled={saving}>Open empty portfolio</button>
           </div>
         </div>
       )}
@@ -144,14 +145,14 @@ export function PortfolioCreateFlow() {
           <div className="wizard-step-content basic-info-step">
             <label className="wizard-field">
               <span>Portfolio Name</span><small>The backend trims and validates the final name.</small>
-              <input value={name} onChange={event => { setName(event.target.value); setError(null); }} placeholder="e.g. Long-Term Growth" disabled={Boolean(createdPortfolio)} />
+              <input value={name} onChange={event => { setName(event.target.value); setError(null); }} placeholder="e.g. Long-Term Growth" disabled={saving || Boolean(createdPortfolio)} />
             </label>
           </div>
 
           <div className="wizard-step-content holdings-step">
             <div className="wizard-title-row">
               <div><strong>Manual symbol entry</strong><p>No asset catalogue, autocomplete, price, or company metadata is used.</p></div>
-              <button className="primary-btn" onClick={addHolding}>＋ Add Holding</button>
+              <button className="primary-btn" onClick={addHolding} disabled={saving}>＋ Add Holding</button>
             </div>
             <div className="table-scroll">
               <table className={styles.holdingTable}>
@@ -159,12 +160,12 @@ export function PortfolioCreateFlow() {
                 <tbody>{holdings.map((holding, index) => (
                   <tr key={holding.id}>
                     <td>{index + 1}</td>
-                    <td><input aria-label={`Holding ${index + 1} symbol`} value={holding.symbol} onChange={event => updateHolding(holding.id, { symbol: event.target.value })} placeholder="e.g. AAPL" /></td>
-                    <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} allocation percentage`} type="number" min="0" max="100" step="0.01" value={holding.percentage} onChange={event => updateHolding(holding.id, { percentage: event.target.value })} /></td>
+                    <td><input aria-label={`Holding ${index + 1} symbol`} value={holding.symbol} onChange={event => updateHolding(holding.id, { symbol: event.target.value })} placeholder="e.g. AAPL" disabled={saving} /></td>
+                    <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} allocation percentage`} type="number" min="0" max="100" step="0.01" value={holding.percentage} onChange={event => updateHolding(holding.id, { percentage: event.target.value })} disabled={saving} /></td>
                     <td><div className={styles.orderActions}>
-                      <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={index === 0}>↑</button>
-                      <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={index === holdings.length - 1}>↓</button>
-                      <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => { setHoldings(previous => previous.filter(item => item.id !== holding.id)); setError(null); }}>×</button>
+                      <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={saving || index === 0}>↑</button>
+                      <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={saving || index === holdings.length - 1}>↓</button>
+                      <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => { setHoldings(previous => previous.filter(item => item.id !== holding.id)); setError(null); }} disabled={saving}>×</button>
                     </div></td>
                   </tr>
                 ))}</tbody>

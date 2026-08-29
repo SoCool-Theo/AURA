@@ -52,6 +52,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   }, [portfolioId, reloadKey]);
 
   async function rename() {
+    if (busy) return;
     if (!portfolio) return;
     const name = prompt('New portfolio name', portfolio.name);
     if (!name?.trim() || name.trim() === portfolio.name) return;
@@ -68,6 +69,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   }
 
   async function duplicate() {
+    if (busy) return;
     if (!portfolio) return;
     const name = prompt('Name for duplicated portfolio', `${portfolio.name} Copy`);
     if (!name?.trim()) return;
@@ -85,6 +87,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   }
 
   async function remove() {
+    if (busy) return;
     if (!portfolio || !confirm(`Delete ${portfolio.name}? This cannot be undone.`)) return;
 
     setBusy(true);
@@ -133,13 +136,13 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
           </div>
         </div>
         <div className="detail-header-actions">
-          <button className="primary-btn" onClick={() => setTab('Holdings')}>Edit Holdings</button>
+          <button className="primary-btn" onClick={() => setTab('Holdings')} disabled={busy}>Edit Holdings</button>
           <div className="relative">
             <button className="secondary-btn detail-more-btn" onClick={() => setMenu(!menu)} aria-expanded={menu} disabled={busy}>More <Icon name="chevron-down" size={16} /></button>
             {menu && <div className="menu-pop detail-menu">
-              <button onClick={() => { setMenu(false); void rename(); }}>Rename portfolio</button>
-              <button onClick={() => { setMenu(false); void duplicate(); }}>Duplicate portfolio</button>
-              <button className="danger" onClick={() => { setMenu(false); void remove(); }}>Delete portfolio</button>
+              <button onClick={() => { setMenu(false); void rename(); }} disabled={busy}>Rename portfolio</button>
+              <button onClick={() => { setMenu(false); void duplicate(); }} disabled={busy}>Duplicate portfolio</button>
+              <button className="danger" onClick={() => { setMenu(false); void remove(); }} disabled={busy}>Delete portfolio</button>
             </div>}
           </div>
         </div>

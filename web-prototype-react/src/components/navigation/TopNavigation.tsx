@@ -36,9 +36,9 @@ export function TopNavigation({ route }: TopNavigationProps) {
           })}
         </nav>
         <div className="top-nav-actions">
-          <button className="nav-action" aria-label="Search"><Icon name="search" size={21}/></button>
-          <button className="nav-action notification-button" aria-label="Notifications">
-            <Icon name="bell" size={21}/><span className="notification-dot" aria-hidden="true" />
+          <button className="nav-action" aria-label="Search unavailable" title="Search is not available yet" disabled><Icon name="search" size={21}/></button>
+          <button className="nav-action notification-button" aria-label="Notifications unavailable" title="Notifications are not available yet" disabled>
+            <Icon name="bell" size={21}/>
           </button>
           <ProfileMenu />
         </div>

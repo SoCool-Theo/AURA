@@ -69,6 +69,7 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
   }, [portfolioId, reloadKey]);
 
   async function analyze() {
+    if (analyzing) return;
     if (!selectedPortfolioId || !startDate || !endDate) {
       setError('Choose a portfolio, start date, and end date.');
       return;

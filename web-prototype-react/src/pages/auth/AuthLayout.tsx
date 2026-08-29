@@ -15,7 +15,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
             <span className={styles.brandMark} aria-hidden="true" />
             <span className={styles.brandName}>AURA</span>
           </div>
-          <p>AI-Powered Portfolio Risk Intelligence</p>
+          <p>Portfolio Risk Intelligence</p>
         </header>
         {children}
       </section>

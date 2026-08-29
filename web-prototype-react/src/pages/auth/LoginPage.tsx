@@ -23,6 +23,7 @@ export function LoginPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
 
     const nextErrors: LoginErrors = {};
     if (!email.trim()) {

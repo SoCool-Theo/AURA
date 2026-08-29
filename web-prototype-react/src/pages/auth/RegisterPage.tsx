@@ -45,6 +45,7 @@ export function RegisterPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
 
     const nextErrors: RegisterErrors = {};
     if (!email.trim()) {
