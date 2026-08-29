@@ -44,8 +44,8 @@ export type PortfolioListResponse = {
   portfolios: PortfolioSummaryResponse[];
 };
 
-// Legacy prototype view models. They remain only so Phase 2 does not migrate
-// production pages or their mock data before the approved caller phases.
+// Legacy prototype view models retained for deferred, mock-backed feature
+// pages. Production portfolio routes use the backend response types above.
 export type Holding = {
   symbol: string;
   name: string;

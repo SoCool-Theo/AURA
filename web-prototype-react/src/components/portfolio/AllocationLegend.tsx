@@ -1,7 +1,7 @@
-import type { Holding } from '../../types/portfolio';
+import type { PortfolioHoldingResponse } from '../../types/portfolio';
 
 interface AllocationLegendProps {
-  holdings: Holding[];
+  holdings: PortfolioHoldingResponse[];
 }
 
 export function AllocationLegend({ holdings }: AllocationLegendProps) {
@@ -15,8 +15,8 @@ export function AllocationLegend({ holdings }: AllocationLegendProps) {
         {holdings.slice(0, 5).map(holding => (
           <span
             key={holding.symbol}
-            style={{ width: `${holding.weight}%` }}
-            title={`${holding.symbol} ${holding.weight}%`}
+            style={{ width: `${holding.weight * 100}%` }}
+            title={`${holding.symbol} ${(holding.weight * 100).toFixed(2)}%`}
           />
         ))}
       </div>
@@ -24,7 +24,7 @@ export function AllocationLegend({ holdings }: AllocationLegendProps) {
         {holdings.slice(0, 4).map(holding => (
           <span key={holding.symbol}>
             <b>{holding.symbol}</b>
-            {holding.weight}%
+            {Number((holding.weight * 100).toFixed(4))}%
           </span>
         ))}
         {holdings.length > 4 && (

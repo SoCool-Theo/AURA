@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ProtectedRoute } from '../auth/ProtectedRoute';
 import { useAuth } from '../auth/useAuth';
 import { useHashRoute } from '../hooks/useHashRoute';
@@ -28,7 +28,7 @@ import { go } from './routes';
 function App() {
   const route = useHashRoute();
   const { status } = useAuth();
-  const [portfolios, setPortfolios] = usePersistedState('aura-portfolios', defaultPortfolios);
+  const [prototypePortfolios, setPrototypePortfolios] = useState(defaultPortfolios);
   const [reports, setReports] = usePersistedState('aura-reports', reportsSeed);
   const [watchlist, setWatchlist] = usePersistedState('aura-watchlist', watchlistSeed);
   const [settings, setSettings] = usePersistedState('aura-settings', defaultSettings);
@@ -43,22 +43,24 @@ function App() {
     return route.page === 'login' ? <LoginPage /> : <RegisterPage />;
   }
 
-  const activePortfolio = portfolios.find(p => p.id === (route.id || 'tech')) || portfolios[0];
+  const activePortfolio = prototypePortfolios.find(
+    portfolio => portfolio.id === (route.id || 'tech'),
+  ) || prototypePortfolios[0];
 
   let content;
   switch (route.page) {
-    case 'dashboard': content = <DashboardPage portfolios={portfolios} settings={settings} />; break;
-    case 'portfolios': content = <PortfoliosPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
-    case 'portfolio': content = <PortfolioDetailPage portfolio={activePortfolio} setPortfolios={setPortfolios} />; break;
+    case 'dashboard': content = <DashboardPage portfolios={prototypePortfolios} settings={settings} />; break;
+    case 'portfolios': content = <PortfoliosPage />; break;
+    case 'portfolio': content = <PortfolioDetailPage key={route.id} portfolioId={route.id} />; break;
     case 'analytics': content = <AnalyticsPage portfolio={activePortfolio} setReports={setReports} />; break;
-    case 'simulations': content = <SimulationsPage portfolio={activePortfolio} portfolios={portfolios} setReports={setReports} />; break;
+    case 'simulations': content = <SimulationsPage portfolio={activePortfolio} portfolios={prototypePortfolios} setReports={setReports} />; break;
     case 'assistant': content = <AssistantPage portfolio={activePortfolio} />; break;
     case 'reports': content = route.id && route.reportId
       ? <ReportDetailPage portfolioId={route.id} reportId={route.reportId} />
       : <ReportsPage reports={reports} setReports={setReports} />; break;
     case 'watchlist': content = <WatchlistPage watchlist={watchlist} setWatchlist={setWatchlist} />; break;
     case 'learn': content = <LearnPage />; break;
-    case 'create': content = <CreatePortfolioPage portfolios={portfolios} setPortfolios={setPortfolios} />; break;
+    case 'create': content = <CreatePortfolioPage />; break;
     case 'settings': content = <SettingsPage settings={settings} setSettings={setSettings} />; break;
     case '404': content = <NotFoundPage />; break;
     default: content = <NotFoundPage />;
