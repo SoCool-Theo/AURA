@@ -1,41 +1,14 @@
-import { lineA } from '../../../mocks/dashboard.mock';
-import { pct } from '../../../utils/formatting';
-import { LineChart } from '../../../components/charts/LineChart';
+import type { PortfolioReportResponse } from '../../../types/report';
+import { go } from '../../../app/routes';
 import { Card } from '../../../components/ui/Card';
 import { Icon } from '../../../components/ui/Icon';
+import { formatPercent } from '../dashboardUi';
+import styles from '../DashboardIntegration.module.css';
+import { PortfolioReturnChart } from './PortfolioReturnChart';
 
-interface PortfolioPerformanceProps {
-  annualizedReturn: number;
-}
-
-export function PortfolioPerformance({ annualizedReturn }: PortfolioPerformanceProps) {
-  return (
-    <Card className="dashboard-performance-card">
-      <div className="dashboard-card-header performance-header">
-        <div className="dashboard-card-title">
-          <span className="title-icon"><Icon name="trend" size={22} /></span>
-          <h2>Portfolio Performance</h2>
-        </div>
-        <div className="range-tabs">
-          <button>1M</button>
-          <button>6M</button>
-          <button>1Y</button>
-          <button>3Y</button>
-          <button className="active">All</button>
-        </div>
-        <div className="performance-return">
-          <strong>{pct(annualizedReturn)}</strong>
-          <small>Annualized Return</small>
-        </div>
-      </div>
-      <div className="dashboard-chart-axis">
-        <span>$120K</span>
-        <span>$100K</span>
-        <span>$80K</span>
-        <span>$60K</span>
-        <span>$40K</span>
-      </div>
-      <LineChart primary={lineA} height={245} area />
-    </Card>
-  );
+export function PortfolioPerformance({ portfolioId, report, loading, failed }: { portfolioId: string; report: PortfolioReportResponse | null; loading: boolean; failed: boolean }) {
+  if (loading) return <Card className={`dashboard-performance-card ${styles.emptyPanel}`}><h3>Loading portfolio returns</h3><p role="status">Retrieving the latest immutable analysis report.</p></Card>;
+  if (!report) return <Card className={`dashboard-performance-card ${styles.emptyPanel}`}><h3>Portfolio returns unavailable</h3><p>{failed ? 'The latest report could not be retrieved.' : 'Analyze this portfolio to create a saved return series.'}</p>{!failed && <button className="primary-btn" onClick={() => go(`analytics/${portfolioId}`)}>Analyze Portfolio</button>}</Card>;
+  const points = report.analysis.portfolio_returns;
+  return <Card className="dashboard-performance-card"><div className="dashboard-card-header performance-header"><div className="dashboard-card-title"><span className="title-icon"><Icon name="trend" size={22} /></span><h2>Periodic Portfolio Returns</h2></div><div className="performance-return"><strong>{formatPercent(report.analysis.portfolio_metrics.annualized_return)}</strong><small>Annualized return</small></div></div>{points.length ? <PortfolioReturnChart points={points} /> : <div className={styles.emptyPanel}><h3>No return observations</h3><p>The saved report contains no portfolio return points.</p></div>}</Card>;
 }

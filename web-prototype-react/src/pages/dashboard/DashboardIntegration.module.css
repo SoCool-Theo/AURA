@@ -1,0 +1,24 @@
+.state { min-height: 260px; padding: 42px 24px; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
+.state h2 { margin: 0 0 8px; }
+.state p { max-width: 580px; margin: 0 0 16px; color: var(--text-muted); }
+.error { margin: 0 0 14px; padding: 12px 14px; border: 1px solid rgba(255, 89, 100, .4); border-radius: 10px; background: rgba(202, 79, 71, .12); color: #ff9aaa; }
+.reportNotice { margin-bottom: 14px; padding: 12px 14px; border: 1px solid var(--border-divider); border-radius: 11px; background: rgba(7, 27, 40, .75); display: flex; align-items: center; justify-content: space-between; gap: 14px; color: var(--text-secondary); font-size: 13px; }
+.reportNotice strong { color: var(--text-primary); }
+.reportNotice button { white-space: nowrap; }
+.kpiPlaceholder { color: var(--text-muted); font-size: 24px; }
+.chart { width: 100%; height: 225px; }
+.chart line { stroke: var(--border-divider); stroke-width: 1; }
+.chart polyline { fill: none; stroke: var(--purple-light); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.chartLabels { display: flex; justify-content: space-between; padding: 0 24px 16px; color: var(--text-muted); font-size: 11px; }
+.emptyPanel { min-height: 180px; padding: 30px 22px; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
+.emptyPanel h3 { margin: 0 0 7px; }
+.emptyPanel p { margin: 0 0 13px; color: var(--text-muted); font-size: 13px; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 24px 20px; }
+.actions button { min-width: 0; }
+.driverValue { display: flex; align-items: flex-end; flex-direction: column; gap: 3px; }
+.driverValue small { color: var(--text-muted); }
+.driverValue strong.negative { color: var(--red-bright); }
+:global(.dashboard-risk-list) > div { grid-template-columns: 42px minmax(0, 1fr) auto; }
+.analysisMeta { flex: 1; margin: 2px 24px 14px; color: var(--text-secondary); font-size: 13px; line-height: 1.65; }
+.analysisMeta strong { color: var(--text-primary); }
+@media (max-width: 640px) { .reportNotice { align-items: flex-start; flex-direction: column; } .reportNotice button { width: 100%; } .actions { grid-template-columns: 1fr; } }

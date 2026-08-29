@@ -1,38 +1,10 @@
+import type { PortfolioReportResponse } from '../../../types/report';
 import { go } from '../../../app/routes';
 import { Card } from '../../../components/ui/Card';
 import { Icon } from '../../../components/ui/Icon';
+import { formatTimestamp } from '../dashboardUi';
+import styles from '../DashboardIntegration.module.css';
 
-interface PortfolioAnalysisCardProps {
-  portfolioId: string;
-  riskScore: number;
-  riskLabel: string;
-}
-
-export function PortfolioAnalysisCard({
-  portfolioId,
-  riskScore,
-  riskLabel,
-}: PortfolioAnalysisCardProps) {
-  return (
-    <Card className="dashboard-analysis-card">
-      <div className="dashboard-card-header">
-        <div className="dashboard-card-title">
-          <span className="title-icon"><Icon name="analysis" size={22} /></span>
-          <h2>Portfolio Analysis</h2>
-        </div>
-      </div>
-      <div className="analysis-status">
-        <p>Last analyzed: May 11, 2026</p>
-        <p>Risk score: <strong>{riskScore}</strong><span>•</span><b>{riskLabel}</b></p>
-      </div>
-      <div className="analysis-card-actions">
-        <button className="primary-btn" onClick={() => go(`analytics/${portfolioId}`)}>
-          View Analysis <span>→</span>
-        </button>
-        <button className="secondary-btn" onClick={() => go(`analytics/${portfolioId}`)}>
-          Re-analyze <span>↻</span>
-        </button>
-      </div>
-    </Card>
-  );
+export function PortfolioAnalysisCard({ portfolioId, report, loading, failed }: { portfolioId: string; report: PortfolioReportResponse | null; loading: boolean; failed: boolean }) {
+  return <Card className="dashboard-analysis-card"><div className="dashboard-card-header"><div className="dashboard-card-title"><span className="title-icon"><Icon name="analysis" size={22} /></span><h2>Core Workflows</h2></div></div><div className={styles.analysisMeta}>{loading ? <span role="status">Loading latest analysis…</span> : report ? <span>Latest report created <strong>{formatTimestamp(report.created_at)}</strong> for {report.analysis.start_date} through {report.analysis.end_date}.</span> : failed ? <span>Latest report context is currently unavailable.</span> : <span>This portfolio has not been analyzed yet. Create a report to populate report-backed Dashboard metrics.</span>}</div><div className={styles.actions}><button className="secondary-btn" onClick={() => go(`portfolio/${portfolioId}`)}>Open Portfolio</button><button className="primary-btn" onClick={() => go(`analytics/${portfolioId}`)}>{report ? 'Analyze Again' : 'Analyze Portfolio'}</button>{report && <button className="secondary-btn" onClick={() => go(`reports/${portfolioId}/${report.id}`)}>View Latest Report</button>}<button className="secondary-btn" onClick={() => go('reports')}>View Reports</button><button className="secondary-btn" onClick={() => go(`simulations/${portfolioId}`)}>Simulate</button></div></Card>;
 }

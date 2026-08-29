@@ -48,7 +48,7 @@ function App() {
 
   let content;
   switch (route.page) {
-    case 'dashboard': content = <DashboardPage portfolios={prototypePortfolios} settings={settings} />; break;
+    case 'dashboard': content = <DashboardPage />; break;
     case 'portfolios': content = <PortfoliosPage />; break;
     case 'portfolio': content = <PortfolioDetailPage key={route.id} portfolioId={route.id} />; break;
     case 'analytics': content = <AnalyticsPage key={route.id} portfolioId={route.id} />; break;

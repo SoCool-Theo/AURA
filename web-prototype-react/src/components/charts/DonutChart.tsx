@@ -11,7 +11,7 @@ const DONUT_COLORS = ['#5844E5', '#1160F8', '#11B89D', '#F2A121', '#A855F7', '#3
 
 export function DonutChart({ holdings }: DonutChartProps) {
   let offset = 0;
-  const circles = holdings.slice(0, 6).map((holding, index) => {
+  const circles = holdings.map((holding, index) => {
     const dash = `${holding.weight} ${100 - holding.weight}`;
     const circle = (
       <circle

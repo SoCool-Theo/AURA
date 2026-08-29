@@ -1,86 +1,22 @@
 import type { ReactNode } from 'react';
-import type { Portfolio } from '../../../types/portfolio';
-import { downturnA, lineA } from '../../../mocks/dashboard.mock';
-import { money, pct } from '../../../utils/formatting';
-import { GaugeChart } from '../../../components/charts/GaugeChart';
-import { MiniLineChart } from '../../../components/charts/MiniLineChart';
+import type { PortfolioResponse } from '../../../types/portfolio';
+import type { PortfolioReportResponse } from '../../../types/report';
 import { Card } from '../../../components/ui/Card';
+import { GaugeChart } from '../../../components/charts/GaugeChart';
 import { Icon } from '../../../components/ui/Icon';
+import { formatPercent } from '../dashboardUi';
+import styles from '../DashboardIntegration.module.css';
 
-interface DashboardKpiGridProps {
-  portfolio: Portfolio;
-  annualizedReturn: number;
-  riskLabel: string;
-}
+function DashboardKpi({ title, icon, tone, visual, children }: { title: string; icon: string; tone: string; visual: ReactNode; children: ReactNode }) { return <Card className={`dashboard-kpi ${tone}`}><div className="metric-heading"><span className="metric-icon"><Icon name={icon} size={21} /></span><span>{title}</span></div><div className="metric-body"><div className="metric-copy">{children}</div><div className="metric-visual">{visual}</div></div></Card>; }
 
-interface DashboardKpiProps {
-  title: string;
-  icon: string;
-  tone: string;
-  visual: ReactNode;
-  children: ReactNode;
-}
-
-function DashboardKpi({ title, icon, tone, visual, children }: DashboardKpiProps) {
-  return (
-    <Card className={`dashboard-kpi ${tone}`}>
-      <div className="metric-heading">
-        <span className="metric-icon"><Icon name={icon} size={21} /></span>
-        <span>{title}</span>
-      </div>
-      <div className="metric-body">
-        <div className="metric-copy">{children}</div>
-        <div className="metric-visual">{visual}</div>
-      </div>
-    </Card>
-  );
-}
-
-export function DashboardKpiGrid({
-  portfolio,
-  annualizedReturn,
-  riskLabel,
-}: DashboardKpiGridProps) {
-  return (
-    <div className="dashboard-kpis">
-      <DashboardKpi
-        title="Total Portfolio Value"
-        icon="wallet"
-        tone="purple"
-        visual={<MiniLineChart values={lineA.slice(12)} />}
-      >
-        <strong>{money(portfolio.value)}</strong>
-        <span className="metric-change positive">
-          ▲ {money(portfolio.value * .064)} (6.4%)
-        </span>
-      </DashboardKpi>
-      <DashboardKpi
-        title="Risk Score"
-        icon="shield"
-        tone="amber"
-        visual={<GaugeChart score={portfolio.riskScore} label="" />}
-      >
-        <strong>{portfolio.riskScore}</strong>
-        <span className="metric-change warning">{riskLabel}</span>
-      </DashboardKpi>
-      <DashboardKpi
-        title="Annualized Return"
-        icon="trend"
-        tone="purple"
-        visual={<MiniLineChart values={lineA.slice(8)} />}
-      >
-        <strong>{pct(annualizedReturn)}</strong>
-        <span className="metric-change purple-text">Annualized</span>
-      </DashboardKpi>
-      <DashboardKpi
-        title="Maximum Drawdown"
-        icon="drawdown"
-        tone="red"
-        visual={<MiniLineChart values={downturnA.slice(6)} />}
-      >
-        <strong>-21.45%</strong>
-        <span className="metric-change negative">Mar 2020</span>
-      </DashboardKpi>
-    </div>
-  );
+export function DashboardKpiGrid({ portfolio, report, reportLoading, reportFailed }: { portfolio: PortfolioResponse; report: PortfolioReportResponse | null; reportLoading: boolean; reportFailed: boolean }) {
+  const analysis = report?.analysis; const risk = analysis?.risk_classification;
+  const unavailable = reportLoading ? 'Loading…' : 'N/A';
+  const status = reportLoading ? 'Loading' : reportFailed ? 'Unavailable' : 'Not analyzed';
+  return <div className="dashboard-kpis">
+    <DashboardKpi title="Holdings" icon="wallet" tone="purple" visual={<span className={styles.kpiPlaceholder}>#</span>}><strong>{portfolio.holdings.length}</strong><span className="metric-change purple-text">Saved assets</span></DashboardKpi>
+    <DashboardKpi title="Risk Score" icon="shield" tone="amber" visual={risk ? <GaugeChart score={risk.risk_score} label="" /> : <span className={styles.kpiPlaceholder}>—</span>}><strong>{risk?.risk_score ?? unavailable}</strong><span className="metric-change warning">{risk?.risk_level ?? status}</span></DashboardKpi>
+    <DashboardKpi title="Annualized Return" icon="trend" tone="purple" visual={<span className={styles.kpiPlaceholder}>↗</span>}><strong>{analysis ? formatPercent(analysis.portfolio_metrics.annualized_return) : unavailable}</strong><span className="metric-change purple-text">{analysis ? 'Latest saved report' : status}</span></DashboardKpi>
+    <DashboardKpi title="Maximum Drawdown" icon="drawdown" tone="red" visual={<span className={styles.kpiPlaceholder}>↘</span>}><strong>{analysis ? formatPercent(analysis.max_drawdown.max_drawdown) : unavailable}</strong><span className="metric-change negative">{analysis ? `${analysis.max_drawdown.peak_date ?? 'N/A'} to ${analysis.max_drawdown.trough_date ?? 'N/A'}` : status}</span></DashboardKpi>
+  </div>;
 }
