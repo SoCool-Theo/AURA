@@ -1,0 +1,82 @@
+name: aura-local-env-setup
+
+services:
+  env-setup:
+    image: alpine:3.22
+    network_mode: none
+    security_opt:
+      - no-new-privileges:true
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        umask 077
+
+        backend_env=/workspace/backend/.env
+        frontend_env=/workspace/web-prototype-react/.env
+        database_env=/workspace/.env.test-database
+        database_secret=/workspace/.local-secrets/aura-test-db-password
+
+        for target in "$$backend_env" "$$frontend_env" "$$database_env" "$$database_secret"; do
+          if [ -e "$$target" ]; then
+            echo "Environment setup stopped: $${target#/workspace/} already exists."
+            echo "No files were changed."
+            exit 1
+          fi
+        done
+
+        mkdir -p /workspace/.local-secrets
+
+        backend_tmp=$${backend_env}.tmp
+        frontend_tmp=$${frontend_env}.tmp
+        database_env_tmp=$${database_env}.tmp
+        database_secret_tmp=$${database_secret}.tmp
+
+        cleanup() {
+          rm -f "$$backend_tmp" "$$frontend_tmp" "$$database_env_tmp" "$$database_secret_tmp"
+        }
+        trap cleanup EXIT HUP INT TERM
+
+        jwt_secret="$$(od -An -N64 -tx1 /dev/urandom | tr -d ' \n')"
+        database_password="$$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+        database_url="postgresql+psycopg://aura:$${database_password}@127.0.0.1:5433/aura_test"
+
+        printf '%s\n' \
+          'APP_NAME=AURA' \
+          'APP_ENV=development' \
+          'DEBUG=true' \
+          'API_PREFIX=/api' \
+          "DATABASE_URL=$$database_url" \
+          "JWT_SECRET_KEY=$$jwt_secret" \
+          'JWT_ALGORITHM=HS256' \
+          'ACCESS_TOKEN_EXPIRE_MINUTES=30' \
+          'MARKET_DATA_UPDATE_TIME_UTC=02:00' \
+          'CORS_ALLOWED_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173"]' \
+          > "$$backend_tmp"
+
+        printf '%s\n' \
+          'VITE_API_BASE_URL=http://127.0.0.1:8000' \
+          > "$$frontend_tmp"
+
+        printf '%s\n' \
+          'POSTGRES_USER=aura' \
+          'POSTGRES_DB=aura_test' \
+          'POSTGRES_PORT=5433' \
+          > "$$database_env_tmp"
+
+        printf '%s\n' "$$database_password" > "$$database_secret_tmp"
+
+        mv "$$backend_tmp" "$$backend_env"
+        mv "$$frontend_tmp" "$$frontend_env"
+        mv "$$database_env_tmp" "$$database_env"
+        mv "$$database_secret_tmp" "$$database_secret"
+        trap - EXIT HUP INT TERM
+
+        echo 'Created backend/.env.'
+        echo 'Created web-prototype-react/.env.'
+        echo 'Created .env.test-database.'
+        echo 'Created the ignored local database secret.'
+        echo 'Generated secrets were not printed.'
