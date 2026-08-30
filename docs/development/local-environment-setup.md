@@ -27,19 +27,19 @@ connection as a `DATABASE_URL`. Anyone who can read that local file can read
 the password, so keep access to the project directory restricted to trusted
 local users.
 
-## Generate the local environment
+## Cross-platform Docker commands
 
 Requirements:
 
-- Docker Desktop is installed and running.
+- Docker Desktop or Docker Engine with the Compose plugin is installed and
+  running.
 - Commands are run from the Aura project root.
 - None of the four generated targets listed above already exists.
 
-Run:
-
-```powershell
-docker compose -f aura-local-env-setup.yml run --rm env-setup
-```
+The same `aura-local-env-setup.yml` service is used on every platform. Run
+exactly one of the platform-specific commands below. Bash supplies the host
+user and group so files created through a bind mount remain owned by the local
+developer on native Linux.
 
 The generator intentionally stops before writing anything if any target
 already exists. It never silently overwrites a JWT secret, database password,
@@ -53,6 +53,45 @@ Created web-prototype-react/.env.
 Created .env.test-database.
 Created the ignored local database secret.
 Generated secrets were not printed.
+```
+
+## Windows PowerShell
+
+Generate the environment:
+
+```powershell
+docker compose -f aura-local-env-setup.yml run --rm env-setup
+```
+
+Confirm that all four generated targets exist without displaying their
+contents:
+
+```powershell
+Test-Path -LiteralPath backend/.env
+Test-Path -LiteralPath web-prototype-react/.env
+Test-Path -LiteralPath .env.test-database
+Test-Path -LiteralPath .local-secrets/aura-test-db-password
+```
+
+Each command should return `True`.
+
+## macOS/Linux Bash
+
+Generate the environment while preserving host file ownership:
+
+```bash
+docker compose -f aura-local-env-setup.yml run --rm \
+  --user "$(id -u):$(id -g)" env-setup
+```
+
+Confirm that all four generated targets exist without displaying their
+contents:
+
+```bash
+test -f backend/.env && echo 'backend/.env exists'
+test -f web-prototype-react/.env && echo 'frontend .env exists'
+test -f .env.test-database && echo 'database environment exists'
+test -s .local-secrets/aura-test-db-password && echo 'database secret exists'
 ```
 
 ## Generated backend configuration
@@ -104,7 +143,7 @@ file instead of placing it in container environment variables.
 
 Run:
 
-```powershell
+```shell
 git status --short --ignored
 ```
 
