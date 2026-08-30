@@ -42,6 +42,16 @@ class AnalysisRepository:
         """Return an analysis by primary key, or ``None`` when absent."""
         return self._session.get(Analysis, analysis_id)
 
+    def delete(self, analysis_id: UUID) -> bool:
+        """Delete an analysis when present without committing."""
+        analysis = self.get_by_id(analysis_id)
+        if analysis is None:
+            return False
+
+        self._session.delete(analysis)
+        self._session.flush()
+        return True
+
     def list_for_portfolio(self, portfolio_id: UUID) -> list[Analysis]:
         """Return a portfolio's newest analyses in deterministic order."""
         statement = (

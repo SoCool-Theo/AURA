@@ -438,3 +438,103 @@ def test_get_report_unowned_parent_returns_none_before_report_lookup(
     assert result is None
     repository.get_by_id.assert_not_called()
     _assert_session_lifecycle_untouched(session)
+
+
+def test_delete_report_validates_association_then_delegates_delete() -> None:
+    service, session, portfolio_service, _, repository = (
+        _service_with_dependencies()
+    )
+    portfolio = _portfolio()
+    analysis = _analysis_record()
+    events: list[str] = []
+    portfolio_service.get.side_effect = lambda **kwargs: (
+        events.append("ownership") or portfolio
+    )
+    repository.get_by_id.side_effect = lambda report_id: (
+        events.append("get") or analysis
+    )
+    repository.delete.side_effect = lambda report_id: (
+        events.append("delete") or True
+    )
+
+    result = service.delete_report(
+        user_id=_USER_ID,
+        portfolio_id=_PORTFOLIO_ID,
+        report_id=_REPORT_ID,
+    )
+
+    assert result is True
+    assert events == ["ownership", "get", "delete"]
+    portfolio_service.get.assert_called_once_with(
+        user_id=_USER_ID,
+        portfolio_id=_PORTFOLIO_ID,
+    )
+    repository.get_by_id.assert_called_once_with(_REPORT_ID)
+    repository.delete.assert_called_once_with(_REPORT_ID)
+    _assert_session_lifecycle_untouched(session)
+
+
+@pytest.mark.parametrize("report_state", ["missing", "different-portfolio"])
+def test_delete_report_missing_and_wrong_association_are_identical_not_found(
+    report_state: str,
+) -> None:
+    service, session, portfolio_service, _, repository = (
+        _service_with_dependencies()
+    )
+    portfolio_service.get.return_value = _portfolio()
+    if report_state == "missing":
+        repository.get_by_id.return_value = None
+    else:
+        analysis = _analysis_record()
+        analysis.portfolio_id = uuid4()
+        repository.get_by_id.return_value = analysis
+
+    with pytest.raises(ReportNotFoundError):
+        service.delete_report(
+            user_id=_USER_ID,
+            portfolio_id=_PORTFOLIO_ID,
+            report_id=_REPORT_ID,
+        )
+
+    repository.delete.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+@pytest.mark.parametrize("portfolio_state", ["missing", "wrong-owner"])
+def test_delete_report_unowned_parent_returns_none_before_report_lookup(
+    portfolio_state: str,
+) -> None:
+    service, session, portfolio_service, _, repository = (
+        _service_with_dependencies()
+    )
+    portfolio_service.get.return_value = None
+
+    result = service.delete_report(
+        user_id=_USER_ID,
+        portfolio_id=_PORTFOLIO_ID,
+        report_id=_REPORT_ID,
+    )
+
+    assert result is None
+    repository.get_by_id.assert_not_called()
+    repository.delete.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_delete_report_missing_during_repository_delete_is_not_found() -> None:
+    service, session, portfolio_service, _, repository = (
+        _service_with_dependencies()
+    )
+    portfolio_service.get.return_value = _portfolio()
+    repository.get_by_id.return_value = _analysis_record()
+    repository.delete.return_value = False
+
+    with pytest.raises(ReportNotFoundError):
+        service.delete_report(
+            user_id=_USER_ID,
+            portfolio_id=_PORTFOLIO_ID,
+            report_id=_REPORT_ID,
+        )
+
+    repository.delete.assert_called_once_with(_REPORT_ID)
+    _assert_session_lifecycle_untouched(session)
