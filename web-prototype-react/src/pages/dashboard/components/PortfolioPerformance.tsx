@@ -42,7 +42,7 @@ function visibleReturnPoints(
 }
 
 export function PortfolioPerformance({ portfolioId, report, loading, failed }: { portfolioId: string; report: PortfolioReportResponse | null; loading: boolean; failed: boolean }) {
-  const [viewRange, setViewRange] = useState<ViewRange>('ALL');
+  const [viewRange, setViewRange] = useState<ViewRange>('1M');
   if (loading) return <Card className={`dashboard-performance-card ${styles.emptyPanel}`}><h3>Loading portfolio returns</h3><p role="status">Retrieving the latest immutable analysis report.</p></Card>;
   if (!report) return <Card className={`dashboard-performance-card ${styles.emptyPanel}`}><h3>Portfolio returns unavailable</h3><p>{failed ? 'The latest report could not be retrieved.' : 'Analyze this portfolio to create a saved return series.'}</p>{!failed && <button className="primary-btn" onClick={() => go(`analytics/${portfolioId}`)}>Analyze Portfolio</button>}</Card>;
   const points = report.analysis.portfolio_returns;

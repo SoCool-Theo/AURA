@@ -6,7 +6,8 @@
 .saved strong { color: var(--green-bright); }
 .dateFields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .dateFields label { color: var(--text-secondary); font-size: 12px; }
-.dateFields input, .portfolioSelect { width: 100%; margin-top: 5px; padding: 10px; border: 1px solid var(--border-control); border-radius: 9px; background: var(--control-bg); color: var(--text-primary); }
+.dateFields input { width: 100%; margin-top: 5px; padding: 10px; border: 1px solid var(--border-control); border-radius: 9px; background: var(--control-bg); color: var(--text-primary); }
+.portfolioSelect { height: 46px; margin-top: 8px; }
 .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
 .metric { padding: 15px; }
 .metric small, .metric span { display: block; color: var(--text-muted); font-size: 11px; }
