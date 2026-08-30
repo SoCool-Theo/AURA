@@ -6,35 +6,47 @@ a section says otherwise.
 
 ## Prerequisites
 
-- Docker Desktop
+- Docker Desktop or Docker Engine with the Compose plugin
 - Python 3.13 and the Aura `.venv`
 - Backend dependencies from `backend/requirements.txt`
 - Node.js and npm
 - Frontend dependencies installed under `web-prototype-react/`
 - Local environment files created according to `local-environment-setup.md`
 
-## 1. Start the test database
+## Cross-platform Docker commands
 
-```powershell
+The Docker commands in this section work in Windows PowerShell, macOS Bash,
+and Linux Bash.
+
+### 1. Start the test database
+
+```shell
 docker compose --env-file .env.test-database -f aura-test-database.yml up -d
 ```
 
 Wait until the service reports `healthy`:
 
-```powershell
+```shell
 docker compose --env-file .env.test-database -f aura-test-database.yml ps
 ```
 
-## 2. Apply backend migrations
+### Stop the database while preserving data
+
+```shell
+docker compose --env-file .env.test-database -f aura-test-database.yml down
+```
+
+Do not add `-v` unless the test database should be permanently erased.
+
+## Windows PowerShell
+
+### 2. Apply backend migrations
 
 ```powershell
 .venv\Scripts\python.exe -m alembic -c backend/alembic.ini upgrade head
 ```
 
-Alembic reads `DATABASE_URL` from `backend/.env`. Run migrations before the
-first backend startup and whenever new migrations are added.
-
-## 3. Start the FastAPI backend
+### 3. Start the FastAPI backend
 
 Open a PowerShell terminal in the project root and run:
 
@@ -48,16 +60,42 @@ Verify:
 - OpenAPI: <http://127.0.0.1:8000/docs>
 - ReDoc: <http://127.0.0.1:8000/redoc>
 
-Keep this terminal running.
+Keep this terminal running, then open a second PowerShell terminal.
 
-## 4. Start the React frontend
-
-Open a second PowerShell terminal:
+### 4. Start the React frontend
 
 ```powershell
 Set-Location web-prototype-react
 npm run dev
 ```
+
+## macOS/Linux Bash
+
+### 2. Apply backend migrations
+
+```bash
+.venv/bin/python -m alembic -c backend/alembic.ini upgrade head
+```
+
+### 3. Start the FastAPI backend
+
+Open a terminal in the project root and run:
+
+```bash
+.venv/bin/python -m uvicorn app.main:app --reload --app-dir backend
+```
+
+Keep this terminal running, then open a second terminal.
+
+### 4. Start the React frontend
+
+```bash
+cd web-prototype-react
+npm run dev
+```
+
+Alembic reads `DATABASE_URL` from `backend/.env`. Run migrations before the
+first backend startup and whenever new migrations are added.
 
 Open <http://127.0.0.1:5173>.
 
@@ -69,24 +107,17 @@ The frontend reads `VITE_API_BASE_URL=http://127.0.0.1:8000` from
 
 Use this order after restarting the computer:
 
-1. Start Docker Desktop.
+1. Start Docker Desktop or the Docker Engine.
 2. Start `aura-test-database.yml`.
 3. Confirm PostgreSQL is healthy.
 4. Apply any pending Alembic migrations.
 5. Start FastAPI.
 6. Start Vite.
 
-## Stop the services
+## Stop the application servers
 
 Stop Vite and FastAPI with `Ctrl+C` in their terminals.
-
-Stop PostgreSQL while preserving its data:
-
-```powershell
-docker compose --env-file .env.test-database -f aura-test-database.yml down
-```
-
-Do not add `-v` unless the test database should be permanently erased.
+Then use the cross-platform Docker shutdown command above to stop PostgreSQL.
 
 ## Common problems
 

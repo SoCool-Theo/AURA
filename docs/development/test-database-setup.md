@@ -19,33 +19,48 @@ The database uses:
 
 Create the local files first by following `local-environment-setup.md`.
 
-## Validate the Compose definition
+## Cross-platform Docker commands
+
+The Docker commands in this section work in Windows PowerShell, macOS Bash,
+and Linux Bash.
+
+### Validate the Compose definition
 
 This command renders the configuration without starting PostgreSQL:
 
-```powershell
+```shell
 docker compose --env-file .env.test-database -f aura-test-database.yml config --quiet
 ```
 
-## Start PostgreSQL
+### Start PostgreSQL
 
-```powershell
+```shell
 docker compose --env-file .env.test-database -f aura-test-database.yml up -d
 ```
 
 Check status:
 
-```powershell
+```shell
 docker compose --env-file .env.test-database -f aura-test-database.yml ps
 ```
 
 The service should become `healthy`. View logs without revealing the password:
 
-```powershell
+```shell
 docker compose --env-file .env.test-database -f aura-test-database.yml logs postgres-test
 ```
 
-## Apply Alembic migrations
+### Stop while preserving data
+
+```shell
+docker compose --env-file .env.test-database -f aura-test-database.yml down
+```
+
+The named volume remains available for the next startup.
+
+## Windows PowerShell
+
+### Apply Alembic migrations
 
 From the project root:
 
@@ -59,7 +74,7 @@ Check the current revision:
 .venv\Scripts\python.exe -m alembic -c backend/alembic.ini current
 ```
 
-## Configure live PostgreSQL tests
+### Configure live PostgreSQL tests
 
 Aura's guarded live tests require `AURA_TEST_DATABASE_URL` and reject database
 names outside `aura_test` or `aura_test_*`. The backend `.env` already contains
@@ -90,13 +105,46 @@ Remove the session variable afterward:
 Remove-Item Env:AURA_TEST_DATABASE_URL
 ```
 
-## Stop while preserving data
+## macOS/Linux Bash
 
-```powershell
-docker compose --env-file .env.test-database -f aura-test-database.yml down
+### Apply Alembic migrations
+
+From the project root:
+
+```bash
+.venv/bin/python -m alembic -c backend/alembic.ini upgrade head
 ```
 
-The named volume remains available for the next startup.
+Check the current revision:
+
+```bash
+.venv/bin/python -m alembic -c backend/alembic.ini current
+```
+
+### Configure live PostgreSQL tests
+
+Copy `DATABASE_URL` from `backend/.env` into the current shell without printing
+it:
+
+```bash
+export AURA_TEST_DATABASE_URL="$(grep '^DATABASE_URL=' backend/.env | cut -d= -f2-)"
+test -n "$AURA_TEST_DATABASE_URL" || {
+  echo 'DATABASE_URL was not found in backend/.env' >&2
+  exit 1
+}
+```
+
+Run a guarded live database test:
+
+```bash
+.venv/bin/python -m pytest backend/tests/integration/database/test_database.py -q
+```
+
+Remove the session variable afterward:
+
+```bash
+unset AURA_TEST_DATABASE_URL
+```
 
 ## Reset the database
 
@@ -104,7 +152,7 @@ The named volume remains available for the next startup.
 > test database volume and all portfolios, users, reports, simulations, market
 > data, and other records stored in it. It does not delete source files.
 
-```powershell
+```shell
 docker compose --env-file .env.test-database -f aura-test-database.yml down -v
 ```
 
@@ -122,8 +170,8 @@ before starting with regenerated credentials.
 
 ### Docker cannot read its configuration
 
-Confirm Docker Desktop is running and that the current Windows user can access
-the Docker engine and the user's Docker configuration directory.
+Confirm Docker Desktop or the Docker Engine is running and that the current
+user can access Docker and the user's Docker configuration directory.
 
 ### Port 5433 is occupied
 
@@ -135,7 +183,16 @@ Choose an unused host port in `.env.test-database`, then update the port in
 Inspect the service logs. Confirm that the generated password file exists and
 is non-empty, but do not print its contents.
 
+Windows PowerShell:
+
 ```powershell
 Test-Path -LiteralPath .local-secrets/aura-test-db-password
+docker compose --env-file .env.test-database -f aura-test-database.yml logs postgres-test
+```
+
+macOS/Linux Bash:
+
+```bash
+test -s .local-secrets/aura-test-db-password && echo 'database secret exists'
 docker compose --env-file .env.test-database -f aura-test-database.yml logs postgres-test
 ```
