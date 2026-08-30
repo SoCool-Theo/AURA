@@ -6,10 +6,28 @@
 .reportNotice strong { color: var(--text-primary); }
 .reportNotice button { white-space: nowrap; }
 .kpiPlaceholder { color: var(--text-muted); font-size: 24px; }
-.chart { width: 100%; height: 225px; }
-.chart line { stroke: var(--border-divider); stroke-width: 1; }
-.chart polyline { fill: none; stroke: var(--purple-light); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
-.chartLabels { display: flex; justify-content: space-between; padding: 0 24px 16px; color: var(--text-muted); font-size: 11px; }
+.rangeTabs { display: flex; align-items: center; gap: 4px; }
+.rangeTabs button { min-width: 35px; padding: 6px 7px; border: 1px solid var(--border-control); border-radius: 7px; background: var(--control-bg); color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; }
+.rangeTabs button:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.rangeTabs button.activeRange { border-color: var(--purple-primary); background: rgba(53, 215, 192, .15); color: var(--purple-light); box-shadow: 0 0 12px rgba(53, 215, 192, .1); }
+.chartFrame { padding: 8px 24px 2px 16px; display: grid; grid-template-columns: 21px 54px minmax(0, 1fr); grid-template-rows: 184px 24px 22px; }
+.yAxisTitle { grid-column: 1; grid-row: 1; align-self: center; justify-self: center; color: var(--text-secondary); font-size: 10px; font-weight: 700; letter-spacing: .025em; writing-mode: vertical-rl; transform: rotate(180deg); }
+.yTicks { position: relative; grid-column: 2; grid-row: 1; }
+.yTicks span { position: absolute; right: 8px; color: var(--text-muted); font-size: 10px; line-height: 1; transform: translateY(-50%); white-space: nowrap; }
+.plot { min-width: 0; grid-column: 3; grid-row: 1; }
+.chart { width: 100%; height: 184px; overflow: visible; }
+.gridLine { stroke: var(--border-divider); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.zeroLine { stroke: var(--text-muted); stroke-width: 1.25; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
+.seriesLine { fill: none; stroke: var(--purple-light); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.singlePoint { fill: var(--purple-light); vector-effect: non-scaling-stroke; }
+.chartLabels { grid-column: 3; grid-row: 2; display: flex; justify-content: space-between; padding-top: 7px; color: var(--text-muted); font-size: 10px; }
+.xAxisTitle { grid-column: 3; grid-row: 3; align-self: end; justify-self: center; color: var(--text-secondary); font-size: 10px; font-weight: 700; letter-spacing: .025em; }
+.rangeSummary { margin: 0; padding: 0 24px 13px 91px; color: var(--text-muted); font-size: 10px; line-height: 1.45; }
+.analysisPeriod { height: auto; min-height: 52px; }
+.analysisPeriod span { min-width: 0; }
+.analysisPeriod small, .analysisPeriod strong { display: block; }
+.analysisPeriod small { color: var(--text-muted); font-size: 9px; font-weight: 650; text-transform: uppercase; letter-spacing: .045em; }
+.analysisPeriod strong { margin-top: 3px; overflow: hidden; color: var(--text-primary); font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .emptyPanel { min-height: 180px; padding: 30px 22px; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
 .emptyPanel h3 { margin: 0 0 7px; }
 .emptyPanel p { margin: 0 0 13px; color: var(--text-muted); font-size: 13px; }
@@ -21,4 +39,5 @@
 :global(.dashboard-risk-list) > div { grid-template-columns: 42px minmax(0, 1fr) auto; }
 .analysisMeta { flex: 1; margin: 2px 24px 14px; color: var(--text-secondary); font-size: 13px; line-height: 1.65; }
 .analysisMeta strong { color: var(--text-primary); }
-@media (max-width: 640px) { .reportNotice { align-items: flex-start; flex-direction: column; } .reportNotice button { width: 100%; } .actions { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .rangeTabs { grid-column: 1/-1; order: 3; width: 100%; justify-content: space-between; } .rangeTabs button { flex: 1; } }
+@media (max-width: 640px) { .reportNotice { align-items: flex-start; flex-direction: column; } .reportNotice button { width: 100%; } .actions { grid-template-columns: 1fr; } .chartFrame { padding-left: 9px; padding-right: 12px; grid-template-columns: 18px 45px minmax(0, 1fr); } .yTicks span { right: 5px; font-size: 9px; } .chartLabels { font-size: 9px; } .rangeSummary { padding-left: 72px; padding-right: 12px; } }
