@@ -41,3 +41,14 @@ export function getPortfolioReport(
     options,
   );
 }
+
+export function deletePortfolioReport(
+  portfolioId: Uuid,
+  reportId: Uuid,
+  options: ApiCallOptions = {},
+): Promise<void> {
+  return apiRequest<void>(
+    `${reportsPath(portfolioId)}/${encodeURIComponent(reportId)}`,
+    { ...options, method: 'DELETE' },
+  );
+}

@@ -4,6 +4,8 @@ import { listPortfolios } from '../../api/portfoliosApi';
 import { go } from '../../app/routes';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
+import { AuraSelect } from '../../components/ui/AuraSelect';
+import type { AuraSelectOption } from '../../components/ui/AuraSelect';
 import type { PortfolioSummaryResponse } from '../../types/portfolio';
 import type { PortfolioReportResponse } from '../../types/report';
 import { analysisErrorMessage, formatReportTimestamp } from './analyticsUi';
@@ -95,6 +97,33 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
   }
 
   const selectedPortfolio = portfolios.find(item => item.id === selectedPortfolioId);
+  const portfolioOptions: AuraSelectOption<string>[] = [
+    {
+      value: '',
+      label: loadingPortfolios
+        ? 'Loading portfolios…'
+        : portfolios.length
+          ? 'Select a portfolio'
+          : 'No portfolios available',
+      description: 'Choose an owned saved portfolio',
+      icon: 'wallet',
+      tone: 'neutral',
+      disabled: true,
+    },
+    ...portfolios.map(portfolio => ({
+      value: portfolio.id,
+      label: portfolio.name,
+      description: 'Saved portfolio',
+      icon: 'wallet',
+      tone: 'teal' as const,
+    })),
+  ];
+
+  function selectPortfolio(nextPortfolioId: string) {
+    setSelectedPortfolioId(nextPortfolioId);
+    setReport(null);
+    setError(null);
+  }
 
   return (
     <div className="page analytics-page">
@@ -112,14 +141,21 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
           <span className={styles.badge}>Creates one saved report</span>
         </div>
         <div className={styles.controlGrid}>
-          <label className={styles.field}>Portfolio
-            <select value={selectedPortfolioId} onChange={event => { setSelectedPortfolioId(event.target.value); setReport(null); setError(null); }} disabled={loadingPortfolios || analyzing}>
-              <option value="" disabled>{portfolios.length ? 'Select a portfolio' : 'No portfolios available'}</option>
-              {portfolios.map(portfolio => <option value={portfolio.id} key={portfolio.id}>{portfolio.name}</option>)}
-            </select>
-          </label>
-          <label className={styles.field}>Start date<input type="date" value={startDate} onChange={event => { setStartDate(event.target.value); setReport(null); setError(null); }} disabled={analyzing} /></label>
-          <label className={styles.field}>End date<input type="date" value={endDate} onChange={event => { setEndDate(event.target.value); setReport(null); setError(null); }} disabled={analyzing} /></label>
+          <div className={styles.analysisFields}>
+            <div className={styles.field}>
+              <span>Portfolio</span>
+              <AuraSelect
+                className={styles.portfolioSelect}
+                ariaLabel="Select portfolio for analysis"
+                value={selectedPortfolioId}
+                options={portfolioOptions}
+                onChange={selectPortfolio}
+                disabled={loadingPortfolios || analyzing}
+              />
+            </div>
+            <label className={styles.field}>Start Date<input type="date" value={startDate} onChange={event => { setStartDate(event.target.value); setReport(null); setError(null); }} disabled={analyzing} /></label>
+            <label className={styles.field}>End Date<input type="date" value={endDate} onChange={event => { setEndDate(event.target.value); setReport(null); setError(null); }} disabled={analyzing} /></label>
+          </div>
           <button className="primary-btn" onClick={() => void analyze()} disabled={loadingPortfolios || analyzing || !selectedPortfolioId}>{analyzing ? 'Analyzing…' : 'Analyze Portfolio'}</button>
         </div>
       </Card>

@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { listPortfolios } from '../../api/portfoliosApi';
-import { listPortfolioReports } from '../../api/reportsApi';
+import {
+  deletePortfolioReport,
+  listPortfolioReports,
+} from '../../api/reportsApi';
 import { go } from '../../app/routes';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
@@ -10,6 +13,7 @@ import { analysisErrorMessage } from '../analytics/analyticsUi';
 import { ReportFilters } from './components/ReportFilters';
 import { ReportSummary } from './components/ReportSummary';
 import { ReportTable } from './components/ReportTable';
+import styles from './ReportsPage.module.css';
 
 export function ReportsPage() {
   const [reports, setReports] = useState<PortfolioReportHistoryItem[]>([]);
@@ -18,12 +22,18 @@ export function ReportsPage() {
   const [portfolioId, setPortfolioId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const deletingReportIdsRef = useRef(new Set<string>());
+  const [deletingReportIds, setDeletingReportIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
+    setActionError(null);
     setReports([]);
 
     void listPortfolios({ signal: controller.signal })
@@ -66,6 +76,29 @@ export function ReportsPage() {
     setPortfolioId('');
   }
 
+  async function remove(report: PortfolioReportHistoryItem) {
+    if (deletingReportIdsRef.current.has(report.id)) return;
+    if (!confirm(
+      `Delete the saved analysis report for ${report.portfolio_name}? This cannot be undone.`,
+    )) return;
+
+    deletingReportIdsRef.current.add(report.id);
+    setDeletingReportIds(new Set(deletingReportIdsRef.current));
+    setActionError(null);
+    try {
+      await deletePortfolioReport(report.portfolio_id, report.id);
+      setReports(previous => previous.filter(item => item.id !== report.id));
+    } catch (requestError) {
+      setActionError(analysisErrorMessage(
+        requestError,
+        'Unable to delete report.',
+      ));
+    } finally {
+      deletingReportIdsRef.current.delete(report.id);
+      setDeletingReportIds(new Set(deletingReportIdsRef.current));
+    }
+  }
+
   return (
     <div className="page reports-page">
       <header className="reports-header">
@@ -78,6 +111,10 @@ export function ReportsPage() {
           <Icon name="analysis" size={17} /> Create New Analysis
         </button>
       </header>
+
+      {actionError && (
+        <p className={styles.actionError} role="alert">{actionError}</p>
+      )}
 
       {!loading && !error && <ReportSummary reports={reports} portfolioCount={portfolios.length} />}
 
@@ -104,6 +141,8 @@ export function ReportsPage() {
           onOpen={report => go(`reports/${report.portfolio_id}/${report.id}`)}
           onCreateAnalysis={() => go('analytics')}
           onResetFilters={resetFilters}
+          onDelete={report => void remove(report)}
+          deletingReportIds={deletingReportIds}
         />}
 
         {!loading && !error && <div className="table-footer">
@@ -113,7 +152,7 @@ export function ReportsPage() {
       </Card>
       <div className="reports-education-note">
         <Icon name="shield" size={16} />
-        <p>Report deletion, export, sharing, and download generation are not supported by the current backend.</p>
+        <p>Deletion permanently removes the saved backend report. Export, sharing, and download generation remain unavailable.</p>
       </div>
     </div>
   );

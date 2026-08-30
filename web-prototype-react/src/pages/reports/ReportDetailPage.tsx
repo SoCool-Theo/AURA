@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react';
-import { getPortfolioReport } from '../../api/reportsApi';
+import { useEffect, useRef, useState } from 'react';
+import {
+  deletePortfolioReport,
+  getPortfolioReport,
+} from '../../api/reportsApi';
 import { go } from '../../app/routes';
 import { Icon } from '../../components/ui/Icon';
 import type { PortfolioReportResponse } from '../../types/report';
@@ -16,12 +19,16 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const deletingRef = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
+    setActionError(null);
     setReport(null);
 
     void getPortfolioReport(portfolioId, reportId, { signal: controller.signal })
@@ -35,6 +42,28 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
 
     return () => controller.abort();
   }, [portfolioId, reportId, reloadKey]);
+
+  async function remove() {
+    if (deletingRef.current || !report) return;
+    if (!confirm(
+      `Delete the saved analysis report for ${report.analysis.portfolio_name}? This cannot be undone.`,
+    )) return;
+
+    deletingRef.current = true;
+    setDeleting(true);
+    setActionError(null);
+    try {
+      await deletePortfolioReport(portfolioId, reportId);
+      go('reports');
+    } catch (requestError) {
+      setActionError(analysisErrorMessage(
+        requestError,
+        'Unable to delete report.',
+      ));
+      deletingRef.current = false;
+      setDeleting(false);
+    }
+  }
 
   if (loading) {
     return <div className={styles.state} role="status"><span className={styles.spinner} /><h2>Loading report</h2><p>Retrieving the immutable saved analysis snapshot.</p></div>;
@@ -54,12 +83,22 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
   return (
     <div className={`page ${styles.page}`}>
       <button className={styles.backLink} onClick={() => go('reports')}>← Reports <span>/</span> Saved Analysis</button>
+      {actionError && (
+        <p className={styles.actionError} role="alert">{actionError}</p>
+      )}
       <header className={styles.header}>
         <div>
           <div className={styles.titleRow}><h1>{report.analysis.portfolio_name} Analysis</h1><span>Immutable Snapshot</span></div>
           <p>Created {formatReportTimestamp(report.created_at)}<i>•</i>Report {report.id}</p>
         </div>
         <div className={styles.headerActions} aria-label="Report actions">
+          <button
+            className={styles.deleteButton}
+            onClick={() => void remove()}
+            disabled={deleting}
+          >
+            {deleting ? 'Deleting…' : 'Delete Report'}
+          </button>
           <button className="secondary-btn" onClick={() => go(`analytics/${report.portfolio_id}`)}>Analyze Current Portfolio</button>
         </div>
       </header>

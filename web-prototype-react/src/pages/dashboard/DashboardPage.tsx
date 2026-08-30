@@ -71,7 +71,7 @@ export function DashboardPage() {
       {reportError && <div className={styles.reportNotice} role="alert"><span><strong>Report metrics unavailable.</strong> {reportError}</span><button className="secondary-btn" onClick={() => setReportReloadKey(value => value + 1)}>Retry Report</button></div>}
       {!reportLoading && !reportError && !report && <div className={styles.reportNotice}><span><strong>This portfolio has not been analyzed.</strong> Report-backed metrics remain N/A until you create an analysis.</span><button className="primary-btn" onClick={() => go(`analytics/${portfolio.id}`)}>Analyze Portfolio</button></div>}
       <DashboardKpiGrid portfolio={portfolio} report={report} reportLoading={reportLoading} reportFailed={Boolean(reportError)} />
-      <div className="dashboard-primary-grid"><PortfolioPerformance portfolioId={portfolio.id} report={report} loading={reportLoading} failed={Boolean(reportError)} /><RiskDrivers portfolioId={portfolio.id} drivers={report?.analysis.risk_drivers.entries ?? null} loading={reportLoading} failed={Boolean(reportError)} /></div>
+      <div className="dashboard-primary-grid"><PortfolioPerformance key={report?.id ?? portfolio.id} portfolioId={portfolio.id} report={report} loading={reportLoading} failed={Boolean(reportError)} /><RiskDrivers portfolioId={portfolio.id} drivers={report?.analysis.risk_drivers.entries ?? null} loading={reportLoading} failed={Boolean(reportError)} /></div>
       <div className="dashboard-bottom-grid"><PortfolioAllocation holdings={portfolio.holdings} /><AiInsight /><PortfolioAnalysisCard portfolioId={portfolio.id} report={report} loading={reportLoading} failed={Boolean(reportError)} /></div>
     </>}
   </div>;
