@@ -1,0 +1,30 @@
+name: aura-test-database
+
+services:
+  postgres-test:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_PASSWORD_FILE: /run/secrets/aura_test_db_password
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    secrets:
+      - aura_test_db_password
+    volumes:
+      - aura-test-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+secrets:
+  aura_test_db_password:
+    file: ./.local-secrets/aura-test-db-password
+
+volumes:
+  aura-test-postgres-data:
