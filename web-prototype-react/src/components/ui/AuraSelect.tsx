@@ -20,6 +20,7 @@ interface AuraSelectProps<T extends string> {
   onChange: (value: T) => void;
   ariaLabel: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function AuraSelect<T extends string>({
@@ -28,6 +29,7 @@ export function AuraSelect<T extends string>({
   onChange,
   ariaLabel,
   className = '',
+  disabled = false,
 }: AuraSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
@@ -103,7 +105,7 @@ export function AuraSelect<T extends string>({
   }
 
   function selectOption(option: AuraSelectOption<T>) {
-    if (option.disabled) return;
+    if (disabled || option.disabled) return;
     onChange(option.value);
     setOpen(false);
     window.setTimeout(() => triggerRef.current?.focus());
@@ -121,6 +123,7 @@ export function AuraSelect<T extends string>({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={menuId}
+        disabled={disabled}
         onClick={() => setOpen(current => !current)}
         onKeyDown={event => {
           if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key) && !open) {

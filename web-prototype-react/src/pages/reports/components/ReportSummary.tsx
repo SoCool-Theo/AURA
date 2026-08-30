@@ -1,17 +1,14 @@
-import type { ReportSummary as ReportSummaryType } from '../../../types/report';
 import { Card } from '../../../components/ui/Card';
 import { Icon } from '../../../components/ui/Icon';
+import type { PortfolioReportHistoryItem } from '../../../types/report';
 
 interface ReportSummaryProps {
-  reports: ReportSummaryType[];
+  reports: PortfolioReportHistoryItem[];
+  portfolioCount: number;
 }
 
-export function ReportSummary({ reports }: ReportSummaryProps) {
-  const reportCounts = {
-    analysis: reports.filter(report => report.type === 'Analysis').length,
-    simulation: reports.filter(report => report.type === 'Simulation').length,
-    comparison: reports.filter(report => report.type === 'Comparison').length,
-  };
+export function ReportSummary({ reports, portfolioCount }: ReportSummaryProps) {
+  const portfoliosWithReports = new Set(reports.map(report => report.portfolio_id)).size;
 
   return (
     <div className="report-summary-grid">
@@ -21,15 +18,15 @@ export function ReportSummary({ reports }: ReportSummaryProps) {
       </Card>
       <Card className="report-summary-card blue">
         <span><Icon name="analysis" size={19} /></span>
-        <div><small>Portfolio Analyses</small><strong>{reportCounts.analysis}</strong><p>Risk analysis reports</p></div>
+        <div><small>Analysis Snapshots</small><strong>{reports.length}</strong><p>Immutable backend reports</p></div>
       </Card>
       <Card className="report-summary-card amber">
-        <span><Icon name="simulations" size={19} /></span>
-        <div><small>Simulations</small><strong>{reportCounts.simulation}</strong><p>Historical scenario results</p></div>
+        <span><Icon name="wallet" size={19} /></span>
+        <div><small>Portfolios Checked</small><strong>{portfolioCount}</strong><p>Owned portfolios queried</p></div>
       </Card>
       <Card className="report-summary-card green">
-        <span><Icon name="analytics" size={19} /></span>
-        <div><small>Comparisons</small><strong>{reportCounts.comparison}</strong><p>Portfolio comparisons</p></div>
+        <span><Icon name="reports" size={19} /></span>
+        <div><small>With Reports</small><strong>{portfoliosWithReports}</strong><p>Portfolios with history</p></div>
       </Card>
     </div>
   );

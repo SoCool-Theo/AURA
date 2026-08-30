@@ -1,37 +1,30 @@
-import type { ReportSummary } from '../../../types/report';
 import { Icon } from '../../../components/ui/Icon';
-import { RiskPill } from '../../../components/ui/RiskPill';
+import type { PortfolioReportHistoryItem } from '../../../types/report';
+import { formatReportTimestamp } from '../../analytics/analyticsUi';
 
 interface ReportTableProps {
-  reports: ReportSummary[];
-  onDownload: (report: ReportSummary) => void;
-  onDelete: (reportId: number) => void;
-  onOpen: (report: ReportSummary) => void;
+  reports: PortfolioReportHistoryItem[];
+  totalReportCount: number;
+  onOpen: (report: PortfolioReportHistoryItem) => void;
+  onCreateAnalysis: () => void;
   onResetFilters: () => void;
-}
-
-function reportIcon(report: ReportSummary) {
-  return report.type === 'Simulation'
-    ? 'simulations'
-    : report.type === 'Comparison'
-      ? 'analytics'
-      : 'reports';
 }
 
 export function ReportTable({
   reports,
-  onDownload,
-  onDelete,
+  totalReportCount,
   onOpen,
+  onCreateAnalysis,
   onResetFilters,
 }: ReportTableProps) {
   if (!reports.length) {
+    const historyIsEmpty = totalReportCount === 0;
     return (
       <div className="reports-empty-state">
         <span><Icon name="reports" size={28} /></span>
-        <h3>No reports found</h3>
-        <p>Try changing your search or report-type filter.</p>
-        <button className="secondary-btn" onClick={onResetFilters}>Reset Filters</button>
+        <h3>{historyIsEmpty ? 'No saved analysis reports' : 'No reports match these filters'}</h3>
+        <p>{historyIsEmpty ? 'Run a portfolio analysis to create the first immutable report snapshot.' : 'Try changing the portfolio filter or search text.'}</p>
+        <button className={historyIsEmpty ? 'primary-btn' : 'secondary-btn'} onClick={historyIsEmpty ? onCreateAnalysis : onResetFilters}>{historyIsEmpty ? 'Create Analysis' : 'Reset Filters'}</button>
       </div>
     );
   }
@@ -41,40 +34,32 @@ export function ReportTable({
       <table className="reports-table">
         <thead>
           <tr>
-            <th>Report</th><th>Portfolio</th><th>Type</th><th>Created</th><th>Risk Score</th><th aria-label="Actions" />
+            <th>Report</th><th>Portfolio</th><th>Requested Period</th><th>Created</th><th aria-label="Actions" />
           </tr>
         </thead>
         <tbody>
           {reports.map(report => (
             <tr key={report.id}>
               <td>
-                <div className={`report-name-cell ${report.type.toLowerCase()}`}>
-                  <span><Icon name={reportIcon(report)} size={18} /></span>
+                <div className="report-name-cell analysis">
+                  <span><Icon name="reports" size={18} /></span>
                   <div>
-                    {report.type === 'Analysis'
-                      ? <button className="report-open-button" onClick={() => onOpen(report)}>{report.name}</button>
-                      : <strong>{report.name}</strong>}
-                    <small>{report.type === 'Analysis' ? 'Open saved analysis snapshot' : 'Educational portfolio risk report'}</small>
+                    <button className="report-open-button" onClick={() => onOpen(report)}>Portfolio Analysis</button>
+                    <small>ID {report.id}</small>
                   </div>
                 </div>
               </td>
               <td>
                 <div className="report-portfolio-cell">
-                  <span>{report.portfolio.slice(0, 2).toUpperCase()}</span>
-                  <strong>{report.portfolio}</strong>
+                  <span>{report.portfolio_name.slice(0, 2).toUpperCase()}</span>
+                  <strong>{report.portfolio_name}</strong>
                 </div>
               </td>
-              <td><span className={`report-type-badge ${report.type.toLowerCase()}`}>{report.type}</span></td>
-              <td><div className="report-date-cell"><Icon name="calendar" size={15} /><span>{report.date}</span></div></td>
-              <td>
-                {report.riskScore
-                  ? <div className="report-risk-score"><strong>{report.riskScore}</strong><RiskPill score={report.riskScore} /></div>
-                  : <span className="not-applicable">Not applicable</span>}
-              </td>
+              <td><span className="report-type-badge analysis">{report.start_date} → {report.end_date}</span></td>
+              <td><div className="report-date-cell"><Icon name="calendar" size={15} /><span>{formatReportTimestamp(report.created_at)}</span></div></td>
               <td>
                 <div className="report-row-actions">
-                  <button onClick={() => onDownload(report)} aria-label={`Download ${report.name}`} title="Download report"><span>↓</span></button>
-                  <button className="delete" onClick={() => onDelete(report.id)} aria-label={`Delete ${report.name}`} title="Delete report">×</button>
+                  <button onClick={() => onOpen(report)} aria-label={`Open report ${report.id}`} title="Open saved snapshot">→</button>
                 </div>
               </td>
             </tr>

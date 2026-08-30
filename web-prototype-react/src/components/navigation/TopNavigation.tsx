@@ -1,15 +1,13 @@
 import { navItems } from '../../app/navigation';
 import { go, type AppRoute } from '../../app/routes';
-import type { UserSettings } from '../../types/settings';
 import { Icon } from '../ui/Icon';
 import { ProfileMenu } from './ProfileMenu';
 
 type TopNavigationProps = {
   route: AppRoute;
-  settings: UserSettings;
 };
 
-export function TopNavigation({ route, settings }: TopNavigationProps) {
+export function TopNavigation({ route }: TopNavigationProps) {
   const isActive = (key: string) => (
     route.page === key
     || (key === 'portfolios' && ['portfolio', 'create'].includes(route.page))
@@ -38,11 +36,11 @@ export function TopNavigation({ route, settings }: TopNavigationProps) {
           })}
         </nav>
         <div className="top-nav-actions">
-          <button className="nav-action" aria-label="Search"><Icon name="search" size={21}/></button>
-          <button className="nav-action notification-button" aria-label="Notifications">
-            <Icon name="bell" size={21}/><span className="notification-dot" aria-hidden="true" />
+          <button className="nav-action" aria-label="Search unavailable" title="Search is not available yet" disabled><Icon name="search" size={21}/></button>
+          <button className="nav-action notification-button" aria-label="Notifications unavailable" title="Notifications are not available yet" disabled>
+            <Icon name="bell" size={21}/>
           </button>
-          <ProfileMenu settings={settings} />
+          <ProfileMenu />
         </div>
       </div>
     </header>

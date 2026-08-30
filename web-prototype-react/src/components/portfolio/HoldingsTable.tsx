@@ -1,16 +1,15 @@
-import type { Portfolio } from '../../types/portfolio';
-import { money, pct } from '../../utils/formatting';
+import type { PortfolioResponse } from '../../types/portfolio';
 import { Card } from '../ui/Card';
 import { SymbolBadge } from '../ui/SymbolBadge';
 
 interface HoldingsTableProps {
-  portfolio: Portfolio;
+  portfolio: PortfolioResponse;
   onViewAll?: () => void;
 }
 
 export function HoldingsTable({ portfolio, onViewAll }: HoldingsTableProps) {
   const totalWeight = portfolio.holdings.reduce(
-    (sum, holding) => sum + Number(holding.weight || 0),
+    (sum, holding) => sum + Number(holding.weight || 0) * 100,
     0,
   );
 
@@ -27,38 +26,30 @@ export function HoldingsTable({ portfolio, onViewAll }: HoldingsTableProps) {
         <table className="detail-holdings-table">
           <thead>
             <tr>
-              <th>Asset</th>
-              <th>Weight</th>
-              <th>Value</th>
-              <th>Daily Change</th>
+              <th>Position</th>
+              <th>Symbol</th>
+              <th>Allocation</th>
             </tr>
           </thead>
           <tbody>
             {portfolio.holdings.map(holding => (
-              <tr key={holding.symbol}>
+              <tr key={`${holding.position}-${holding.symbol}`}>
+                <td>{holding.position + 1}</td>
                 <td>
                   <div className="asset-cell">
                     <SymbolBadge symbol={holding.symbol} />
-                    <div>
-                      <strong>{holding.symbol}</strong>
-                      <small>{holding.name}</small>
-                    </div>
+                    <div><strong>{holding.symbol}</strong></div>
                   </div>
                 </td>
-                <td><strong>{holding.weight}%</strong></td>
-                <td>{money(holding.value)}</td>
-                <td className={holding.dailyChange > 0 ? 'green-text' : holding.dailyChange < 0 ? 'red-text' : ''}>
-                  {holding.dailyChange === 0 ? '—' : pct(holding.dailyChange)}
-                </td>
+                <td><strong>{Number((holding.weight * 100).toFixed(4))}%</strong></td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
+              <td />
               <td>Total</td>
               <td>{totalWeight.toFixed(1)}%</td>
-              <td>{money(portfolio.value)}</td>
-              <td />
             </tr>
           </tfoot>
         </table>

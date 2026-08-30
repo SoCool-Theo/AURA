@@ -86,11 +86,11 @@ export function LearnPage() {
       <Card className="learn-aura-card">
         <span><Icon name="spark" size={22} /></span>
         <div>
-          <h2>Have a question while learning?</h2>
-          <p>Ask Aura to explain a portfolio-risk concept using the context of your current portfolio.</p>
+          <h2>Future AI explanations</h2>
+          <p>The AI Assistant is a truthful preview until Aura’s backend AI Agent is implemented.</p>
         </div>
         <button className="secondary-btn" onClick={() => go('assistant')}>
-          Ask AI Assistant <span>→</span>
+          View AI Preview <span>→</span>
         </button>
       </Card>
       <div className="learn-education-note">

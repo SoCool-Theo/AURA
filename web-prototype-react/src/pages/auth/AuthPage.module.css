@@ -222,6 +222,25 @@
   transform: translateY(-1px);
 }
 
+.formError {
+  margin: -4px 0 0;
+  padding: 11px 13px;
+  border: 1px solid rgba(255, 89, 100, .35);
+  border-radius: 8px;
+  background: rgba(90, 32, 40, .45);
+  color: var(--red-bright);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.registrationComplete p {
+  line-height: 1.6;
+}
+
+.registrationComplete .submitButton {
+  margin-top: 28px;
+}
+
 .authDivider {
   margin: 32px 0 27px;
   display: flex;

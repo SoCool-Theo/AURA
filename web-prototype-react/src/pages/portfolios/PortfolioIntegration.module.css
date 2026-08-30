@@ -1,0 +1,142 @@
+.stateCard {
+  padding: 34px;
+  text-align: center;
+}
+
+.stateCard h2,
+.stateCard h3 {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.stateCard p {
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.stateCard button {
+  margin-top: 18px;
+}
+
+.error {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 89, 100, .35);
+  border-radius: 9px;
+  background: rgba(90, 32, 40, .42);
+  color: var(--red-bright);
+  line-height: 1.45;
+}
+
+.partialSuccess {
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid rgba(242, 161, 33, .4);
+  border-radius: 10px;
+  background: rgba(80, 52, 11, .38);
+  color: var(--text-secondary);
+}
+
+.partialSuccess strong {
+  display: block;
+  color: var(--amber-bright);
+}
+
+.partialSuccess p {
+  margin: 7px 0 0;
+  line-height: 1.5;
+}
+
+.partialActions,
+.editorActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 13px;
+}
+
+.holdingTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.holdingTable th,
+.holdingTable td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--border-divider);
+  text-align: left;
+}
+
+.holdingTable th {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.holdingTable input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid var(--border-control);
+  border-radius: 8px;
+  background: var(--control-bg);
+  color: var(--text-primary);
+}
+
+.orderActions {
+  display: flex;
+  gap: 5px;
+}
+
+.orderActions button {
+  min-width: 34px;
+  min-height: 34px;
+  border: 1px solid var(--border-control);
+  border-radius: 7px;
+  background: var(--control-bg);
+  color: var(--text-primary);
+}
+
+.dangerButton {
+  color: var(--red-bright) !important;
+}
+
+.metadataGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.metadataGrid > div {
+  padding: 17px;
+  border: 1px solid var(--border-divider);
+  border-radius: 10px;
+  background: var(--control-bg);
+}
+
+.metadataGrid small,
+.metadataGrid strong {
+  display: block;
+}
+
+.metadataGrid small {
+  color: var(--text-muted);
+}
+
+.metadataGrid strong {
+  margin-top: 8px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .metadataGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .holdingTable {
+    min-width: 650px;
+  }
+}

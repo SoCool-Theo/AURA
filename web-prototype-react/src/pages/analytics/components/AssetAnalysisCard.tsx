@@ -1,36 +1,27 @@
-import type { Holding } from '../../../types/portfolio';
-import { pct } from '../../../utils/formatting';
 import { Card } from '../../../components/ui/Card';
-import { RiskPill } from '../../../components/ui/RiskPill';
 import { SymbolBadge } from '../../../components/ui/SymbolBadge';
+import type { AssetMetrics } from '../../../types/analytics';
+import { formatNumber, formatPercent } from '../analyticsUi';
+import styles from '../AnalyticsIntegration.module.css';
 
 interface AssetAnalysisCardProps {
-  holding: Holding;
-  index: number;
-  portfolioRiskScore: number;
+  asset: AssetMetrics;
 }
 
-export function AssetAnalysisCard({
-  holding,
-  index,
-  portfolioRiskScore,
-}: AssetAnalysisCardProps) {
+export function AssetAnalysisCard({ asset }: AssetAnalysisCardProps) {
   return (
-    <Card className="asset-analysis-card">
-      <div className="asset-analysis-card-head">
-        <div className="asset-cell">
-          <SymbolBadge symbol={holding.symbol} />
-          <div><strong>{holding.symbol}</strong><small>{holding.name}</small></div>
-        </div>
-        <RiskPill score={Math.max(25, portfolioRiskScore - index * 9)} />
+    <Card className={styles.asset}>
+      <div className={styles.assetHeader}>
+        <SymbolBadge symbol={asset.symbol} />
+        <strong>{asset.symbol}</strong>
+        <span>{formatPercent(asset.weight, 1)} weight</span>
       </div>
-      <div className="asset-weight-row"><span>Portfolio weight</span><strong>{holding.weight}%</strong></div>
-      <div className="asset-weight-bar"><span style={{ width: `${holding.weight}%` }} /></div>
       <dl>
-        <div><dt>Annualized return</dt><dd className="green-text">{pct(8 + index * 2.1)}</dd></div>
-        <div><dt>Volatility</dt><dd>{(14 + index * 4.2).toFixed(1)}%</dd></div>
-        <div><dt>Maximum drawdown</dt><dd className="red-text">-{(18 + index * 7.3).toFixed(1)}%</dd></div>
-        <div><dt>Sharpe ratio</dt><dd>{(1.4 - index * .17).toFixed(2)}</dd></div>
+        <div><dt>Cumulative return</dt><dd>{formatPercent(asset.cumulative_return)}</dd></div>
+        <div><dt>Annualized return</dt><dd>{formatPercent(asset.annualized_return)}</dd></div>
+        <div><dt>Annualized volatility</dt><dd>{formatPercent(asset.annualized_volatility)}</dd></div>
+        <div><dt>Maximum drawdown</dt><dd>{formatPercent(asset.max_drawdown)}</dd></div>
+        <div><dt>Sharpe ratio</dt><dd>{formatNumber(asset.sharpe_ratio)}</dd></div>
       </dl>
     </Card>
   );
