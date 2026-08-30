@@ -1,6 +1,7 @@
 import { Icon } from '../../../components/ui/Icon';
 import type { PortfolioReportHistoryItem } from '../../../types/report';
 import { formatReportTimestamp } from '../../analytics/analyticsUi';
+import styles from '../ReportsPage.module.css';
 
 interface ReportTableProps {
   reports: PortfolioReportHistoryItem[];
@@ -8,6 +9,8 @@ interface ReportTableProps {
   onOpen: (report: PortfolioReportHistoryItem) => void;
   onCreateAnalysis: () => void;
   onResetFilters: () => void;
+  onDelete: (report: PortfolioReportHistoryItem) => void;
+  deletingReportIds: ReadonlySet<string>;
 }
 
 export function ReportTable({
@@ -16,6 +19,8 @@ export function ReportTable({
   onOpen,
   onCreateAnalysis,
   onResetFilters,
+  onDelete,
+  deletingReportIds,
 }: ReportTableProps) {
   if (!reports.length) {
     const historyIsEmpty = totalReportCount === 0;
@@ -38,8 +43,9 @@ export function ReportTable({
           </tr>
         </thead>
         <tbody>
-          {reports.map(report => (
-            <tr key={report.id}>
+          {reports.map(report => {
+            const deleting = deletingReportIds.has(report.id);
+            return <tr key={report.id}>
               <td>
                 <div className="report-name-cell analysis">
                   <span><Icon name="reports" size={18} /></span>
@@ -60,10 +66,19 @@ export function ReportTable({
               <td>
                 <div className="report-row-actions">
                   <button onClick={() => onOpen(report)} aria-label={`Open report ${report.id}`} title="Open saved snapshot">→</button>
+                  <button
+                    className={`${styles.deleteAction} delete`}
+                    onClick={() => onDelete(report)}
+                    disabled={deleting}
+                    aria-label={deleting ? `Deleting report ${report.id}` : `Delete report ${report.id}`}
+                    title={deleting ? 'Deleting saved report' : 'Delete saved report'}
+                  >
+                    {deleting ? 'Deleting…' : 'Delete'}
+                  </button>
                 </div>
               </td>
             </tr>
-          ))}
+          })}
         </tbody>
       </table>
     </div>
