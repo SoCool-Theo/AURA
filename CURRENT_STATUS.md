@@ -1193,6 +1193,103 @@ supervision remain later work; production deployment must run one scheduler
 process replica because `max_instances=1` prevents overlap only within one
 process.
 
+## Customer React Web Backend Integration
+
+**Status:** Completed and merged into `develop`
+**Source branch:** `feat/react-web-backend-integration`
+
+### Completed scope
+
+The completed workstream connected Aura's existing non-AI customer/investor
+React application to the stable FastAPI and PostgreSQL backend capabilities.
+It did not integrate the separate Admin frontend or add an Admin-specific API.
+
+- Added a centralized fetch-based API client with structured API errors, an
+  environment-driven API origin, Bearer authentication, and frontend
+  TypeScript contracts derived from the existing backend contracts.
+- Added an explicit environment-driven FastAPI CORS allowlist for browser
+  communication without changing financial calculations or existing API
+  contracts.
+- Integrated real registration, login, `/api/auth/me` session restoration,
+  `sessionStorage` JWT persistence, protected routes, frontend logout, and
+  401-only session invalidation.
+- Integrated real portfolio list, creation, detail, rename, complete ordered
+  symbol/weight replacement, duplication, and deletion through the existing
+  authenticated Portfolio API and PostgreSQL persistence.
+- Connected Analyze Portfolio to
+  `POST /api/portfolios/{portfolio_id}/reports`, with real backend analytics,
+  report history, and immutable report detail rendering.
+- Integrated all three completed simulation modes: Historical Scenario,
+  Allocation Change, and Combined Simulation, including the backend scenario
+  catalogue, automatic Simulation History persistence, and immutable history
+  detail rendering.
+- Composed the Dashboard from real portfolio detail and latest saved report
+  data, including backend risk, return, drawdown, and risk-driver values. It
+  uses holdings count instead of an unsupported dollar valuation and does not
+  fabricate financial series or values.
+- Removed production fallback-to-mock behavior and browser-local authority for
+  domain records. Unsupported AI, Watchlist, Search, Notifications, profile
+  editing, and other deferred capabilities remain truthful and unavailable.
+
+Backend analytics and simulation calculations remain the financial source of
+truth. The approved Phase 9 Dashboard adjustment only rounds the
+backend-returned risk score for display.
+
+### Live end-to-end and final verification
+
+Phase 9 exercised real React → FastAPI → PostgreSQL behavior for registration,
+login, session restoration, protected routes, portfolio persistence, report
+creation/history/detail, immutable report snapshots, Dashboard composition,
+all three simulation modes, Simulation History/detail, logout/re-login
+persistence, and expected authentication and error behavior.
+
+The preserved historical dataset contained 95,488 `market_data` rows across
+17 symbols. One clearly synthetic account remains in the test database because
+there is no safe user-deletion endpoint:
+`phase9-e2e-20260830-001@example.com`. This is test-environment residue, not a
+production feature defect.
+
+Final verification confirmed:
+
+- exactly 20 Aura HTTP operations;
+- a passing React production build;
+- passing focused API and targeted reporting/simulation regressions;
+- 820 passing analytics tests;
+- a broad safe backend result of 2,058 passed and 52 skipped;
+- passing Python compilation, FastAPI import, public health, CORS preflight,
+  `npm ls`, `pip check`, and Git diff checks;
+- no dependency drift, committed credentials/secrets, or unexpected backend
+  financial, schema, model, or migration changes; and
+- successful final manual checks for the portfolio rename dialog,
+  duplicate/delete dialogs, and Analytics custom date inputs.
+
+### Current boundaries and future capabilities
+
+The non-AI customer web application is now integrated for authentication,
+portfolios, holdings, analysis, reports and report detail, Historical Scenario,
+Allocation Change, Combined Simulation, Simulation History and detail, and the
+Dashboard. This does not mean the full Aura product is complete.
+
+The next core roadmap workstreams remain:
+
+1. `feat/backend-ai-agent`
+2. `feat/react-web-ai-integration`
+3. `feat/backend-api-integration` for final full-system/API integration
+   verification as applicable
+4. `feat/backend-deployment`
+
+The Backend AI Agent is not implemented, and the current Assistant and
+Dashboard AI experiences remain intentionally deferred. Other future or
+optional gaps include Watchlist persistence, customer quote/live market-data
+APIs, asset search/catalogue support, shares and invested amounts, live
+portfolio valuation, editable profiles, password management, global Search,
+Notifications, support/contact APIs, report export/share/delete actions, and
+user-level report/simulation history optimization.
+
+Aura's Admin frontend remains a separate future workstream. No completed
+Admin role/authorization system, Admin-specific backend API, or Admin
+web/backend integration exists.
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -1205,18 +1302,16 @@ cause test failures.
 
 ## Current Backend Priorities
 
-### Recommended next workstream
+### Recommended next core workstream
 
-- Begin the planned, unimplemented `feat/react-web-backend-integration`
-  workstream to connect the customer React web frontend to completed non-AI
-  authentication, portfolio, analysis/report, simulation, and Simulation
-  History APIs. This stage explicitly excludes AI/chat integration and does
-  not require placeholder AI APIs or fake AI responses.
+- Begin the planned, unimplemented `feat/backend-ai-agent` workstream to
+  explain stable Aura analysis, report, and simulation results in simple,
+  educational language without inventing calculations or financial advice.
 
 ```text
 ✅ feat/backend-market-data-scheduler
         ↓
-feat/react-web-backend-integration
+✅ feat/react-web-backend-integration
         ↓
 feat/backend-ai-agent
         ↓
@@ -1229,26 +1324,16 @@ feat/backend-deployment
 
 ### Approved follow-on development order
 
-1. `feat/react-web-backend-integration` — recommended next after the completed
-   scheduler workstream to connect the customer React web frontend to non-AI
-   authentication, portfolio, analysis/report, simulation, and Simulation
-   History APIs. This stage explicitly excludes AI/chat integration.
-2. `feat/backend-ai-agent` — planned after non-AI frontend/backend integration
-   to explain stable Aura analysis, report, and simulation results in simple
-   educational language without inventing calculations or financial advice.
-3. `feat/react-web-ai-integration` — planned after the backend AI Agent to
+1. `feat/backend-ai-agent` — the next core workstream; planned and
+   unimplemented.
+2. `feat/react-web-ai-integration` — planned after the backend AI Agent to
    connect the React AI/chat/explanation experience to that completed backend.
-4. `feat/backend-api-integration` — later final integration after the major
-   backend features, including AI, are stable.
-5. `feat/backend-deployment` — planned only after stable final integration.
+3. `feat/backend-api-integration` — later final full-system/backend-API
+   integration verification after the major backend features, including AI,
+   are stable.
+4. `feat/backend-deployment` — planned only after stable final integration.
 
-This is an approved development order, not a claim that the scheduler or
-non-AI React integration is a technical prerequisite for the AI Agent. The
-non-AI integration stage is intentionally earlier so authentication, API
-communication and contracts, CORS, loading/error behavior, portfolio and
-analysis/report workflows, and simulation flows can be validated before AI
-integration begins.
-
-The five follow-on workstreams remain planned and unimplemented. AI endpoints
-and chat integration do not yet exist, final backend integration is not ready,
-and deployment remains later work.
+The completed non-AI React/backend integration provides the customer-web
+foundation for these later stages but does not make the AI Agent, React AI
+experience, final full-system integration, deployment, optional product gaps,
+or Admin integration complete.
