@@ -531,4 +531,4 @@ def test_openapi_exposes_all_reporting_operations(
     assert {"post", "get"}.issubset(collection)
     assert {"get", "delete"}.issubset(detail)
     methods = _registered_methods()
-    assert len(methods) == 21
+    assert len(methods) == 22
