@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.dependencies import CurrentUser, DatabaseSession
 from app.schemas.common import AnalysisPeriod
@@ -121,3 +121,35 @@ def get_report(
     if report is None:
         raise _portfolio_not_found()
     return report
+
+
+@router.delete(
+    "/{report_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+def delete_report(
+    portfolio_id: UUID,
+    report_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> Response:
+    try:
+        deleted = AnalysisReportingService(session).delete_report(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+            report_id=report_id,
+        )
+    except ReportNotFoundError as error:
+        raise _report_not_found() from error
+    except Exception as error:
+        raise _internal_error("Unable to delete report") from error
+
+    if deleted is None:
+        raise _portfolio_not_found()
+
+    try:
+        session.commit()
+    except Exception as error:
+        raise _internal_error("Unable to delete report") from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

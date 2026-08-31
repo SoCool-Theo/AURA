@@ -1,14 +1,6 @@
 import { Icon } from '../../../components/ui/Icon';
+import styles from '../DashboardIntegration.module.css';
 
-export function DateRangeSelector() {
-  return (
-    <button
-      className="dashboard-selector date-selector"
-      aria-label="Selected date: May 11, 2026"
-    >
-      <Icon name="calendar" size={19} />
-      <span>May 11, 2026</span>
-      <span className="selector-chevron"><Icon name="chevron-down" size={17} /></span>
-    </button>
-  );
+export function DateRangeSelector({ startDate, endDate }: { startDate?: string; endDate?: string }) {
+  return <div className={`dashboard-selector date-selector ${styles.analysisPeriod}`} aria-label="Latest report analysis period"><Icon name="calendar" size={19} /><span><small>Latest report period</small><strong>{startDate && endDate ? `${startDate} – ${endDate}` : 'No analysis period'}</strong></span></div>;
 }

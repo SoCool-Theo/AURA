@@ -106,7 +106,7 @@ def _registered_methods() -> set[tuple[str, str]]:
     }
 
 
-def test_all_three_reporting_routes_are_registered() -> None:
+def test_all_four_reporting_routes_are_registered() -> None:
     methods = _registered_methods()
 
     assert ("/api/portfolios/{portfolio_id}/reports", "POST") in methods
@@ -114,6 +114,10 @@ def test_all_three_reporting_routes_are_registered() -> None:
     assert (
         "/api/portfolios/{portfolio_id}/reports/{report_id}",
         "GET",
+    ) in methods
+    assert (
+        "/api/portfolios/{portfolio_id}/reports/{report_id}",
+        "DELETE",
     ) in methods
 
 
@@ -357,6 +361,147 @@ def test_get_detail_unowned_parent_maps_to_portfolio_not_found(
     api_harness.session.commit.assert_not_called()
 
 
+def test_delete_report_returns_empty_204_commits_once_and_removes_access(
+    api_harness: ApiHarness,
+) -> None:
+    api_harness.service.delete_report.return_value = True
+
+    response = api_harness.client.delete(
+        DETAIL_PATH,
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""
+    api_harness.service.delete_report.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        report_id=REPORT_ID,
+    )
+    api_harness.session.commit.assert_called_once_with()
+    api_harness.session.rollback.assert_not_called()
+
+    api_harness.service.get_report.side_effect = ReportNotFoundError
+    detail_response = api_harness.client.get(
+        DETAIL_PATH,
+        headers=REQUEST_HEADERS,
+    )
+    assert detail_response.status_code == 404
+    assert detail_response.json() == {"detail": "Report not found"}
+
+    api_harness.service.list_reports.return_value = PortfolioReportListResponse(
+        reports=[]
+    )
+    history_response = api_harness.client.get(
+        REPORT_PATH,
+        headers=REQUEST_HEADERS,
+    )
+    assert history_response.status_code == 200
+    assert history_response.json() == {"reports": []}
+    api_harness.session.commit.assert_called_once_with()
+
+
+@pytest.mark.parametrize("report_state", ["missing", "wrong-associated"])
+def test_delete_report_missing_and_wrong_association_are_not_found(
+    api_harness: ApiHarness,
+    report_state: str,
+) -> None:
+    api_harness.service.delete_report.side_effect = ReportNotFoundError
+
+    response = api_harness.client.delete(
+        DETAIL_PATH,
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Report not found"}
+    api_harness.service.delete_report.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        report_id=REPORT_ID,
+    )
+    api_harness.session.commit.assert_not_called()
+    api_harness.session.rollback.assert_called_once_with()
+
+
+@pytest.mark.parametrize("portfolio_state", ["missing", "wrong-owner"])
+def test_delete_report_unowned_parent_is_portfolio_not_found(
+    api_harness: ApiHarness,
+    portfolio_state: str,
+) -> None:
+    api_harness.service.delete_report.return_value = None
+
+    response = api_harness.client.delete(
+        DETAIL_PATH,
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Portfolio not found"}
+    api_harness.session.commit.assert_not_called()
+    api_harness.session.rollback.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {},
+        {"X-User-ID": str(OWNER_ID)},
+        {"Authorization": "Bearer not-a-jwt"},
+    ],
+)
+def test_delete_report_requires_valid_bearer_authentication(
+    api_harness: ApiHarness,
+    headers: dict[str, str],
+) -> None:
+    response = api_harness.client.delete(DETAIL_PATH, headers=headers)
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    api_harness.service.delete_report.assert_not_called()
+    api_harness.session.commit.assert_not_called()
+
+
+def test_delete_report_failure_does_not_commit_and_hides_details(
+    api_harness: ApiHarness,
+) -> None:
+    api_harness.service.delete_report.side_effect = RuntimeError(
+        "sensitive database failure"
+    )
+
+    response = api_harness.client.delete(
+        DETAIL_PATH,
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Unable to delete report"}
+    assert "sensitive database failure" not in response.text
+    api_harness.session.commit.assert_not_called()
+    api_harness.session.rollback.assert_called_once_with()
+    api_harness.service.create_report.assert_not_called()
+
+
+def test_delete_report_commit_failure_is_sanitized(
+    api_harness: ApiHarness,
+) -> None:
+    api_harness.service.delete_report.return_value = True
+    api_harness.session.commit.side_effect = RuntimeError(
+        "sensitive commit failure"
+    )
+
+    response = api_harness.client.delete(
+        DETAIL_PATH,
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Unable to delete report"}
+    assert "sensitive commit failure" not in response.text
+    api_harness.session.commit.assert_called_once_with()
+    api_harness.session.rollback.assert_called_once_with()
+
+
 def test_existing_portfolio_routes_and_health_remain_available(
     api_harness: ApiHarness,
 ) -> None:
@@ -384,4 +529,6 @@ def test_openapi_exposes_all_reporting_operations(
     ]
 
     assert {"post", "get"}.issubset(collection)
-    assert "get" in detail
+    assert {"get", "delete"}.issubset(detail)
+    methods = _registered_methods()
+    assert len(methods) == 21

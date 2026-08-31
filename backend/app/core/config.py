@@ -2,6 +2,7 @@ import re
 from datetime import time
 from pathlib import Path
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, PositiveInt, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,10 +22,24 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: PositiveInt = 30
     market_data_update_time_utc: time = time(hour=2)
+
+    # AI / LLM configuration
     openai_api_key: SecretStr | None = None
     aura_llm_model: str | None = None
-    aura_llm_timeout_seconds: Annotated[float, Field(gt=0, le=120)] = 30.0
-    aura_llm_max_output_tokens: Annotated[int, Field(ge=1, le=1500)] = 1200
+    aura_llm_timeout_seconds: Annotated[
+        float,
+        Field(gt=0, le=120),
+    ] = 30.0
+    aura_llm_max_output_tokens: Annotated[
+        int,
+        Field(ge=1, le=1500),
+    ] = 1200
+
+    # React frontend CORS configuration
+    cors_allowed_origins: tuple[str, ...] = (
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    )
 
     @field_validator("database_url")
     @classmethod
@@ -48,6 +63,7 @@ class Settings(BaseSettings):
                 and value.tzinfo is None
             ):
                 return value
+
         elif isinstance(value, str) and _DAILY_TIME_PATTERN.fullmatch(value):
             hour, minute = value.split(":")
             return time(hour=int(hour), minute=int(minute))
@@ -61,6 +77,45 @@ class Settings(BaseSettings):
     def normalize_aura_llm_model(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip() or None
+        return value
+
+    @field_validator("cors_allowed_origins")
+    @classmethod
+    def validate_cors_allowed_origins(
+        cls,
+        value: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        if not value:
+            raise ValueError("CORS_ALLOWED_ORIGINS must not be empty")
+
+        for origin in value:
+            parsed = urlsplit(origin)
+
+            try:
+                port = parsed.port
+            except ValueError as error:
+                raise ValueError(
+                    "CORS_ALLOWED_ORIGINS entries must use valid ports"
+                ) from error
+
+            if (
+                origin != origin.strip()
+                or "*" in origin
+                or parsed.scheme not in {"http", "https"}
+                or parsed.hostname is None
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+                or (":" in parsed.netloc and port is None)
+            ):
+                raise ValueError(
+                    "CORS_ALLOWED_ORIGINS entries must be explicit HTTP(S) "
+                    "origins without credentials, paths, wildcards, queries, "
+                    "or fragments"
+                )
+
         return value
 
     model_config = SettingsConfigDict(

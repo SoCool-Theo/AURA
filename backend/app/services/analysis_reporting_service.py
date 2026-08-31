@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from ..database.models import Analysis
 from ..database.repositories import AnalysisRepository
 from ..schemas.common import AnalysisPeriod
 from ..schemas.portfolio import PortfolioAnalysisRequest
@@ -104,6 +105,23 @@ class AnalysisReportingService:
         report_id: UUID,
     ) -> PortfolioReportResponse | None:
         """Return one report, distinguishing parent and report absence."""
+        analysis = self._get_owned_report(
+            user_id=user_id,
+            portfolio_id=portfolio_id,
+            report_id=report_id,
+        )
+        if analysis is None:
+            return None
+        return analysis_record_to_report_response(analysis)
+
+    def _get_owned_report(
+        self,
+        *,
+        user_id: UUID,
+        portfolio_id: UUID,
+        report_id: UUID,
+    ) -> Analysis | None:
+        """Return an associated report after preserving portfolio privacy."""
         portfolio = self._portfolio_service.get(
             user_id=user_id,
             portfolio_id=portfolio_id,
@@ -114,4 +132,23 @@ class AnalysisReportingService:
         analysis = self._repository.get_by_id(report_id)
         if analysis is None or analysis.portfolio_id != portfolio.id:
             raise ReportNotFoundError
-        return analysis_record_to_report_response(analysis)
+        return analysis
+
+    def delete_report(
+        self,
+        *,
+        user_id: UUID,
+        portfolio_id: UUID,
+        report_id: UUID,
+    ) -> bool | None:
+        """Delete one report after validating its owned portfolio association."""
+        analysis = self._get_owned_report(
+            user_id=user_id,
+            portfolio_id=portfolio_id,
+            report_id=report_id,
+        )
+        if analysis is None:
+            return None
+        if not self._repository.delete(report_id):
+            raise ReportNotFoundError
+        return True

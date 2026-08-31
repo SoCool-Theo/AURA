@@ -1,3 +1,29 @@
+import type { IsoDateTime, Uuid } from './api';
+import type { AnalysisPeriod, PortfolioAnalysisResponse } from './analytics';
+
+export type PortfolioReportResponse = {
+  id: Uuid;
+  portfolio_id: Uuid;
+  created_at: IsoDateTime;
+  analysis: PortfolioAnalysisResponse;
+};
+
+export type PortfolioReportSummary = AnalysisPeriod & {
+  id: Uuid;
+  portfolio_id: Uuid;
+  created_at: IsoDateTime;
+};
+
+export type PortfolioReportListResponse = {
+  reports: PortfolioReportSummary[];
+};
+
+export type PortfolioReportHistoryItem = PortfolioReportSummary & {
+  portfolio_name: string;
+};
+
+// Legacy prototype view models retained only for deferred mock-backed
+// simulation/demo code. Production Analytics and Reports use the API types.
 export type ReportSummary = {
   id: number;
   portfolioId: string;

@@ -77,6 +77,12 @@ feature/refactor/docs branch
 | `feat/backend-authentication` | Integration feature | Completed and merged into `develop` | Bearer JWT authentication, credential persistence, and authenticated portfolio/report ownership boundaries |
 | `feat/backend-historical-scenario-simulator` | Integration feature | Completed and merged into `develop` | Deterministic historical simulation of an owned saved portfolio against predefined market events |
 | `feat/backend-allocation-simulator` | Integration feature | Completed and merged into `develop` | Compare saved and modified weights for the same owned portfolio over one arbitrary historical period |
+| `feat/backend-combined-simulator` | Integration feature | Completed and merged into `develop` | Compare original and modified allocations during one predefined historical event |
+| `feat/backend-simulation-history` | Integration feature | Completed and merged into `develop` | Persist and retrieve immutable results from all three simulation modes |
+| `feat/backend-market-data-historical-backfill` | Integration feature | Completed and merged into `develop` | Extend verified PostgreSQL historical coverage where provider and asset history permit |
+| `feat/backend-historical-scenario-catalog` | Integration feature | Completed and merged into `develop` | Expand the deterministic educational historical-event catalogue |
+| `feat/backend-market-data-scheduler` | Integration feature | Completed and merged into `develop` | Schedule the existing market-data update and PostgreSQL persistence workflow |
+| `feat/react-web-backend-integration` | Customer web integration | Completed and merged into `develop` | Connect the non-AI customer React web application to existing FastAPI/PostgreSQL capabilities |
 | `feat/backend-quality-ci` | Optional support | Optional | Automated testing and code-quality checks |
 
 ---
@@ -1409,18 +1415,19 @@ stable in `develop`.
 | `feat/backend-market-data-historical-backfill` | Extend verified historical market-data coverage toward year 2000 where provider and asset history permit | Completed market-data pipeline + storage/PostgreSQL infrastructure | Completed and merged into `develop` |
 | `feat/backend-historical-scenario-catalog` | Expand the predefined educational historical-event catalogue | Historical-simulation foundation + verified historical backfill/coverage | Completed and merged into `develop` |
 | `feat/backend-market-data-scheduler` | Automate the existing market-data update/storage workflow | Completed market-data pipeline + PostgreSQL database/storage | Completed and merged into `develop` |
-| `feat/react-web-backend-integration` | Connect the customer React web frontend to completed non-AI backend capabilities | Authentication + Portfolio API + AnalysisService/reporting + all three simulator modes + Simulation History + stable API contracts | Recommended next workstream; non-AI backend prerequisites are substantially complete |
+| `feat/react-web-backend-integration` | Connect the customer React web frontend to completed non-AI backend capabilities | Authentication + Portfolio API + AnalysisService/reporting + all three simulator modes + Simulation History + stable API contracts | Completed and merged into `develop` |
 | `feat/backend-ai-agent` | Explain stable analysis, report, and simulation results | Stable analytics + reports + simulations + schemas + database/backend context | Planned after non-AI React/backend integration; unimplemented |
 | `feat/react-web-ai-integration` | Connect React AI/chat/explanation experiences to the backend AI Agent | Completed backend AI Agent + React integration foundation | Not ready until the backend AI Agent is complete |
 | `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent behavior for final integration | Completed major backend feature work including AI + stable integration boundaries | Later/final integration; not ready |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
 
-`feat/react-web-backend-integration` covers login/register, portfolio
-management, risk analysis, analysis/report history, Historical Scenario,
-Allocation, and Combined simulations, and Simulation History. It explicitly
-excludes AI/chat integration and does not assume placeholder AI APIs or fake AI
-responses. `feat/react-web-ai-integration` remains separate and begins only
-after the backend AI Agent exists.
+The completed `feat/react-web-backend-integration` workstream covers
+login/register, portfolio management, risk analysis, analysis/report history,
+Historical Scenario, Allocation and Combined simulations, Simulation History,
+and the real Dashboard composition for the customer/investor React web
+application. It explicitly excludes AI/chat and Admin integration.
+`feat/react-web-ai-integration` remains separate and begins only after the
+backend AI Agent exists.
 
 ---
 
@@ -1655,6 +1662,91 @@ within one process.
 
 ---
 
+# Completed Customer React Web Integration
+
+## `feat/react-web-backend-integration`
+
+**Status:** Completed and merged into `develop`
+
+This workstream connected Aura's existing non-AI customer/investor React web
+application to the completed FastAPI and PostgreSQL capabilities. It did not
+integrate the separate Admin frontend or add Admin roles or APIs.
+
+### Completed Integration
+
+- Added a centralized fetch-based React API client, structured errors,
+  environment-driven API origin, and TypeScript contracts derived from the
+  existing backend contracts.
+- Added an explicit environment-driven FastAPI CORS allowlist without changing
+  backend financial formulas, schemas, models, migrations, or feature APIs.
+- Integrated registration, login, `/api/auth/me`, Bearer JWT requests,
+  `sessionStorage` token persistence, protected routes, frontend logout, and
+  401-only session invalidation.
+- Integrated real portfolio list, creation, detail, rename, complete ordered
+  symbol/weight replacement, duplication, deletion, and PostgreSQL
+  persistence.
+- Connected Analyze Portfolio to the existing report-creation endpoint and
+  rendered real backend analytics, report history, and immutable report
+  detail.
+- Integrated Historical Scenario, Allocation Change, Combined Simulation,
+  automatic Simulation History persistence, and immutable history detail.
+- Composed the Dashboard from real portfolio/detail/latest-report data,
+  including backend risk, return, drawdown, risk-driver, allocation, and
+  periodic-return information. Holdings count replaces unsupported portfolio
+  dollar valuation, and no fabricated financial values are shown.
+- Removed production fallback-to-mock behavior and browser-local authority for
+  domain records. AI, Watchlist, Search, Notifications, mutable account data,
+  and other unsupported capabilities remain truthful and deferred.
+
+Backend analytics and simulation results remain the financial source of truth.
+The approved Dashboard risk-score adjustment only rounds the backend-returned
+value for presentation.
+
+### Final Verification
+
+Phase 9 exercised real React → FastAPI → PostgreSQL registration/login,
+session restoration, protected routes, portfolio persistence, report
+creation/history/detail and immutability, Dashboard composition, all three
+simulation modes, Simulation History/detail, logout/re-login persistence, and
+expected authentication/error behavior.
+
+- Exactly 20 Aura HTTP operations remained.
+- React production build, focused API regressions, targeted
+  reporting/simulation tests, Python compilation, FastAPI import, health,
+  CORS preflight, `npm ls`, `pip check`, and Git diff checks passed.
+- Analytics regression: 820 passed.
+- Broad safe backend regression: 2,058 passed and 52 skipped.
+- No dependency drift, committed credentials/secrets, or unexpected backend
+  financial, schema, model, or migration changes were found.
+- Final manual browser checks passed for portfolio rename, portfolio
+  duplicate/delete, and Analytics custom date inputs.
+- Live verification preserved 95,488 `market_data` rows across 17 symbols.
+
+One clearly synthetic account remains in the test database because no safe
+user-deletion endpoint exists:
+`phase9-e2e-20260830-001@example.com`. This is test-environment residue, not a
+production feature defect.
+
+### Boundary and Remaining Work
+
+The customer web application is integrated for authentication, portfolios,
+holdings, analysis, reports and report detail, all three simulation modes,
+Simulation History/detail, and the Dashboard. The full Aura product is not
+complete.
+
+The Backend AI Agent and React AI integration remain the next core roadmap
+stages. Watchlist persistence, customer quote/live market-data APIs, asset
+search/catalogue support, shares/invested amounts, live portfolio valuation,
+editable profiles, password management, global Search, Notifications,
+support/contact APIs, report actions, and global report/simulation history
+optimization remain future or optional capabilities.
+
+Aura's Admin frontend is a separate future workstream. There is no completed
+Admin role/authorization system, Admin-specific backend API, or Admin
+web/backend integration.
+
+---
+
 # Recommended Backend Development and Dependency Flow
 
 ```text
@@ -1694,9 +1786,9 @@ AnalysisService + Portfolio API + Analysis persistence
                 ↓
 ✅ feat/backend-market-data-scheduler
                 ↓
-feat/react-web-backend-integration  ← recommended next; non-AI integration
+✅ feat/react-web-backend-integration
                 ↓
-feat/backend-ai-agent
+feat/backend-ai-agent  ← recommended next
                 ↓
 feat/react-web-ai-integration
                 ↓
@@ -1713,15 +1805,15 @@ dependency for later services, APIs, reporting, simulations, and AI
 integration. AnalysisService, the Portfolio API, analysis reporting,
 authentication, all three core simulator modes, Simulation History, and
 Historical Market-Data Backfill and Historical Scenario Catalogue are
-complete, as is the Market-Data Scheduler. Non-AI React/backend integration is
-the recommended next workstream, followed by the backend AI Agent, React AI
-integration, final backend/API integration, and deployment.
+complete, as are the Market-Data Scheduler and non-AI React/backend
+integration. The backend AI Agent is the recommended next workstream, followed
+by React AI integration, final backend/API integration, and deployment.
 
 This sequence is the approved development order, not a hard dependency claim.
-The scheduler is not a technical prerequisite for the AI Agent. Non-AI React
-integration is intentionally earlier so the team can validate authentication,
-API communication and contracts, CORS, loading/error behavior, real portfolio
-workflows, analysis/report display, and simulation flows before adding AI.
+The scheduler is not a technical prerequisite for the AI Agent. The completed
+non-AI React integration validates authentication, API communication and
+contracts, CORS, loading/error behavior, real portfolio workflows,
+analysis/report display, and simulation flows before AI is added.
 
 ---
 
@@ -1729,17 +1821,19 @@ workflows, analysis/report display, and simulation flows before adding AI.
 
 The analytics, schema, database, historical market-data, AnalysisService,
 Portfolio API, analysis-reporting, authentication, all three simulator modes,
-Simulation History, Historical Market-Data Backfill, and Historical Scenario
-Catalogue and Market-Data Scheduler workstreams are complete. The recommended
-next workstream is the planned, unimplemented:
+Simulation History, Historical Market-Data Backfill, Historical Scenario
+Catalogue, Market-Data Scheduler, and customer React/backend integration
+workstreams are complete. The recommended next workstream is the planned,
+unimplemented:
 
 ```text
-feat/react-web-backend-integration
+feat/backend-ai-agent
 ```
 
-It connects the customer React web frontend to completed non-AI
-authentication, portfolio, analysis/report, simulation, and Simulation History
-APIs. It explicitly excludes AI/chat integration and does not assume
+It adds the backend AI capability after the customer React web frontend has
+been connected to the completed non-AI authentication, portfolio,
+analysis/report, simulation, and Simulation History APIs. The completed React
+integration intentionally excludes AI/chat integration and does not use
 placeholder AI APIs or fake AI responses.
 
 The approved follow-on order is:
@@ -1747,9 +1841,9 @@ The approved follow-on order is:
 ```text
 ✅ feat/backend-market-data-scheduler
         ↓
-feat/react-web-backend-integration   # non-AI product workflows
+✅ feat/react-web-backend-integration  # completed non-AI product workflows
         ↓
-feat/backend-ai-agent
+feat/backend-ai-agent                 # recommended next
         ↓
 feat/react-web-ai-integration
         ↓
@@ -1783,8 +1877,8 @@ develop
 ├── feat/backend-market-data-historical-backfill  # completed
 ├── feat/backend-historical-scenario-catalog      # completed
 ├── feat/backend-market-data-scheduler            # completed
-├── feat/react-web-backend-integration             # recommended next; non-AI
-├── feat/backend-ai-agent                         # planned
+├── feat/react-web-backend-integration             # completed; non-AI
+├── feat/backend-ai-agent                         # recommended next; planned
 ├── feat/react-web-ai-integration                  # planned after backend AI
 ├── feat/backend-api-integration                  # later final integration
 ├── feat/backend-deployment                       # later
@@ -1813,7 +1907,7 @@ develop
 ├── feat/frontend-portfolio-management
 ├── feat/frontend-risk-report
 ├── feat/frontend-simulation
-├── feat/react-web-backend-integration  # planned non-AI integration
+├── feat/react-web-backend-integration  # completed non-AI integration
 └── feat/react-web-ai-integration       # planned after backend AI Agent
 ```
 
@@ -1913,7 +2007,7 @@ Documentation changes should not be added to `main` directly.
 
 ```text
 ✅ feat/backend-market-data-scheduler            # completed
-feat/react-web-backend-integration              # recommended next; excludes AI/chat
+✅ feat/react-web-backend-integration             # completed; excludes AI/chat
 ```
 
 ## AI Integration Stage
@@ -1939,16 +2033,16 @@ develop → main release Pull Request
 With analytics, schemas, the market-data pipeline, the database foundation,
 market-data storage, AnalysisService, the Portfolio API, analysis reporting,
 authentication, all three core simulator modes, Simulation History, and
-Historical Market-Data Backfill, Historical Scenario Catalogue, and the
-Market-Data Scheduler are merged into `develop`.
+Historical Market-Data Backfill, Historical Scenario Catalogue, the
+Market-Data Scheduler, and customer React/backend integration are merged into
+`develop`.
 
 The recommended next workstream is the planned, unimplemented:
 
 ```text
-feat/react-web-backend-integration
+feat/backend-ai-agent
 ```
 
-It precedes the backend AI Agent, React AI integration, final backend/API
-integration, and deployment. This is project-management order rather than a
-new technical dependency for AI. Do not treat any of these follow-on
-workstreams as completed.
+It is followed by React AI integration, final backend/API integration, and
+deployment. This is project-management order rather than a new technical
+dependency. Do not treat any of these follow-on workstreams as completed.

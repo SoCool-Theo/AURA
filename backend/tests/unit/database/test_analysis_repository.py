@@ -114,6 +114,75 @@ def test_get_existing_and_missing_analysis() -> None:
     assert repository.get_by_id(uuid4()) is None
 
 
+def test_delete_existing_analysis_without_owning_transaction() -> None:
+    session = MagicMock(spec=Session)
+    analysis_id = uuid4()
+    unrelated = Analysis(
+        id=uuid4(),
+        portfolio_id=uuid4(),
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 12, 31),
+        schema_version="1.0",
+        result_snapshot={"portfolio_name": "Unrelated"},
+    )
+    existing = Analysis(
+        id=analysis_id,
+        portfolio_id=uuid4(),
+        start_date=date(2025, 1, 1),
+        end_date=date(2025, 12, 31),
+        schema_version="1.0",
+        result_snapshot=_snapshot(),
+    )
+    original_snapshot = copy.deepcopy(existing.result_snapshot)
+    session.get.return_value = existing
+
+    result = AnalysisRepository(session).delete(analysis_id)
+
+    assert result is True
+    session.get.assert_called_once_with(Analysis, analysis_id)
+    session.delete.assert_called_once_with(existing)
+    assert session.delete.call_args.args[0] is not unrelated
+    session.flush.assert_called_once_with()
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+    assert existing.result_snapshot == original_snapshot
+
+
+def test_delete_missing_analysis_returns_false_without_mutation() -> None:
+    session = MagicMock(spec=Session)
+    analysis_id = uuid4()
+    session.get.return_value = None
+
+    result = AnalysisRepository(session).delete(analysis_id)
+
+    assert result is False
+    session.get.assert_called_once_with(Analysis, analysis_id)
+    session.delete.assert_not_called()
+    session.flush.assert_not_called()
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+
+
+def test_delete_failure_propagates_without_owning_transaction() -> None:
+    session = MagicMock(spec=Session)
+    analysis_id = uuid4()
+    analysis = MagicMock(spec=Analysis)
+    failure = SQLAlchemyError("analysis delete failed")
+    session.get.return_value = analysis
+    session.flush.side_effect = failure
+
+    with pytest.raises(SQLAlchemyError) as raised:
+        AnalysisRepository(session).delete(analysis_id)
+
+    assert raised.value is failure
+    session.delete.assert_called_once_with(analysis)
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+
+
 def test_list_for_portfolio_filters_and_orders_newest_first() -> None:
     session = MagicMock(spec=Session)
     expected = [MagicMock(spec=Analysis), MagicMock(spec=Analysis)]

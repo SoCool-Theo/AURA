@@ -6,7 +6,7 @@ const SUGGESTED_PAGES = [
   { path: 'portfolios', icon: 'portfolios', title: 'Portfolios', description: 'Manage your portfolios' },
   { path: 'analytics', icon: 'analytics', title: 'Analytics', description: 'Analyze portfolio risk' },
   { path: 'simulations', icon: 'simulations', title: 'Simulations', description: 'Run what-if scenarios' },
-  { path: 'assistant', icon: 'assistant', title: 'AI Assistant', description: 'Ask Aura for insights' },
+  { path: 'assistant', icon: 'assistant', title: 'AI Assistant', description: 'Preview the deferred AI experience' },
   { path: 'reports', icon: 'reports', title: 'Reports', description: 'View your reports' },
 ] as const;
 
@@ -40,15 +40,7 @@ export function NotFoundPage() {
           </button>
         </div>
 
-        <p className={styles.supportLine}>
-          Need help?{' '}
-          <button
-            type="button"
-            onClick={() => alert('Aura support contact options will be connected in a later phase.')}
-          >
-            Contact support
-          </button>
-        </p>
+        <p className={styles.supportLine}>Support contact options are not available yet.</p>
       </section>
 
       <section className={styles.suggestions} aria-labelledby="suggested-pages-title">
@@ -64,7 +56,7 @@ export function NotFoundPage() {
       </section>
 
       <footer className={styles.notFoundFooter}>
-        <p>AURA – AI-Powered Portfolio Risk Intelligence</p>
+        <p>AURA – Portfolio Risk Intelligence</p>
         <small>© 2026 Aura. All rights reserved.</small>
       </footer>
     </div>
