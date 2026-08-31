@@ -85,3 +85,12 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 
+# ==========================================
+# SECRETS AND ENVIRONMENT VARIABLES
+# ==========================================
+
+.env
+.env.*
+!.env.example
+
+.local-secrets/

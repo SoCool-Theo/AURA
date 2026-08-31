@@ -1,9 +1,9 @@
 import re
 from datetime import time
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import PositiveInt, PostgresDsn, SecretStr, field_validator
+from pydantic import Field, PositiveInt, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: PositiveInt = 30
     market_data_update_time_utc: time = time(hour=2)
+    openai_api_key: SecretStr | None = None
+    aura_llm_model: str | None = None
+    aura_llm_timeout_seconds: Annotated[float, Field(gt=0, le=120)] = 30.0
+    aura_llm_max_output_tokens: Annotated[int, Field(ge=1, le=1500)] = 1200
 
     @field_validator("database_url")
     @classmethod
@@ -51,6 +55,13 @@ class Settings(BaseSettings):
         raise ValueError(
             "MARKET_DATA_UPDATE_TIME_UTC must use strict HH:MM format"
         )
+
+    @field_validator("aura_llm_model", mode="before")
+    @classmethod
+    def normalize_aura_llm_model(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
 
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,
