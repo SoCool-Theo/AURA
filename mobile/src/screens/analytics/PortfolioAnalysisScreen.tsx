@@ -1,34 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
-import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { SectionHeader } from '../../components/ui/SectionHeader';
-import { Tag } from '../../components/ui/Tag';
-
-import { RiskGauge } from '../../components/charts/RiskGauge';
+import { WebKpiCard } from '../../components/ui/WebKpiCard';
+import { DateRangeSelector, type DateRange } from '../../components/ui/DateRangeSelector';
+import { RiskBadge } from '../../components/ui/RiskBadge';
 import { AssetRelationshipBars } from '../../components/charts/AssetRelationshipBars';
-import { RiskDriverCard } from '../../components/portfolio/RiskDriverCard';
-
+import { DonutAllocationChart } from '../../components/charts/DonutAllocationChart';
 import { useAppData } from '../../hooks/useAppData';
 import { demoAnalyzePortfolio } from '../../utils/localCalculations';
-
 import { colors, spacing } from '../../theme/theme';
 import { formatPercent } from '../../utils/formatting';
 
 export function PortfolioAnalysisScreen({ route }: { route: any }) {
   const { portfolios, activePortfolio, saveAnalysisReport } = useAppData();
+  const [range, setRange] = useState<DateRange>('1Y');
   const portfolioId = route.params?.portfolioId ?? activePortfolio?.id;
   const portfolio = portfolios.find((item) => item.id === portfolioId);
 
   if (!portfolio) {
     return (
       <SafeAreaView style={styles.safe}>
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>Select a portfolio to view analytics.</Text>
-        </View>
+        <View style={styles.empty}><Text style={styles.emptyText}>Select a portfolio to view analytics.</Text></View>
       </SafeAreaView>
     );
   }
@@ -38,199 +36,124 @@ export function PortfolioAnalysisScreen({ route }: { route: any }) {
 
   async function saveReport() {
     const report = await saveAnalysisReport(selectedPortfolio.id);
-    if (report) {
-      Alert.alert(
-        'Report saved',
-        'This local analysis snapshot is now available in Reports.'
-      );
-    }
+    if (report) Alert.alert('Report saved', 'This analysis snapshot is now available in Reports.');
   }
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <PageTitle
-          eyebrow="PORTFOLIO ANALYSIS"
-          title={selectedPortfolio.name}
-          subtitle="Understand the main signals behind your portfolio risk."
-        />
+        <PageTitle eyebrow="PORTFOLIO ANALYSIS" title="Analytics" subtitle={`${selectedPortfolio.name} · detailed risk intelligence`} right={<RiskBadge level={analysis.riskLevel} />} />
 
-        <Card style={styles.riskSummary}>
-          <View style={styles.gaugeColumn}>
-            <Text style={styles.overline}>OVERALL RISK</Text>
-            <RiskGauge score={analysis.riskScore} size={126} strokeWidth={10} />
-            <Tag
-              label={analysis.riskLevel}
-              tone={
-                analysis.riskScore >= 70
-                  ? 'danger'
-                  : analysis.riskScore >= 40
-                    ? 'warning'
-                    : 'success'
-              }
-            />
-          </View>
+        <Card style={styles.rangeCard}>
+          <View style={styles.rangeHeader}><Text style={styles.rangeTitle}>Analysis period</Text><Text style={styles.rangeMeta}>Display preview</Text></View>
+          <DateRangeSelector value={range} onChange={setRange} />
+        </Card>
 
-          <View style={styles.summaryDivider} />
+        <View style={styles.kpiGrid}>
+          <WebKpiCard icon="speedometer-outline" label="Risk Score" value={`${analysis.riskScore}/100`} meta={analysis.riskLevel} tone={analysis.riskScore >= 70 ? 'danger' : 'warning'} />
+          <WebKpiCard icon="pulse-outline" label="Volatility" value={formatPercent(analysis.volatility)} meta="Annualized" tone="warning" />
+          <WebKpiCard icon="analytics-outline" label="Sharpe Ratio" value={analysis.sharpeRatio.toFixed(2)} meta="Risk-adjusted return" tone="blue" />
+          <WebKpiCard icon="trending-down-outline" label="Max Drawdown" value={formatPercent(analysis.maxDrawdown)} meta="Historical downside" tone="danger" />
+        </View>
 
-          <View style={styles.summaryMetrics}>
-            <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Volatility</Text>
-              <Text style={styles.metricValue}>{formatPercent(analysis.volatility)}</Text>
-            </View>
-
-            <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Sharpe ratio</Text>
-              <Text style={styles.metricValue}>{analysis.sharpeRatio.toFixed(2)}</Text>
-            </View>
-
-            <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Max drawdown</Text>
-              <Text style={[styles.metricValue, { color: colors.danger }]}>
-                {formatPercent(analysis.maxDrawdown)}
-              </Text>
-            </View>
-
-            <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Diversification</Text>
-              <Text style={styles.metricValue}>{analysis.diversification}</Text>
-            </View>
+        <SectionHeader title="Analysis Summary" />
+        <Card style={styles.summaryCard}>
+          <View style={styles.summaryIcon}><Ionicons name="shield-checkmark-outline" size={24} color={colors.primary} /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.summaryTitle}>{analysis.riskLevel}</Text>
+            <Text style={styles.summaryText}>This portfolio combines {selectedPortfolio.holdings.length} holdings with {analysis.diversification.toLowerCase()} diversification. Review the risk drivers and asset relationships below for the main contributors.</Text>
           </View>
         </Card>
 
-        <SectionHeader title="Main risk drivers" />
+        <SectionHeader title="Risk Drivers" />
+        <Card style={styles.tableCard}>
+          <View style={styles.tableHeader}><Text style={[styles.tableHeaderText, { flex: 0.7 }]}>Asset</Text><Text style={[styles.tableHeaderText, { flex: 0.6 }]}>Level</Text><Text style={[styles.tableHeaderText, { flex: 1.7 }]}>Explanation</Text></View>
+          {analysis.topRiskDrivers.map((driver, index) => (
+            <View key={driver.symbol} style={[styles.driverRow, index > 0 && styles.borderTop]}>
+              <View style={{ flex: 0.7 }}><Text style={styles.symbol}>{driver.symbol}</Text></View>
+              <View style={{ flex: 0.6 }}><RiskBadge level={driver.level} /></View>
+              <Text style={styles.driverText}>{driver.explanation}</Text>
+            </View>
+          ))}
+        </Card>
 
-        <View style={styles.driverList}>
-          {analysis.topRiskDrivers.map((driver) => (
-            <RiskDriverCard key={driver.symbol} driver={driver} />
+        <SectionHeader title="Asset Relationships" />
+        <Card>
+          <Text style={styles.cardTitle}>Correlation relationships</Text>
+          <Text style={styles.cardText}>A clearer mobile alternative to the web heatmap. The final values will come from backend market data.</Text>
+          <View style={{ marginTop: spacing.lg }}><AssetRelationshipBars holdings={selectedPortfolio.holdings} /></View>
+        </Card>
+
+        <SectionHeader title="Diversification" />
+        <Card style={styles.diversificationCard}>
+          <View style={styles.diversificationScore}>
+            <Text style={styles.overline}>STATUS</Text>
+            <Text style={styles.diversificationValue}>{analysis.diversification}</Text>
+            <Text style={styles.diversificationText}>Diversification reflects the mix of weights and risk characteristics in this demo frontend.</Text>
+          </View>
+          <DonutAllocationChart data={selectedPortfolio.holdings.map((holding) => ({ symbol: holding.symbol, weight: holding.weight }))} />
+        </Card>
+
+        <SectionHeader title="Individual Asset Analysis" />
+        <View style={styles.assetList}>
+          {selectedPortfolio.holdings.map((holding) => (
+            <Card key={holding.symbol} style={styles.assetCard}>
+              <View style={styles.assetTop}>
+                <View style={styles.assetSymbolBox}><Text style={styles.assetSymbol}>{holding.symbol}</Text></View>
+                <View style={{ flex: 1 }}><Text style={styles.assetName}>{holding.name}</Text><Text style={styles.assetMeta}>{holding.weight.toFixed(1)}% allocation</Text></View>
+                <RiskBadge level={holding.risk} />
+              </View>
+              <View style={styles.assetMetrics}>
+                <View><Text style={styles.assetMetricLabel}>Weight</Text><Text style={styles.assetMetricValue}>{holding.weight.toFixed(1)}%</Text></View>
+                <View><Text style={styles.assetMetricLabel}>Risk</Text><Text style={styles.assetMetricValue}>{holding.risk}</Text></View>
+                <View><Text style={styles.assetMetricLabel}>Contribution</Text><Text style={styles.assetMetricValue}>{holding.weight >= 30 ? 'High' : holding.weight >= 15 ? 'Medium' : 'Lower'}</Text></View>
+              </View>
+            </Card>
           ))}
         </View>
 
-        <SectionHeader title="Asset relationships" />
-
-        <Card style={styles.relationshipCard}>
-          <View style={styles.relationshipHeader}>
-            <View>
-              <Text style={styles.relationshipTitle}>Correlation pairs</Text>
-              <Text style={styles.relationshipSubtitle}>
-                Easier to read on mobile than a heatmap.
-              </Text>
-            </View>
-            <Tag label="DEMO" tone="primary" />
-          </View>
-
-          <AssetRelationshipBars holdings={selectedPortfolio.holdings} />
-        </Card>
-
-        <SectionHeader title="What this means" />
-
-        <Card style={styles.explanationCard}>
-          <Text style={styles.explanationTitle}>Diversification context</Text>
-          <Text style={styles.explanationText}>
-            Higher positive correlation means two assets have historically tended to move in the same direction. Lower or negative relationships can provide more diversification. Production values will be calculated from backend historical market data.
-          </Text>
-        </Card>
-
-        <Button
-          title="Save report snapshot"
-          onPress={saveReport}
-          style={{ marginTop: spacing.xl }}
-        />
+        <Button title="Save Analysis Report" onPress={saveReport} style={{ marginTop: spacing.xl }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  content: {
-    padding: spacing.lg,
-    paddingBottom: 100
-  },
-  riskSummary: {
-    marginTop: spacing.xl,
-    flexDirection: 'row',
-    gap: spacing.lg,
-    alignItems: 'stretch'
-  },
-  gaugeColumn: {
-    width: 142,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm
-  },
-  overline: {
-    color: colors.muted,
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 1
-  },
-  summaryDivider: {
-    width: 1,
-    backgroundColor: colors.borderSoft
-  },
-  summaryMetrics: {
-    flex: 1,
-    justifyContent: 'space-around'
-  },
-  metricRow: {
-    gap: 3,
-    paddingVertical: 5
-  },
-  metricLabel: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: '700'
-  },
-  metricValue: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '900'
-  },
-  driverList: {
-    gap: spacing.md
-  },
-  relationshipCard: {
-    gap: spacing.lg
-  },
-  relationshipHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing.md
-  },
-  relationshipTitle: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '900'
-  },
-  relationshipSubtitle: {
-    color: colors.muted,
-    fontSize: 10,
-    marginTop: 4
-  },
-  explanationCard: {
-    gap: spacing.sm
-  },
-  explanationTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '900'
-  },
-  explanationText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    lineHeight: 19
-  },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    color: colors.textSecondary
-  }
+  safe: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.lg, paddingBottom: 100 },
+  rangeCard: { marginTop: spacing.xl, gap: spacing.md },
+  rangeHeader: { flexDirection: 'row', justifyContent: 'space-between' },
+  rangeTitle: { color: colors.text, fontSize: 12, fontWeight: '900' },
+  rangeMeta: { color: colors.muted, fontSize: 9 },
+  kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.md, marginTop: spacing.md },
+  summaryCard: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
+  summaryIcon: { width: 48, height: 48, borderRadius: 15, backgroundColor: colors.cyanBackground, alignItems: 'center', justifyContent: 'center' },
+  summaryTitle: { color: colors.text, fontSize: 16, fontWeight: '900' },
+  summaryText: { color: colors.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  tableCard: { paddingVertical: spacing.sm },
+  tableHeader: { flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.sm },
+  tableHeaderText: { color: colors.muted, fontSize: 8, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.7 },
+  driverRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', paddingVertical: spacing.md },
+  borderTop: { borderTopWidth: 1, borderTopColor: colors.borderSoft },
+  symbol: { color: colors.primary, fontSize: 11, fontWeight: '900' },
+  driverText: { color: colors.textSecondary, fontSize: 10, lineHeight: 15, flex: 1.7 },
+  cardTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  cardText: { color: colors.textSecondary, fontSize: 11, lineHeight: 17, marginTop: 4 },
+  diversificationCard: { gap: spacing.lg },
+  diversificationScore: { gap: 4 },
+  overline: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  diversificationValue: { color: colors.text, fontSize: 22, fontWeight: '900' },
+  diversificationText: { color: colors.textSecondary, fontSize: 11, lineHeight: 17 },
+  assetList: { gap: spacing.md },
+  assetCard: { gap: spacing.md },
+  assetTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  assetSymbolBox: { minWidth: 52, paddingHorizontal: 8, height: 42, borderRadius: 13, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  assetSymbol: { color: colors.primary, fontSize: 10, fontWeight: '900' },
+  assetName: { color: colors.text, fontSize: 13, fontWeight: '900' },
+  assetMeta: { color: colors.muted, fontSize: 10, marginTop: 3 },
+  assetMetrics: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: colors.borderSoft, paddingTop: spacing.md },
+  assetMetricLabel: { color: colors.muted, fontSize: 9 },
+  assetMetricValue: { color: colors.text, fontSize: 11, fontWeight: '900', marginTop: 3 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyText: { color: colors.textSecondary }
 });

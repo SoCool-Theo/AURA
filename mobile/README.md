@@ -1,77 +1,53 @@
-# Aura Mobile – All Frontend Features
+# Aura Mobile — Web Parity Complete Frontend
 
-This React Native + TypeScript build keeps Aura's agreed mobile `src/` architecture and contains the customer-facing frontend features from the Aura web application, adapted for phone use.
+React Native + TypeScript mobile application adapted from Aura's customer React web product structure and visual system.
 
-## Main navigation
+## Included
+
+- Login / Register
+- Home / Dashboard
+- Portfolio list
+- Portfolio detail with Overview / Holdings / Performance / Activity tabs
+- Create Portfolio
+- Add Asset
+- Edit Holdings
+- Analytics
+- Historical Scenario simulation
+- Allocation Change simulation
+- Combined Simulation
+- Simulation Results
+- Simulation History
+- AI Assistant UI
+- Reports
+- Report Detail
+- Watchlist
+- Learn
+- Settings
+- Dark mode / Light mode
+- Local display name
+- Hide portfolio values
+- Local persistence for frontend testing
+
+## Mobile navigation
 
 ```text
 Home | Portfolio | Simulate | AI | More
 ```
 
-`More` contains:
-
-```text
-Analytics
-Reports
-Watchlist
-Learn
-Settings
-```
-
-Nested Portfolio, Simulation, Report, Watchlist, Learn and Settings screens retain a Home shortcut in the header.
-
-## Included frontend functionality
-
-- Onboarding
-- Local/mock Login and Register
-- Home dashboard and quick shortcuts
-- Portfolio create/open/rename/duplicate/delete
-- Add assets and invested amounts
-- Edit/remove holdings
-- Automatic local weight recalculation
-- Demo portfolio analysis
-- Save/view/delete local report snapshots
-- Historical Scenario simulation
-- Allocation Change simulation
-- Combined Simulation
-- Simulation Result and History
-- Redesigned AI Assistant UI with no fake AI answers
-- Watchlist search/add/remove with local persistence
-- Learn search/category filters, lesson detail and completion progress
-- Settings, reset local demo data and sign out
-
-## Web-to-mobile feature parity
-
-The mobile frontend now includes the same main customer areas documented for the web app:
-
-```text
-Dashboard
-Portfolios
-Analytics
-Simulations
-AI Assistant
-Reports
-Watchlist
-Learn
-Settings
-```
-
-It also includes Login/Register and Report Detail.
-
-The layouts are adapted for mobile rather than copied from the web.
-
-## Backend boundary
-
-The local calculations in `src/utils/localCalculations.ts` are demo-only so the complete frontend can be tested without FastAPI. They are not Aura's production analytics.
-
-When FastAPI integration is enabled, the backend remains authoritative for authentication, ownership, official analytics, simulations, reports, history, market data, and future AI explanations.
+More contains Analytics, Reports, Watchlist, Learn, and Settings.
 
 ## Run
 
 ```bash
-cd "/Users/kelvin/Downloads/Aura test/AURA/mobile"
+cd mobile
 npm install
 npx expo install --fix
 npm run typecheck
 npx expo start -c
 ```
+
+## Important
+
+This package is frontend-complete for mobile testing. The production Aura backend remains the source of truth for authentication, portfolio ownership, financial analytics, reports, simulations, market data, and future AI explanations.
+
+See `WEB_MOBILE_PARITY.md` for the web-to-mobile mapping.

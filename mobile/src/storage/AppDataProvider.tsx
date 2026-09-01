@@ -38,6 +38,7 @@ type ContextValue = {
   learnProgress: Record<string, boolean>;
   setActivePortfolio: (id: string) => Promise<void>;
   createPortfolio: (name: string) => Promise<Portfolio>;
+  createPortfolioWithHoldings: (name: string, holdings: Holding[]) => Promise<Portfolio>;
   renamePortfolio: (id: string, name: string) => Promise<void>;
   duplicatePortfolio: (id: string) => Promise<Portfolio | null>;
   deletePortfolio: (id: string) => Promise<void>;
@@ -116,6 +117,19 @@ export function AppDataProvider({ children }: PropsWithChildren) {
 
   async function createPortfolio(name: string) {
     const portfolio = createEmptyPortfolio(name);
+    await commitPortfolios([portfolio, ...portfolios]);
+    await setActivePortfolio(portfolio.id);
+    return portfolio;
+  }
+
+  async function createPortfolioWithHoldings(name: string, holdings: Holding[]) {
+    const base = createEmptyPortfolio(name);
+    const balanced = rebalanceByValue(holdings);
+    const portfolio: Portfolio = {
+      ...base,
+      holdings: balanced,
+      totalValue: balanced.reduce((sum, item) => sum + item.value, 0)
+    };
     await commitPortfolios([portfolio, ...portfolios]);
     await setActivePortfolio(portfolio.id);
     return portfolio;
@@ -359,6 +373,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       learnProgress,
       setActivePortfolio,
       createPortfolio,
+      createPortfolioWithHoldings,
       renamePortfolio,
       duplicatePortfolio,
       deletePortfolio,
