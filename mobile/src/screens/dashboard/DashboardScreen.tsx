@@ -12,14 +12,12 @@ import { PortfolioPerformanceChart } from '../../components/charts/PortfolioPerf
 import { DonutAllocationChart } from '../../components/charts/DonutAllocationChart';
 import { RiskBadge } from '../../components/ui/RiskBadge';
 import { useAppData } from '../../hooks/useAppData';
-import { useAuth } from '../../auth/useAuth';
 import { usePreferences } from '../../preferences/usePreferences';
 import { demoAnalyzePortfolio } from '../../utils/localCalculations';
 import { colors, spacing } from '../../theme/theme';
 import { formatCurrency, formatPercent } from '../../utils/formatting';
 
 export function DashboardScreen({ navigation }: { navigation: any }) {
-  const { user } = useAuth();
   const { displayName, hidePortfolioValues } = usePreferences();
   const { activePortfolio, portfolios, setActivePortfolio } = useAppData();
   const [range, setRange] = useState<DateRange>('1Y');
@@ -39,7 +37,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
 
   const portfolio = activePortfolio;
   const analysis = demoAnalyzePortfolio(portfolio);
-  const firstName = (displayName || user?.name || 'Investor').split(' ')[0];
+  const firstName = (displayName || 'Investor').split(' ')[0];
   const showMoney = (value: number) => hidePortfolioValues ? '••••••' : formatCurrency(value);
 
   return (

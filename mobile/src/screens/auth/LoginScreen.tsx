@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { AuthStackParamList } from '../../navigation/navigationTypes';
+import { authenticationErrorMessage } from '../../auth/authErrors';
 import { useAuth } from '../../auth/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -21,17 +22,39 @@ const featureRows = [
 
 export function LoginScreen({ navigation }: Props) {
   const { signIn } = useAuth();
-  const [email, setEmail] = useState('demo@aura.app');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   async function submit() {
+    if (submittingRef.current) return;
+
+    const normalizedEmail = email.trim();
+    if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+      Alert.alert('Check your email', 'Enter a valid email address.');
+      return;
+    }
+    if (password.length < 8) {
+      Alert.alert('Check your password', 'Password must contain at least 8 characters.');
+      return;
+    }
+
+    submittingRef.current = true;
     try {
       setLoading(true);
-      await signIn(email, password);
+      await signIn({ email: normalizedEmail, password });
+      setPassword('');
     } catch (error) {
-      Alert.alert('Unable to sign in', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert(
+        'Unable to sign in',
+        authenticationErrorMessage(
+          error,
+          'Aura could not complete sign in. Please try again.'
+        )
+      );
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }
@@ -63,12 +86,12 @@ export function LoginScreen({ navigation }: Props) {
           <Text style={styles.formTitle}>Welcome back</Text>
           <Text style={styles.formText}>Sign in to continue to your Aura dashboard.</Text>
           <View style={styles.form}>
-            <Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-            <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry />
+            <Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" editable={!loading} />
+            <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry editable={!loading} />
             <Button title={loading ? 'Signing in…' : 'Sign in'} onPress={submit} disabled={loading} />
-            <Button title="Create an account" variant="secondary" onPress={() => navigation.navigate('Register')} />
+            <Button title="Create an account" variant="secondary" onPress={() => navigation.navigate('Register')} disabled={loading} />
           </View>
-          <Text style={styles.note}>Demo mode works without the backend. Production authentication will use the shared FastAPI API.</Text>
+          <Text style={styles.note}>Your Aura session is stored securely on this device.</Text>
         </Card>
       </ScrollView>
     </SafeAreaView>

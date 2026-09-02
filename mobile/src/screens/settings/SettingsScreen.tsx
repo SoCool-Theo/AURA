@@ -36,7 +36,7 @@ export function SettingsScreen() {
     resetPreferences
   } = usePreferences();
 
-  const resolvedName = displayName || user?.name || 'Aura Investor';
+  const resolvedName = displayName || 'Aura Investor';
   const [editingProfile, setEditingProfile] = useState(false);
   const [draftName, setDraftName] = useState(resolvedName);
 
@@ -106,7 +106,7 @@ export function SettingsScreen() {
             <Text style={styles.name}>{resolvedName}</Text>
             <Text style={styles.email}>{user?.email}</Text>
             <Text style={styles.helper}>
-              Display name is stored locally in this frontend build.
+              Display name is stored only on this device and is not part of your backend account.
             </Text>
           </View>
 

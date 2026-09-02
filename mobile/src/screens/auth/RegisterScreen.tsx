@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { AuthStackParamList } from '../../navigation/navigationTypes';
+import { authenticationErrorMessage } from '../../auth/authErrors';
 import { useAuth } from '../../auth/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -14,18 +15,50 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
 export function RegisterScreen({ navigation }: Props) {
   const { register } = useAuth();
-  const [name, setName] = useState('Aura Investor');
-  const [email, setEmail] = useState('new@aura.app');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   async function submit() {
+    if (submittingRef.current) return;
+
+    const normalizedEmail = email.trim();
+    if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+      Alert.alert('Check your email', 'Enter a valid email address.');
+      return;
+    }
+    if (password.length < 8) {
+      Alert.alert('Check your password', 'Password must contain at least 8 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Check your passwords', 'Passwords do not match.');
+      return;
+    }
+
+    submittingRef.current = true;
     try {
       setLoading(true);
-      await register(name, email, password);
+      await register({ email: normalizedEmail, password });
+      setPassword('');
+      setConfirmPassword('');
+      Alert.alert(
+        'Account created',
+        'Your Aura account is ready. Sign in with your email and password to continue.',
+        [{ text: 'Continue to sign in', onPress: () => navigation.goBack() }]
+      );
     } catch (error) {
-      Alert.alert('Unable to register', error instanceof Error ? error.message : 'Please try again.');
+      Alert.alert(
+        'Unable to register',
+        authenticationErrorMessage(
+          error,
+          'Aura could not create the account. Please try again.'
+        )
+      );
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }
@@ -39,11 +72,11 @@ export function RegisterScreen({ navigation }: Props) {
 
         <Card style={styles.formCard}>
           <View style={styles.form}>
-            <Input label="Name" value={name} onChangeText={setName} autoCapitalize="words" />
-            <Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-            <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry />
+            <Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" editable={!loading} />
+            <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry editable={!loading} />
+            <Input label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry editable={!loading} />
             <Button title={loading ? 'Creating account…' : 'Create account'} onPress={submit} disabled={loading} />
-            <Button title="Back to sign in" variant="secondary" onPress={() => navigation.goBack()} />
+            <Button title="Back to sign in" variant="secondary" onPress={() => navigation.goBack()} disabled={loading} />
           </View>
         </Card>
 

@@ -5,6 +5,7 @@ import { useAuth } from '../auth/useAuth';
 import { useAppData } from '../hooks/useAppData';
 import { LoadingState } from '../components/ui/LoadingState';
 import { OnboardingScreen } from '../screens/onboarding/OnboardingScreen';
+import { SessionRestoreScreen } from '../screens/auth/SessionRestoreScreen';
 import { AuthNavigator } from './AuthNavigator';
 import { MainTabNavigator } from './MainTabNavigator';
 import type { RootStackParamList } from './navigationTypes';
@@ -13,7 +14,12 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const ONBOARDING_KEY = 'aura_onboarding_complete';
 
 export function RootNavigator() {
-  const { user, isLoading: authLoading } = useAuth();
+  const {
+    status: authStatus,
+    sessionError,
+    retrySessionRestore,
+    signOut
+  } = useAuth();
   const { loading: appDataLoading } = useAppData();
   const [checked, setChecked] = useState(false);
   const [onboarded, setOnboarded] = useState(false);
@@ -25,8 +31,18 @@ export function RootNavigator() {
     });
   }, []);
 
-  if (authLoading || appDataLoading || !checked) {
+  if (authStatus === 'initializing' || appDataLoading || !checked) {
     return <LoadingState message="Starting Aura…" />;
+  }
+
+  if (authStatus === 'error') {
+    return (
+      <SessionRestoreScreen
+        message={sessionError ?? 'Aura could not verify your saved session.'}
+        onRetry={retrySessionRestore}
+        onSignOut={signOut}
+      />
+    );
   }
 
   return (
@@ -42,7 +58,7 @@ export function RootNavigator() {
             />
           )}
         </Stack.Screen>
-      ) : user ? (
+      ) : authStatus === 'authenticated' ? (
         <Stack.Screen name="Main" component={MainTabNavigator} />
       ) : (
         <Stack.Screen name="Auth" component={AuthNavigator} />
