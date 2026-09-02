@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Portfolio } from '../../types/portfolio';
+import type { DemoPortfolio as Portfolio } from '../../types/demo';
 import { Card } from '../ui/Card';
 import { RiskBadge } from '../ui/RiskBadge';
 import { colors, spacing } from '../../theme/theme';

@@ -1,7 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Portfolio, Holding } from '../types/portfolio';
-import type { ReportSnapshot } from '../types/report';
-import type { SimulationRecord } from '../types/simulation';
+import type {
+  DemoHolding as Holding,
+  DemoPortfolio as Portfolio,
+  DemoReportSnapshot as ReportSnapshot,
+  DemoSimulationRecord as SimulationRecord
+} from '../types/demo';
 import { portfoliosMock } from '../mocks/portfolios.mock';
 
 const PORTFOLIOS_KEY = 'aura_local_portfolios_v2';

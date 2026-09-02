@@ -1,4 +1,4 @@
-import type { PortfolioAnalysis } from '../types/analytics';
+import type { DemoPortfolioAnalysis as PortfolioAnalysis } from '../types/demo';
 
 export const analyticsMock: PortfolioAnalysis = {
   riskScore: 72,

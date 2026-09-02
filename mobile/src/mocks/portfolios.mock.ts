@@ -1,4 +1,4 @@
-import type { Portfolio } from '../types/portfolio';
+import type { DemoPortfolio as Portfolio } from '../types/demo';
 
 export const portfoliosMock: Portfolio[] = [
   {

@@ -1,19 +1,44 @@
-import { environment } from '../config/environment';
-import type { ReportSnapshot } from '../types/report';
-import { apiClient } from './apiClient';
+import type { ApiCallOptions, Uuid } from '../types/api';
+import type {
+  PortfolioReportListResponse,
+  PortfolioReportResponse
+} from '../types/report';
+import { apiRequest } from './apiClient';
+
+function reportsPath(portfolioId: Uuid): string {
+  return `/api/portfolios/${encodeURIComponent(portfolioId)}/reports`;
+}
 
 export const reportsApi = {
-  async list(portfolioId: string): Promise<ReportSnapshot[]> {
-    if (environment.useMocks) return [];
-    const response = await apiClient<{ items: ReportSnapshot[] }>(
-      `/api/portfolios/${portfolioId}/reports`
+  list(
+    portfolioId: Uuid,
+    options: ApiCallOptions = {}
+  ): Promise<PortfolioReportListResponse> {
+    return apiRequest<PortfolioReportListResponse>(
+      reportsPath(portfolioId),
+      options
     );
-    return response.items;
   },
 
-  async get(portfolioId: string, reportId: string): Promise<ReportSnapshot> {
-    return apiClient<ReportSnapshot>(
-      `/api/portfolios/${portfolioId}/reports/${reportId}`
+  get(
+    portfolioId: Uuid,
+    reportId: Uuid,
+    options: ApiCallOptions = {}
+  ): Promise<PortfolioReportResponse> {
+    return apiRequest<PortfolioReportResponse>(
+      `${reportsPath(portfolioId)}/${encodeURIComponent(reportId)}`,
+      options
+    );
+  },
+
+  delete(
+    portfolioId: Uuid,
+    reportId: Uuid,
+    options: ApiCallOptions = {}
+  ): Promise<void> {
+    return apiRequest<void>(
+      `${reportsPath(portfolioId)}/${encodeURIComponent(reportId)}`,
+      { ...options, method: 'DELETE', responseMode: 'none' }
     );
   }
 };

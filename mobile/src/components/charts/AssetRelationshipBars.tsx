@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { DimensionValue } from 'react-native';
-import type { Holding } from '../../types/portfolio';
+import type { DemoHolding as Holding } from '../../types/demo';
 import { colors, spacing } from '../../theme/theme';
 
 type Pair = {

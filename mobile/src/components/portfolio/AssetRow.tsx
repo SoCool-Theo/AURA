@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import type { Holding } from '../../types/portfolio';
+import type { DemoHolding as Holding } from '../../types/demo';
 import { RiskBadge } from '../ui/RiskBadge';
 import { colors, spacing } from '../../theme/theme';
 import { formatCurrency } from '../../utils/formatting';

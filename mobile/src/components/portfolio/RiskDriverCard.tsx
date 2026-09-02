@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import type { RiskDriver } from '../../types/analytics';
+import type { DemoRiskDriver as RiskDriver } from '../../types/demo';
 import { Card } from '../ui/Card';
 import { RiskBadge } from '../ui/RiskBadge';
 import { colors, spacing } from '../../theme/theme';

@@ -1,7 +1,12 @@
-import type { Portfolio } from '../types/portfolio';
-import type { PortfolioAnalysis } from '../types/analytics';
-import type { SimulationMetrics } from '../types/simulation';
+import type {
+  DemoPortfolio as Portfolio,
+  DemoPortfolioAnalysis as PortfolioAnalysis,
+  DemoSimulationMetrics as SimulationMetrics
+} from '../types/demo';
 import type { ScenarioDefinition } from '../mocks/scenarios.mock';
+
+// Temporary demo-only calculations for screens that have not reached their
+// integration phase. FastAPI remains the production financial authority.
 
 function holdingRiskValue(level: 'Low' | 'Medium' | 'High') {
   if (level === 'High') return 90;

@@ -1,7 +1,10 @@
 import React, { createContext, PropsWithChildren, useEffect, useMemo, useState } from 'react';
-import type { Portfolio, Holding } from '../types/portfolio';
-import type { ReportSnapshot } from '../types/report';
-import type { SimulationRecord } from '../types/simulation';
+import type {
+  DemoHolding as Holding,
+  DemoPortfolio as Portfolio,
+  DemoReportSnapshot as ReportSnapshot,
+  DemoSimulationRecord as SimulationRecord
+} from '../types/demo';
 import {
   clearLocalAuraData,
   createEmptyPortfolio,

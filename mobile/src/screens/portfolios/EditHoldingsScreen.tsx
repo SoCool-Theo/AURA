@@ -6,7 +6,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useAppData } from '../../hooks/useAppData';
-import type { Holding } from '../../types/portfolio';
+import type { DemoHolding as Holding } from '../../types/demo';
 import { colors, spacing, typography } from '../../theme/theme';
 
 export function EditHoldingsScreen({ route, navigation }: { route: any; navigation: any }) {

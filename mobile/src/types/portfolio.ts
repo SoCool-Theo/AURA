@@ -1,18 +1,45 @@
-export type Holding = {
+import type { IsoDateTime, Uuid } from './api';
+
+export type PortfolioHoldingInput = {
   symbol: string;
-  name: string;
   weight: number;
-  value: number;
-  risk: 'Low' | 'Medium' | 'High';
 };
 
-export type Portfolio = {
-  id: string;
+export type PortfolioCreateRequest = {
   name: string;
-  totalValue: number;
-  riskScore: number;
-  riskLevel: 'Low' | 'Moderate' | 'High';
-  annualizedReturn: number;
-  maxDrawdown: number;
-  holdings: Holding[];
+};
+
+export type PortfolioUpdateRequest = {
+  name: string;
+};
+
+export type PortfolioDuplicateRequest = {
+  name: string;
+};
+
+export type PortfolioHoldingsReplaceRequest = {
+  holdings: PortfolioHoldingInput[];
+};
+
+export type PortfolioHoldingResponse = PortfolioHoldingInput & {
+  position: number;
+};
+
+export type PortfolioResponse = {
+  id: Uuid;
+  name: string;
+  created_at: IsoDateTime;
+  updated_at: IsoDateTime;
+  holdings: PortfolioHoldingResponse[];
+};
+
+export type PortfolioSummaryResponse = {
+  id: Uuid;
+  name: string;
+  created_at: IsoDateTime;
+  updated_at: IsoDateTime;
+};
+
+export type PortfolioListResponse = {
+  portfolios: PortfolioSummaryResponse[];
 };

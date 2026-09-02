@@ -1,4 +1,4 @@
-import type { SimulationRecord } from '../types/simulation';
+import type { DemoSimulationRecord as SimulationRecord } from '../types/demo';
 
 export const simulationsMock: SimulationRecord[] = [
   {

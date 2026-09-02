@@ -9,7 +9,7 @@ import { Input } from '../../components/ui/Input';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { useAppData } from '../../hooks/useAppData';
 import { colors, spacing } from '../../theme/theme';
-import type { Holding } from '../../types/portfolio';
+import type { DemoHolding as Holding } from '../../types/demo';
 import { formatCurrency } from '../../utils/formatting';
 
 type DraftHolding = Omit<Holding, 'weight'> & { id: string };

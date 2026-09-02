@@ -1,10 +1,10 @@
 import React, { createContext, PropsWithChildren, useEffect, useMemo, useState } from 'react';
-import type { AuraUser } from '../types/auth';
-import { authApi } from '../api/authApi';
+import type { DemoAuraUser } from '../types/demo';
+import { demoAuthApi } from '../mocks/auth.mock';
 import { clearToken, getToken, saveToken } from './authStorage';
 
 type AuthContextValue = {
-  user: AuraUser | null;
+  user: DemoAuraUser | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
@@ -14,7 +14,7 @@ type AuthContextValue = {
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const [user, setUser] = useState<AuraUser | null>(null);
+  const [user, setUser] = useState<DemoAuraUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const token = await getToken();
       if (token) {
         try {
-          setUser(await authApi.me(token));
+          setUser(await demoAuthApi.me());
         } catch {
           await clearToken();
         }
@@ -35,12 +35,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     user,
     isLoading,
     signIn: async (email, password) => {
-      const result = await authApi.login(email, password);
+      const result = await demoAuthApi.login(email, password);
       await saveToken(result.accessToken);
       setUser(result.user);
     },
     register: async (name, email, password) => {
-      const result = await authApi.register(name, email, password);
+      const result = await demoAuthApi.register(name, email, password);
       await saveToken(result.accessToken);
       setUser(result.user);
     },
