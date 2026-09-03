@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     market_data_update_time_utc: time = time(hour=2)
 
     # AI / LLM configuration
+    aura_llm_provider: Literal["openai", "groq"] | None = None
     openai_api_key: SecretStr | None = None
+    groq_api_key: SecretStr | None = None
     aura_llm_model: str | None = None
     aura_llm_timeout_seconds: Annotated[
         float,
@@ -77,6 +79,13 @@ class Settings(BaseSettings):
     def normalize_aura_llm_model(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip() or None
+        return value
+
+    @field_validator("aura_llm_provider", mode="before")
+    @classmethod
+    def normalize_aura_llm_provider(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().casefold() or None
         return value
 
     @field_validator("cors_allowed_origins")

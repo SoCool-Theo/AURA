@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.agents.agent import AuraAgentContextUnavailableError, AuraAgentOutputError
+from app.agents.groq_provider import GroqProvider
 from app.agents.openai_provider import OpenAIProvider
 from app.agents.provider import (
     LLMProvider,
@@ -67,13 +68,21 @@ def _internal_error() -> HTTPException:
 
 def get_agent_provider() -> LLMProvider:
     """Create the configured provider only for AI explanation requests."""
-    api_key = settings.openai_api_key
+    provider_name = settings.aura_llm_provider
+    if provider_name is None or settings.aura_llm_model is None:
+        raise _provider_unavailable()
+
+    if provider_name == "openai":
+        api_key = settings.openai_api_key
+        provider_type = OpenAIProvider
+    else:
+        api_key = settings.groq_api_key
+        provider_type = GroqProvider
+
     if api_key is None or not api_key.get_secret_value().strip():
         raise _provider_unavailable()
-    if settings.aura_llm_model is None:
-        raise _provider_unavailable()
     try:
-        return OpenAIProvider(
+        return provider_type(
             api_key=api_key.get_secret_value(),
             model=settings.aura_llm_model,
             timeout_seconds=settings.aura_llm_timeout_seconds,
