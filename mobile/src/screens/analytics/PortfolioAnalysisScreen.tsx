@@ -1,118 +1,355 @@
-import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
+import { AnalysisResults } from '../../components/analytics/AnalysisResults';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import {
+  DateRangeSelector,
+  type DateRange
+} from '../../components/ui/DateRangeSelector';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { LoadingState } from '../../components/ui/LoadingState';
 import { PageTitle } from '../../components/ui/PageTitle';
-import { SectionHeader } from '../../components/ui/SectionHeader';
-import { WebKpiCard } from '../../components/ui/WebKpiCard';
-import { DateRangeSelector, type DateRange } from '../../components/ui/DateRangeSelector';
-import { RiskBadge } from '../../components/ui/RiskBadge';
-import { AssetRelationshipBars } from '../../components/charts/AssetRelationshipBars';
-import { DonutAllocationChart } from '../../components/charts/DonutAllocationChart';
-import { useAppData } from '../../hooks/useAppData';
-import { demoAnalyzePortfolio } from '../../utils/localCalculations';
+import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
+import { usePortfolios } from '../../portfolio/usePortfolios';
+import { reportErrorMessage } from '../../report/reportErrors';
+import { formatReportTimestamp } from '../../report/reportFormatting';
+import { useReports } from '../../report/useReports';
 import { colors, spacing } from '../../theme/theme';
-import { formatPercent } from '../../utils/formatting';
+import type { PortfolioReportResponse } from '../../types/report';
 
-export function PortfolioAnalysisScreen({ route }: { route: any }) {
-  const { portfolios, activePortfolio, saveAnalysisReport } = useAppData();
-  const [range, setRange] = useState<DateRange>('1Y');
-  const portfolioId = route.params?.portfolioId ?? activePortfolio?.id;
-  const portfolio = portfolios.find((item) => item.id === portfolioId);
+function localIsoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
-  if (!portfolio) {
+function periodFor(range: DateRange): { start: string; end: string } {
+  const months = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 }[range];
+  const end = new Date();
+  const originalDay = end.getDate();
+  const start = new Date(end.getFullYear(), end.getMonth() - months, 1);
+  const lastDay = new Date(
+    start.getFullYear(),
+    start.getMonth() + 1,
+    0
+  ).getDate();
+  start.setDate(Math.min(originalDay, lastDay));
+  return { start: localIsoDate(start), end: localIsoDate(end) };
+}
+
+function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year
+    && parsed.getUTCMonth() === month - 1
+    && parsed.getUTCDate() === day;
+}
+
+export function PortfolioAnalysisScreen({
+  route,
+  navigation
+}: {
+  route: any;
+  navigation: any;
+}) {
+  const initialPeriod = useRef(periodFor('1Y')).current;
+  const requestedPortfolioId = route.params?.portfolioId as string | undefined;
+  const {
+    portfolios,
+    activePortfolioId,
+    listStatus,
+    listError,
+    refreshPortfolios,
+    selectPortfolio
+  } = usePortfolios();
+  const { createReport } = useReports();
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState(
+    requestedPortfolioId ?? ''
+  );
+  const [startDate, setStartDate] = useState(initialPeriod.start);
+  const [endDate, setEndDate] = useState(initialPeriod.end);
+  const [selectedRange, setSelectedRange] = useState<DateRange | null>('1Y');
+  const [report, setReport] = useState<PortfolioReportResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const submittingRef = useRef(false);
+  const requestedSelectionHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (listStatus !== 'ready') return;
+
+    if (requestedPortfolioId && !requestedSelectionHandledRef.current) {
+      requestedSelectionHandledRef.current = true;
+      if (portfolios.some((item) => item.id === requestedPortfolioId)) {
+        setSelectedPortfolioId(requestedPortfolioId);
+        selectPortfolio(requestedPortfolioId);
+      } else {
+        setSelectedPortfolioId('');
+        setError('The requested portfolio was not found.');
+      }
+      return;
+    }
+
+    const currentIsValid = portfolios.some(
+      (item) => item.id === selectedPortfolioId
+    );
+    if (currentIsValid) return;
+
+    const nextId = (
+      activePortfolioId
+      && portfolios.some((item) => item.id === activePortfolioId)
+    ) ? activePortfolioId : portfolios[0]?.id ?? '';
+    setSelectedPortfolioId(nextId);
+    if (nextId) selectPortfolio(nextId);
+  }, [
+    activePortfolioId,
+    listStatus,
+    portfolios,
+    requestedPortfolioId,
+    selectPortfolio,
+    selectedPortfolioId
+  ]);
+
+  function choosePortfolio(portfolioId: string) {
+    if (analyzing) return;
+    setSelectedPortfolioId(portfolioId);
+    selectPortfolio(portfolioId);
+    setReport(null);
+    setError(null);
+  }
+
+  function chooseRange(range: DateRange) {
+    if (analyzing) return;
+    const period = periodFor(range);
+    setSelectedRange(range);
+    setStartDate(period.start);
+    setEndDate(period.end);
+    setReport(null);
+    setError(null);
+  }
+
+  function editStartDate(value: string) {
+    setSelectedRange(null);
+    setStartDate(value);
+    setReport(null);
+    setError(null);
+  }
+
+  function editEndDate(value: string) {
+    setSelectedRange(null);
+    setEndDate(value);
+    setReport(null);
+    setError(null);
+  }
+
+  async function analyze() {
+    if (submittingRef.current) return;
+    if (!selectedPortfolioId) {
+      setError('Choose a portfolio to analyze.');
+      return;
+    }
+    if (!startDate.trim() || !endDate.trim()) {
+      setError('Enter both the analysis start date and end date.');
+      return;
+    }
+    if (!isIsoDate(startDate) || !isIsoDate(endDate)) {
+      setError('Enter valid dates in YYYY-MM-DD format.');
+      return;
+    }
+    if (startDate > endDate) {
+      setError('Start date must be on or before end date.');
+      return;
+    }
+
+    submittingRef.current = true;
+    setAnalyzing(true);
+    setError(null);
+    setReport(null);
+    try {
+      setReport(await createReport(selectedPortfolioId, {
+        start_date: startDate,
+        end_date: endDate
+      }));
+    } catch (requestError) {
+      setError(reportErrorMessage(
+        requestError,
+        'Unable to analyze this portfolio.'
+      ));
+    } finally {
+      submittingRef.current = false;
+      setAnalyzing(false);
+    }
+  }
+
+  if (
+    (listStatus === 'idle' || listStatus === 'loading')
+    && !portfolios.length
+  ) {
+    return <LoadingState message="Loading portfolios…" />;
+  }
+
+  if (listStatus === 'error' && !portfolios.length) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.empty}><Text style={styles.emptyText}>Select a portfolio to view analytics.</Text></View>
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <View style={styles.centerState}>
+          <Card style={styles.stateCard}>
+            <Text style={styles.errorTitle}>Portfolios unavailable</Text>
+            <Text style={styles.stateText}>{portfolioErrorMessage(listError)}</Text>
+            <Button title="Retry" onPress={() => void refreshPortfolios()} />
+          </Card>
+        </View>
       </SafeAreaView>
     );
   }
 
-  const selectedPortfolio = portfolio;
-  const analysis = demoAnalyzePortfolio(selectedPortfolio);
-
-  async function saveReport() {
-    const report = await saveAnalysisReport(selectedPortfolio.id);
-    if (report) Alert.alert('Report saved', 'This analysis snapshot is now available in Reports.');
+  if (listStatus === 'ready' && !portfolios.length) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <View style={styles.centerState}>
+          <Card>
+            <EmptyState
+              icon="analytics-outline"
+              title="No portfolio to analyze"
+              description="Create a real portfolio and complete its holdings before running analysis."
+            />
+          </Card>
+        </View>
+      </SafeAreaView>
+    );
   }
+
+  const selectedPortfolio = portfolios.find(
+    (item) => item.id === selectedPortfolioId
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <PageTitle eyebrow="PORTFOLIO ANALYSIS" title="Analytics" subtitle={`${selectedPortfolio.name} · detailed risk intelligence`} right={<RiskBadge level={analysis.riskLevel} />} />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <PageTitle
+          eyebrow="PORTFOLIO ANALYSIS"
+          title="Analytics"
+          subtitle="Run Aura's backend analytics and save one immutable report."
+        />
 
-        <Card style={styles.rangeCard}>
-          <View style={styles.rangeHeader}><Text style={styles.rangeTitle}>Analysis period</Text><Text style={styles.rangeMeta}>Display preview</Text></View>
-          <DateRangeSelector value={range} onChange={setRange} />
-        </Card>
+        <Card style={styles.controlsCard}>
+          <Text style={styles.controlLabel}>Portfolio</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.portfolioOptions}
+          >
+            {portfolios.map((portfolio) => {
+              const selected = portfolio.id === selectedPortfolioId;
+              return (
+                <Pressable
+                  key={portfolio.id}
+                  onPress={() => choosePortfolio(portfolio.id)}
+                  disabled={analyzing}
+                  style={[styles.portfolioOption, selected && styles.selectedOption]}
+                >
+                  <Text style={[
+                    styles.portfolioName,
+                    selected && styles.selectedOptionText
+                  ]}>
+                    {portfolio.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
 
-        <View style={styles.kpiGrid}>
-          <WebKpiCard icon="speedometer-outline" label="Risk Score" value={`${analysis.riskScore}/100`} meta={analysis.riskLevel} tone={analysis.riskScore >= 70 ? 'danger' : 'warning'} />
-          <WebKpiCard icon="pulse-outline" label="Volatility" value={formatPercent(analysis.volatility)} meta="Annualized" tone="warning" />
-          <WebKpiCard icon="analytics-outline" label="Sharpe Ratio" value={analysis.sharpeRatio.toFixed(2)} meta="Risk-adjusted return" tone="blue" />
-          <WebKpiCard icon="trending-down-outline" label="Max Drawdown" value={formatPercent(analysis.maxDrawdown)} meta="Historical downside" tone="danger" />
-        </View>
-
-        <SectionHeader title="Analysis Summary" />
-        <Card style={styles.summaryCard}>
-          <View style={styles.summaryIcon}><Ionicons name="shield-checkmark-outline" size={24} color={colors.primary} /></View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.summaryTitle}>{analysis.riskLevel}</Text>
-            <Text style={styles.summaryText}>This portfolio combines {selectedPortfolio.holdings.length} holdings with {analysis.diversification.toLowerCase()} diversification. Review the risk drivers and asset relationships below for the main contributors.</Text>
+          <View style={styles.periodHeader}>
+            <Text style={styles.controlLabel}>Analysis period</Text>
+            <Text style={styles.helper}>Inclusive calendar dates</Text>
           </View>
-        </Card>
+          <DateRangeSelector value={selectedRange} onChange={chooseRange} />
 
-        <SectionHeader title="Risk Drivers" />
-        <Card style={styles.tableCard}>
-          <View style={styles.tableHeader}><Text style={[styles.tableHeaderText, { flex: 0.7 }]}>Asset</Text><Text style={[styles.tableHeaderText, { flex: 0.6 }]}>Level</Text><Text style={[styles.tableHeaderText, { flex: 1.7 }]}>Explanation</Text></View>
-          {analysis.topRiskDrivers.map((driver, index) => (
-            <View key={driver.symbol} style={[styles.driverRow, index > 0 && styles.borderTop]}>
-              <View style={{ flex: 0.7 }}><Text style={styles.symbol}>{driver.symbol}</Text></View>
-              <View style={{ flex: 0.6 }}><RiskBadge level={driver.level} /></View>
-              <Text style={styles.driverText}>{driver.explanation}</Text>
+          <View style={styles.dateRow}>
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>Start date</Text>
+              <TextInput
+                value={startDate}
+                onChangeText={editStartDate}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.muted}
+                autoCapitalize="none"
+                keyboardType="numbers-and-punctuation"
+                editable={!analyzing}
+                style={styles.input}
+              />
             </View>
-          ))}
-        </Card>
-
-        <SectionHeader title="Asset Relationships" />
-        <Card>
-          <Text style={styles.cardTitle}>Correlation relationships</Text>
-          <Text style={styles.cardText}>A clearer mobile alternative to the web heatmap. The final values will come from backend market data.</Text>
-          <View style={{ marginTop: spacing.lg }}><AssetRelationshipBars holdings={selectedPortfolio.holdings} /></View>
-        </Card>
-
-        <SectionHeader title="Diversification" />
-        <Card style={styles.diversificationCard}>
-          <View style={styles.diversificationScore}>
-            <Text style={styles.overline}>STATUS</Text>
-            <Text style={styles.diversificationValue}>{analysis.diversification}</Text>
-            <Text style={styles.diversificationText}>Diversification reflects the mix of weights and risk characteristics in this demo frontend.</Text>
+            <View style={styles.dateField}>
+              <Text style={styles.dateLabel}>End date</Text>
+              <TextInput
+                value={endDate}
+                onChangeText={editEndDate}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={colors.muted}
+                autoCapitalize="none"
+                keyboardType="numbers-and-punctuation"
+                editable={!analyzing}
+                style={styles.input}
+              />
+            </View>
           </View>
-          <DonutAllocationChart data={selectedPortfolio.holdings.map((holding) => ({ symbol: holding.symbol, weight: holding.weight }))} />
+
+          <Button
+            title={analyzing ? 'Analyzing and Saving…' : 'Analyze Portfolio'}
+            onPress={() => void analyze()}
+            disabled={analyzing || !selectedPortfolioId}
+          />
         </Card>
 
-        <SectionHeader title="Individual Asset Analysis" />
-        <View style={styles.assetList}>
-          {selectedPortfolio.holdings.map((holding) => (
-            <Card key={holding.symbol} style={styles.assetCard}>
-              <View style={styles.assetTop}>
-                <View style={styles.assetSymbolBox}><Text style={styles.assetSymbol}>{holding.symbol}</Text></View>
-                <View style={{ flex: 1 }}><Text style={styles.assetName}>{holding.name}</Text><Text style={styles.assetMeta}>{holding.weight.toFixed(1)}% allocation</Text></View>
-                <RiskBadge level={holding.risk} />
-              </View>
-              <View style={styles.assetMetrics}>
-                <View><Text style={styles.assetMetricLabel}>Weight</Text><Text style={styles.assetMetricValue}>{holding.weight.toFixed(1)}%</Text></View>
-                <View><Text style={styles.assetMetricLabel}>Risk</Text><Text style={styles.assetMetricValue}>{holding.risk}</Text></View>
-                <View><Text style={styles.assetMetricLabel}>Contribution</Text><Text style={styles.assetMetricValue}>{holding.weight >= 30 ? 'High' : holding.weight >= 15 ? 'Medium' : 'Lower'}</Text></View>
-              </View>
-            </Card>
-          ))}
-        </View>
+        {error ? (
+          <Card style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Analysis unavailable</Text>
+            <Text style={styles.stateText}>{error}</Text>
+          </Card>
+        ) : null}
 
-        <Button title="Save Analysis Report" onPress={saveReport} style={{ marginTop: spacing.xl }} />
+        {analyzing ? (
+          <Card style={styles.stateCard}>
+            <Text style={styles.stateTitle}>Running portfolio analysis</Text>
+            <Text style={styles.stateText}>
+              Aura is calculating the requested period and saving the backend report snapshot.
+            </Text>
+          </Card>
+        ) : null}
+
+        {report && !analyzing ? (
+          <>
+            <Card style={styles.savedCard}>
+              <Text style={styles.savedTitle}>Report saved</Text>
+              <Text style={styles.savedText}>
+                Created {formatReportTimestamp(report.created_at)} for {selectedPortfolio?.name ?? report.analysis.portfolio_name}.
+              </Text>
+              <Button
+                title="Open Immutable Report"
+                variant="secondary"
+                onPress={() => navigation.navigate('ReportDetail', {
+                  portfolioId: report.portfolio_id,
+                  reportId: report.id
+                })}
+              />
+            </Card>
+            <AnalysisResults analysis={report.analysis} />
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -120,40 +357,54 @@ export function PortfolioAnalysisScreen({ route }: { route: any }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, paddingBottom: 100 },
-  rangeCard: { marginTop: spacing.xl, gap: spacing.md },
-  rangeHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  rangeTitle: { color: colors.text, fontSize: 12, fontWeight: '900' },
-  rangeMeta: { color: colors.muted, fontSize: 9 },
-  kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.md, marginTop: spacing.md },
-  summaryCard: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
-  summaryIcon: { width: 48, height: 48, borderRadius: 15, backgroundColor: colors.cyanBackground, alignItems: 'center', justifyContent: 'center' },
-  summaryTitle: { color: colors.text, fontSize: 16, fontWeight: '900' },
-  summaryText: { color: colors.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 5 },
-  tableCard: { paddingVertical: spacing.sm },
-  tableHeader: { flexDirection: 'row', gap: spacing.sm, paddingBottom: spacing.sm },
-  tableHeaderText: { color: colors.muted, fontSize: 8, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.7 },
-  driverRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', paddingVertical: spacing.md },
-  borderTop: { borderTopWidth: 1, borderTopColor: colors.borderSoft },
-  symbol: { color: colors.primary, fontSize: 11, fontWeight: '900' },
-  driverText: { color: colors.textSecondary, fontSize: 10, lineHeight: 15, flex: 1.7 },
-  cardTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  cardText: { color: colors.textSecondary, fontSize: 11, lineHeight: 17, marginTop: 4 },
-  diversificationCard: { gap: spacing.lg },
-  diversificationScore: { gap: 4 },
-  overline: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-  diversificationValue: { color: colors.text, fontSize: 22, fontWeight: '900' },
-  diversificationText: { color: colors.textSecondary, fontSize: 11, lineHeight: 17 },
-  assetList: { gap: spacing.md },
-  assetCard: { gap: spacing.md },
-  assetTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  assetSymbolBox: { minWidth: 52, paddingHorizontal: 8, height: 42, borderRadius: 13, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  assetSymbol: { color: colors.primary, fontSize: 10, fontWeight: '900' },
-  assetName: { color: colors.text, fontSize: 13, fontWeight: '900' },
-  assetMeta: { color: colors.muted, fontSize: 10, marginTop: 3 },
-  assetMetrics: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: colors.borderSoft, paddingTop: spacing.md },
-  assetMetricLabel: { color: colors.muted, fontSize: 9 },
-  assetMetricValue: { color: colors.text, fontSize: 11, fontWeight: '900', marginTop: 3 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { color: colors.textSecondary }
+  content: { padding: spacing.lg, paddingBottom: 110 },
+  controlsCard: { gap: spacing.md, marginTop: spacing.xl },
+  controlLabel: { color: colors.text, fontSize: 12, fontWeight: '900' },
+  helper: { color: colors.muted, fontSize: 9 },
+  portfolioOptions: { gap: spacing.sm, paddingRight: spacing.md },
+  portfolioOption: {
+    minHeight: 42,
+    maxWidth: 190,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt
+  },
+  selectedOption: {
+    borderColor: colors.primary,
+    backgroundColor: colors.selectedBackground
+  },
+  portfolioName: { color: colors.textSecondary, fontSize: 11, fontWeight: '800' },
+  selectedOptionText: { color: colors.primary },
+  periodHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.sm
+  },
+  dateRow: { flexDirection: 'row', gap: spacing.md },
+  dateField: { flex: 1 },
+  dateLabel: { color: colors.muted, fontSize: 10, marginBottom: 6 },
+  input: {
+    minHeight: 46,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
+    paddingHorizontal: spacing.md,
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  errorCard: { gap: spacing.sm, marginTop: spacing.md, borderColor: colors.dangerBorder },
+  errorTitle: { color: colors.danger, fontSize: 15, fontWeight: '900' },
+  stateCard: { gap: spacing.md, marginTop: spacing.md },
+  stateTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  stateText: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
+  savedCard: { gap: spacing.md, marginTop: spacing.xl, borderColor: colors.successBorder },
+  savedTitle: { color: colors.success, fontSize: 16, fontWeight: '900' },
+  savedText: { color: colors.textSecondary, fontSize: 11, lineHeight: 17 },
+  centerState: { flex: 1, justifyContent: 'center', padding: spacing.xl }
 });

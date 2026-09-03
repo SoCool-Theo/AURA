@@ -2,15 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   DemoHolding as Holding,
   DemoPortfolio as Portfolio,
-  DemoReportSnapshot as ReportSnapshot,
   DemoSimulationRecord as SimulationRecord
 } from '../types/demo';
 import { portfoliosMock } from '../mocks/portfolios.mock';
 
-// Legacy demo persistence for screens outside the current integration phase.
-// It is not the production portfolio source used by PortfolioProvider.
+// Legacy demo persistence for screens outside the current integration phases.
+// Production portfolios and reports are owned by their authenticated providers.
 
 const PORTFOLIOS_KEY = 'aura_local_portfolios_v2';
+// Retained only so Reset Demo Data removes obsolete pre-Phase-5 snapshots.
 const REPORTS_KEY = 'aura_local_reports_v2';
 const SIMULATIONS_KEY = 'aura_local_simulations_v2';
 const ACTIVE_PORTFOLIO_KEY = 'aura_active_portfolio_v2';
@@ -26,15 +26,6 @@ export async function loadPortfolios(): Promise<Portfolio[]> {
 
 export async function savePortfolios(items: Portfolio[]) {
   await AsyncStorage.setItem(PORTFOLIOS_KEY, JSON.stringify(items));
-}
-
-export async function loadReports(): Promise<ReportSnapshot[]> {
-  const raw = await AsyncStorage.getItem(REPORTS_KEY);
-  return raw ? JSON.parse(raw) : [];
-}
-
-export async function saveReports(items: ReportSnapshot[]) {
-  await AsyncStorage.setItem(REPORTS_KEY, JSON.stringify(items));
 }
 
 export async function loadSimulations(): Promise<SimulationRecord[]> {

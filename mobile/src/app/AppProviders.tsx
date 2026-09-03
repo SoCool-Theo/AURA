@@ -14,6 +14,7 @@ import {
 import { usePreferences } from '../preferences/usePreferences';
 import { AppDataProvider } from '../storage/AppDataProvider';
 import { PortfolioProvider } from '../portfolio/PortfolioProvider';
+import { ReportProvider } from '../report/ReportProvider';
 import { darkPalette, lightPalette } from '../theme/colors';
 
 function NavigationShell({ children }: PropsWithChildren) {
@@ -41,11 +42,13 @@ function NavigationShell({ children }: PropsWithChildren) {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AuthProvider>
         <PortfolioProvider>
-          <AppDataProvider>
-            <NavigationContainer theme={navigationTheme}>
-              {children}
-            </NavigationContainer>
-          </AppDataProvider>
+          <ReportProvider>
+            <AppDataProvider>
+              <NavigationContainer theme={navigationTheme}>
+                {children}
+              </NavigationContainer>
+            </AppDataProvider>
+          </ReportProvider>
         </PortfolioProvider>
       </AuthProvider>
     </>

@@ -1,91 +1,175 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+
+import { AnalysisResults } from '../../components/analytics/AnalysisResults';
+import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { LoadingState } from '../../components/ui/LoadingState';
 import { PageTitle } from '../../components/ui/PageTitle';
-import { SectionHeader } from '../../components/ui/SectionHeader';
-import { Tag } from '../../components/ui/Tag';
-import { RiskDriverCard } from '../../components/portfolio/RiskDriverCard';
-import { useAppData } from '../../hooks/useAppData';
+import { reportErrorMessage } from '../../report/reportErrors';
+import { formatReportTimestamp } from '../../report/reportFormatting';
+import { useReports } from '../../report/useReports';
 import { colors, spacing } from '../../theme/theme';
-import { formatPercent } from '../../utils/formatting';
+import type { PortfolioReportResponse } from '../../types/report';
 
-export function ReportDetailScreen({ route }: { route: any }) {
-  const { reports } = useAppData();
-  const report = reports.find((item) => item.id === route.params.reportId);
+type LoadStatus = 'loading' | 'ready' | 'error';
 
-  if (!report) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.empty}><Text style={styles.emptyText}>Report not found.</Text></View>
-      </SafeAreaView>
+export function ReportDetailScreen({
+  route,
+  navigation
+}: {
+  route: any;
+  navigation: any;
+}) {
+  const portfolioId = route.params.portfolioId as string;
+  const reportId = route.params.reportId as string;
+  const { getReport, deleteReport } = useReports();
+  const [report, setReport] = useState<PortfolioReportResponse | null>(null);
+  const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const requestRef = useRef(0);
+  const deletingRef = useRef(false);
+
+  const loadReport = useCallback(async () => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    setLoadStatus('loading');
+    setLoadError(null);
+    setReport(null);
+
+    try {
+      const response = await getReport(portfolioId, reportId);
+      if (requestRef.current !== requestId) return;
+      setReport(response);
+      setLoadStatus('ready');
+    } catch (error) {
+      if (requestRef.current !== requestId) return;
+      setLoadError(error);
+      setLoadStatus('error');
+    }
+  }, [getReport, portfolioId, reportId]);
+
+  useFocusEffect(useCallback(() => {
+    void loadReport();
+    return () => {
+      requestRef.current += 1;
+    };
+  }, [loadReport]));
+
+  function confirmDelete() {
+    if (!report || deletingRef.current) return;
+    Alert.alert(
+      'Delete report?',
+      `Permanently delete the saved analysis for ${report.analysis.portfolio_name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (deletingRef.current) return;
+            deletingRef.current = true;
+            setDeleting(true);
+            setActionError(null);
+            try {
+              await deleteReport(portfolioId, reportId);
+              const navigationState = navigation.getState?.();
+              const previousRoute = navigationState?.routes?.[
+                navigationState.index - 1
+              ]?.name;
+              if (
+                previousRoute === 'Analytics'
+                || previousRoute === 'PortfolioAnalysis'
+              ) {
+                navigation.popToTop();
+              } else {
+                navigation.goBack();
+              }
+            } catch (error) {
+              setActionError(reportErrorMessage(
+                error,
+                'Unable to delete report.'
+              ));
+              deletingRef.current = false;
+              setDeleting(false);
+            }
+          }
+        }
+      ]
     );
   }
 
-  const analysis = report.analysis;
+  if (loadStatus === 'loading') {
+    return <LoadingState message="Loading immutable report…" />;
+  }
+
+  if (loadStatus === 'error' || !report) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <View style={styles.centerState}>
+          <Card style={styles.stateCard}>
+            <Text style={styles.errorTitle}>Report unavailable</Text>
+            <Text style={styles.stateText}>
+              {reportErrorMessage(loadError, 'Report not found.')}
+            </Text>
+            <Button title="Retry" onPress={() => void loadReport()} />
+            <Button
+              title="Back"
+              variant="secondary"
+              onPress={() => navigation.goBack()}
+            />
+          </Card>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <PageTitle
-          title="Report Detail"
-          subtitle={new Date(report.createdAt).toLocaleString()}
-          right={
-            <View style={styles.share}>
-              <Ionicons name="share-outline" color={colors.textSecondary} size={20} />
-            </View>
-          }
+          eyebrow="IMMUTABLE SNAPSHOT"
+          title={`${report.analysis.portfolio_name} Analysis`}
+          subtitle={`Created ${formatReportTimestamp(report.created_at)}`}
         />
 
-        <Card style={styles.reportHeader}>
-          <View style={styles.reportIcon}>
-            <Ionicons name="document-text-outline" color={colors.purpleSoft} size={23} />
+        <Card style={styles.identityCard}>
+          <View style={styles.identityRow}>
+            <Text style={styles.identityLabel}>Report ID</Text>
+            <Text style={styles.identityValue}>{report.id}</Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.reportTitle}>{report.portfolioName} Analysis</Text>
-            <Text style={styles.reportType}>Analysis Report</Text>
+          <View style={styles.identityRow}>
+            <Text style={styles.identityLabel}>Portfolio ID</Text>
+            <Text style={styles.identityValue}>{report.portfolio_id}</Text>
           </View>
-          <Ionicons name="chevron-forward" color={colors.muted} size={18} />
-        </Card>
-
-        <Card style={styles.summaryCard}>
-          <Text style={styles.overline}>SUMMARY</Text>
-          <Text style={styles.summary}>
-            Your portfolio currently shows {analysis.riskLevel.toLowerCase()} with risk driven by concentration, volatility and diversification signals.
+          <Text style={styles.snapshotNote}>
+            This detail uses the stored backend report and does not rerun analysis.
           </Text>
         </Card>
 
-        <SectionHeader title="Key metrics" />
-        <View style={styles.grid}>
-          <Card style={styles.metric}>
-            <Text style={styles.metricLabel}>Risk score</Text>
-            <Text style={styles.metricValue}>{analysis.riskScore}/100</Text>
-            <Tag label={analysis.riskLevel} tone="warning" />
+        {actionError ? (
+          <Card style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Unable to delete report</Text>
+            <Text style={styles.stateText}>{actionError}</Text>
           </Card>
-          <Card style={styles.metric}>
-            <Text style={styles.metricLabel}>Volatility</Text>
-            <Text style={styles.metricValue}>{formatPercent(analysis.volatility)}</Text>
-            <Tag label="High" tone="danger" />
-          </Card>
-          <Card style={styles.metric}>
-            <Text style={styles.metricLabel}>Sharpe ratio</Text>
-            <Text style={styles.metricValue}>{analysis.sharpeRatio.toFixed(2)}</Text>
-            <Tag label="Fair" tone="warning" />
-          </Card>
-          <Card style={styles.metric}>
-            <Text style={styles.metricLabel}>Max drawdown</Text>
-            <Text style={styles.metricValue}>{formatPercent(analysis.maxDrawdown)}</Text>
-            <Tag label="High" tone="danger" />
-          </Card>
-        </View>
+        ) : null}
 
-        <SectionHeader title="Risk drivers" />
-        <View style={styles.list}>
-          {analysis.topRiskDrivers.map((driver) => (
-            <RiskDriverCard key={driver.symbol} driver={driver} />
-          ))}
-        </View>
+        <AnalysisResults analysis={report.analysis} />
+
+        <Button
+          title={deleting ? 'Deleting…' : 'Delete Report'}
+          variant="danger"
+          onPress={confirmDelete}
+          disabled={deleting}
+          style={{ marginTop: spacing.xl }}
+        />
+        <Text style={styles.unsupportedNote}>
+          Sharing, export, download, and report editing are unavailable.
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -93,20 +177,27 @@ export function ReportDetailScreen({ route }: { route: any }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, paddingBottom: 100 },
-  share: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  reportHeader: { marginTop: spacing.xl, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  reportIcon: { width: 48, height: 48, borderRadius: 15, backgroundColor: colors.purpleBackground, alignItems: 'center', justifyContent: 'center' },
-  reportTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
-  reportType: { color: colors.muted, fontSize: 10, marginTop: 4 },
-  summaryCard: { marginTop: spacing.md, gap: spacing.sm },
-  overline: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-  summary: { color: colors.textSecondary, lineHeight: 20, fontSize: 13 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  metric: { width: '47.8%', gap: spacing.sm },
-  metricLabel: { color: colors.muted, fontSize: 10, fontWeight: '800' },
-  metricValue: { color: colors.text, fontSize: 19, fontWeight: '900' },
-  list: { gap: spacing.md },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { color: colors.textSecondary }
+  content: { padding: spacing.lg, paddingBottom: 110 },
+  identityCard: { gap: spacing.sm, marginTop: spacing.xl },
+  identityRow: { flexDirection: 'row', gap: spacing.md },
+  identityLabel: { color: colors.muted, fontSize: 9, width: 70 },
+  identityValue: { color: colors.text, fontSize: 9, flex: 1 },
+  snapshotNote: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: spacing.sm
+  },
+  errorCard: { gap: spacing.sm, marginTop: spacing.md, borderColor: colors.dangerBorder },
+  errorTitle: { color: colors.danger, fontSize: 15, fontWeight: '900' },
+  stateCard: { gap: spacing.md },
+  stateText: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
+  centerState: { flex: 1, justifyContent: 'center', padding: spacing.xl },
+  unsupportedNote: {
+    color: colors.muted,
+    fontSize: 10,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginTop: spacing.md
+  }
 });

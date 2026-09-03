@@ -2,7 +2,6 @@ import React, { createContext, PropsWithChildren, useEffect, useMemo, useState }
 import type {
   DemoHolding as Holding,
   DemoPortfolio as Portfolio,
-  DemoReportSnapshot as ReportSnapshot,
   DemoSimulationRecord as SimulationRecord
 } from '../types/demo';
 import {
@@ -11,33 +10,29 @@ import {
   loadActivePortfolioId,
   loadLearnProgress,
   loadPortfolios,
-  loadReports,
   loadSimulations,
   loadWatchlistSymbols,
   rebalanceByValue,
   saveActivePortfolioId,
   saveLearnProgress,
   savePortfolios,
-  saveReports,
   saveSimulations,
   saveWatchlistSymbols
 } from './appStorage';
 import {
-  demoAnalyzePortfolio,
   demoAllocationMetrics,
   demoScenarioMetrics,
   portfolioWithWeights
 } from '../utils/localCalculations';
 import { scenarioCatalog } from '../mocks/scenarios.mock';
 
-// Temporary demo state for Dashboard, reports, simulations, and other screens
-// that have not reached their API-integration phases. Production portfolio
-// screens use PortfolioProvider and never read this local portfolio data.
+// Temporary demo state for Dashboard, simulations, Assistant, and other
+// screens that have not reached their API-integration phases. Production
+// portfolios use PortfolioProvider; Analytics and Reports use ReportProvider.
 
 type ContextValue = {
   loading: boolean;
   portfolios: Portfolio[];
-  reports: ReportSnapshot[];
   simulations: SimulationRecord[];
   activePortfolioId: string | null;
   activePortfolio: Portfolio | null;
@@ -51,8 +46,6 @@ type ContextValue = {
   deletePortfolio: (id: string) => Promise<void>;
   addHolding: (portfolioId: string, holding: Holding) => Promise<void>;
   replaceHoldings: (portfolioId: string, holdings: Holding[]) => Promise<void>;
-  saveAnalysisReport: (portfolioId: string) => Promise<ReportSnapshot | null>;
-  deleteReport: (reportId: string) => Promise<void>;
   runHistorical: (portfolioId: string, scenarioId: string) => Promise<SimulationRecord | null>;
   runAllocation: (portfolioId: string, weights: Record<string, number>) => Promise<SimulationRecord | null>;
   runCombined: (
@@ -72,7 +65,6 @@ export const AppDataContext = createContext<ContextValue | undefined>(undefined)
 export function AppDataProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [reports, setReports] = useState<ReportSnapshot[]>([]);
   const [simulations, setSimulations] = useState<SimulationRecord[]>([]);
   const [activePortfolioId, setActivePortfolioId] = useState<string | null>(null);
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
@@ -82,14 +74,12 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     (async () => {
       const [
         savedPortfolios,
-        savedReports,
         savedSimulations,
         savedActiveId,
         savedWatchlist,
         savedLearnProgress
       ] = await Promise.all([
         loadPortfolios(),
-        loadReports(),
         loadSimulations(),
         loadActivePortfolioId(),
         loadWatchlistSymbols(),
@@ -97,7 +87,6 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       ]);
 
       setPortfolios(savedPortfolios);
-      setReports(savedReports);
       setSimulations(savedSimulations);
       setWatchlistSymbols(savedWatchlist);
       setLearnProgress(savedLearnProgress);
@@ -200,30 +189,6 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           : portfolio
       )
     );
-  }
-
-  async function saveAnalysisReport(portfolioId: string) {
-    const portfolio = portfolios.find((item) => item.id === portfolioId);
-    if (!portfolio) return null;
-
-    const report: ReportSnapshot = {
-      id: `report-${Date.now()}`,
-      portfolioId,
-      portfolioName: portfolio.name,
-      createdAt: new Date().toISOString(),
-      analysis: demoAnalyzePortfolio(portfolio)
-    };
-
-    const next = [report, ...reports];
-    setReports(next);
-    await saveReports(next);
-    return report;
-  }
-
-  async function deleteReport(reportId: string) {
-    const next = reports.filter((item) => item.id !== reportId);
-    setReports(next);
-    await saveReports(next);
   }
 
   async function runHistorical(portfolioId: string, scenarioId: string) {
@@ -355,7 +320,6 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     ]);
 
     setPortfolios(defaults);
-    setReports([]);
     setSimulations([]);
     setWatchlistSymbols(defaultWatchlist);
     setLearnProgress({});
@@ -372,7 +336,6 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     () => ({
       loading,
       portfolios,
-      reports,
       simulations,
       activePortfolioId,
       activePortfolio,
@@ -386,8 +349,6 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       deletePortfolio,
       addHolding,
       replaceHoldings,
-      saveAnalysisReport,
-      deleteReport,
       runHistorical,
       runAllocation,
       runCombined,
@@ -400,7 +361,6 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     [
       loading,
       portfolios,
-      reports,
       simulations,
       activePortfolioId,
       watchlistSymbols,

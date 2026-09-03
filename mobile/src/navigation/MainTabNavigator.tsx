@@ -68,6 +68,7 @@ function PortfolioNavigator() {
       <PortfolioStack.Screen name="AddAsset" component={AddAssetScreen} options={{ title: 'Add Asset' }} />
       <PortfolioStack.Screen name="EditHoldings" component={EditHoldingsScreen} options={{ title: 'Edit Holdings' }} />
       <PortfolioStack.Screen name="PortfolioAnalysis" component={PortfolioAnalysisScreen} options={{ title: 'Analytics' }} />
+      <PortfolioStack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ title: 'Report Detail' }} />
     </PortfolioStack.Navigator>
   );
 }

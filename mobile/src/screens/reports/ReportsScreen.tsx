@@ -1,85 +1,287 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
+import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { LoadingState } from '../../components/ui/LoadingState';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { Tag } from '../../components/ui/Tag';
-import { useAppData } from '../../hooks/useAppData';
+import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
+import { usePortfolios } from '../../portfolio/usePortfolios';
+import { reportErrorMessage } from '../../report/reportErrors';
+import { formatReportTimestamp } from '../../report/reportFormatting';
+import { useReports } from '../../report/useReports';
+import type { ReportHistoryItem } from '../../report/ReportProvider';
 import { colors, spacing } from '../../theme/theme';
 
-const filters = ['All', 'Low Risk', 'Moderate Risk', 'High Risk'] as const;
-type Filter = (typeof filters)[number];
-
 export function ReportsScreen({ navigation }: { navigation: any }) {
-  const { reports, deleteReport } = useAppData();
+  const {
+    portfolios,
+    listStatus,
+    listError,
+    refreshPortfolios
+  } = usePortfolios();
+  const {
+    reports,
+    historyStatus,
+    historyError,
+    isRefreshing,
+    refreshReportHistory,
+    deleteReport
+  } = useReports();
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('All');
+  const [portfolioFilter, setPortfolioFilter] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const deletingIdsRef = useRef(new Set<string>());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+
+  useFocusEffect(useCallback(() => {
+    if (listStatus === 'ready' || portfolios.length) {
+      void refreshReportHistory(portfolios);
+    }
+  }, [listStatus, portfolios, refreshReportHistory]));
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return reports.filter((report) => {
-      const matchesQuery = !q || report.portfolioName.toLowerCase().includes(q);
-      const risk = report.analysis.riskLevel.toLowerCase();
-      const matchesFilter = filter === 'All' || risk.includes(filter.replace(' Risk', '').toLowerCase());
-      return matchesQuery && matchesFilter;
-    });
-  }, [reports, query, filter]);
+    const normalizedQuery = query.trim().toLowerCase();
+    return reports.filter((report) => (
+      (!portfolioFilter || report.portfolio_id === portfolioFilter)
+      && (
+        !normalizedQuery
+        || report.portfolio_name.toLowerCase().includes(normalizedQuery)
+        || report.id.toLowerCase().includes(normalizedQuery)
+      )
+    ));
+  }, [portfolioFilter, query, reports]);
+
+  function retry() {
+    if (listStatus === 'error' && !portfolios.length) {
+      void refreshPortfolios();
+      return;
+    }
+    void refreshReportHistory(portfolios);
+  }
+
+  function confirmDelete(report: ReportHistoryItem) {
+    if (deletingIdsRef.current.has(report.id)) return;
+    Alert.alert(
+      'Delete report?',
+      `Permanently delete the saved analysis for ${report.portfolio_name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (deletingIdsRef.current.has(report.id)) return;
+            deletingIdsRef.current.add(report.id);
+            setDeletingIds(new Set(deletingIdsRef.current));
+            setActionError(null);
+            try {
+              await deleteReport(report.portfolio_id, report.id);
+            } catch (error) {
+              setActionError(reportErrorMessage(
+                error,
+                'Unable to delete report.'
+              ));
+            } finally {
+              deletingIdsRef.current.delete(report.id);
+              setDeletingIds(new Set(deletingIdsRef.current));
+            }
+          }
+        }
+      ]
+    );
+  }
+
+  if (
+    ((listStatus === 'idle' || listStatus === 'loading') && !portfolios.length)
+    || (historyStatus === 'idle' || historyStatus === 'loading')
+      && !reports.length
+      && listStatus !== 'error'
+  ) {
+    return <LoadingState message="Loading report history…" />;
+  }
+
+  const blockingError = listStatus === 'error' && !portfolios.length
+    ? portfolioErrorMessage(listError)
+    : historyStatus === 'error' && !reports.length
+      ? reportErrorMessage(historyError, 'Unable to load report history.')
+      : null;
+
+  if (blockingError) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <View style={styles.centerState}>
+          <Card style={styles.stateCard}>
+            <Text style={styles.errorTitle}>Report history unavailable</Text>
+            <Text style={styles.stateText}>{blockingError}</Text>
+            <Button title="Retry" onPress={retry} />
+          </Card>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <PageTitle title="Reports" subtitle="Saved immutable portfolio-analysis snapshots." />
-
-        <View style={styles.search}>
-          <Ionicons name="search-outline" color={colors.muted} size={17} />
-          <TextInput value={query} onChangeText={setQuery} placeholder="Search reports" placeholderTextColor={colors.muted} style={styles.searchInput} />
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          {filters.map((item) => (
-            <Pressable key={item} onPress={() => setFilter(item)}>
-              <Tag label={item} tone={filter === item ? 'primary' : 'default'} />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={(
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => void refreshReportHistory(portfolios)}
+            tintColor={colors.primary}
+          />
+        )}
+      >
+        <PageTitle
+          title="Reports"
+          subtitle="Immutable analysis snapshots stored by Aura's backend."
+          right={(
+            <Pressable
+              style={styles.newButton}
+              onPress={() => navigation.navigate('Analytics', {})}
+            >
+              <Ionicons name="add" size={19} color={colors.onPrimary} />
             </Pressable>
-          ))}
-        </ScrollView>
+          )}
+        />
 
-        <View style={styles.tableHeader}>
-          <Text style={[styles.headerText, { flex: 1.7 }]}>Report</Text>
-          <Text style={styles.headerText}>Risk</Text>
-          <Text style={styles.headerText}>Date</Text>
-        </View>
+        {actionError ? (
+          <Card style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Report action failed</Text>
+            <Text style={styles.stateText}>{actionError}</Text>
+          </Card>
+        ) : null}
+
+        {historyStatus === 'error' && reports.length ? (
+          <Card style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Could not refresh every report</Text>
+            <Text style={styles.stateText}>
+              {reportErrorMessage(historyError, 'Unable to refresh report history.')}
+            </Text>
+            <Button title="Retry" onPress={retry} />
+          </Card>
+        ) : null}
+
+        {reports.length ? (
+          <>
+            <View style={styles.search}>
+              <Ionicons name="search-outline" color={colors.muted} size={17} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search portfolio name or report ID"
+                placeholderTextColor={colors.muted}
+                style={styles.searchInput}
+              />
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterRow}
+            >
+              <Pressable onPress={() => setPortfolioFilter('')}>
+                <Tag label="All portfolios" tone={!portfolioFilter ? 'primary' : 'default'} />
+              </Pressable>
+              {portfolios.map((portfolio) => (
+                <Pressable
+                  key={portfolio.id}
+                  onPress={() => setPortfolioFilter(portfolio.id)}
+                >
+                  <Tag
+                    label={portfolio.name}
+                    tone={portfolioFilter === portfolio.id ? 'primary' : 'default'}
+                  />
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
 
         <View style={styles.list}>
-          {filtered.length ? filtered.map((report) => (
-            <Pressable key={report.id} onPress={() => navigation.navigate('ReportDetail', { reportId: report.id })}>
-              <Card style={styles.reportCard}>
-                <View style={styles.icon}><Ionicons name="document-text-outline" color={colors.primary} size={22} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.title}>{report.portfolioName} Analysis</Text>
-                  <Text style={styles.type}>Analysis Report</Text>
-                  <View style={styles.metaRow}>
-                    <Tag label={report.analysis.riskLevel} tone={report.analysis.riskLevel.toLowerCase().includes('high') ? 'danger' : report.analysis.riskLevel.toLowerCase().includes('low') ? 'success' : 'warning'} />
-                    <Text style={styles.date}>{new Date(report.createdAt).toLocaleDateString()}</Text>
+          {!reports.length ? (
+            <Card>
+              <EmptyState
+                icon="document-text-outline"
+                title="No reports yet"
+                description="Run an analysis to create your first immutable backend report."
+              />
+            </Card>
+          ) : filtered.length ? filtered.map((report) => {
+            const deleting = deletingIds.has(report.id);
+            return (
+              <Pressable
+                key={report.id}
+                onPress={() => navigation.navigate('ReportDetail', {
+                  portfolioId: report.portfolio_id,
+                  reportId: report.id
+                })}
+                disabled={deleting}
+              >
+                <Card style={styles.reportCard}>
+                  <View style={styles.icon}>
+                    <Ionicons
+                      name="document-text-outline"
+                      color={colors.primary}
+                      size={22}
+                    />
                   </View>
-                </View>
-                <Pressable onPress={() => Alert.alert('Delete report?', 'Remove this local snapshot?', [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: () => deleteReport(report.id) }
-                ])} style={styles.delete}>
-                  <Ionicons name="trash-outline" color={colors.muted} size={17} />
-                </Pressable>
-              </Card>
-            </Pressable>
-          )) : (
-            <Card style={styles.empty}>
-              <Ionicons name="document-text-outline" color={colors.muted} size={30} />
-              <Text style={styles.emptyTitle}>No matching reports</Text>
-              <Text style={styles.emptyText}>Run Analytics and save a report snapshot, or change the current filter.</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.title}>{report.portfolio_name} Analysis</Text>
+                    <Text style={styles.period}>
+                      {report.start_date} → {report.end_date}
+                    </Text>
+                    <Text style={styles.date}>
+                      {formatReportTimestamp(report.created_at)}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      confirmDelete(report);
+                    }}
+                    style={styles.delete}
+                    disabled={deleting}
+                  >
+                    <Ionicons
+                      name={deleting ? 'hourglass-outline' : 'trash-outline'}
+                      color={deleting ? colors.warning : colors.muted}
+                      size={17}
+                    />
+                  </Pressable>
+                </Card>
+              </Pressable>
+            );
+          }) : (
+            <Card>
+              <EmptyState
+                icon="search-outline"
+                title="No matching reports"
+                description="Change the portfolio filter or search text."
+              />
             </Card>
           )}
         </View>
+
+        <Text style={styles.note}>
+          Reports are read-only snapshots. Export, sharing, download, and editing are unavailable.
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -87,21 +289,60 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg, paddingBottom: 100 },
-  search: { height: 44, borderRadius: 13, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.borderSoft, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, marginTop: spacing.xl },
+  content: { padding: spacing.lg, paddingBottom: 110 },
+  newButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  search: {
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.xl
+  },
   searchInput: { flex: 1, color: colors.text, fontSize: 12 },
   filterRow: { gap: spacing.sm, paddingVertical: spacing.lg },
-  tableHeader: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.sm, marginBottom: spacing.sm },
-  headerText: { color: colors.muted, fontSize: 8, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.7 },
-  list: { gap: spacing.md },
+  list: { gap: spacing.md, marginTop: spacing.lg },
   reportCard: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
-  icon: { width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cyanBackground },
+  icon: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.cyanBackground
+  },
   title: { color: colors.text, fontWeight: '900', fontSize: 14 },
-  type: { color: colors.textSecondary, fontSize: 10, marginTop: 4 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
-  date: { color: colors.muted, fontSize: 9 },
-  delete: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  empty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxl },
-  emptyTitle: { color: colors.text, fontWeight: '900' },
-  emptyText: { color: colors.muted, fontSize: 12, textAlign: 'center', lineHeight: 18 }
+  period: { color: colors.textSecondary, fontSize: 10, marginTop: 4 },
+  date: { color: colors.muted, fontSize: 9, marginTop: 5 },
+  delete: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  errorCard: { gap: spacing.md, marginTop: spacing.xl, borderColor: colors.dangerBorder },
+  errorTitle: { color: colors.danger, fontSize: 15, fontWeight: '900' },
+  stateCard: { gap: spacing.md },
+  stateText: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
+  centerState: { flex: 1, justifyContent: 'center', padding: spacing.xl },
+  note: {
+    color: colors.muted,
+    fontSize: 10,
+    lineHeight: 16,
+    textAlign: 'center',
+    marginTop: spacing.xl
+  }
 });

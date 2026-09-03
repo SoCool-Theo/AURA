@@ -5,7 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../components/ui/Card';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { useAppData } from '../../hooks/useAppData';
+import { usePortfolios } from '../../portfolio/usePortfolios';
+import { useReports } from '../../report/useReports';
 import { colors, spacing } from '../../theme/theme';
+import { useFocusEffect } from '@react-navigation/native';
 
 const items = [
   { label: 'Analytics', description: 'Detailed risk metrics', icon: 'analytics-outline', color: colors.primary, bg: colors.cyanBackground, route: 'Analytics' },
@@ -16,11 +19,25 @@ const items = [
 ] as const;
 
 export function MoreScreen({ navigation }: { navigation: any }) {
-  const { reports, simulations, watchlistSymbols, activePortfolio } = useAppData();
+  const { simulations, watchlistSymbols } = useAppData();
+  const { portfolios, activePortfolioId, listStatus } = usePortfolios();
+  const {
+    reports,
+    historyStatus,
+    refreshReportHistory
+  } = useReports();
+
+  useFocusEffect(React.useCallback(() => {
+    if (listStatus === 'ready' || portfolios.length) {
+      void refreshReportHistory(portfolios);
+    }
+  }, [listStatus, portfolios, refreshReportHistory]));
 
   function open(route: (typeof items)[number]['route']) {
     if (route === 'Analytics') {
-      navigation.navigate('Analytics', { portfolioId: activePortfolio?.id });
+      navigation.navigate('Analytics', {
+        portfolioId: activePortfolioId ?? undefined
+      });
       return;
     }
     navigation.navigate(route);
@@ -33,7 +50,9 @@ export function MoreScreen({ navigation }: { navigation: any }) {
 
         <View style={styles.summaryRow}>
           <Card style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{reports.length}</Text>
+            <Text style={styles.summaryValue}>
+              {historyStatus === 'ready' || reports.length ? reports.length : '—'}
+            </Text>
             <Text style={styles.summaryLabel}>Reports</Text>
           </Card>
           <Card style={styles.summaryCard}>

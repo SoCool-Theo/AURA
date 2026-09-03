@@ -71,7 +71,7 @@ export function SettingsScreen() {
   function resetEverything() {
     Alert.alert(
       'Reset local app data?',
-      'This restores sample portfolios, clears local reports and simulations, resets Watchlist/Learn progress, and restores app preferences.',
+      'This restores local demo data, clears local simulations, resets Watchlist/Learn progress, and restores app preferences. Backend portfolios and reports are not deleted.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

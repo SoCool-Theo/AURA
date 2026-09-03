@@ -2,10 +2,10 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, spacing } from '../../theme/theme';
 
-export type DateRange = '1M' | '3M' | '6M' | '1Y' | 'ALL';
-const ranges: DateRange[] = ['1M', '3M', '6M', '1Y', 'ALL'];
+export type DateRange = '1M' | '3M' | '6M' | '1Y';
+const ranges: DateRange[] = ['1M', '3M', '6M', '1Y'];
 
-export function DateRangeSelector({ value, onChange }: { value: DateRange; onChange: (value: DateRange) => void }) {
+export function DateRangeSelector({ value, onChange }: { value: DateRange | null; onChange: (value: DateRange) => void }) {
   return (
     <View style={styles.row}>
       {ranges.map((range) => {
