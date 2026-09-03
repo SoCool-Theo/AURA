@@ -286,6 +286,7 @@ def test_default_provider_truthfully_returns_unavailable_after_authentication() 
     with (
         patch.object(dependency_module, "_get_session_factory", return_value=session_factory),
         patch.object(settings, "jwt_secret_key", SecretStr(JWT_SECRET)),
+        patch.object(settings, "aura_llm_provider", None),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
         response = client.post(PATH, headers=_headers(), json=_payload())

@@ -92,6 +92,36 @@ def test_valid_provider_output_passes_without_changing_content() -> None:
     assert text == "  A negative maximum drawdown describes a historical decline.  "
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Your portfolio is concentrated in two crypto assets, so movements in those assets can have a large effect on the total portfolio.",
+        "A concentrated portfolio generally has greater exposure to a small number of assets.",
+        "Diversification describes how spread out a portfolio is; it does not guarantee lower risk.",
+    ],
+)
+def test_explanatory_provider_output_remains_allowed(text: str) -> None:
+    assert validate_provider_output(text).reason is GuardrailReason.ALLOWED
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "How you could reduce risk: add other asset types such as stocks or bonds.",
+        "Consider adding stablecoins as a lower-volatility alternative.",
+        "Reduce your SOL allocation and increase diversification by buying other assets.",
+        "Educationally, you should add more crypto coins to reduce concentration.",
+        "Sell BNB and buy a different asset class.",
+    ],
+)
+def test_personalized_provider_allocation_advice_is_rejected(text: str) -> None:
+    decision = validate_provider_output(text)
+
+    assert decision.allowed is False
+    assert decision.reason is GuardrailReason.INVESTMENT_ADVICE
+    assert decision.response == INVESTMENT_ADVICE_REFUSAL
+
+
 @pytest.mark.parametrize("text", [None, "", " \n\t "])
 def test_invalid_provider_output_is_rejected(text: object) -> None:
     assert validate_provider_output(text).reason is GuardrailReason.INVALID_OUTPUT

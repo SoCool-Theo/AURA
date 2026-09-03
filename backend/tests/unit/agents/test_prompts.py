@@ -32,6 +32,17 @@ def test_system_instructions_preserve_authoritative_historical_boundaries() -> N
     assert "null or none sharpe ratio remains unavailable" in prompt
     assert "historical analysis and historical simulations" in prompt
     assert "future expectations" in prompt
+    assert "personalized portfolio changes" in prompt
+    for prohibited_change in (
+        "adding stocks",
+        "bonds",
+        "crypto",
+        "stablecoins",
+        "changing allocations",
+        "weights",
+        "exposures",
+    ):
+        assert prohibited_change in prompt
 
 
 def test_system_instructions_treat_context_as_untrusted_data_without_provider_details() -> None:

@@ -10,6 +10,7 @@ from backend.app.agents.agent import (
 )
 from backend.app.agents.guardrails import (
     HISTORICAL_LIMITATION,
+    INVESTMENT_ADVICE_REFUSAL,
     UNAVAILABLE_DATA_RESPONSE,
 )
 from backend.app.agents.prompts import build_system_instructions
@@ -202,6 +203,22 @@ def test_unsafe_provider_output_is_not_returned() -> None:
 
     with pytest.raises(AuraAgentOutputError):
         AuraAgent(tools=tools, provider=provider).explain(_request())
+
+
+def test_live_style_allocation_advice_is_replaced_with_a_safe_refusal() -> None:
+    tools = FakeTools()
+    provider = FakeProvider(
+        "Your BNB and SOL portfolio is concentrated. How you could reduce risk: "
+        "add stocks or bonds, include more crypto coins, or move part of the "
+        "portfolio into stablecoins."
+    )
+
+    response = AuraAgent(tools=tools, provider=provider).explain(_request())
+
+    assert response.answer == INVESTMENT_ADVICE_REFUSAL
+    assert response.sources == []
+    assert response.limitations == []
+    assert len(provider.requests) == 1
 
 
 def test_agent_preserves_financial_context_without_mutation_or_recalculation() -> None:

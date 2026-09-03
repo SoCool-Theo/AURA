@@ -12,6 +12,7 @@ from ..schemas.agent import (
     AgentSourceReference,
 )
 from .guardrails import (
+    GuardrailReason,
     HISTORICAL_LIMITATION,
     UNAVAILABLE_DATA_RESPONSE,
     evaluate_user_message,
@@ -70,7 +71,15 @@ class AuraAgent:
             grounded_context=grounded_context,
         )
         provider_response = self.provider.generate(provider_request)
-        if not validate_provider_output(provider_response.text).allowed:
+        output_decision = validate_provider_output(provider_response.text)
+        if output_decision.reason is GuardrailReason.INVESTMENT_ADVICE:
+            return AgentExplainResponse(
+                answer=output_decision.response
+                or "I can explain Aura's historical risk results.",
+                sources=[],
+                limitations=[],
+            )
+        if not output_decision.allowed:
             raise AuraAgentOutputError()
 
         sources = [

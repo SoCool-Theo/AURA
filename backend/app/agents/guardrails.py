@@ -18,7 +18,8 @@ UNAVAILABLE_DATA_RESPONSE = (
 )
 INVESTMENT_ADVICE_REFUSAL = (
     "I can explain the historical risk characteristics of your portfolio, but I "
-    "can't recommend whether you should buy, sell, or hold a specific investment. "
+    "can't recommend whether you should buy, sell, or hold a specific investment, "
+    "add or remove assets, or change your allocation. "
     "I can explain how a holding contributes to your portfolio's calculated risk."
 )
 INVALID_MESSAGE_RESPONSE = "Please ask a portfolio-risk or historical-simulation question."
@@ -61,6 +62,46 @@ _INVESTMENT_ADVICE_PATTERNS = (
 _SYSTEM_LEAKAGE_PATTERN = re.compile(
     r"\b(?:system\s+message|system\s+instructions|developer\s+message)\b",
 )
+_PROHIBITED_OUTPUT_ADVICE_PATTERNS = (
+    re.compile(
+        r"\b(?:you\s+)?(?:should|need\s+to|ought\s+to)\s+"
+        r"(?:add|include|buy|purchase|sell|remove|reduce|increase|decrease|"
+        r"change|adjust|move|shift|rebalance)\b"
+    ),
+    re.compile(
+        r"\byou\s+(?:could|can)\s+(?:add|include|buy|purchase|sell|remove|"
+        r"reduce|increase|decrease|change|adjust|move|shift|rebalance)\b"
+    ),
+    re.compile(
+        r"\bconsider\s+(?:adding|including|buying|purchasing|selling|removing|"
+        r"reducing|increasing|decreasing|changing|adjusting|moving|shifting|"
+        r"rebalancing)\b"
+    ),
+    re.compile(
+        r"\b(?:add|include|buy|purchase)\s+(?:more\s+)?"
+        r"(?:stocks?|bonds?|crypto(?:currency|currencies)?|coins?|stablecoins?|"
+        r"asset\s+classes?)\b"
+    ),
+    re.compile(
+        r"(?:^|[:;]\s*|\n\s*(?:[-*]\s*)?)(?:add|include)\b[^.!?]{0,80}"
+        r"\b(?:stocks?|bonds?|crypto(?:currency|currencies)?|coins?|stablecoins?|"
+        r"asset\s+classes?)\b"
+    ),
+    re.compile(
+        r"\b(?:reduce|increase|decrease|change|adjust|move|shift|rebalance)\s+"
+        r"(?:your\s+)?(?:[a-z0-9._-]+\s+)?(?:portfolio\s+)?(?:allocation|allocations|exposure|"
+        r"weight|weights|position|positions|holding|holdings)\b"
+    ),
+    re.compile(
+        r"\b(?:move|shift)\s+(?:part|some|a\s+portion)\s+of\s+(?:your\s+)?"
+        r"portfolio\s+(?:into|to)\b"
+    ),
+    re.compile(
+        r"\bdiversif(?:y|ication)\b.*\b(?:by\s+)?(?:adding|including|buying|"
+        r"purchasing)\b"
+    ),
+    re.compile(r"(?:^|[.!?]\s*|\n\s*(?:[-*]\s*)?)(?:buy|purchase|sell)\b"),
+)
 
 
 def _normalized_message(value: object) -> str | None:
@@ -98,6 +139,12 @@ def validate_provider_output(text: object) -> GuardrailDecision:
         return GuardrailDecision(False, GuardrailReason.OUTPUT_TOO_LONG)
     if _SYSTEM_LEAKAGE_PATTERN.search(text.casefold()):
         return GuardrailDecision(False, GuardrailReason.SYSTEM_LEAKAGE)
+    if any(pattern.search(text.casefold()) for pattern in _PROHIBITED_OUTPUT_ADVICE_PATTERNS):
+        return GuardrailDecision(
+            False,
+            GuardrailReason.INVESTMENT_ADVICE,
+            INVESTMENT_ADVICE_REFUSAL,
+        )
     return GuardrailDecision(True, GuardrailReason.ALLOWED)
 
 
