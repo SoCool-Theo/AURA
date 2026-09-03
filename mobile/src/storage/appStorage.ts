@@ -7,6 +7,9 @@ import type {
 } from '../types/demo';
 import { portfoliosMock } from '../mocks/portfolios.mock';
 
+// Legacy demo persistence for screens outside the current integration phase.
+// It is not the production portfolio source used by PortfolioProvider.
+
 const PORTFOLIOS_KEY = 'aura_local_portfolios_v2';
 const REPORTS_KEY = 'aura_local_reports_v2';
 const SIMULATIONS_KEY = 'aura_local_simulations_v2';

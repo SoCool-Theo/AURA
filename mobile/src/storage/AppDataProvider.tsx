@@ -30,6 +30,10 @@ import {
 } from '../utils/localCalculations';
 import { scenarioCatalog } from '../mocks/scenarios.mock';
 
+// Temporary demo state for Dashboard, reports, simulations, and other screens
+// that have not reached their API-integration phases. Production portfolio
+// screens use PortfolioProvider and never read this local portfolio data.
+
 type ContextValue = {
   loading: boolean;
   portfolios: Portfolio[];

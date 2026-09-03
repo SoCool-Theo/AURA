@@ -1,21 +1,22 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import type { DemoHolding as Holding } from '../../types/demo';
-import { RiskBadge } from '../ui/RiskBadge';
+import type { PortfolioHoldingResponse } from '../../types/portfolio';
 import { colors, spacing } from '../../theme/theme';
-import { formatCurrency } from '../../utils/formatting';
+import { decimalWeightToPercent } from '../../portfolio/portfolioValidation';
 
-export function AssetRow({ holding }: { holding: Holding }) {
+export function AssetRow({ holding }: { holding: PortfolioHoldingResponse }) {
   return (
     <View style={styles.row}>
       <View style={styles.symbolBox}>
         <Text style={styles.symbol}>{holding.symbol.slice(0, 4)}</Text>
       </View>
       <View style={styles.middle}>
-        <Text style={styles.name}>{holding.name}</Text>
-        <Text style={styles.meta}>{holding.weight}% weight · {formatCurrency(holding.value)}</Text>
+        <Text style={styles.name}>{holding.symbol}</Text>
+        <Text style={styles.meta}>Position {holding.position + 1}</Text>
       </View>
-      <RiskBadge level={holding.risk} />
+      <Text style={styles.weight}>
+        {decimalWeightToPercent(holding.weight).toFixed(2)}%
+      </Text>
     </View>
   );
 }
@@ -29,5 +30,6 @@ const styles = StyleSheet.create({
   symbol: { color: colors.primary, fontWeight: '900', fontSize: 11 },
   middle: { flex: 1 },
   name: { color: colors.text, fontWeight: '800' },
-  meta: { color: colors.muted, marginTop: 4, fontSize: 12 }
+  meta: { color: colors.muted, marginTop: 4, fontSize: 12 },
+  weight: { color: colors.primary, fontSize: 13, fontWeight: '900' }
 });

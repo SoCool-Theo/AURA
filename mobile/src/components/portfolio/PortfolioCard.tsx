@@ -1,37 +1,45 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { DemoPortfolio as Portfolio } from '../../types/demo';
+import type { PortfolioSummaryResponse } from '../../types/portfolio';
 import { Card } from '../ui/Card';
-import { RiskBadge } from '../ui/RiskBadge';
 import { colors, spacing } from '../../theme/theme';
-import { formatCurrency } from '../../utils/formatting';
 
-export function PortfolioCard({ portfolio, onPress }: { portfolio: Portfolio; onPress: () => void }) {
+export function PortfolioCard({
+  portfolio,
+  active,
+  onPress
+}: {
+  portfolio: PortfolioSummaryResponse;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable onPress={onPress}>
-      <Card style={styles.card}>
+      <Card style={[styles.card, active && styles.activeCard]}>
         <View style={styles.top}>
-          <View>
+          <View style={styles.main}>
             <Text style={styles.name}>{portfolio.name}</Text>
-            <Text style={styles.value}>{formatCurrency(portfolio.totalValue)}</Text>
+            <Text style={styles.meta}>
+              Updated {new Date(portfolio.updated_at).toLocaleDateString()}
+            </Text>
           </View>
-          <RiskBadge level={portfolio.riskLevel} />
+          {active ? <Text style={styles.activeLabel}>ACTIVE</Text> : null}
         </View>
-        <View style={styles.stats}>
-          <Text style={styles.stat}>Risk {portfolio.riskScore}/100</Text>
-          <Text style={styles.stat}>Return {portfolio.annualizedReturn.toFixed(1)}%</Text>
-          <Text style={styles.stat}>{portfolio.holdings.length} assets</Text>
-        </View>
+        <Text style={styles.created}>
+          Created {new Date(portfolio.created_at).toLocaleDateString()}
+        </Text>
       </Card>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.lg },
-  top: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.lg },
+  card: { gap: spacing.md },
+  activeCard: { borderColor: colors.primary },
+  top: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  main: { flex: 1 },
   name: { color: colors.text, fontSize: 18, fontWeight: '800' },
-  value: { color: colors.textSecondary, marginTop: 4 },
-  stats: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
-  stat: { color: colors.muted, fontSize: 12, fontWeight: '700' }
+  meta: { color: colors.textSecondary, marginTop: 4, fontSize: 12 },
+  created: { color: colors.muted, fontSize: 11 },
+  activeLabel: { color: colors.success, fontSize: 9, fontWeight: '900', letterSpacing: 0.8 }
 });
