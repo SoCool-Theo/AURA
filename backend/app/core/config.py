@@ -1,10 +1,10 @@
 import re
 from datetime import time
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import PositiveInt, PostgresDsn, SecretStr, field_validator
+from pydantic import Field, PositiveInt, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +22,22 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: PositiveInt = 30
     market_data_update_time_utc: time = time(hour=2)
+
+    # AI / LLM configuration
+    aura_llm_provider: Literal["openai", "groq"] | None = None
+    openai_api_key: SecretStr | None = None
+    groq_api_key: SecretStr | None = None
+    aura_llm_model: str | None = None
+    aura_llm_timeout_seconds: Annotated[
+        float,
+        Field(gt=0, le=120),
+    ] = 30.0
+    aura_llm_max_output_tokens: Annotated[
+        int,
+        Field(ge=1, le=1500),
+    ] = 1200
+
+    # React frontend CORS configuration
     cors_allowed_origins: tuple[str, ...] = (
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -49,6 +65,7 @@ class Settings(BaseSettings):
                 and value.tzinfo is None
             ):
                 return value
+
         elif isinstance(value, str) and _DAILY_TIME_PATTERN.fullmatch(value):
             hour, minute = value.split(":")
             return time(hour=int(hour), minute=int(minute))
@@ -56,6 +73,20 @@ class Settings(BaseSettings):
         raise ValueError(
             "MARKET_DATA_UPDATE_TIME_UTC must use strict HH:MM format"
         )
+
+    @field_validator("aura_llm_model", mode="before")
+    @classmethod
+    def normalize_aura_llm_model(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+    @field_validator("aura_llm_provider", mode="before")
+    @classmethod
+    def normalize_aura_llm_provider(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().casefold() or None
+        return value
 
     @field_validator("cors_allowed_origins")
     @classmethod
@@ -68,6 +99,7 @@ class Settings(BaseSettings):
 
         for origin in value:
             parsed = urlsplit(origin)
+
             try:
                 port = parsed.port
             except ValueError as error:
@@ -92,6 +124,7 @@ class Settings(BaseSettings):
                     "origins without credentials, paths, wildcards, queries, "
                     "or fragments"
                 )
+
         return value
 
     model_config = SettingsConfigDict(
