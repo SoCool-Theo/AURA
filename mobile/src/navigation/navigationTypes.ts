@@ -20,7 +20,7 @@ export type SimulationStackParamList = {
   HistoricalScenario: { portfolioId?: string };
   AllocationChange: { portfolioId?: string };
   CombinedSimulation: { portfolioId?: string };
-  SimulationResult: { simulationId: string };
+  SimulationResult: { portfolioId: string; simulationId: string };
   SimulationHistory: undefined;
 };
 

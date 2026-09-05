@@ -1,86 +1,89 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { SimulationResults } from '../../components/simulations/SimulationResults';
+import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { MetricCard } from '../../components/portfolio/MetricCard';
-import { useAppData } from '../../hooks/useAppData';
+import { LoadingState } from '../../components/ui/LoadingState';
+import { simulationErrorMessage } from '../../simulation/simulationErrors';
+import { formatSimulationTimestamp } from '../../simulation/simulationFormatting';
+import type { SimulationRunResult } from '../../simulation/SimulationProvider';
+import { useSimulations } from '../../simulation/useSimulations';
+import type { SimulationHistoryDetailResponse } from '../../types/simulation';
 import { colors, spacing, typography } from '../../theme/theme';
-import { formatCurrency, formatPercent } from '../../utils/formatting';
+
+function toRunResult(detail: SimulationHistoryDetailResponse): SimulationRunResult {
+  if (detail.simulation_type === 'historical-scenario') {
+    return { type: 'historical-scenario', response: detail.result };
+  }
+  if (detail.simulation_type === 'allocation') {
+    return { type: 'allocation', response: detail.result };
+  }
+  return { type: 'combined', response: detail.result };
+}
 
 export function SimulationResultScreen({ route }: { route: any }) {
-  const { simulations } = useAppData();
-  const record = simulations.find((item) => item.id === route.params.simulationId);
+  const { getHistoryDetail } = useSimulations();
+  const { portfolioId, simulationId } = route.params;
+  const [detail, setDetail] = useState<SimulationHistoryDetailResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
+  const requestRef = useRef(0);
 
-  if (!record) {
-    return <SafeAreaView style={styles.safe}><EmptyState title="Simulation not found" description="Open Simulation History and choose another result." /></SafeAreaView>;
+  const load = useCallback(async () => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await getHistoryDetail(portfolioId, simulationId);
+      if (requestRef.current === requestId) setDetail(response);
+    } catch (caught) {
+      if (requestRef.current === requestId) setError(caught);
+    } finally {
+      if (requestRef.current === requestId) setLoading(false);
+    }
+  }, [getHistoryDetail, portfolioId, simulationId]);
+
+  useEffect(() => {
+    void load();
+    return () => {
+      requestRef.current += 1;
+    };
+  }, [load]);
+
+  if (loading && !detail) return <LoadingState message="Loading saved simulation…" />;
+  if (error && !detail) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <View style={styles.center}>
+          <Card style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Simulation unavailable</Text>
+            <Text style={styles.errorText}>{simulationErrorMessage(error, 'Unable to load this simulation result.')}</Text>
+            <Button title="Retry" onPress={() => void load()} />
+          </Card>
+        </View>
+      </SafeAreaView>
+    );
   }
-
-  const original = record.original;
-  const modified = record.modified;
+  if (!detail) return null;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.eyebrow}>{record.mode.toUpperCase()}</Text>
-        <Text style={styles.title}>{record.title}</Text>
-        <Text style={styles.subtitle}>{record.portfolioName} · saved locally</Text>
-
-        <Card style={styles.hero}>
-          <Text style={styles.heroLabel}>ORIGINAL PORTFOLIO RETURN</Text>
-          <Text style={[styles.heroValue, { color: original.cumulativeReturn < 0 ? colors.danger : colors.success }]}>
-            {formatPercent(original.cumulativeReturn)}
-          </Text>
-          <Text style={styles.heroCaption}>Demo result for frontend interaction only</Text>
+        <Text style={styles.title}>Saved Simulation</Text>
+        <Text style={styles.subtitle}>Immutable backend history detail.</Text>
+        <Card style={styles.metadata}>
+          <Text style={styles.metaLabel}>SIMULATION ID</Text>
+          <Text selectable style={styles.metaValue}>{detail.id}</Text>
+          <Text style={styles.metaLabel}>PORTFOLIO ID</Text>
+          <Text selectable style={styles.metaValue}>{detail.portfolio_id}</Text>
+          <Text style={styles.metaLabel}>CREATED</Text>
+          <Text style={styles.metaValue}>{formatSimulationTimestamp(detail.created_at)}</Text>
         </Card>
-
-        <View style={styles.grid}>
-          <MetricCard label="Ending Value" value={formatCurrency(original.endingValue)} />
-          <MetricCard label="Volatility" value={formatPercent(original.annualizedVolatility)} />
-          <MetricCard label="Max Drawdown" value={formatPercent(original.maxDrawdown)} />
-          <MetricCard label="Sharpe Ratio" value={original.sharpeRatio?.toFixed(2) ?? '—'} />
-        </View>
-
-        {modified ? (
-          <>
-            <Text style={styles.section}>Modified allocation</Text>
-            <Card style={styles.compareCard}>
-              <View style={styles.compareRow}>
-                <Text style={styles.compareLabel}>Return</Text>
-                <Text style={styles.compareValue}>{formatPercent(modified.cumulativeReturn)}</Text>
-              </View>
-              <View style={styles.compareRow}>
-                <Text style={styles.compareLabel}>Ending value</Text>
-                <Text style={styles.compareValue}>{formatCurrency(modified.endingValue)}</Text>
-              </View>
-              <View style={styles.compareRow}>
-                <Text style={styles.compareLabel}>Volatility</Text>
-                <Text style={styles.compareValue}>{formatPercent(modified.annualizedVolatility)}</Text>
-              </View>
-              <View style={styles.compareRow}>
-                <Text style={styles.compareLabel}>Max drawdown</Text>
-                <Text style={styles.compareValue}>{formatPercent(modified.maxDrawdown)}</Text>
-              </View>
-            </Card>
-
-            {record.comparison ? (
-              <>
-                <Text style={styles.section}>Difference</Text>
-                <Card style={styles.deltaCard}>
-                  <Text style={styles.deltaText}>
-                    Return delta: {formatPercent(record.comparison.returnDelta)}
-                  </Text>
-                  <Text style={styles.deltaText}>
-                    Volatility delta: {formatPercent(record.comparison.volatilityDelta)}
-                  </Text>
-                  <Text style={styles.deltaText}>
-                    Drawdown delta: {formatPercent(record.comparison.drawdownDelta)}
-                  </Text>
-                </Card>
-              </>
-            ) : null}
-          </>
-        ) : null}
+        {error ? <Text style={styles.refreshError}>Refresh failed; showing the previously loaded immutable result.</Text> : null}
+        <SimulationResults result={toRunResult(detail)} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -89,19 +92,14 @@ export function SimulationResultScreen({ route }: { route: any }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: 100 },
-  eyebrow: { color: colors.primary, fontSize: 10, fontWeight: '900', letterSpacing: 1.3 },
-  title: { color: colors.text, ...typography.h1, marginTop: 4 },
+  title: { color: colors.text, ...typography.h1 },
   subtitle: { color: colors.textSecondary, marginTop: 6, marginBottom: spacing.xl },
-  hero: { alignItems: 'center', gap: spacing.sm },
-  heroLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.1 },
-  heroValue: { fontSize: 44, fontWeight: '900' },
-  heroCaption: { color: colors.textSecondary, fontSize: 12 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.md, marginVertical: spacing.xl },
-  section: { color: colors.text, ...typography.h2, marginTop: spacing.xl, marginBottom: spacing.md },
-  compareCard: { gap: spacing.md },
-  compareRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  compareLabel: { color: colors.textSecondary },
-  compareValue: { color: colors.text, fontWeight: '900' },
-  deltaCard: { gap: spacing.sm },
-  deltaText: { color: colors.textSecondary, fontWeight: '700' }
+  metadata: { gap: spacing.xs },
+  metaLabel: { color: colors.muted, fontSize: 9, fontWeight: '900', marginTop: spacing.sm },
+  metaValue: { color: colors.textSecondary, fontSize: 11 },
+  center: { flex: 1, justifyContent: 'center', padding: spacing.xl },
+  errorCard: { gap: spacing.md, borderColor: colors.dangerBorder },
+  errorTitle: { color: colors.danger, fontWeight: '900', fontSize: 16 },
+  errorText: { color: colors.textSecondary, lineHeight: 19 },
+  refreshError: { color: colors.warning, marginTop: spacing.md, fontSize: 11 }
 });

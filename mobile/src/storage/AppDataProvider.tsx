@@ -1,8 +1,7 @@
 import React, { createContext, PropsWithChildren, useEffect, useMemo, useState } from 'react';
 import type {
   DemoHolding as Holding,
-  DemoPortfolio as Portfolio,
-  DemoSimulationRecord as SimulationRecord
+  DemoPortfolio as Portfolio
 } from '../types/demo';
 import {
   clearLocalAuraData,
@@ -10,30 +9,21 @@ import {
   loadActivePortfolioId,
   loadLearnProgress,
   loadPortfolios,
-  loadSimulations,
   loadWatchlistSymbols,
   rebalanceByValue,
   saveActivePortfolioId,
   saveLearnProgress,
   savePortfolios,
-  saveSimulations,
   saveWatchlistSymbols
 } from './appStorage';
-import {
-  demoAllocationMetrics,
-  demoScenarioMetrics,
-  portfolioWithWeights
-} from '../utils/localCalculations';
-import { scenarioCatalog } from '../mocks/scenarios.mock';
 
-// Temporary demo state for Dashboard, simulations, Assistant, and other
+// Temporary demo state for Dashboard, Assistant, and other
 // screens that have not reached their API-integration phases. Production
-// portfolios use PortfolioProvider; Analytics and Reports use ReportProvider.
+// portfolios, Analytics, Reports, and Simulations use focused providers.
 
 type ContextValue = {
   loading: boolean;
   portfolios: Portfolio[];
-  simulations: SimulationRecord[];
   activePortfolioId: string | null;
   activePortfolio: Portfolio | null;
   watchlistSymbols: string[];
@@ -46,14 +36,6 @@ type ContextValue = {
   deletePortfolio: (id: string) => Promise<void>;
   addHolding: (portfolioId: string, holding: Holding) => Promise<void>;
   replaceHoldings: (portfolioId: string, holdings: Holding[]) => Promise<void>;
-  runHistorical: (portfolioId: string, scenarioId: string) => Promise<SimulationRecord | null>;
-  runAllocation: (portfolioId: string, weights: Record<string, number>) => Promise<SimulationRecord | null>;
-  runCombined: (
-    portfolioId: string,
-    scenarioId: string,
-    weights: Record<string, number>
-  ) => Promise<SimulationRecord | null>;
-  deleteSimulation: (id: string) => Promise<void>;
   addWatchlistSymbol: (symbol: string) => Promise<void>;
   removeWatchlistSymbol: (symbol: string) => Promise<void>;
   toggleLessonComplete: (lessonId: string) => Promise<void>;
@@ -65,7 +47,6 @@ export const AppDataContext = createContext<ContextValue | undefined>(undefined)
 export function AppDataProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [simulations, setSimulations] = useState<SimulationRecord[]>([]);
   const [activePortfolioId, setActivePortfolioId] = useState<string | null>(null);
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
   const [learnProgress, setLearnProgress] = useState<Record<string, boolean>>({});
@@ -74,20 +55,17 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     (async () => {
       const [
         savedPortfolios,
-        savedSimulations,
         savedActiveId,
         savedWatchlist,
         savedLearnProgress
       ] = await Promise.all([
         loadPortfolios(),
-        loadSimulations(),
         loadActivePortfolioId(),
         loadWatchlistSymbols(),
         loadLearnProgress()
       ]);
 
       setPortfolios(savedPortfolios);
-      setSimulations(savedSimulations);
       setWatchlistSymbols(savedWatchlist);
       setLearnProgress(savedLearnProgress);
 
@@ -191,106 +169,6 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     );
   }
 
-  async function runHistorical(portfolioId: string, scenarioId: string) {
-    const portfolio = portfolios.find((item) => item.id === portfolioId);
-    const scenario = scenarioCatalog.find((item) => item.id === scenarioId);
-    if (!portfolio || !scenario) return null;
-
-    const record: SimulationRecord = {
-      id: `simulation-${Date.now()}`,
-      portfolioId,
-      portfolioName: portfolio.name,
-      mode: 'Historical Scenario',
-      title: scenario.name,
-      scenarioId,
-      createdAt: new Date().toISOString(),
-      original: demoScenarioMetrics(portfolio, scenario)
-    };
-
-    const next = [record, ...simulations];
-    setSimulations(next);
-    await saveSimulations(next);
-    return record;
-  }
-
-  async function runAllocation(portfolioId: string, weights: Record<string, number>) {
-    const portfolio = portfolios.find((item) => item.id === portfolioId);
-    if (!portfolio) return null;
-
-    const originalWeights = Object.fromEntries(
-      portfolio.holdings.map((holding) => [holding.symbol, holding.weight])
-    );
-    const original = demoAllocationMetrics(portfolio, originalWeights);
-    const modified = demoAllocationMetrics(portfolio, weights);
-
-    const record: SimulationRecord = {
-      id: `simulation-${Date.now()}`,
-      portfolioId,
-      portfolioName: portfolio.name,
-      mode: 'Allocation Change',
-      title: 'Allocation Comparison',
-      createdAt: new Date().toISOString(),
-      original,
-      modified,
-      comparison: {
-        returnDelta: Number((modified.cumulativeReturn - original.cumulativeReturn).toFixed(2)),
-        volatilityDelta: Number(
-          (modified.annualizedVolatility - original.annualizedVolatility).toFixed(2)
-        ),
-        drawdownDelta: Number((modified.maxDrawdown - original.maxDrawdown).toFixed(2))
-      }
-    };
-
-    const next = [record, ...simulations];
-    setSimulations(next);
-    await saveSimulations(next);
-    return record;
-  }
-
-  async function runCombined(
-    portfolioId: string,
-    scenarioId: string,
-    weights: Record<string, number>
-  ) {
-    const portfolio = portfolios.find((item) => item.id === portfolioId);
-    const scenario = scenarioCatalog.find((item) => item.id === scenarioId);
-    if (!portfolio || !scenario) return null;
-
-    const modifiedPortfolio = portfolioWithWeights(portfolio, weights);
-    const original = demoScenarioMetrics(portfolio, scenario);
-    const modified = demoScenarioMetrics(modifiedPortfolio, scenario);
-
-    const record: SimulationRecord = {
-      id: `simulation-${Date.now()}`,
-      portfolioId,
-      portfolioName: portfolio.name,
-      mode: 'Combined',
-      title: `${scenario.name} Comparison`,
-      scenarioId,
-      createdAt: new Date().toISOString(),
-      original,
-      modified,
-      comparison: {
-        returnDelta: Number((modified.cumulativeReturn - original.cumulativeReturn).toFixed(2)),
-        volatilityDelta: Number(
-          (modified.annualizedVolatility - original.annualizedVolatility).toFixed(2)
-        ),
-        drawdownDelta: Number((modified.maxDrawdown - original.maxDrawdown).toFixed(2))
-      }
-    };
-
-    const next = [record, ...simulations];
-    setSimulations(next);
-    await saveSimulations(next);
-    return record;
-  }
-
-  async function deleteSimulation(id: string) {
-    const next = simulations.filter((item) => item.id !== id);
-    setSimulations(next);
-    await saveSimulations(next);
-  }
-
   async function addWatchlistSymbol(symbol: string) {
     const normalized = symbol.trim().toUpperCase();
     if (!normalized || watchlistSymbols.includes(normalized)) return;
@@ -320,7 +198,6 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     ]);
 
     setPortfolios(defaults);
-    setSimulations([]);
     setWatchlistSymbols(defaultWatchlist);
     setLearnProgress({});
 
@@ -336,7 +213,6 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     () => ({
       loading,
       portfolios,
-      simulations,
       activePortfolioId,
       activePortfolio,
       watchlistSymbols,
@@ -349,10 +225,6 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       deletePortfolio,
       addHolding,
       replaceHoldings,
-      runHistorical,
-      runAllocation,
-      runCombined,
-      deleteSimulation,
       addWatchlistSymbol,
       removeWatchlistSymbol,
       toggleLessonComplete,
@@ -361,7 +233,6 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     [
       loading,
       portfolios,
-      simulations,
       activePortfolioId,
       watchlistSymbols,
       learnProgress

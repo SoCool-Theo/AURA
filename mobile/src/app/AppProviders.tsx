@@ -15,6 +15,7 @@ import { usePreferences } from '../preferences/usePreferences';
 import { AppDataProvider } from '../storage/AppDataProvider';
 import { PortfolioProvider } from '../portfolio/PortfolioProvider';
 import { ReportProvider } from '../report/ReportProvider';
+import { SimulationProvider } from '../simulation/SimulationProvider';
 import { darkPalette, lightPalette } from '../theme/colors';
 
 function NavigationShell({ children }: PropsWithChildren) {
@@ -43,11 +44,13 @@ function NavigationShell({ children }: PropsWithChildren) {
       <AuthProvider>
         <PortfolioProvider>
           <ReportProvider>
-            <AppDataProvider>
-              <NavigationContainer theme={navigationTheme}>
-                {children}
-              </NavigationContainer>
-            </AppDataProvider>
+            <SimulationProvider>
+              <AppDataProvider>
+                <NavigationContainer theme={navigationTheme}>
+                  {children}
+                </NavigationContainer>
+              </AppDataProvider>
+            </SimulationProvider>
           </ReportProvider>
         </PortfolioProvider>
       </AuthProvider>

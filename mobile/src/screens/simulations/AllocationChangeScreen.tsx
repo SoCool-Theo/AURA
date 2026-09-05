@@ -1,75 +1,123 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card } from '../../components/ui/Card';
+
+import { AllocationEditor } from '../../components/simulations/AllocationEditor';
+import { PortfolioSelector } from '../../components/simulations/PortfolioSelector';
+import { SimulationResults } from '../../components/simulations/SimulationResults';
 import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { useAppData } from '../../hooks/useAppData';
+import { LoadingState } from '../../components/ui/LoadingState';
+import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
+import { simulationErrorMessage } from '../../simulation/simulationErrors';
+import type { SimulationRunResult } from '../../simulation/SimulationProvider';
+import {
+  allocationInputsFromPortfolio,
+  allocationTotal,
+  defaultSimulationPeriod,
+  isValidIsoDate,
+  validateModifiedAllocation,
+  type AllocationInputs
+} from '../../simulation/simulationValidation';
+import { useSimulationPortfolio } from '../../simulation/useSimulationPortfolio';
+import { useSimulations } from '../../simulation/useSimulations';
 import { colors, spacing, typography } from '../../theme/theme';
 
-export function AllocationChangeScreen({ route, navigation }: { route: any; navigation: any }) {
-  const { portfolios, activePortfolio, runAllocation } = useAppData();
-  const portfolioId = route.params?.portfolioId ?? activePortfolio?.id;
-  const portfolio = portfolios.find((item) => item.id === portfolioId) ?? activePortfolio;
+export function AllocationChangeScreen({ route }: { route: any }) {
+  const portfolioState = useSimulationPortfolio(route.params?.portfolioId);
+  const { runAllocation } = useSimulations();
+  const initialPeriod = useRef(defaultSimulationPeriod()).current;
+  const [startDate, setStartDate] = useState(initialPeriod.start);
+  const [endDate, setEndDate] = useState(initialPeriod.end);
+  const [weights, setWeights] = useState<AllocationInputs>({});
+  const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [result, setResult] = useState<SimulationRunResult | null>(null);
+  const runningRef = useRef(false);
 
-  const initial = useMemo(
-    () => Object.fromEntries((portfolio?.holdings ?? []).map((holding) => [holding.symbol, String(holding.weight)])),
-    [portfolio?.id]
-  );
-  const [weights, setWeights] = useState<Record<string, string>>(initial);
-
-  if (!portfolio || !portfolio.holdings.length) {
-    return <SafeAreaView style={styles.safe}><EmptyState title="No holdings available" description="Add assets before changing allocation." /></SafeAreaView>;
-  }
-
-  const selectedPortfolio = portfolio;
-  const total = selectedPortfolio.holdings.reduce((sum, holding) => sum + Number(weights[holding.symbol] || 0), 0);
+  useEffect(() => {
+    if (portfolioState.portfolio) {
+      setWeights(allocationInputsFromPortfolio(portfolioState.portfolio));
+      setResult(null);
+      setRunError(null);
+    }
+  }, [portfolioState.portfolio]);
 
   async function run() {
-    if (Math.abs(total - 100) > 0.05) {
-      Alert.alert('Weights must total 100%', `Current total is ${total.toFixed(2)}%.`);
+    const portfolio = portfolioState.portfolio;
+    if (runningRef.current || !portfolio) return;
+    if (!isValidIsoDate(startDate) || !isValidIsoDate(endDate) || startDate > endDate) {
+      setRunError('Enter a valid start and end date in YYYY-MM-DD format, with the start no later than the end.');
       return;
     }
-    const numeric = Object.fromEntries(Object.entries(weights).map(([symbol, value]) => [symbol, Number(value)]));
-    const record = await runAllocation(selectedPortfolio.id, numeric);
-    if (record) navigation.replace('SimulationResult', { simulationId: record.id });
+    const validated = validateModifiedAllocation(portfolio, weights);
+    if (!validated.allocation) {
+      setRunError(validated.error);
+      return;
+    }
+
+    runningRef.current = true;
+    setRunning(true);
+    setRunError(null);
+    try {
+      const response = await runAllocation(portfolio.id, {
+        start_date: startDate,
+        end_date: endDate,
+        modified_allocation: validated.allocation
+      });
+      setResult({ type: 'allocation', response });
+    } catch (error) {
+      setRunError(simulationErrorMessage(error));
+    } finally {
+      runningRef.current = false;
+      setRunning(false);
+    }
   }
+
+  if ((portfolioState.listStatus === 'idle' || portfolioState.listStatus === 'loading') && !portfolioState.portfolios.length) {
+    return <LoadingState message="Loading portfolios…" />;
+  }
+  const portfolioFailure = portfolioState.listStatus === 'error' && !portfolioState.portfolios.length
+    ? portfolioErrorMessage(portfolioState.listError)
+    : portfolioState.detailStatus === 'error'
+      ? portfolioErrorMessage(portfolioState.detailError)
+      : null;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Allocation Change</Text>
-        <Text style={styles.subtitle}>Edit percentages for the same assets and compare the frontend demo metrics.</Text>
+        <Text style={styles.subtitle}>Compare the saved portfolio with a modified allocation over an explicit period.</Text>
 
-        <Card style={styles.totalCard}>
-          <Text style={styles.totalLabel}>TOTAL ALLOCATION</Text>
-          <Text style={[styles.totalValue, Math.abs(total - 100) > 0.05 && { color: colors.warning }]}>
-            {total.toFixed(2)}%
-          </Text>
-        </Card>
-
-        <View style={styles.list}>
-          {selectedPortfolio.holdings.map((holding) => (
-            <Card key={holding.symbol} style={styles.row}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.symbol}>{holding.symbol}</Text>
-                <Text style={styles.name}>{holding.name}</Text>
-              </View>
-              <View style={styles.weightInputBox}>
-                <TextInput
-                  value={weights[holding.symbol]}
-                  onChangeText={(text) => setWeights((current) => ({ ...current, [holding.symbol]: text }))}
-                  keyboardType="decimal-pad"
-                  style={styles.input}
-                  placeholderTextColor={colors.muted}
-                />
-                <Text style={styles.percent}>%</Text>
-              </View>
-            </Card>
-          ))}
-        </View>
-
-        <Button title="Compare allocation" onPress={run} style={{ marginTop: spacing.xl }} />
+        {!portfolioState.portfolios.length ? (
+          <Card><EmptyState title="No portfolio available" description="Create a portfolio with holdings before running a simulation." /></Card>
+        ) : (
+          <>
+            <Text style={styles.section}>Portfolio</Text>
+            <PortfolioSelector portfolios={portfolioState.portfolios} selectedId={portfolioState.selectedPortfolioId} onSelect={portfolioState.choosePortfolio} />
+            {portfolioState.detailStatus === 'loading' ? <Text style={styles.state}>Loading holdings…</Text> : null}
+            {portfolioFailure ? (
+              <Card style={styles.errorCard}><Text style={styles.error}>{portfolioFailure}</Text><Button title="Retry portfolio" onPress={() => void portfolioState.retryPortfolio()} /></Card>
+            ) : null}
+            {portfolioState.portfolio && !portfolioState.portfolio.holdings.length ? (
+              <Card><EmptyState title="No holdings available" description="Add holdings to this portfolio before changing its allocation." /></Card>
+            ) : portfolioState.portfolio ? (
+              <>
+                <Text style={styles.section}>Analysis period</Text>
+                <View style={styles.dateRow}>
+                  <View style={styles.dateField}><Text style={styles.label}>START</Text><TextInput value={startDate} onChangeText={setStartDate} style={styles.dateInput} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} /></View>
+                  <View style={styles.dateField}><Text style={styles.label}>END</Text><TextInput value={endDate} onChangeText={setEndDate} style={styles.dateInput} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} /></View>
+                </View>
+                <Text style={styles.section}>Modified allocation</Text>
+                <AllocationEditor portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value) => setWeights((current) => ({ ...current, [symbol]: value }))} />
+                {runError ? <Card style={styles.errorCard}><Text style={styles.error}>{runError}</Text></Card> : null}
+                <Button title={running ? 'Running…' : 'Compare allocation'} onPress={() => void run()} disabled={running} style={{ marginTop: spacing.xl }} />
+                {result ? <SimulationResults result={result} /> : null}
+              </>
+            ) : null}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -79,15 +127,13 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: 100 },
   title: { color: colors.text, ...typography.h1 },
-  subtitle: { color: colors.textSecondary, marginTop: 6, marginBottom: spacing.xl, lineHeight: 20 },
-  totalCard: { alignItems: 'center', gap: 4, marginBottom: spacing.lg },
-  totalLabel: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
-  totalValue: { color: colors.primary, fontSize: 28, fontWeight: '900' },
-  list: { gap: spacing.md },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  symbol: { color: colors.text, fontWeight: '900', fontSize: 16 },
-  name: { color: colors.textSecondary, marginTop: 3, fontSize: 12 },
-  weightInputBox: { flexDirection: 'row', alignItems: 'center', width: 105, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingRight: 12 },
-  input: { flex: 1, minHeight: 46, color: colors.text, textAlign: 'right', paddingHorizontal: 10, fontWeight: '900' },
-  percent: { color: colors.muted, fontWeight: '800' }
+  subtitle: { color: colors.textSecondary, marginTop: 6, marginBottom: spacing.lg, lineHeight: 20 },
+  section: { color: colors.text, fontSize: 14, fontWeight: '900', marginTop: spacing.lg, marginBottom: spacing.sm },
+  state: { color: colors.textSecondary, marginBottom: spacing.lg },
+  dateRow: { flexDirection: 'row', gap: spacing.md },
+  dateField: { flex: 1 },
+  label: { color: colors.muted, fontSize: 9, fontWeight: '900', marginBottom: spacing.xs },
+  dateInput: { minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.text, paddingHorizontal: spacing.md },
+  errorCard: { gap: spacing.md, borderColor: colors.dangerBorder, marginTop: spacing.md },
+  error: { color: colors.danger, lineHeight: 18, fontSize: 12 }
 });

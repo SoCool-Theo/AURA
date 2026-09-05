@@ -7,6 +7,7 @@ import { PageTitle } from '../../components/ui/PageTitle';
 import { useAppData } from '../../hooks/useAppData';
 import { usePortfolios } from '../../portfolio/usePortfolios';
 import { useReports } from '../../report/useReports';
+import { useSimulations } from '../../simulation/useSimulations';
 import { colors, spacing } from '../../theme/theme';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -19,19 +20,25 @@ const items = [
 ] as const;
 
 export function MoreScreen({ navigation }: { navigation: any }) {
-  const { simulations, watchlistSymbols } = useAppData();
+  const { watchlistSymbols } = useAppData();
   const { portfolios, activePortfolioId, listStatus } = usePortfolios();
   const {
     reports,
     historyStatus,
     refreshReportHistory
   } = useReports();
+  const {
+    history: simulations,
+    historyStatus: simulationHistoryStatus,
+    refreshHistory: refreshSimulationHistory
+  } = useSimulations();
 
   useFocusEffect(React.useCallback(() => {
     if (listStatus === 'ready' || portfolios.length) {
       void refreshReportHistory(portfolios);
+      void refreshSimulationHistory(portfolios);
     }
-  }, [listStatus, portfolios, refreshReportHistory]));
+  }, [listStatus, portfolios, refreshReportHistory, refreshSimulationHistory]));
 
   function open(route: (typeof items)[number]['route']) {
     if (route === 'Analytics') {
@@ -56,7 +63,9 @@ export function MoreScreen({ navigation }: { navigation: any }) {
             <Text style={styles.summaryLabel}>Reports</Text>
           </Card>
           <Card style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{simulations.length}</Text>
+            <Text style={styles.summaryValue}>
+              {simulationHistoryStatus === 'ready' || simulations.length ? simulations.length : '—'}
+            </Text>
             <Text style={styles.summaryLabel}>Simulations</Text>
           </Card>
           <Card style={styles.summaryCard}>
