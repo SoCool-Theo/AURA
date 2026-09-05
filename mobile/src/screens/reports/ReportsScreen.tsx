@@ -67,7 +67,7 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
   }, [portfolioFilter, query, reports]);
 
   function retry() {
-    if (listStatus === 'error' && !portfolios.length) {
+    if (listStatus === 'error') {
       void refreshPortfolios();
       return;
     }
@@ -143,7 +143,7 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
         refreshControl={(
           <RefreshControl
             refreshing={isRefreshing}
-            onRefresh={() => void refreshReportHistory(portfolios)}
+            onRefresh={retry}
             tintColor={colors.primary}
           />
         )}
@@ -165,6 +165,14 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
           <Card style={styles.errorCard}>
             <Text style={styles.errorTitle}>Report action failed</Text>
             <Text style={styles.stateText}>{actionError}</Text>
+          </Card>
+        ) : null}
+
+        {listStatus === 'error' && portfolios.length ? (
+          <Card style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Portfolio list refresh failed</Text>
+            <Text style={styles.stateText}>History uses the previously loaded portfolio list. {portfolioErrorMessage(listError)}</Text>
+            <Button title="Retry portfolios" onPress={retry} />
           </Card>
         ) : null}
 

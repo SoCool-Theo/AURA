@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../components/ui/Card';
 import { PageTitle } from '../../components/ui/PageTitle';
-import { useAppData } from '../../hooks/useAppData';
 import { usePortfolios } from '../../portfolio/usePortfolios';
 import { useReports } from '../../report/useReports';
 import { useSimulations } from '../../simulation/useSimulations';
@@ -14,13 +13,12 @@ import { useFocusEffect } from '@react-navigation/native';
 const items = [
   { label: 'Analytics', description: 'Detailed risk metrics', icon: 'analytics-outline', color: colors.primary, bg: colors.cyanBackground, route: 'Analytics' },
   { label: 'Reports', description: 'Saved analysis snapshots', icon: 'document-text-outline', color: colors.purpleSoft, bg: colors.purpleBackground, route: 'Reports' },
-  { label: 'Watchlist', description: 'Track selected market assets', icon: 'eye-outline', color: colors.warning, bg: colors.warningBackground, route: 'Watchlist' },
+  { label: 'Watchlist', description: 'Unavailable · coming later', icon: 'eye-outline', color: colors.warning, bg: colors.warningBackground, route: 'Watchlist' },
   { label: 'Learn', description: 'Portfolio-risk education', icon: 'school-outline', color: colors.blue, bg: colors.blueBackground, route: 'Learn' },
   { label: 'Settings', description: 'Account and preferences', icon: 'settings-outline', color: colors.textSecondary, bg: colors.surfaceAlt, route: 'Settings' }
 ] as const;
 
 export function MoreScreen({ navigation }: { navigation: any }) {
-  const { watchlistSymbols } = useAppData();
   const { portfolios, activePortfolioId, listStatus } = usePortfolios();
   const {
     reports,
@@ -58,21 +56,21 @@ export function MoreScreen({ navigation }: { navigation: any }) {
         <View style={styles.summaryRow}>
           <Card style={styles.summaryCard}>
             <Text style={styles.summaryValue}>
-              {historyStatus === 'ready' || reports.length ? reports.length : '—'}
+              {listStatus === 'ready' && historyStatus === 'ready' ? reports.length : '—'}
             </Text>
             <Text style={styles.summaryLabel}>Reports</Text>
           </Card>
           <Card style={styles.summaryCard}>
             <Text style={styles.summaryValue}>
-              {simulationHistoryStatus === 'ready' || simulations.length ? simulations.length : '—'}
+              {listStatus === 'ready' && simulationHistoryStatus === 'ready' ? simulations.length : '—'}
             </Text>
             <Text style={styles.summaryLabel}>Simulations</Text>
           </Card>
-          <Card style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{watchlistSymbols.length}</Text>
-            <Text style={styles.summaryLabel}>Watching</Text>
-          </Card>
         </View>
+
+        {listStatus === 'error' || historyStatus === 'error' || simulationHistoryStatus === 'error' ? (
+          <Text style={styles.description}>Some counts could not refresh. Open Reports or Simulations to retry.</Text>
+        ) : null}
 
         <View style={styles.list}>
           {items.map((item) => (

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { Tag } from '../../components/ui/Tag';
@@ -13,7 +14,7 @@ import { colors, spacing } from '../../theme/theme';
 const categories = ['All', 'Risk Basics', 'Analytics', 'Simulation', 'AI'] as const;
 
 export function LearnScreen({ navigation }: { navigation: any }) {
-  const { learnProgress } = useAppData();
+  const { learnProgress, localError, retryLocalData } = useAppData();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<(typeof categories)[number]>('All');
 
@@ -32,13 +33,14 @@ export function LearnScreen({ navigation }: { navigation: any }) {
     });
   }, [query, category]);
 
-  const completed = Object.values(learnProgress).filter(Boolean).length;
+  const completed = learnLessons.filter((lesson) => learnProgress[lesson.id]).length;
   const progress = Math.round((completed / learnLessons.length) * 100);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <PageTitle title="Learn" subtitle="Build confidence with short Aura risk lessons." />
+        <PageTitle title="Learn" subtitle="Static educational lessons. Progress is saved on this device only." />
+        {localError ? <Card><Text style={styles.progressLabel}>{localError}</Text><Button title="Retry local progress" onPress={() => void retryLocalData()} /></Card> : null}
 
         <Card style={styles.progressCard}>
           <View style={styles.progressTop}>

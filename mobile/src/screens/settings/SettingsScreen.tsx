@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View
@@ -23,14 +22,11 @@ import { colors, spacing } from '../../theme/theme';
 
 export function SettingsScreen() {
   const { user, signOut } = useAuth();
-  const { resetDemoData } = useAppData();
+  const { resetLocalData } = useAppData();
   const {
     themeMode,
     setThemeMode,
-    notificationsEnabled,
-    setNotificationsEnabled,
-    hidePortfolioValues,
-    setHidePortfolioValues,
+    storageError,
     displayName,
     setDisplayName,
     resetPreferences
@@ -39,6 +35,17 @@ export function SettingsScreen() {
   const resolvedName = displayName || 'Aura Investor';
   const [editingProfile, setEditingProfile] = useState(false);
   const [draftName, setDraftName] = useState(resolvedName);
+  const [pending, setPending] = useState(false);
+  const pendingRef = useRef(false);
+
+  async function logout() {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true);
+    try { await signOut(); }
+    catch { Alert.alert('Sign out incomplete', 'Aura could not remove the saved session. Please retry.'); }
+    finally { pendingRef.current = false; setPending(false); }
+  }
 
   useEffect(() => {
     setDraftName(resolvedName);
@@ -57,29 +64,40 @@ export function SettingsScreen() {
   function showHelp() {
     Alert.alert(
       'Help & Support',
-      'For this frontend build, use the README inside the mobile folder for setup and troubleshooting. Backend/API support will be connected later.'
+      'Use the mobile README for setup and API connection troubleshooting. In-app support messaging is unavailable.'
     );
   }
 
   function showAbout() {
     Alert.alert(
       'About Aura',
-      'Aura is an educational portfolio risk intelligence app. This mobile build includes the local frontend experience; production analytics remain a backend responsibility.'
+      'Aura displays portfolio analytics and historical simulations from its backend. AI explanations, live quotes, and Watchlist are unavailable.'
     );
   }
 
   function resetEverything() {
+    if (pendingRef.current) return;
     Alert.alert(
       'Reset local app data?',
-      'This restores local demo data, resets Watchlist/Learn progress, and restores app preferences. Backend portfolios, reports, and simulations are not deleted.',
+      'This resets device-local Learn progress and preferences, and removes obsolete demo storage. Backend portfolios, reports, simulations, and your session are not deleted.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reset',
           style: 'destructive',
           onPress: async () => {
-            await resetDemoData();
-            resetPreferences();
+            if (pendingRef.current) return;
+            pendingRef.current = true;
+            setPending(true);
+            try {
+              await resetLocalData();
+              await resetPreferences();
+            } catch {
+              Alert.alert('Local reset incomplete', 'Some device data could not be reset. Please retry.');
+            } finally {
+              pendingRef.current = false;
+              setPending(false);
+            }
           }
         }
       ]
@@ -94,6 +112,7 @@ export function SettingsScreen() {
           subtitle="Personalize Aura and manage local app data."
         />
 
+        {storageError ? <Text style={styles.helper}>{storageError}</Text> : null}
         <Text style={styles.sectionTitle}>Profile</Text>
         <Card style={styles.profileCard}>
           <View style={styles.avatar}>
@@ -203,20 +222,9 @@ export function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLabel}>Hide portfolio values</Text>
               <Text style={styles.rowDescription}>
-                Masks money values on Home and Portfolio screens.
+                Unavailable: Aura does not currently provide monetary portfolio values.
               </Text>
             </View>
-            <Switch
-              value={hidePortfolioValues}
-              onValueChange={setHidePortfolioValues}
-              trackColor={{
-                false: colors.border,
-                true: colors.trackOn
-              }}
-              thumbColor={
-                hidePortfolioValues ? colors.primary : colors.muted
-              }
-            />
           </View>
 
           <View style={styles.row}>
@@ -230,20 +238,9 @@ export function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLabel}>App notifications</Text>
               <Text style={styles.rowDescription}>
-                Saves your notification preference for future backend alerts.
+                Unavailable: notification delivery is not integrated.
               </Text>
             </View>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
-              trackColor={{
-                false: colors.border,
-                true: colors.trackOn
-              }}
-              thumbColor={
-                notificationsEnabled ? colors.primary : colors.muted
-              }
-            />
           </View>
         </View>
 
@@ -252,6 +249,7 @@ export function SettingsScreen() {
           <Pressable
             style={[styles.row, styles.rowBorder]}
             onPress={resetEverything}
+            disabled={pending}
           >
             <View style={styles.rowIcon}>
               <Ionicons
@@ -263,7 +261,7 @@ export function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLabel}>Reset local data</Text>
               <Text style={styles.rowDescription}>
-                Restore the original frontend demo state.
+                Reset device preferences and Learn progress.
               </Text>
             </View>
             <Ionicons name="chevron-forward" color={colors.muted} size={18} />
@@ -308,9 +306,10 @@ export function SettingsScreen() {
         </View>
 
         <Button
-          title="Sign out"
+          title={pending ? 'Please wait…' : 'Sign out'}
           variant="danger"
-          onPress={signOut}
+          onPress={() => void logout()}
+          disabled={pending}
           style={{ marginTop: spacing.xl }}
         />
       </ScrollView>

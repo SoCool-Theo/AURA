@@ -5,12 +5,17 @@ import { usePortfolios } from '../portfolio/usePortfolios';
 import { useReports } from '../report/useReports';
 import type { PortfolioResponse } from '../types/portfolio';
 import type { PortfolioReportResponse } from '../types/report';
+import type { ReportHistoryItem, ReportHistoryStatus } from '../report/ReportProvider';
+import { ApiError } from '../api/apiClient';
 
 export function useDashboard() {
   const portfoliosState = usePortfolios();
-  const reportsState = useReports();
+  const { getReport, getPortfolioReportHistory } = useReports();
   const { portfolios, activePortfolioId, selectPortfolio, getPortfolio, refreshPortfolios } = portfoliosState;
-  const { reports, historyStatus, getReport, refreshReportHistory } = reportsState;
+  const [history, setHistory] = useState<{ portfolioId: string; reports: ReportHistoryItem[] } | null>(null);
+  const [historyStatus, setHistoryStatus] = useState<ReportHistoryStatus>('idle');
+  const [historyError, setHistoryError] = useState<unknown>(null);
+  const [historyRefreshing, setHistoryRefreshing] = useState(false);
   const focused = useIsFocused();
   const [revision, setRevision] = useState(0);
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
@@ -34,14 +39,28 @@ export function useDashboard() {
     if (!stateRef.current.isRefreshing) void refreshPortfolios();
   }, [refreshPortfolios]));
 
-  // Membership, not array identity: getPortfolio updates provider summaries.
-  // Depending on the array itself would repeatedly reload after those updates.
-  const portfolioIds = JSON.stringify(portfolios.map((item) => item.id));
+  // Dashboard has an independent selected-history load, supplied by ReportProvider.
+  // Global Reports failures cannot invalidate this portfolio's successful history.
   useEffect(() => {
-    if (focused && (stateRef.current.listStatus === 'ready' || stateRef.current.portfolios.length)) {
-      void refreshReportHistory(stateRef.current.portfolios);
-    }
-  }, [focused, portfolioIds, refreshReportHistory, revision, portfoliosState.listStatus]);
+    const selected = stateRef.current.portfolios.find((item) => item.id === selectedId);
+    if (!focused || !selected) return;
+    let current = true;
+    setHistoryRefreshing(true);
+    setHistoryStatus('loading');
+    setHistoryError(null);
+    void getPortfolioReportHistory(selected).then((reports) => {
+      if (!current) return;
+      setHistory({ portfolioId: selected.id, reports });
+      setHistoryStatus('ready');
+    }).catch((error: unknown) => {
+      if (!current) return;
+      setHistoryError(error);
+      setHistoryStatus('error');
+    }).finally(() => {
+      if (current) setHistoryRefreshing(false);
+    });
+    return () => { current = false; };
+  }, [focused, selectedId, getPortfolioReportHistory, revision]);
 
   useEffect(() => {
     if (!focused || !selectedId) return;
@@ -51,7 +70,10 @@ export function useDashboard() {
     void getPortfolio(selectedId).then((value) => {
       if (current) setPortfolio(value);
     }).catch((error: unknown) => {
-      if (current) setPortfolioError(error);
+      if (current) {
+        setPortfolioError(error);
+        if (error instanceof ApiError && error.status === 404) setPortfolio(null);
+      }
     }).finally(() => {
       if (current) setPortfolioLoading(false);
     });
@@ -59,7 +81,7 @@ export function useDashboard() {
   }, [focused, getPortfolio, selectedId, revision]);
 
   // ReportProvider already orders by created_at descending with deterministic ties.
-  const newest = reports.find((item) => item.portfolio_id === selectedId);
+  const newest = history?.portfolioId === selectedId ? history.reports[0] : undefined;
   const newestId = newest?.id;
   useEffect(() => {
     if (!focused || !selectedId || !newestId || historyStatus !== 'ready') return;
@@ -69,14 +91,17 @@ export function useDashboard() {
     void getReport(selectedId, newestId).then((value) => {
       if (current) setReport(value);
     }).catch((error: unknown) => {
-      if (current) setReportError(error);
+      if (current) {
+        setReportError(error);
+        if (error instanceof ApiError && error.status === 404) setReport(null);
+      }
     }).finally(() => {
       if (current) setReportLoading(false);
     });
     return () => { current = false; };
   }, [focused, getReport, historyStatus, newestId, selectedId, revision]);
 
-  const refreshing = portfoliosState.isRefreshing || reportsState.isRefreshing
+  const refreshing = portfoliosState.isRefreshing || (Boolean(selectedId) && historyRefreshing)
     || (Boolean(selectedId) && portfolioLoading)
     || (historyStatus === 'ready' && Boolean(newestId) && reportLoading);
 
@@ -93,7 +118,7 @@ export function useDashboard() {
 
   return {
     portfoliosState,
-    reportsState,
+    reportsState: { historyStatus, historyError, isRefreshing: historyRefreshing },
     selectedId,
     portfolio: portfolio?.id === selectedId ? portfolio : null,
     portfolioLoading,

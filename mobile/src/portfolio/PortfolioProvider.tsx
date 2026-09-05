@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 
 import { portfoliosApi } from '../api/portfoliosApi';
+import { ApiError } from '../api/apiClient';
 import { useAuth } from '../auth/useAuth';
 import type {
   PortfolioHoldingInput,
@@ -68,6 +69,7 @@ export function PortfolioProvider({ children }: PropsWithChildren) {
   const [listError, setListError] = useState<unknown>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const listRequestRef = useRef(0);
+  const deletedPortfolioIdsRef = useRef(new Set<string>());
 
   const upsertSummary = useCallback((
     portfolio: PortfolioResponse,
@@ -96,11 +98,12 @@ export function PortfolioProvider({ children }: PropsWithChildren) {
     try {
       const response = await portfoliosApi.list();
       if (listRequestRef.current !== requestId) return;
-      setPortfolios(response.portfolios);
+      const available = response.portfolios.filter((item) => !deletedPortfolioIdsRef.current.has(item.id));
+      setPortfolios(available);
       setActivePortfolioId((current) => (
-        current && response.portfolios.some((item) => item.id === current)
+        current && available.some((item) => item.id === current)
           ? current
-          : response.portfolios[0]?.id ?? null
+          : available[0]?.id ?? null
       ));
       setListStatus('ready');
     } catch (error) {
@@ -113,6 +116,7 @@ export function PortfolioProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
+    deletedPortfolioIdsRef.current.clear();
     listRequestRef.current += 1;
     if (authStatus !== 'authenticated') {
       setPortfolios([]);
@@ -127,6 +131,9 @@ export function PortfolioProvider({ children }: PropsWithChildren) {
 
   const getPortfolio = useCallback(async (portfolioId: string) => {
     const portfolio = await portfoliosApi.get(portfolioId);
+    if (deletedPortfolioIdsRef.current.has(portfolioId)) {
+      throw new ApiError({ kind: 'http', status: 404, message: 'Portfolio not found.' });
+    }
     upsertSummary(portfolio, false);
     return portfolio;
   }, [upsertSummary]);
@@ -182,6 +189,7 @@ export function PortfolioProvider({ children }: PropsWithChildren) {
 
   const deletePortfolio = useCallback(async (portfolioId: string) => {
     await portfoliosApi.delete(portfolioId);
+    deletedPortfolioIdsRef.current.add(portfolioId);
     setPortfolios((current) => current.filter((item) => item.id !== portfolioId));
     setActivePortfolioId((current) => current === portfolioId ? null : current);
   }, []);

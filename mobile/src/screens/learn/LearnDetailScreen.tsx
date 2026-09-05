@@ -10,7 +10,7 @@ import { useAppData } from '../../hooks/useAppData';
 import { colors, spacing, typography } from '../../theme/theme';
 
 export function LearnDetailScreen({ route }: { route: any }) {
-  const { learnProgress, toggleLessonComplete } = useAppData();
+  const { learnProgress, toggleLessonComplete, localError, localPending, retryLocalData } = useAppData();
   const lesson = learnLessons.find((item) => item.id === route.params.lessonId);
 
   if (!lesson) {
@@ -68,10 +68,12 @@ export function LearnDetailScreen({ route }: { route: any }) {
           </Text>
         </Card>
 
+        {localError ? <Card><Text style={styles.noteText}>{localError}</Text><Button title="Retry local progress" onPress={() => void retryLocalData()} /></Card> : null}
         <Button
           title={done ? 'Mark as not completed' : 'Mark lesson completed'}
           variant={done ? 'secondary' : 'primary'}
           onPress={() => toggleLessonComplete(lesson.id)}
+          disabled={localPending || Boolean(localError)}
           style={{ marginTop: spacing.xl }}
         />
       </ScrollView>

@@ -25,6 +25,7 @@ export type ReportHistoryItem = PortfolioReportSummary & {
 export type ReportHistoryStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 type ReportContextValue = {
+  getPortfolioReportHistory: (portfolio: PortfolioSummaryResponse) => Promise<ReportHistoryItem[]>;
   reports: ReportHistoryItem[];
   historyStatus: ReportHistoryStatus;
   historyError: unknown;
@@ -88,6 +89,16 @@ export function ReportProvider({ children }: PropsWithChildren) {
   const [historyError, setHistoryError] = useState<unknown>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const historyRequestRef = useRef(0);
+  const deletedReportIdsRef = useRef(new Set<string>());
+
+  // One transport and ordering path for both selected and global history views.
+  const getPortfolioReportHistory = useCallback(async (portfolio: PortfolioSummaryResponse) => {
+    const response = await reportsApi.list(portfolio.id);
+    return orderGlobalHistory(response.reports.filter((report) => !deletedReportIdsRef.current.has(report.id)).map((report) => ({
+      ...report,
+      portfolio_name: portfolio.name
+    })));
+  }, []);
 
   const refreshReportHistory = useCallback(async (
     portfolios: PortfolioSummaryResponse[]
@@ -99,18 +110,10 @@ export function ReportProvider({ children }: PropsWithChildren) {
     setHistoryStatus((current) => current === 'ready' ? 'ready' : 'loading');
 
     try {
-      const histories = await Promise.all(portfolios.map(async (portfolio) => ({
-        portfolio,
-        response: await reportsApi.list(portfolio.id)
-      })));
+      const histories = await Promise.all(portfolios.map(getPortfolioReportHistory));
       if (historyRequestRef.current !== requestId) return;
 
-      setReports(orderGlobalHistory(histories.flatMap(({ portfolio, response }) => (
-        response.reports.map((report) => ({
-          ...report,
-          portfolio_name: portfolio.name
-        }))
-      ))));
+      setReports(orderGlobalHistory(histories.flat().filter((report) => !deletedReportIdsRef.current.has(report.id))));
       setHistoryStatus('ready');
     } catch (error) {
       if (historyRequestRef.current !== requestId) return;
@@ -119,9 +122,10 @@ export function ReportProvider({ children }: PropsWithChildren) {
     } finally {
       if (historyRequestRef.current === requestId) setIsRefreshing(false);
     }
-  }, []);
+  }, [getPortfolioReportHistory]);
 
   useEffect(() => {
+    deletedReportIdsRef.current.clear();
     historyRequestRef.current += 1;
     setReports([]);
     setHistoryStatus('idle');
@@ -151,10 +155,12 @@ export function ReportProvider({ children }: PropsWithChildren) {
     reportId: string
   ) => {
     await reportsApi.delete(portfolioId, reportId);
+    deletedReportIdsRef.current.add(reportId);
     setReports((current) => current.filter((item) => item.id !== reportId));
   }, []);
 
   const value = useMemo<ReportContextValue>(() => ({
+    getPortfolioReportHistory,
     reports,
     historyStatus,
     historyError,
@@ -164,6 +170,7 @@ export function ReportProvider({ children }: PropsWithChildren) {
     getReport,
     deleteReport
   }), [
+    getPortfolioReportHistory,
     createReport,
     deleteReport,
     getReport,

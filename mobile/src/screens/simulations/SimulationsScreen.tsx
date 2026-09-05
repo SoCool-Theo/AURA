@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 import { Tag } from '../../components/ui/Tag';
@@ -21,7 +23,7 @@ const modes = [
 ] as const;
 
 export function SimulationsScreen({ navigation }: { navigation: any }) {
-  const { portfolios, activePortfolioId, listStatus } = usePortfolios();
+  const { portfolios, activePortfolioId, listStatus, listError, refreshPortfolios } = usePortfolios();
   const { history, historyStatus, historyError, refreshHistory } = useSimulations();
 
   useFocusEffect(useCallback(() => {
@@ -47,7 +49,13 @@ export function SimulationsScreen({ navigation }: { navigation: any }) {
 
         <SectionHeader title="Recent simulations" action="View all" onPress={() => navigation.navigate('SimulationHistory')} />
 
-        {historyStatus === 'error' ? (
+        {listStatus === 'error' ? (
+          <Card style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Could not refresh portfolios</Text>
+            <Text style={styles.errorText}>{portfolioErrorMessage(listError)}</Text>
+            <Button title="Retry portfolios" onPress={() => void refreshPortfolios()} />
+          </Card>
+        ) : historyStatus === 'error' ? (
           <Card style={styles.errorCard}>
             <Text style={styles.errorTitle}>Complete history unavailable</Text>
             <Text style={styles.errorText}>{simulationErrorMessage(historyError, 'At least one portfolio history request failed. Retry from Simulation History.')}</Text>

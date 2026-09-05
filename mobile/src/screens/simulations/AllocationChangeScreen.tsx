@@ -78,7 +78,13 @@ export function AllocationChangeScreen({ route }: { route: any }) {
   if ((portfolioState.listStatus === 'idle' || portfolioState.listStatus === 'loading') && !portfolioState.portfolios.length) {
     return <LoadingState message="Loading portfolios…" />;
   }
-  const portfolioFailure = portfolioState.listStatus === 'error' && !portfolioState.portfolios.length
+  if (portfolioState.listStatus === 'error' && !portfolioState.portfolios.length) {
+    return <SafeAreaView style={styles.safe}><Card style={styles.errorCard}>
+      <Text style={styles.error}>{portfolioErrorMessage(portfolioState.listError)}</Text>
+      <Button title="Retry portfolios" onPress={() => void portfolioState.refreshPortfolios()} />
+    </Card></SafeAreaView>;
+  }
+  const portfolioFailure = portfolioState.listStatus === 'error'
     ? portfolioErrorMessage(portfolioState.listError)
     : portfolioState.detailStatus === 'error'
       ? portfolioErrorMessage(portfolioState.detailError)
@@ -95,10 +101,10 @@ export function AllocationChangeScreen({ route }: { route: any }) {
         ) : (
           <>
             <Text style={styles.section}>Portfolio</Text>
-            <PortfolioSelector portfolios={portfolioState.portfolios} selectedId={portfolioState.selectedPortfolioId} onSelect={portfolioState.choosePortfolio} />
+            <PortfolioSelector disabled={running} portfolios={portfolioState.portfolios} selectedId={portfolioState.selectedPortfolioId} onSelect={(id) => { if (!runningRef.current) portfolioState.choosePortfolio(id); }} />
             {portfolioState.detailStatus === 'loading' ? <Text style={styles.state}>Loading holdings…</Text> : null}
             {portfolioFailure ? (
-              <Card style={styles.errorCard}><Text style={styles.error}>{portfolioFailure}</Text><Button title="Retry portfolio" onPress={() => void portfolioState.retryPortfolio()} /></Card>
+              <Card style={styles.errorCard}><Text style={styles.error}>{portfolioFailure}</Text><Button title="Retry portfolio" onPress={() => void (portfolioState.listStatus === 'error' ? portfolioState.refreshPortfolios() : portfolioState.retryPortfolio())} /></Card>
             ) : null}
             {portfolioState.portfolio && !portfolioState.portfolio.holdings.length ? (
               <Card><EmptyState title="No holdings available" description="Add holdings to this portfolio before changing its allocation." /></Card>
@@ -106,11 +112,11 @@ export function AllocationChangeScreen({ route }: { route: any }) {
               <>
                 <Text style={styles.section}>Analysis period</Text>
                 <View style={styles.dateRow}>
-                  <View style={styles.dateField}><Text style={styles.label}>START</Text><TextInput value={startDate} onChangeText={setStartDate} style={styles.dateInput} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} /></View>
-                  <View style={styles.dateField}><Text style={styles.label}>END</Text><TextInput value={endDate} onChangeText={setEndDate} style={styles.dateInput} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} /></View>
+                  <View style={styles.dateField}><Text style={styles.label}>START</Text><TextInput editable={!running} value={startDate} onChangeText={setStartDate} style={styles.dateInput} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} /></View>
+                  <View style={styles.dateField}><Text style={styles.label}>END</Text><TextInput editable={!running} value={endDate} onChangeText={setEndDate} style={styles.dateInput} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} /></View>
                 </View>
                 <Text style={styles.section}>Modified allocation</Text>
-                <AllocationEditor portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value) => setWeights((current) => ({ ...current, [symbol]: value }))} />
+                <AllocationEditor disabled={running} portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value) => setWeights((current) => ({ ...current, [symbol]: value }))} />
                 {runError ? <Card style={styles.errorCard}><Text style={styles.error}>{runError}</Text></Card> : null}
                 <Button title={running ? 'Running…' : 'Compare allocation'} onPress={() => void run()} disabled={running} style={{ marginTop: spacing.xl }} />
                 {result ? <SimulationResults result={result} /> : null}

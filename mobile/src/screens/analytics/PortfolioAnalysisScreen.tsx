@@ -246,6 +246,14 @@ export function PortfolioAnalysisScreen({
           subtitle="Run Aura's backend analytics and save one immutable report."
         />
 
+        {listStatus === 'error' ? (
+          <Card style={styles.stateCard}>
+            <Text style={styles.errorTitle}>Portfolio list refresh failed</Text>
+            <Text style={styles.stateText}>Using the previously loaded portfolios. {portfolioErrorMessage(listError)}</Text>
+            <Button title="Retry portfolios" onPress={() => void refreshPortfolios()} />
+          </Card>
+        ) : null}
+
         <Card style={styles.controlsCard}>
           <Text style={styles.controlLabel}>Portfolio</Text>
           <ScrollView

@@ -53,7 +53,13 @@ export function HistoricalScenarioScreen({ route }: { route: any }) {
     return <LoadingState message="Loading portfolios…" />;
   }
 
-  const portfolioFailure = portfolioState.listStatus === 'error' && !portfolioState.portfolios.length
+  if (portfolioState.listStatus === 'error' && !portfolioState.portfolios.length) {
+    return <SafeAreaView style={styles.safe}><Card style={styles.errorCard}>
+      <Text style={styles.error}>{portfolioErrorMessage(portfolioState.listError)}</Text>
+      <Button title="Retry portfolios" onPress={() => void portfolioState.refreshPortfolios()} />
+    </Card></SafeAreaView>;
+  }
+  const portfolioFailure = portfolioState.listStatus === 'error'
     ? portfolioErrorMessage(portfolioState.listError)
     : portfolioState.detailStatus === 'error'
       ? portfolioErrorMessage(portfolioState.detailError)
@@ -71,9 +77,11 @@ export function HistoricalScenarioScreen({ route }: { route: any }) {
           <>
             <Text style={styles.section}>Portfolio</Text>
             <PortfolioSelector
+              disabled={running}
               portfolios={portfolioState.portfolios}
               selectedId={portfolioState.selectedPortfolioId}
               onSelect={(id) => {
+                if (runningRef.current) return;
                 setResult(null);
                 portfolioState.choosePortfolio(id);
               }}
@@ -82,7 +90,7 @@ export function HistoricalScenarioScreen({ route }: { route: any }) {
             {portfolioFailure ? (
               <Card style={styles.errorCard}>
                 <Text style={styles.error}>{portfolioFailure}</Text>
-                <Button title="Retry portfolio" onPress={() => void portfolioState.retryPortfolio()} />
+                <Button title="Retry portfolio" onPress={() => void (portfolioState.listStatus === 'error' ? portfolioState.refreshPortfolios() : portfolioState.retryPortfolio())} />
               </Card>
             ) : null}
 
@@ -94,16 +102,17 @@ export function HistoricalScenarioScreen({ route }: { route: any }) {
                 <Button title="Retry scenarios" onPress={() => void refreshScenarios()} />
               </Card>
             ) : scenarios.length ? (
-              <ScenarioSelector scenarios={scenarios} selectedId={scenarioId} onSelect={(id) => { setScenarioId(id); setResult(null); }} />
+              <ScenarioSelector disabled={running} scenarios={scenarios} selectedId={scenarioId} onSelect={(id) => { if (runningRef.current) return; setScenarioId(id); setResult(null); }} />
             ) : scenarioStatus === 'ready' ? (
               <Card><EmptyState title="No scenarios available" description="The backend did not return any historical scenarios." /></Card>
             ) : null}
 
             {runError ? <Card style={styles.errorCard}><Text style={styles.error}>{runError}</Text></Card> : null}
+            {portfolioState.portfolio && !portfolioState.portfolio.holdings.length ? <Text style={styles.state}>Add saved holdings before running a simulation.</Text> : null}
             <Button
               title={running ? 'Running…' : 'Run historical scenario'}
               onPress={() => void run()}
-              disabled={running || !portfolioState.portfolio || !scenarioId}
+              disabled={running || !portfolioState.portfolio?.holdings.length || !scenarioId || scenarioStatus !== 'ready'}
               style={{ marginTop: spacing.xl }}
             />
             {result ? <SimulationResults result={result} /> : null}

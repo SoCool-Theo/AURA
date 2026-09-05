@@ -62,10 +62,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const invalidation = (async () => {
       try {
         await clearToken();
-      } finally {
         setUser(null);
         setSessionError(null);
         setStatus('unauthenticated');
+      } catch (error) {
+        setUser(null);
+        setSessionError('Aura could not remove the saved session from this device. Retry sign out.');
+        setStatus('error');
+        throw error;
       }
     })();
     invalidationRef.current = invalidation;

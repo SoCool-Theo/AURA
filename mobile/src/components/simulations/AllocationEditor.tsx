@@ -10,11 +10,13 @@ export function AllocationEditor({
   portfolio,
   inputs,
   total,
+  disabled = false,
   onChange
 }: {
   portfolio: PortfolioResponse;
   inputs: AllocationInputs;
   total: number;
+  disabled?: boolean;
   onChange: (symbol: string, value: string) => void;
 }) {
   const totalIsValid = Math.abs(total - 100) <= 1e-7;
@@ -35,6 +37,7 @@ export function AllocationEditor({
             </View>
             <View style={styles.inputBox}>
               <TextInput
+                editable={!disabled}
                 value={inputs[holding.symbol] ?? ''}
                 onChangeText={(value) => onChange(holding.symbol, value)}
                 keyboardType="decimal-pad"

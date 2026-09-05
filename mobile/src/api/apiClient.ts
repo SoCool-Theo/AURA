@@ -134,6 +134,7 @@ function extractDetail(body: ParsedResponseBody): JsonValue | null {
 }
 
 function httpErrorMessage(status: number, detail: JsonValue | null): string {
+  if (status >= 500) return `Aura API is unavailable (HTTP ${status}). Please try again.`;
   if (typeof detail === 'string' && detail.trim()) return detail;
   return `Request failed with HTTP ${status}.`;
 }
@@ -200,6 +201,12 @@ export async function apiRequest<TResponse, TBody = never>(
     });
   }
 
+  // Status alone is authoritative, even if reading a 401 response body fails.
+  if (response.status === 401) {
+    try { await apiAuthentication.onAuthenticationRejected(accessToken); }
+    catch { /* AuthProvider exposes any secure-storage cleanup failure. */ }
+  }
+
   let responseText: string;
   try {
     responseText = await response.text();
@@ -214,18 +221,10 @@ export async function apiRequest<TResponse, TBody = never>(
   const { parsed, body: responseBody } = parseJson(responseText);
 
   if (!response.ok) {
-    const detail = parsed ? extractDetail(responseBody) : null;
+    const detail = parsed && response.status < 500 ? extractDetail(responseBody) : null;
     const kind: ApiErrorKind = response.status === 401
       ? 'authentication'
       : 'http';
-
-    if (response.status === 401) {
-      try {
-        await apiAuthentication.onAuthenticationRejected(accessToken);
-      } catch {
-        // Authentication rejection remains authoritative even if UI cleanup fails.
-      }
-    }
 
     throw new ApiError({
       kind,
@@ -240,12 +239,12 @@ export async function apiRequest<TResponse, TBody = never>(
     return undefined as TResponse;
   }
 
-  if (!responseText || !parsed) {
+  if (!responseText || !parsed || responseBody === null || typeof responseBody !== 'object' || Array.isArray(responseBody)) {
     throw new ApiError({
       kind: 'malformed-response',
       message: !responseText
         ? 'Aura API returned an unexpected empty response.'
-        : 'Aura API returned malformed JSON.',
+        : 'Aura API returned a malformed or unexpected response.',
       status: response.status,
       responseBody
     });

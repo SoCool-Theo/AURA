@@ -35,7 +35,7 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
   }, [history, portfolioFilter, query]);
 
   function retry() {
-    if (listStatus === 'error' && !portfolios.length) void refreshPortfolios();
+    if (listStatus === 'error') void refreshPortfolios();
     else void refreshHistory(portfolios);
   }
 
@@ -67,10 +67,18 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={isRefreshingHistory} onRefresh={() => void refreshHistory(portfolios)} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={isRefreshingHistory} onRefresh={retry} tintColor={colors.primary} />}
       >
         <Text style={styles.title}>Simulation History</Text>
         <Text style={styles.subtitle}>Immutable simulation runs stored by Aura's backend, newest first.</Text>
+
+        {listStatus === 'error' && portfolios.length ? (
+          <Card style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Portfolio list refresh failed</Text>
+            <Text style={styles.errorText}>History uses the previously loaded portfolio list. {portfolioErrorMessage(listError)}</Text>
+            <Button title="Retry portfolios" onPress={retry} />
+          </Card>
+        ) : null}
 
         {historyStatus === 'error' && history.length ? (
           <Card style={styles.errorCard}>

@@ -8,10 +8,12 @@ import { colors, spacing } from '../../theme/theme';
 export function ScenarioSelector({
   scenarios,
   selectedId,
+  disabled = false,
   onSelect
 }: {
   scenarios: HistoricalScenarioResponse[];
   selectedId: string | null;
+  disabled?: boolean;
   onSelect: (scenarioId: string) => void;
 }) {
   return (
@@ -19,7 +21,7 @@ export function ScenarioSelector({
       {scenarios.map((scenario) => {
         const selected = scenario.id === selectedId;
         return (
-          <Pressable key={scenario.id} onPress={() => onSelect(scenario.id)}>
+          <Pressable disabled={disabled} key={scenario.id} onPress={() => onSelect(scenario.id)}>
             <Card style={[styles.card, selected && styles.selected]}>
               <View style={styles.top}>
                 <Text style={styles.name}>{scenario.display_name}</Text>

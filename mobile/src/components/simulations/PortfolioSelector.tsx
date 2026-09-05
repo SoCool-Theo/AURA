@@ -7,10 +7,12 @@ import { colors, spacing } from '../../theme/theme';
 export function PortfolioSelector({
   portfolios,
   selectedId,
+  disabled = false,
   onSelect
 }: {
   portfolios: PortfolioSummaryResponse[];
   selectedId: string | null;
+  disabled?: boolean;
   onSelect: (portfolioId: string) => void;
 }) {
   return (
@@ -23,6 +25,7 @@ export function PortfolioSelector({
         const selected = portfolio.id === selectedId;
         return (
           <Pressable
+            disabled={disabled}
             key={portfolio.id}
             onPress={() => onSelect(portfolio.id)}
             style={[styles.chip, selected && styles.selected]}

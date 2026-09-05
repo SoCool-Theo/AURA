@@ -21,10 +21,11 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
   const detailRequestRef = useRef(0);
 
   useEffect(() => {
-    if (selectedPortfolioId) return;
-    const fallbackId = activePortfolioId ?? portfolios[0]?.id;
-    if (fallbackId) setSelectedPortfolioId(fallbackId);
-  }, [activePortfolioId, portfolios, selectedPortfolioId]);
+    if (listStatus !== 'ready' || portfolios.some((item) => item.id === selectedPortfolioId)) return;
+    const fallbackId = portfolios.find((item) => item.id === activePortfolioId)?.id ?? portfolios[0]?.id ?? null;
+    setSelectedPortfolioId(fallbackId);
+    if (fallbackId) selectPortfolio(fallbackId);
+  }, [activePortfolioId, listStatus, portfolios, selectedPortfolioId, selectPortfolio]);
 
   const loadPortfolio = useCallback(async (portfolioId: string) => {
     const requestId = detailRequestRef.current + 1;
@@ -64,7 +65,7 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
   return {
     ...portfolioState,
     selectedPortfolioId,
-    portfolio,
+    portfolio: portfolio?.id === selectedPortfolioId ? portfolio : null,
     detailStatus,
     detailError,
     choosePortfolio,

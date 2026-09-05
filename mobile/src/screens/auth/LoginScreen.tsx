@@ -17,7 +17,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 const featureRows = [
   ['speedometer-outline', 'Portfolio Risk Intelligence'],
   ['pulse-outline', 'Historical What-If Simulations'],
-  ['sparkles-outline', 'Plain-language AI explanations']
+  ['document-text-outline', 'Saved analysis reports']
 ] as const;
 
 export function LoginScreen({ navigation }: Props) {

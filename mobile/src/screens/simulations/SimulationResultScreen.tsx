@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -35,6 +36,7 @@ export function SimulationResultScreen({ route }: { route: any }) {
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
     setLoading(true);
+    setDetail(null);
     setError(null);
     try {
       const response = await getHistoryDetail(portfolioId, simulationId);
@@ -46,12 +48,12 @@ export function SimulationResultScreen({ route }: { route: any }) {
     }
   }, [getHistoryDetail, portfolioId, simulationId]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void load();
     return () => {
       requestRef.current += 1;
     };
-  }, [load]);
+  }, [load]));
 
   if (loading && !detail) return <LoadingState message="Loading saved simulation…" />;
   if (error && !detail) {

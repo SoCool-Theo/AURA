@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,21 +15,35 @@ export function SessionRestoreScreen({
   onRetry: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
+  const pendingRef = useRef(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function perform(action: () => Promise<void>) {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true);
+    setError(null);
+    try { await action(); }
+    catch { setError('The session action could not be completed. Please retry.'); }
+    finally { pendingRef.current = false; setPending(false); }
+  }
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
         <Card style={styles.card}>
           <Text style={styles.title}>Session verification unavailable</Text>
           <Text style={styles.message}>{message}</Text>
+          {error ? <Text style={styles.message}>{error}</Text> : null}
           <Text style={styles.note}>
             Retry without deleting your saved session, or sign out to remove it from this device.
           </Text>
           <View style={styles.actions}>
-            <Button title="Retry" onPress={() => void onRetry()} />
+            <Button title={pending ? 'Please wait…' : 'Retry'} disabled={pending} onPress={() => void perform(onRetry)} />
             <Button
               title="Sign out"
               variant="secondary"
-              onPress={() => void onSignOut()}
+              disabled={pending}
+              onPress={() => void perform(onSignOut)}
             />
           </View>
         </Card>

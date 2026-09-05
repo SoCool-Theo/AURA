@@ -1,91 +1,30 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type {
-  DemoHolding as Holding,
-  DemoPortfolio as Portfolio
-} from '../types/demo';
-import { portfoliosMock } from '../mocks/portfolios.mock';
 
-// Legacy demo persistence for screens outside the current integration phases.
-// Production portfolios, reports, and simulations use authenticated providers.
-
-const PORTFOLIOS_KEY = 'aura_local_portfolios_v2';
-// Retained only so Reset Demo Data removes obsolete pre-Phase-5 snapshots.
-const REPORTS_KEY = 'aura_local_reports_v2';
-// Retained only so Reset Demo Data removes obsolete pre-Phase-6 snapshots.
-const SIMULATIONS_KEY = 'aura_local_simulations_v2';
-const ACTIVE_PORTFOLIO_KEY = 'aura_active_portfolio_v2';
-const WATCHLIST_KEY = 'aura_local_watchlist_v1';
 const LEARN_PROGRESS_KEY = 'aura_learn_progress_v1';
-
-export async function loadPortfolios(): Promise<Portfolio[]> {
-  const raw = await AsyncStorage.getItem(PORTFOLIOS_KEY);
-  if (raw) return JSON.parse(raw);
-  await AsyncStorage.setItem(PORTFOLIOS_KEY, JSON.stringify(portfoliosMock));
-  return portfoliosMock;
-}
-
-export async function savePortfolios(items: Portfolio[]) {
-  await AsyncStorage.setItem(PORTFOLIOS_KEY, JSON.stringify(items));
-}
-
-export async function loadActivePortfolioId() {
-  return AsyncStorage.getItem(ACTIVE_PORTFOLIO_KEY);
-}
-
-export async function saveActivePortfolioId(id: string) {
-  await AsyncStorage.setItem(ACTIVE_PORTFOLIO_KEY, id);
-}
-
-export async function loadWatchlistSymbols(): Promise<string[]> {
-  const raw = await AsyncStorage.getItem(WATCHLIST_KEY);
-  if (raw) return JSON.parse(raw);
-  const defaults = ['AAPL', 'NVDA', 'SPY', 'GLD', 'BTC-USD'];
-  await AsyncStorage.setItem(WATCHLIST_KEY, JSON.stringify(defaults));
-  return defaults;
-}
-
-export async function saveWatchlistSymbols(symbols: string[]) {
-  await AsyncStorage.setItem(WATCHLIST_KEY, JSON.stringify(symbols));
-}
+// Obsolete domain keys are cleanup targets only. Never read, seed, or save them.
+const LEGACY_DOMAIN_KEYS = [
+  'aura_local_portfolios_v2',
+  'aura_local_reports_v2',
+  'aura_local_simulations_v2',
+  'aura_active_portfolio_v2',
+  'aura_local_watchlist_v1'
+];
 
 export async function loadLearnProgress(): Promise<Record<string, boolean>> {
   const raw = await AsyncStorage.getItem(LEARN_PROGRESS_KEY);
-  return raw ? JSON.parse(raw) : {};
+  if (!raw) return {};
+  const value: unknown = JSON.parse(raw);
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || Object.values(value).some((item) => typeof item !== 'boolean')) {
+    throw new Error('Invalid local Learn progress.');
+  }
+  return value as Record<string, boolean>;
 }
 
 export async function saveLearnProgress(progress: Record<string, boolean>) {
   await AsyncStorage.setItem(LEARN_PROGRESS_KEY, JSON.stringify(progress));
 }
 
-export function createEmptyPortfolio(name: string): Portfolio {
-  return {
-    id: `portfolio-${Date.now()}`,
-    name: name.trim() || 'Untitled Portfolio',
-    totalValue: 0,
-    riskScore: 0,
-    riskLevel: 'Low',
-    annualizedReturn: 0,
-    maxDrawdown: 0,
-    holdings: []
-  };
-}
-
-export function rebalanceByValue(holdings: Holding[]) {
-  const total = holdings.reduce((sum, holding) => sum + holding.value, 0);
-  if (!total) return holdings.map((holding) => ({ ...holding, weight: 0 }));
-  return holdings.map((holding) => ({
-    ...holding,
-    weight: Number(((holding.value / total) * 100).toFixed(2))
-  }));
-}
-
 export async function clearLocalAuraData() {
-  await AsyncStorage.multiRemove([
-    PORTFOLIOS_KEY,
-    REPORTS_KEY,
-    SIMULATIONS_KEY,
-    ACTIVE_PORTFOLIO_KEY,
-    WATCHLIST_KEY,
-    LEARN_PROGRESS_KEY
-  ]);
+  await AsyncStorage.multiRemove([...LEGACY_DOMAIN_KEYS, LEARN_PROGRESS_KEY]);
 }

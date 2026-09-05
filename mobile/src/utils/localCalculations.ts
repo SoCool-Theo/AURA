@@ -5,8 +5,8 @@ import type {
 } from '../types/demo';
 import type { ScenarioDefinition } from '../mocks/scenarios.mock';
 
-// Temporary demo-only calculations for screens that have not reached their
-// integration phase. FastAPI remains the production financial authority.
+// Isolated legacy demo helpers. No production entry point imports this module.
+// FastAPI is the only production financial authority.
 
 function holdingRiskValue(level: 'Low' | 'Medium' | 'High') {
   if (level === 'High') return 90;
