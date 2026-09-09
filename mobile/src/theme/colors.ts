@@ -1,7 +1,6 @@
 import {
   DynamicColorIOS,
   Platform,
-  PlatformColor,
   type ColorValue
 } from 'react-native';
 
@@ -75,63 +74,29 @@ export const darkPalette = {
   onPrimary: '#031614'
 };
 
-function adaptive(
-  light: string,
-  dark: string,
-  androidToken?: string
-): ColorValue {
+function adaptive(light: string, dark: string): ColorValue {
   if (Platform.OS === 'ios') {
     return DynamicColorIOS({ light, dark });
-  }
-
-  if (Platform.OS === 'android' && androidToken) {
-    return PlatformColor(androidToken);
   }
 
   return dark;
 }
 
 export const colors = {
-  background: adaptive(
-    lightPalette.background,
-    darkPalette.background,
-    '?android:attr/colorBackground'
-  ),
+  background: adaptive(lightPalette.background, darkPalette.background),
   backgroundSoft: adaptive(
     lightPalette.backgroundSoft,
-    darkPalette.backgroundSoft,
-    '?android:attr/colorBackground'
+    darkPalette.backgroundSoft
   ),
-  surface: adaptive(
-    lightPalette.surface,
-    darkPalette.surface,
-    '?android:attr/colorBackgroundFloating'
-  ),
-  surfaceAlt: adaptive(
-    lightPalette.surfaceAlt,
-    darkPalette.surfaceAlt,
-    '?android:attr/colorBackgroundFloating'
-  ),
+  surface: adaptive(lightPalette.surface, darkPalette.surface),
+  surfaceAlt: adaptive(lightPalette.surfaceAlt, darkPalette.surfaceAlt),
   surfaceElevated: adaptive(
     lightPalette.surfaceElevated,
-    darkPalette.surfaceElevated,
-    '?android:attr/colorBackgroundFloating'
+    darkPalette.surfaceElevated
   ),
-  border: adaptive(
-    lightPalette.border,
-    darkPalette.border,
-    '?android:attr/colorControlNormal'
-  ),
-  borderSoft: adaptive(
-    lightPalette.borderSoft,
-    darkPalette.borderSoft,
-    '?android:attr/colorControlNormal'
-  ),
-  tabBar: adaptive(
-    lightPalette.tabBar,
-    darkPalette.tabBar,
-    '?android:attr/colorBackgroundFloating'
-  ),
+  border: adaptive(lightPalette.border, darkPalette.border),
+  borderSoft: adaptive(lightPalette.borderSoft, darkPalette.borderSoft),
+  tabBar: adaptive(lightPalette.tabBar, darkPalette.tabBar),
 
   primary: adaptive(lightPalette.primary, darkPalette.primary),
   primarySoft: adaptive(lightPalette.primarySoft, darkPalette.primarySoft),
@@ -140,21 +105,12 @@ export const colors = {
   purpleSoft: adaptive(lightPalette.purpleSoft, darkPalette.purpleSoft),
   blue: adaptive(lightPalette.blue, darkPalette.blue),
 
-  text: adaptive(
-    lightPalette.text,
-    darkPalette.text,
-    '?android:attr/textColorPrimary'
-  ),
+  text: adaptive(lightPalette.text, darkPalette.text),
   textSecondary: adaptive(
     lightPalette.textSecondary,
-    darkPalette.textSecondary,
-    '?android:attr/textColorSecondary'
+    darkPalette.textSecondary
   ),
-  muted: adaptive(
-    lightPalette.muted,
-    darkPalette.muted,
-    '?android:attr/textColorSecondary'
-  ),
+  muted: adaptive(lightPalette.muted, darkPalette.muted),
 
   success: adaptive(lightPalette.success, darkPalette.success),
   warning: adaptive(lightPalette.warning, darkPalette.warning),
