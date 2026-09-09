@@ -69,7 +69,8 @@ function buildApiUrl(path: string): string {
   if (!environment.apiBaseUrl) {
     throw new ApiError({
       kind: 'configuration',
-      message: 'EXPO_PUBLIC_API_URL is not configured.'
+      message:
+        'Aura could not determine the API address. Set EXPO_PUBLIC_API_URL explicitly.'
     });
   }
 
