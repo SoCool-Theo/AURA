@@ -1,5 +1,13 @@
 import React, { useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -65,29 +73,39 @@ export function RegisterScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.brand}><Text style={styles.brandMark}>A</Text><Text style={styles.brandName}>Aura</Text></View>
-        <Text style={styles.title}>Create your Aura account</Text>
-        <Text style={styles.subtitle}>Build portfolios, understand risk, and explore historical scenarios.</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoider}
+      >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.brand}><Text style={styles.brandMark}>A</Text><Text style={styles.brandName}>Aura</Text></View>
+          <Text style={styles.title}>Create your Aura account</Text>
+          <Text style={styles.subtitle}>Build portfolios, understand risk, and explore historical scenarios.</Text>
 
-        <Card style={styles.formCard}>
-          <View style={styles.form}>
-            <Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" editable={!loading} />
-            <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry editable={!loading} />
-            <Input label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry editable={!loading} />
-            <Button title={loading ? 'Creating account…' : 'Create account'} onPress={submit} disabled={loading} />
-            <Button title="Back to sign in" variant="secondary" onPress={() => navigation.goBack()} disabled={loading} />
-          </View>
-        </Card>
+          <Card style={styles.formCard}>
+            <View style={styles.form}>
+              <Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" editable={!loading} />
+              <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry editable={!loading} />
+              <Input label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry editable={!loading} />
+              <Button title={loading ? 'Creating account…' : 'Create account'} onPress={submit} disabled={loading} />
+              <Button title="Back to sign in" variant="secondary" onPress={() => navigation.goBack()} disabled={loading} />
+            </View>
+          </Card>
 
-        <Text style={styles.note}>Aura is educational portfolio-risk software and does not provide buy or sell advice.</Text>
-      </ScrollView>
+          <Text style={styles.note}>Aura is educational portfolio-risk software and does not provide buy or sell advice.</Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
+  keyboardAvoider: { flex: 1 },
   content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl },
   brand: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xl },
   brandMark: { width: 36, height: 36, borderRadius: 11, backgroundColor: colors.cyanBackground, color: colors.primary, textAlign: 'center', textAlignVertical: 'center', fontSize: 18, fontWeight: '900' },
