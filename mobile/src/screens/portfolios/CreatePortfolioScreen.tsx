@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
+import { AssetSymbolField } from '../../components/portfolio/AssetSymbolField';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
@@ -120,7 +121,7 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
           <View style={{ flex: 1 }}>
             <Text style={styles.sectionTitle}>Holdings</Text>
             <Text style={styles.sectionText}>
-              Symbols are entered manually; no asset search is available.
+              Type a symbol or choose from Aura’s supported asset list.
             </Text>
           </View>
           <Pressable style={styles.addButton} onPress={addRow} disabled={saving}>
@@ -146,15 +147,9 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
               <View style={styles.inline}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.label}>Symbol</Text>
-                  <TextInput
+                  <AssetSymbolField
                     value={row.symbol}
-                    onChangeText={(value) => patchRow(row.id, {
-                      symbol: value.toUpperCase()
-                    })}
-                    autoCapitalize="characters"
-                    placeholder="AAPL"
-                    placeholderTextColor={colors.muted}
-                    style={styles.input}
+                    onChangeText={(symbol) => patchRow(row.id, { symbol })}
                     editable={!saving}
                   />
                 </View>

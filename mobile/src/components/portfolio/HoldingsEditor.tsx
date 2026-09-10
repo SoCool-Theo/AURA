@@ -19,6 +19,7 @@ import {
 } from '../../portfolio/portfolioValidation';
 import { usePortfolios } from '../../portfolio/usePortfolios';
 import { colors, spacing, typography } from '../../theme/theme';
+import { AssetSymbolField } from './AssetSymbolField';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
@@ -159,15 +160,9 @@ export function HoldingsEditor({
               <View style={styles.fields}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.fieldLabel}>Symbol</Text>
-                  <TextInput
+                  <AssetSymbolField
                     value={row.symbol}
-                    onChangeText={(value) => patchRow(row.id, {
-                      symbol: value.toUpperCase()
-                    })}
-                    autoCapitalize="characters"
-                    placeholder="AAPL"
-                    placeholderTextColor={colors.muted}
-                    style={styles.input}
+                    onChangeText={(symbol) => patchRow(row.id, { symbol })}
                     editable={!saving}
                   />
                 </View>
