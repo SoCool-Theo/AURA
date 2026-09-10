@@ -73,7 +73,7 @@ export function SettingsScreen() {
   function showAbout() {
     Alert.alert(
       'About Aura',
-      'Aura displays portfolio analytics and historical simulations from its backend. AI explanations, live quotes, and Watchlist are unavailable.'
+      'Aura displays backend portfolio analytics, historical simulations, and grounded AI explanations. Live quotes and Watchlist are unavailable.'
     );
   }
 

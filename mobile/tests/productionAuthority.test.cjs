@@ -307,3 +307,89 @@ test('financial presentation preserves signs/nulls and allocation preserves save
   assert.equal(result.allocation[0].weight, 0);
   assert.equal(result.allocation[1].weight, 1);
 });
+
+test('AI client uses the authenticated backend contract and rejects malformed success bodies', async () => {
+  class ApiError extends Error {
+    constructor(options) {
+      super(options.message);
+      Object.assign(this, options);
+    }
+  }
+  const portfolioId = 'e6518442-58cb-408f-ae3f-bf47fb00b555';
+  const reportId = '10000000-0000-0000-0000-000000000001';
+  const request = { portfolio_id: portfolioId, message: 'Why is this risky?' };
+  let response = {
+    answer: 'The saved report shows historical concentration risk.',
+    sources: [
+      { type: 'portfolio', id: portfolioId },
+      { type: 'report', id: reportId }
+    ],
+    limitations: ['This explanation uses historical data.']
+  };
+  let call;
+  const { agentApi } = load('src/api/agentApi.ts', {
+    './apiClient': {
+      ApiError,
+      apiRequest: async (path, options) => {
+        call = { path, options };
+        return response;
+      }
+    }
+  });
+
+  assert.equal(
+    JSON.stringify(await agentApi.explain(request)),
+    JSON.stringify(response)
+  );
+  assert.equal(call.path, '/api/agent/explain');
+  assert.equal(call.options.method, 'POST');
+  assert.deepEqual(call.options.body, request);
+
+  for (const malformed of [
+    { answer: '', sources: [], limitations: [] },
+    { answer: 'Answer', sources: null, limitations: [] },
+    { answer: 'Answer', sources: [{ type: 'unknown', id: portfolioId }], limitations: [] },
+    { answer: 'Answer', sources: [{ type: 'portfolio', id: 'not-a-uuid' }], limitations: [] },
+    { answer: 'Answer', sources: [], limitations: [42] }
+  ]) {
+    response = malformed;
+    await assert.rejects(
+      () => agentApi.explain(request),
+      error => error.kind === 'malformed-response'
+    );
+  }
+});
+
+test('AI errors remain truthful and retryable without exposing provider details', () => {
+  class ApiError extends Error {
+    constructor(options) {
+      super(options.message);
+      Object.assign(this, options);
+    }
+  }
+  const { agentErrorMessage } = load('src/agent/agentErrors.ts', {
+    '../api/apiClient': { ApiError }
+  });
+
+  assert.match(agentErrorMessage(new ApiError({ status: 401 })), /sign in again/i);
+  assert.match(agentErrorMessage(new ApiError({ status: 404 })), /could not be found/i);
+  assert.match(agentErrorMessage(new ApiError({ status: 422 })), /could not process/i);
+  assert.match(agentErrorMessage(new ApiError({ status: 502 })), /invalid AI explanation/i);
+  assert.match(agentErrorMessage(new ApiError({ status: 503 })), /temporarily unavailable/i);
+  assert.match(agentErrorMessage(new ApiError({ kind: 'network' })), /check the connection/i);
+  assert.match(agentErrorMessage(new ApiError({ kind: 'configuration' })), /not configured/i);
+  assert.match(agentErrorMessage(new ApiError({ kind: 'malformed-response' })), /unexpected AI response/i);
+});
+
+test('mobile Assistant has no direct provider access or synthetic conversation authority', () => {
+  const api = fs.readFileSync(path.join(root, 'src/api/agentApi.ts'), 'utf8');
+  const screen = fs.readFileSync(path.join(root, 'src/screens/assistant/AssistantScreen.tsx'), 'utf8');
+
+  assert.match(api, /apiRequest/);
+  assert.match(api, /\/api\/agent\/explain/);
+  assert.match(screen, /usePortfolios/);
+  assert.match(screen, /AbortController/);
+  assert.match(screen, /newest saved report/);
+  assert.ok(!/OPENAI_API_KEY|GROQ_API_KEY|api\.openai|api\.groq/i.test(`${api}\n${screen}`));
+  assert.ok(!/AsyncStorage|SecureStore|conversationHistory|chatHistory/.test(screen));
+});

@@ -99,14 +99,14 @@ export const learnLessons: LearnLesson[] = [
   },
   {
     id: 'ai-explanation',
-    title: 'What will the Aura AI Agent do?',
+    title: 'What does the Aura AI Agent do?',
     category: 'AI',
     readMinutes: 3,
-    summary: 'Learn the intended role of conversational explanations.',
+    summary: 'Learn the role and boundaries of grounded AI explanations.',
     body: [
-      'Aura’s AI Agent is intended to explain stable portfolio analysis, report and simulation results in simple language.',
-      'The current mobile build intentionally does not fabricate AI responses because the backend AI Agent is not implemented yet.',
-      'When connected later, the assistant should explain backend results and context rather than replace the deterministic analytics engine.'
+      'Aura’s AI Agent explains saved portfolio analysis and supported simulation context in simple language.',
+      'The mobile Assistant sends a selected portfolio ID and question to Aura’s authenticated backend. The backend owns the grounded context, provider access, guardrails, sources and limitations.',
+      'The assistant explains backend results rather than replacing the deterministic analytics engine. It does not predict prices or provide personalized buy, sell or hold recommendations.'
     ]
   }
 ];
