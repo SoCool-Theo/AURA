@@ -23,7 +23,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
   const dashboard = useDashboard();
   const { portfoliosState, reportsState, selectedId, portfolio, report, newest } = dashboard;
   const { portfolios, listStatus, listError, selectPortfolio } = portfoliosState;
-  const [range, setRange] = useState<DashboardRange>('1Y');
+  const [range, setRange] = useState<DashboardRange>('1M');
   const analysis = report?.analysis;
   const points = useMemo(() => filterDashboardReturns(analysis?.portfolio_returns ?? [], range), [analysis, range]);
   const selected = portfolios.find((item) => item.id === selectedId);
