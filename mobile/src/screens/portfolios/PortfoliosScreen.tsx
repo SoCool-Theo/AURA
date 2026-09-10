@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +15,7 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingState } from '../../components/ui/LoadingState';
+import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import { usePortfolios } from '../../portfolio/usePortfolios';
@@ -50,7 +50,7 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         refreshControl={(
@@ -144,7 +144,7 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
             </View>
           </Card>
         </Pressable>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

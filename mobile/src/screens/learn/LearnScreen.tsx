@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { Tag } from '../../components/ui/Tag';
 import { learnLessons } from '../../mocks/learn.mock';
@@ -38,7 +39,7 @@ export function LearnScreen({ navigation }: { navigation: any }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         <PageTitle title="Learn" subtitle="Static educational lessons. Progress is saved on this device only." />
         {localError ? <Card><Text style={styles.progressLabel}>{localError}</Text><Button title="Retry local progress" onPress={() => void retryLocalData()} /></Card> : null}
 
@@ -113,7 +114,7 @@ export function LearnScreen({ navigation }: { navigation: any }) {
             );
           })}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

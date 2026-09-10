@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingState } from '../../components/ui/LoadingState';
+import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { Tag } from '../../components/ui/Tag';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import { usePortfolios } from '../../portfolio/usePortfolios';
@@ -64,7 +65,7 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={isRefreshingHistory} onRefresh={retry} tintColor={colors.primary} />}
@@ -122,7 +123,7 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
             <Card><EmptyState icon="search-outline" title="No matching simulations" description="Change the portfolio filter or search text." /></Card>
           )}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

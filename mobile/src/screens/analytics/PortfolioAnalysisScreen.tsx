@@ -18,6 +18,7 @@ import {
 } from '../../components/ui/DateRangeSelector';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingState } from '../../components/ui/LoadingState';
+import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import { usePortfolios } from '../../portfolio/usePortfolios';
@@ -236,7 +237,7 @@ export function PortfolioAnalysisScreen({
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
@@ -358,7 +359,7 @@ export function PortfolioAnalysisScreen({
             <AnalysisResults analysis={report.analysis} />
           </>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

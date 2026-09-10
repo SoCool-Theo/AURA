@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,6 +21,7 @@ import { usePortfolios } from '../../portfolio/usePortfolios';
 import { colors, spacing, typography } from '../../theme/theme';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
 import { LoadingState } from '../ui/LoadingState';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
@@ -129,7 +129,7 @@ export function HoldingsEditor({
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
@@ -220,7 +220,7 @@ export function HoldingsEditor({
           disabled={saving}
           style={{ marginTop: spacing.xl }}
         />
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

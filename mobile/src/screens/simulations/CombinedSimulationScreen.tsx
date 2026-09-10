@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AllocationEditor } from '../../components/simulations/AllocationEditor';
@@ -10,6 +10,7 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingState } from '../../components/ui/LoadingState';
+import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import { simulationErrorMessage } from '../../simulation/simulationErrors';
 import type { SimulationRunResult } from '../../simulation/SimulationProvider';
@@ -91,7 +92,7 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Combined Simulation</Text>
         <Text style={styles.subtitle}>Compare original and modified allocations during one backend-defined scenario.</Text>
 
@@ -127,7 +128,7 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
             ) : null}
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

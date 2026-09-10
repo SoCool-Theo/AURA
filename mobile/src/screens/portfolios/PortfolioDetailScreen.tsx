@@ -1,7 +1,9 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -285,47 +287,52 @@ export function PortfolioDetailScreen({
           if (!actionPendingRef.current) setNameAction(null);
         }}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {nameAction === 'rename' ? 'Rename portfolio' : 'Duplicate portfolio'}
-              </Text>
-              <Pressable
-                style={styles.closeButton}
-                onPress={() => setNameAction(null)}
-                disabled={pendingAction !== null}
-              >
-                <Ionicons name="close" color={colors.text} size={20} />
-              </Pressable>
-            </View>
-            <Text style={styles.inputLabel}>Portfolio name</Text>
-            <TextInput
-              value={draftName}
-              onChangeText={setDraftName}
-              style={styles.input}
-              placeholder="Portfolio name"
-              placeholderTextColor={colors.muted}
-              autoCapitalize="words"
-              editable={pendingAction === null}
-            />
-            <View style={styles.modalActions}>
-              <Button
-                title="Cancel"
-                variant="secondary"
-                style={{ flex: 1 }}
-                onPress={() => setNameAction(null)}
-                disabled={pendingAction !== null}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalAvoidingView}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  {nameAction === 'rename' ? 'Rename portfolio' : 'Duplicate portfolio'}
+                </Text>
+                <Pressable
+                  style={styles.closeButton}
+                  onPress={() => setNameAction(null)}
+                  disabled={pendingAction !== null}
+                >
+                  <Ionicons name="close" color={colors.text} size={20} />
+                </Pressable>
+              </View>
+              <Text style={styles.inputLabel}>Portfolio name</Text>
+              <TextInput
+                value={draftName}
+                onChangeText={setDraftName}
+                style={styles.input}
+                placeholder="Portfolio name"
+                placeholderTextColor={colors.muted}
+                autoCapitalize="words"
+                editable={pendingAction === null}
               />
-              <Button
-                title={pendingAction ? 'Saving…' : 'Save'}
-                style={{ flex: 1 }}
-                onPress={submitNameAction}
-                disabled={pendingAction !== null}
-              />
+              <View style={styles.modalActions}>
+                <Button
+                  title="Cancel"
+                  variant="secondary"
+                  style={{ flex: 1 }}
+                  onPress={() => setNameAction(null)}
+                  disabled={pendingAction !== null}
+                />
+                <Button
+                  title={pendingAction ? 'Saving…' : 'Save'}
+                  style={{ flex: 1 }}
+                  onPress={submitNameAction}
+                  disabled={pendingAction !== null}
+                />
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -358,6 +365,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl
   },
+  modalAvoidingView: { flex: 1 },
   modalCard: {
     backgroundColor: colors.surface,
     borderRadius: 20,

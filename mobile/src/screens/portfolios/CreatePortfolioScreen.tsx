@@ -2,7 +2,6 @@ import React, { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
+import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { PageTitle } from '../../components/ui/PageTitle';
 import {
   PortfolioCreatedWithoutHoldingsError,
@@ -97,7 +97,7 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
@@ -209,7 +209,7 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
             disabled={saving}
           />
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

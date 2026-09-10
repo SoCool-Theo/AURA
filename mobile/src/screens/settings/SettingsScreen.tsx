@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -320,48 +322,53 @@ export function SettingsScreen() {
         animationType="fade"
         onRequestClose={() => setEditingProfile(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Edit profile</Text>
-                <Text style={styles.modalSubtitle}>
-                  Change your local Aura display name.
-                </Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalAvoidingView}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>Edit profile</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Change your local Aura display name.
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.closeButton}
+                  onPress={() => setEditingProfile(false)}
+                >
+                  <Ionicons name="close" color={colors.text} size={20} />
+                </Pressable>
               </View>
-              <Pressable
-                style={styles.closeButton}
-                onPress={() => setEditingProfile(false)}
-              >
-                <Ionicons name="close" color={colors.text} size={20} />
-              </Pressable>
-            </View>
 
-            <Text style={styles.inputLabel}>Display name</Text>
-            <TextInput
-              value={draftName}
-              onChangeText={setDraftName}
-              placeholder="Your name"
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-              autoCapitalize="words"
-            />
+              <Text style={styles.inputLabel}>Display name</Text>
+              <TextInput
+                value={draftName}
+                onChangeText={setDraftName}
+                placeholder="Your name"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                autoCapitalize="words"
+              />
 
-            <View style={styles.modalActions}>
-              <Button
-                title="Cancel"
-                variant="secondary"
-                style={{ flex: 1 }}
-                onPress={() => setEditingProfile(false)}
-              />
-              <Button
-                title="Save"
-                style={{ flex: 1 }}
-                onPress={saveName}
-              />
+              <View style={styles.modalActions}>
+                <Button
+                  title="Cancel"
+                  variant="secondary"
+                  style={{ flex: 1 }}
+                  onPress={() => setEditingProfile(false)}
+                />
+                <Button
+                  title="Save"
+                  style={{ flex: 1 }}
+                  onPress={saveName}
+                />
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -516,6 +523,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     padding: spacing.xl
+  },
+  modalAvoidingView: {
+    flex: 1
   },
   modalCard: {
     backgroundColor: colors.surface,

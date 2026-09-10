@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { LoadingState } from '../../components/ui/LoadingState';
+import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { Tag } from '../../components/ui/Tag';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
@@ -137,7 +138,7 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         refreshControl={(
@@ -290,7 +291,7 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
         <Text style={styles.note}>
           Reports are read-only snapshots. Export, sharing, download, and editing are unavailable.
         </Text>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
