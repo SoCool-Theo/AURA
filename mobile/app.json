@@ -5,6 +5,10 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#07111F",
+      "resizeMode": "contain"
+    },
     "ios": {
       "supportsTablet": true
     },

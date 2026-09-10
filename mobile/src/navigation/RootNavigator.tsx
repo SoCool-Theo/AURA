@@ -1,20 +1,19 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../auth/useAuth';
 import { useAppData } from '../hooks/useAppData';
-import { LoadingState } from '../components/ui/LoadingState';
-import { Button } from '../components/ui/Button';
-import { colors, spacing } from '../theme/theme';
-import { OnboardingScreen } from '../screens/onboarding/OnboardingScreen';
+import { SplashScreen } from '../screens/splash/SplashScreen';
 import { SessionRestoreScreen } from '../screens/auth/SessionRestoreScreen';
+import { WelcomeScreen } from '../screens/welcome/WelcomeScreen';
 import { AuthNavigator } from './AuthNavigator';
 import { MainTabNavigator } from './MainTabNavigator';
-import type { RootStackParamList } from './navigationTypes';
+import type {
+  AuthStackParamList,
+  RootStackParamList
+} from './navigationTypes';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-const ONBOARDING_KEY = 'aura_onboarding_complete';
+const MINIMUM_SPLASH_DURATION_MS = 1400;
 
 export function RootNavigator() {
   const {
@@ -24,22 +23,30 @@ export function RootNavigator() {
     signOut
   } = useAuth();
   const { loading: appDataLoading } = useAppData();
-  const [checked, setChecked] = useState(false);
-  const [onboarded, setOnboarded] = useState(false);
-  const [onboardingError, setOnboardingError] = useState<string | null>(null);
-  const onboardingPending = useRef(false);
+  const [minimumSplashElapsed, setMinimumSplashElapsed] = useState(false);
+  const [welcomeVisible, setWelcomeVisible] = useState(true);
+  const [authEntryRoute, setAuthEntryRoute] = useState<keyof AuthStackParamList>('Login');
 
-  const checkOnboarding = useCallback(async () => {
-    setChecked(false);
-    setOnboardingError(null);
-    try { setOnboarded(await AsyncStorage.getItem(ONBOARDING_KEY) === 'true'); }
-    catch { setOnboardingError('Could not read device onboarding settings. Please retry.'); }
-    finally { setChecked(true); }
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setMinimumSplashElapsed(true),
+      MINIMUM_SPLASH_DURATION_MS
+    );
+    return () => clearTimeout(timer);
   }, []);
-  useEffect(() => { void checkOnboarding(); }, [checkOnboarding]);
+  useEffect(() => {
+    if (authStatus === 'authenticated') {
+      setAuthEntryRoute('Login');
+      setWelcomeVisible(false);
+    }
+  }, [authStatus]);
 
-  if (authStatus === 'initializing' || appDataLoading || !checked) {
-    return <LoadingState message="Starting Aura…" />;
+  if (
+    !minimumSplashElapsed
+    || authStatus === 'initializing'
+    || appDataLoading
+  ) {
+    return <SplashScreen />;
   }
 
   if (authStatus === 'error') {
@@ -52,35 +59,29 @@ export function RootNavigator() {
     );
   }
 
-  if (onboardingError) {
-    return <View style={{ flex: 1, justifyContent: 'center', padding: spacing.xl, gap: spacing.lg, backgroundColor: colors.background }}>
-      <Text style={{ color: colors.text }}>{onboardingError}</Text>
-      <Button title="Retry device settings" onPress={() => void checkOnboarding()} />
-    </View>;
+  if (authStatus === 'unauthenticated' && welcomeVisible) {
+    return (
+      <WelcomeScreen
+        onGetStarted={() => {
+          setAuthEntryRoute('Register');
+          setWelcomeVisible(false);
+        }}
+        onLogin={() => {
+          setAuthEntryRoute('Login');
+          setWelcomeVisible(false);
+        }}
+      />
+    );
   }
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {!onboarded ? (
-        <Stack.Screen name="Onboarding">
-          {() => (
-            <OnboardingScreen
-              onFinish={async () => {
-                if (onboardingPending.current) return;
-                onboardingPending.current = true;
-                try {
-                  await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-                  setOnboarded(true);
-                } catch { setOnboardingError('Could not save onboarding on this device. Please retry.'); }
-                finally { onboardingPending.current = false; }
-              }}
-            />
-          )}
-        </Stack.Screen>
-      ) : authStatus === 'authenticated' ? (
+      {authStatus === 'authenticated' ? (
         <Stack.Screen name="Main" component={MainTabNavigator} />
       ) : (
-        <Stack.Screen name="Auth" component={AuthNavigator} />
+        <Stack.Screen name="Auth">
+          {() => <AuthNavigator initialRouteName={authEntryRoute} />}
+        </Stack.Screen>
       )}
     </Stack.Navigator>
   );

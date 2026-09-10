@@ -55,7 +55,7 @@ export function RegisterScreen({ navigation }: Props) {
       Alert.alert(
         'Account created',
         'Your Aura account is ready. Sign in with your email and password to continue.',
-        [{ text: 'Continue to sign in', onPress: () => navigation.goBack() }]
+        [{ text: 'Continue to sign in', onPress: () => navigation.navigate('Login') }]
       );
     } catch (error) {
       Alert.alert(
@@ -92,7 +92,7 @@ export function RegisterScreen({ navigation }: Props) {
               <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry editable={!loading} />
               <Input label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry editable={!loading} />
               <Button title={loading ? 'Creating account…' : 'Create account'} onPress={submit} disabled={loading} />
-              <Button title="Back to sign in" variant="secondary" onPress={() => navigation.goBack()} disabled={loading} />
+              <Button title="Back to sign in" variant="secondary" onPress={() => navigation.navigate('Login')} disabled={loading} />
             </View>
           </Card>
 
