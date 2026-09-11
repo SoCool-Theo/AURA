@@ -84,9 +84,9 @@ feature/refactor/docs branch
 | `feat/backend-market-data-scheduler` | Integration feature | Completed and merged into `develop` | Schedule the existing market-data update and PostgreSQL persistence workflow |
 | `feat/react-web-backend-integration` | Customer web integration | Completed and merged into `develop` | Connect the non-AI customer React web application to existing FastAPI/PostgreSQL capabilities |
 | `feat/backend-ai-agent` | AI integration feature | Completed and merged into `develop` | Provide authenticated, grounded educational explanations from owned backend portfolio/report/simulation context |
-| `feat/react-web-ai-integration` | Customer web AI integration | Not complete | Finish and verify the customer React Assistant connection to the backend AI Agent |
-| `feat/mobile-web-parity` | Customer mobile integration | Completed and pushed; not yet merged into `develop` | Connect supported non-AI mobile workflows to the shared FastAPI/PostgreSQL backend |
-| Mobile AI integration | Customer mobile AI integration | Remaining | Connect the mobile Assistant to the completed backend AI Agent |
+| `feat/react-web-ai-integration` | Customer web AI integration | Completed and merged into `develop` | Connect the customer React Assistant to the backend AI Agent |
+| `feat/mobile-web-parity` | Customer mobile integration | Completed and pushed; not yet merged into `develop` | Connect supported mobile workflows, including AI explanations, to the shared FastAPI/PostgreSQL backend |
+| Mobile AI integration | Customer mobile AI integration | Completed and pushed on `feat/mobile-web-parity` | Connect the mobile Assistant to the completed backend AI Agent |
 | `feat/backend-quality-ci` | Optional support | Optional | Automated testing and code-quality checks |
 
 ---
@@ -1421,9 +1421,9 @@ stable in `develop`.
 | `feat/backend-market-data-scheduler` | Automate the existing market-data update/storage workflow | Completed market-data pipeline + PostgreSQL database/storage | Completed and merged into `develop` |
 | `feat/react-web-backend-integration` | Connect the customer React web frontend to completed non-AI backend capabilities | Authentication + Portfolio API + AnalysisService/reporting + all three simulator modes + Simulation History + stable API contracts | Completed and merged into `develop` |
 | `feat/backend-ai-agent` | Explain stable analysis, report, and simulation results | Stable analytics + reports + simulations + schemas + database/backend context | Completed and merged into `develop` |
-| `feat/react-web-ai-integration` | Connect React AI/chat/explanation experiences to the backend AI Agent | Completed backend AI Agent + React integration foundation | Not complete; initial implementation requires completion and controlled verification |
-| `feat/mobile-web-parity` | Connect supported non-AI mobile workflows to FastAPI/PostgreSQL | Authentication + portfolios + reports + simulations + stable API contracts | Completed and pushed; not yet merged into `develop` |
-| Mobile AI integration | Connect the mobile Assistant to the backend AI Agent | Completed backend AI Agent + synchronized mobile backend integration | Remaining |
+| `feat/react-web-ai-integration` | Connect React AI/chat/explanation experiences to the backend AI Agent | Completed backend AI Agent + React integration foundation | Completed and merged into `develop` |
+| `feat/mobile-web-parity` | Connect supported mobile workflows to FastAPI/PostgreSQL | Authentication + portfolios + reports + simulations + AI Agent + stable API contracts | Completed and pushed; not yet merged into `develop` |
+| Mobile AI integration | Connect the mobile Assistant to the backend AI Agent | Completed backend AI Agent + synchronized mobile backend integration | Completed and pushed on `feat/mobile-web-parity` |
 | `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent behavior for final integration | Completed major backend feature work including AI + stable integration boundaries | Later/final integration; not ready |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
 
@@ -1432,10 +1432,9 @@ login/register, portfolio management, risk analysis, analysis/report history,
 Historical Scenario, Allocation and Combined simulations, Simulation History,
 and the real Dashboard composition for the customer/investor React web
 application. The subsequent `feat/backend-ai-agent` and
-`feat/react-web-ai-integration` workstreams have begun, but only the Backend AI
-Agent is complete. The React web AI integration is not complete. The mobile
-non-AI integration is complete on `feat/mobile-web-parity`; mobile AI and
-Admin integration remain separate.
+`feat/react-web-ai-integration` workstreams are complete and merged into
+`develop`. Mobile backend and AI integration are complete and pushed on
+`feat/mobile-web-parity`; Admin integration remains separate.
 
 ---
 
@@ -1703,8 +1702,9 @@ integrate the separate Admin frontend or add Admin roles or APIs.
   periodic-return information. Holdings count replaces unsupported portfolio
   dollar valuation, and no fabricated financial values are shown.
 - Removed production fallback-to-mock behavior and browser-local authority for
-  domain records. AI, Watchlist, Search, Notifications, mutable account data,
-  and other unsupported capabilities remain truthful and deferred.
+  domain records. Watchlist, Search, Notifications, mutable account data, and
+  other unsupported capabilities remain truthful and deferred. AI integration
+  was completed later through the dedicated backend and React AI workstreams.
 
 Backend analytics and simulation results remain the financial source of truth.
 The approved Dashboard risk-score adjustment only rounds the backend-returned
@@ -1742,12 +1742,12 @@ holdings, analysis, reports and report detail, all three simulation modes,
 Simulation History/detail, and the Dashboard. The full Aura product is not
 complete.
 
-The subsequent Backend AI Agent stage is complete. React web AI integration
-and mobile AI integration are not complete. Watchlist persistence, customer
-quote/live market-data APIs, asset search/catalogue support, shares/invested
-amounts, live portfolio valuation, editable profiles, password management,
-global Search, Notifications, support/contact APIs, report actions, and global
-report/simulation history optimization remain future or optional capabilities.
+The Backend AI Agent, React web AI integration, and mobile AI integration are
+complete. Watchlist persistence, customer quote/live market-data APIs, asset
+search/catalogue support, shares/invested amounts, live portfolio valuation,
+editable profiles, password management, global Search, Notifications,
+support/contact APIs, report actions, and global report/simulation history
+optimization remain future or optional capabilities.
 
 Aura's Admin frontend is a separate future workstream. There is no completed
 Admin role/authorization system, Admin-specific backend API, or Admin
@@ -1772,24 +1772,26 @@ or investment recommendations.
 
 ## `feat/react-web-ai-integration`
 
-**Status:** Not complete
+**Status:** Completed and merged into `develop`
 
-An initial customer React Assistant connection exists in `develop`. It loads
-real saved portfolios and has a request path to the backend AI Agent, but this
-workstream still requires completion and controlled verification. It must not
-be described as a completed product capability until that remaining work is
-approved.
+The customer React Assistant loads real saved portfolios and calls the
+authenticated backend AI Agent. It presents backend-returned explanations,
+source references, limitations, loading states, and truthful retryable errors
+without duplicating financial calculations or exposing provider credentials.
+Controlled web verification is complete, and the current production build
+passes.
 
 ---
 
-# Completed Customer Mobile Backend Integration
+# Completed Customer Mobile Backend and AI Integration
 
 ## `feat/mobile-web-parity`
 
-**Status:** Completed and pushed; not yet merged into `develop`
+**Status:** Completed, including mobile AI, and pushed; not yet merged into
+`develop`
 
-The mobile implementation now connects supported non-AI production workflows
-to the shared FastAPI/PostgreSQL backend:
+The mobile implementation now connects supported production workflows to the
+shared FastAPI/PostgreSQL backend:
 
 - centralized environment-aware API requests and structured error handling;
 - registration, login, secure token storage, `/api/auth/me` restoration,
@@ -1799,16 +1801,20 @@ to the shared FastAPI/PostgreSQL backend:
 - Historical Scenario, Allocation Change, Combined Simulation, and immutable
   Simulation History/detail; and
 - a Dashboard composed from real portfolios, holdings, and the newest saved
-  backend report without mock financial authority.
+  backend report without mock financial authority;
+- an authenticated, stateless AI Assistant grounded by the backend in the
+  selected real portfolio and newest saved report when available; and
+- backend-returned AI explanations, source references, limitations, and
+  truthful retryable errors.
 
 The branch also includes Expo SDK 57 compatibility, consistent Android Aura
 colors, and dynamic discovery of the local FastAPI host from Expo/Metro during
-development. Backend analytics and simulations remain authoritative.
-
-Mobile AI integration is not complete. The mobile Assistant truthfully remains
-unavailable and must be connected to the completed backend AI Agent in a
-separate focused workstream after `feat/mobile-web-parity` is synchronized
-with the latest `develop`.
+development. Backend analytics, simulations, AI grounding, guardrails, sources,
+and limitations remain authoritative. Mobile stores no provider credentials,
+does not call OpenAI or Groq directly, and creates no authoritative local chat
+history or financial calculations. Final mobile verification passed TypeScript
+checking and all 11 production-authority tests; the focused backend AI
+regression passed 187 tests.
 
 ---
 
@@ -1854,13 +1860,11 @@ AnalysisService + Portfolio API + Analysis persistence
 ✅ feat/react-web-backend-integration
                 ↓
 ✅ feat/backend-ai-agent
-                ├── feat/react-web-ai-integration  ← incomplete
-                └── mobile AI integration          ← incomplete
+                ├── ✅ feat/react-web-ai-integration  ← completed and merged
+                └── ✅ mobile AI integration          ← completed and pushed
                             ↑
-✅ feat/mobile-web-parity                           ← completed non-AI mobile integration
+✅ feat/mobile-web-parity                           ← completed backend + AI mobile integration
 
-After both client AI integrations are complete:
-                ↓
 feat/backend-api-integration
                 ↓
 feat/backend-deployment
@@ -1876,16 +1880,16 @@ authentication, all three core simulator modes, Simulation History, and
 Historical Market-Data Backfill and Historical Scenario Catalogue are
 complete, as are the Market-Data Scheduler and non-AI React/backend
 integration. The backend AI Agent is complete and merged into `develop`.
-React web AI integration remains incomplete. Non-AI mobile backend integration
-is complete on `feat/mobile-web-parity`; mobile AI, final backend/API
-integration, and deployment remain.
+React web AI integration is complete and merged into `develop`. Mobile backend
+and AI integration are complete on `feat/mobile-web-parity`; final backend/API
+integration and deployment remain.
 
 This sequence is the approved development order, not a hard dependency claim.
 The completed web and mobile integrations validate authentication, API
 communication and contracts, loading/error behavior, real portfolio
 workflows, analysis/report display, and simulation flows. The mobile branch
-must be synchronized with the latest `develop` before its Assistant consumes
-the completed backend AI endpoint.
+has been synchronized with `develop`, and its Assistant now consumes the
+completed backend AI endpoint.
 
 ---
 
@@ -1896,23 +1900,21 @@ Portfolio API, analysis-reporting, authentication, all three simulator modes,
 Simulation History, Historical Market-Data Backfill, Historical Scenario
 Catalogue, Market-Data Scheduler, and customer React/backend integration
 workstreams are complete. The backend AI Agent is also complete and merged
-into `develop`. Customer React AI integration is not complete. Non-AI mobile
-backend integration is complete and pushed on `feat/mobile-web-parity`.
+into `develop`. Customer React AI integration is complete and merged. Mobile
+backend and AI integration are complete and pushed on
+`feat/mobile-web-parity`.
 
-The recommended next client work is to finish React web AI integration, then
-complete mobile AI integration:
+The recommended next work is to merge the completed mobile branch and proceed
+to final backend/API integration verification:
 
 ```text
-React web AI completion
+merge feat/mobile-web-parity into develop
         ↓
-mobile AI integration
+feat/backend-api-integration
 ```
 
-The mobile work should connect the mobile Assistant to the completed
-authenticated backend AI explanation endpoint after synchronizing the mobile
-branch with the latest `develop`. Both client integrations must preserve the
-backend as the source of portfolio context, calculations, guardrails, sources,
-and limitations.
+Both completed client integrations preserve the backend as the source of
+portfolio context, calculations, guardrails, sources, and limitations.
 
 The approved follow-on order is:
 
@@ -1922,13 +1924,11 @@ The approved follow-on order is:
 ✅ feat/react-web-backend-integration  # completed non-AI product workflows
         ↓
 ✅ feat/backend-ai-agent
-        ├── feat/react-web-ai-integration  # incomplete
-        └── mobile AI integration          # incomplete
+        ├── ✅ feat/react-web-ai-integration  # completed and merged
+        └── ✅ mobile AI integration          # completed and pushed
                     ↑
-✅ feat/mobile-web-parity                   # completed non-AI mobile workflows
+✅ feat/mobile-web-parity                   # completed backend + AI mobile workflows
 
-After both client AI integrations are complete:
-        ↓
 feat/backend-api-integration
         ↓
 feat/backend-deployment
@@ -1961,9 +1961,9 @@ develop
 ├── feat/backend-market-data-scheduler            # completed
 ├── feat/react-web-backend-integration             # completed; non-AI
 ├── feat/backend-ai-agent                         # completed
-├── feat/react-web-ai-integration                  # incomplete
-├── feat/mobile-web-parity                        # completed; awaiting develop merge
-├── mobile AI integration                        # remaining
+├── feat/react-web-ai-integration                  # completed and merged
+├── feat/mobile-web-parity                        # completed including AI; awaiting develop merge
+├── mobile AI integration                        # completed on feat/mobile-web-parity
 ├── feat/backend-api-integration                  # later final integration
 ├── feat/backend-deployment                       # later
 └── feat/backend-quality-ci                       # optional
@@ -1992,9 +1992,9 @@ develop
 ├── feat/frontend-risk-report
 ├── feat/frontend-simulation
 ├── feat/react-web-backend-integration  # completed non-AI integration
-├── feat/react-web-ai-integration       # incomplete
-├── feat/mobile-web-parity              # completed non-AI mobile integration
-└── mobile AI integration               # remaining
+├── feat/react-web-ai-integration       # completed and merged
+├── feat/mobile-web-parity              # completed backend + AI mobile integration
+└── mobile AI integration               # completed on feat/mobile-web-parity
 ```
 
 A permanent `frontend` or `backend` integration branch is unnecessary because
@@ -2100,14 +2100,14 @@ Documentation changes should not be added to `main` directly.
 
 ```text
 ✅ feat/backend-ai-agent                       # completed and merged
-feat/react-web-ai-integration                  # incomplete
-mobile AI integration                         # incomplete
+✅ feat/react-web-ai-integration               # completed and merged
+✅ mobile AI integration                      # completed and pushed
 ```
 
-## Mobile Non-AI Integration Stage
+## Mobile Integration Stage
 
 ```text
-✅ feat/mobile-web-parity                      # completed and pushed; awaiting develop merge
+✅ feat/mobile-web-parity                      # completed including AI and pushed; awaiting develop merge
 ```
 
 ## Final Integration and Deployment Stage
@@ -2128,19 +2128,19 @@ market-data storage, AnalysisService, the Portfolio API, analysis reporting,
 authentication, all three core simulator modes, Simulation History, and
 Historical Market-Data Backfill, Historical Scenario Catalogue, the
 Market-Data Scheduler, and customer React/backend integration are merged into
-`develop`. The backend AI Agent is also complete and merged. Non-AI mobile
-backend integration is complete and pushed on `feat/mobile-web-parity`, but it
-has not yet been merged into `develop`.
+`develop`. The backend AI Agent is also complete and merged. Mobile backend
+integration and mobile AI integration are complete and pushed on
+`feat/mobile-web-parity`, but that branch has not yet been merged into
+`develop`. React web AI integration is complete and merged into `develop`.
 
 The recommended next work is:
 
 ```text
-finish and verify React web AI integration
+merge feat/mobile-web-parity into develop
         ↓
-synchronize and merge feat/mobile-web-parity
-        ↓
-complete mobile AI integration
+complete final backend/API integration verification
 ```
 
-This is followed by final backend/API integration and deployment. Do not treat
-React web AI, mobile AI, final integration, or deployment as completed.
+This is followed by deployment preparation. React web AI and mobile AI are
+complete; do not treat final backend/API integration or deployment as
+completed.
