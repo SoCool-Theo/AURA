@@ -144,6 +144,83 @@ def test_get_range_empty_symbols_returns_without_querying() -> None:
     session.scalars.assert_not_called()
 
 
+def test_get_latest_on_or_before_uses_one_query_and_requested_order() -> None:
+    session = MagicMock(spec=Session)
+    aapl = MarketData(
+        symbol="AAPL",
+        date=date(2026, 9, 11),
+        adjusted_close=Decimal("231.250000000000"),
+        volume=1_000,
+        source="yfinance",
+    )
+    msft = MarketData(
+        symbol="MSFT",
+        date=date(2026, 9, 10),
+        adjusted_close=Decimal("510.125000000000"),
+        volume=2_000,
+        source="yfinance",
+    )
+    session.scalars.return_value.all.return_value = [aapl, msft]
+    symbols = ["MSFT", "AAPL", "MSFT"]
+    original_symbols = list(symbols)
+    requested_date = date(2026, 9, 11)
+
+    result = MarketDataRepository(session).get_latest_on_or_before(
+        symbols,
+        requested_date,
+    )
+
+    assert result == [msft, aapl]
+    assert symbols == original_symbols
+    assert result[0].adjusted_close == Decimal("510.125000000000")
+    session.scalars.assert_called_once()
+    statement = session.scalars.call_args.args[0]
+    compiled = statement.compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+    assert "max(market_data.date) AS latest_date" in sql
+    assert "market_data.date <= %(date_1)s" in sql
+    assert "GROUP BY market_data.symbol" in sql
+    assert "JOIN" in sql
+    assert compiled.params == {
+        "symbol_1": ["MSFT", "AAPL"],
+        "date_1": requested_date,
+    }
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+
+
+def test_get_latest_on_or_before_omits_missing_symbols() -> None:
+    session = MagicMock(spec=Session)
+    aapl = MarketData(
+        symbol="AAPL",
+        date=date(2026, 9, 11),
+        adjusted_close=Decimal("231.250000000000"),
+        volume=None,
+        source="yfinance",
+    )
+    session.scalars.return_value.all.return_value = [aapl]
+
+    result = MarketDataRepository(session).get_latest_on_or_before(
+        ["AAPL", "MSFT"],
+        date(2026, 9, 11),
+    )
+
+    assert result == [aapl]
+
+
+def test_get_latest_on_or_before_empty_symbols_avoids_query() -> None:
+    session = MagicMock(spec=Session)
+
+    result = MarketDataRepository(session).get_latest_on_or_before(
+        [],
+        date(2026, 9, 11),
+    )
+
+    assert result == []
+    session.scalars.assert_not_called()
+
+
 def test_sqlalchemy_failure_propagates_without_rollback_or_commit() -> None:
     session = MagicMock(spec=Session)
     failure = SQLAlchemyError("upsert failed")

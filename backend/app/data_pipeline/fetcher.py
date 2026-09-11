@@ -7,28 +7,11 @@ from datetime import date, datetime
 
 import pandas as pd
 
+from ..core.instruments import USER_ASSET_SYMBOLS
 from .providers import MarketDataProvider, YFinanceMarketProvider
 
 
-DEFAULT_SYMBOLS: tuple[str, ...] = (
-    "AAPL",
-    "MSFT",
-    "TSLA",
-    "NVDA",
-    "AMZN",
-    "GOOGL",
-    "META",
-    "SPY",
-    "QQQ",
-    "DIA",
-    "VTI",
-    "GLD",
-    "SLV",
-    "BND",
-    "TLT",
-    "BTC-USD",
-    "ETH-USD",
-)
+DEFAULT_SYMBOLS: tuple[str, ...] = USER_ASSET_SYMBOLS
 DEFAULT_START_DATE = "2010-01-01"
 
 

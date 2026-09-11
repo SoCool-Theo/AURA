@@ -43,10 +43,13 @@ def test_default_mode_preserves_csv_only_behavior_and_summary(
         update_script.main([])
 
     update.assert_called_once_with(
-        symbols=update_script.DEFAULT_SYMBOLS,
+        symbols=update_script.MARKET_UPDATE_SYMBOLS,
         start_date=update_script.DEFAULT_START_DATE,
         end_date=None,
     )
+    assert len(update_script.DEFAULT_SYMBOLS) == 17
+    assert "THB=X" not in update_script.DEFAULT_SYMBOLS
+    assert update_script.MARKET_UPDATE_SYMBOLS[-1] == "THB=X"
     persist_update.assert_not_called()
     assert capsys.readouterr().out.splitlines() == [
         "Aura market-data update completed.",
@@ -141,6 +144,24 @@ def test_persistence_mode_delegates_once_and_preserves_output(
         "Failed symbols: MISSING",
         "Database rows stored: 2",
     ]
+
+
+def test_default_persistence_mode_includes_internal_fx(tmp_path: Path) -> None:
+    result = _result(tmp_path)
+    persisted_result = PersistedMarketDataUpdateResult(result, 2)
+
+    with patch.object(
+        update_script,
+        "update_market_data_and_persist",
+        return_value=persisted_result,
+    ) as persist_update:
+        update_script.main(["--persist-database"])
+
+    persist_update.assert_called_once_with(
+        symbols=update_script.MARKET_UPDATE_SYMBOLS,
+        start_date=update_script.DEFAULT_START_DATE,
+        end_date=None,
+    )
 
 
 @pytest.mark.parametrize(
