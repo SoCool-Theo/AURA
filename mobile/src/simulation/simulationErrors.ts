@@ -1,0 +1,23 @@
+import { ApiError } from '../api/apiClient';
+
+function validationMessages(error: ApiError): string[] {
+  if (!Array.isArray(error.detail)) return [];
+  return error.detail.flatMap((item) => (
+    item !== null
+    && typeof item === 'object'
+    && !Array.isArray(item)
+    && typeof item.msg === 'string'
+    && item.msg.trim()
+      ? [item.msg]
+      : []
+  ));
+}
+
+export function simulationErrorMessage(
+  error: unknown,
+  fallback = 'Aura could not complete the simulation request.'
+): string {
+  if (!(error instanceof ApiError)) return fallback;
+  const messages = validationMessages(error);
+  return messages.length ? messages.join('. ') : error.message;
+}
