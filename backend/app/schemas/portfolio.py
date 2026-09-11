@@ -1,14 +1,20 @@
-"""Pydantic contracts for weight-based portfolio analysis and CRUD."""
+"""Pydantic contracts for portfolio analysis, CRUD, and holding facts."""
 
+from datetime import UTC, date, datetime
+from decimal import Decimal
 import math
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import (
     AwareDatetime,
+    BeforeValidator,
+    ConfigDict,
     Field,
+    SerializerFunctionWrapHandler,
     Strict,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
@@ -28,6 +34,44 @@ class PortfolioHoldingInput(AuraBaseModel):
             allow_inf_nan=False,
         ),
     ]
+
+
+def _normalize_invested_currency(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    return value.strip().upper()
+
+
+_InvestedCurrency = Annotated[
+    Literal["USD", "THB"],
+    BeforeValidator(_normalize_invested_currency),
+]
+_PositiveNumeric28Scale12 = Annotated[
+    Decimal,
+    Field(
+        gt=Decimal("0"),
+        max_digits=28,
+        decimal_places=12,
+        allow_inf_nan=False,
+    ),
+]
+
+
+class PortfolioRealHoldingInput(AuraBaseModel):
+    """Future write contract for one aggregate real asset position."""
+
+    symbol: AssetSymbol
+    invested_amount: _PositiveNumeric28Scale12
+    invested_currency: _InvestedCurrency = "USD"
+    shares: _PositiveNumeric28Scale12
+    purchase_date: date
+
+    @field_validator("purchase_date")
+    @classmethod
+    def reject_future_purchase_date(cls, value: date) -> date:
+        if value > datetime.now(UTC).date():
+            raise ValueError("purchase_date must not be in the future")
+        return value
 
 
 def _normalize_portfolio_name(value: object, *, field_name: str) -> object:
@@ -125,19 +169,72 @@ class PortfolioHoldingsReplaceRequest(AuraBaseModel):
 
 
 class PortfolioHoldingResponse(AuraBaseModel):
-    """One persisted holding in its portfolio order."""
+    """One complete legacy allocation or real position in portfolio order."""
 
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: UUID | None = None
     symbol: AssetSymbol
     weight: Annotated[
-        float,
+        float | None,
         Field(
             strict=True,
             ge=0.0,
             le=1.0,
             allow_inf_nan=False,
         ),
-    ]
+    ] = None
+    invested_amount: _PositiveNumeric28Scale12 | None = None
+    invested_currency: _InvestedCurrency | None = None
+    shares: _PositiveNumeric28Scale12 | None = None
+    purchase_date: date | None = None
     position: Annotated[int, Field(strict=True, ge=0)]
+
+    @model_validator(mode="after")
+    def validate_complete_holding_mode(self) -> Self:
+        if "id" in self.model_fields_set and self.id is None:
+            raise ValueError("holding id cannot be null when supplied")
+
+        real_values = (
+            self.invested_amount,
+            self.invested_currency,
+            self.shares,
+            self.purchase_date,
+        )
+        if self.weight is not None:
+            if any(value is not None for value in real_values):
+                raise ValueError(
+                    "holding response must use exactly one legacy or real mode"
+                )
+            return self
+        if all(value is not None for value in real_values):
+            return self
+        raise ValueError(
+            "holding response must use exactly one legacy or real mode"
+        )
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_response_shape(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, object]:
+        serialized = handler(self)
+        if "id" not in self.model_fields_set and self.id is None:
+            serialized.pop("id", None)
+
+        real_field_names = {
+            "invested_amount",
+            "invested_currency",
+            "shares",
+            "purchase_date",
+        }
+        if (
+            self.weight is not None
+            and not (real_field_names & self.model_fields_set)
+        ):
+            for field_name in real_field_names:
+                serialized.pop(field_name, None)
+        return serialized
 
 
 class PortfolioResponse(AuraBaseModel):

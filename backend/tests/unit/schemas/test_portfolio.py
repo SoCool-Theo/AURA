@@ -591,7 +591,7 @@ def test_crud_holding_response_rejects_unknown_field() -> None:
                 "symbol": "AAPL",
                 "weight": 1.0,
                 "position": 0,
-                "shares": 10,
+                "current_value": 10,
             }
         )
 
