@@ -1,14 +1,15 @@
-"""Aura weight-based portfolio holding model."""
+"""Aura legacy-weight and real-position portfolio holding model."""
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -27,13 +28,35 @@ if TYPE_CHECKING:
 
 
 class Holding(Base):
-    """One normalized symbol and exact weight in an ordered portfolio."""
+    """One ordered legacy allocation or aggregate real position."""
 
     __tablename__ = "holdings"
     __table_args__ = (
         CheckConstraint(
             "weight >= 0 AND weight <= 1",
             name="ck_holdings_weight_range",
+        ),
+        CheckConstraint(
+            "invested_amount IS NULL OR invested_amount > 0",
+            name="ck_holdings_invested_amount_positive",
+        ),
+        CheckConstraint(
+            "shares IS NULL OR shares > 0",
+            name="ck_holdings_shares_positive",
+        ),
+        CheckConstraint(
+            "invested_currency IS NULL OR "
+            "invested_currency IN ('USD', 'THB')",
+            name="ck_holdings_invested_currency",
+        ),
+        CheckConstraint(
+            "(weight IS NOT NULL AND invested_amount IS NULL AND "
+            "invested_currency IS NULL AND shares IS NULL AND "
+            "purchase_date IS NULL) OR "
+            "(weight IS NULL AND invested_amount IS NOT NULL AND "
+            "invested_currency IS NOT NULL AND shares IS NOT NULL AND "
+            "purchase_date IS NOT NULL)",
+            name="ck_holdings_complete_mode",
         ),
         CheckConstraint(
             "position >= 0",
@@ -62,9 +85,25 @@ class Holding(Base):
         nullable=False,
     )
     symbol: Mapped[str] = mapped_column(Text, nullable=False)
-    weight: Mapped[Decimal] = mapped_column(
+    invested_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=28, scale=12),
+        nullable=True,
+    )
+    invested_currency: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    shares: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=28, scale=12),
+        nullable=True,
+    )
+    purchase_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+    weight: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=20, scale=18),
-        nullable=False,
+        nullable=True,
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
