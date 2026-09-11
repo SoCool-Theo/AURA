@@ -1352,6 +1352,19 @@ authoritative local chat history or financial calculations. Mobile verification
 passed TypeScript checking and all 11 production-authority tests; the focused
 backend AI regression passed 187 tests.
 
+## Backend API Integration and Feature Expansion
+
+**Status:** Baseline integration completed; additional feature work in progress
+
+**Workstream:** `feat/backend-api-integration`
+
+The original integration goal is complete across authentication, portfolios,
+holdings, analytics, reports, simulations, the Backend AI Agent, and the
+completed React web and mobile client connections. The workstream is now
+continuing as an active expansion stage for newly approved features. Those new
+features must be documented and verified individually before they are treated
+as completed. This ongoing expansion does not make deployment complete.
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -1366,8 +1379,9 @@ cause test failures.
 
 ### Recommended next integration work
 
-- Merge the completed `feat/mobile-web-parity` work into `develop`, then proceed
-  to final backend/API integration verification and deployment preparation.
+- Merge the completed `feat/mobile-web-parity` work into `develop`, then
+  continue the newly approved feature expansion on top of the completed
+  backend/API integration baseline.
 
 ```text
 ✅ feat/backend-market-data-scheduler
@@ -1380,7 +1394,7 @@ cause test failures.
                     ↑
 ✅ feat/mobile-web-parity                   # backend + AI mobile integration complete
 
-feat/backend-api-integration
+🚧 feat/backend-api-integration             # baseline complete; new features in progress
         ↓
 feat/backend-deployment
 ```
@@ -1388,11 +1402,13 @@ feat/backend-deployment
 ### Approved follow-on development order
 
 1. Merge the completed `feat/mobile-web-parity` branch into `develop`.
-2. `feat/backend-api-integration` — final full-system/backend-API
-   integration verification after the major backend features, including AI,
-   are stable.
-3. `feat/backend-deployment` — planned only after stable final integration.
+2. Continue `feat/backend-api-integration` for newly approved features while
+   preserving the completed integration baseline.
+3. Run focused and full regression verification for each added feature.
+4. `feat/backend-deployment` — planned only after the expanded feature set is
+   stable.
 
 The backend AI Agent and both customer client AI integrations are complete.
-Final full-system integration, deployment, optional product gaps, and Admin
-integration remain incomplete.
+The original backend/API integration goal is also complete, while additional
+feature development is now in progress. Deployment, optional product gaps,
+and Admin integration remain incomplete.

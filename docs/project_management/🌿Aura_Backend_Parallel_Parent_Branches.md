@@ -87,6 +87,7 @@ feature/refactor/docs branch
 | `feat/react-web-ai-integration` | Customer web AI integration | Completed and merged into `develop` | Connect the customer React Assistant to the backend AI Agent |
 | `feat/mobile-web-parity` | Customer mobile integration | Completed and pushed; not yet merged into `develop` | Connect supported mobile workflows, including AI explanations, to the shared FastAPI/PostgreSQL backend |
 | Mobile AI integration | Customer mobile AI integration | Completed and pushed on `feat/mobile-web-parity` | Connect the mobile Assistant to the completed backend AI Agent |
+| `feat/backend-api-integration` | Full-system integration and feature expansion | Baseline completed; additional features in progress | Preserve the completed integration baseline while adding and verifying newly approved features |
 | `feat/backend-quality-ci` | Optional support | Optional | Automated testing and code-quality checks |
 
 ---
@@ -1424,7 +1425,7 @@ stable in `develop`.
 | `feat/react-web-ai-integration` | Connect React AI/chat/explanation experiences to the backend AI Agent | Completed backend AI Agent + React integration foundation | Completed and merged into `develop` |
 | `feat/mobile-web-parity` | Connect supported mobile workflows to FastAPI/PostgreSQL | Authentication + portfolios + reports + simulations + AI Agent + stable API contracts | Completed and pushed; not yet merged into `develop` |
 | Mobile AI integration | Connect the mobile Assistant to the backend AI Agent | Completed backend AI Agent + synchronized mobile backend integration | Completed and pushed on `feat/mobile-web-parity` |
-| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, and agent behavior for final integration | Completed major backend feature work including AI + stable integration boundaries | Later/final integration; not ready |
+| `feat/backend-api-integration` | Connect routes, services, schemas, repositories, agents, and clients, then support approved feature expansion | Completed major backend and client integration foundations | Baseline completed; additional features in progress |
 | `feat/backend-deployment` | Containerization and deployment | Stable backend integration | Not ready |
 
 The completed `feat/react-web-backend-integration` workstream covers
@@ -1865,7 +1866,7 @@ AnalysisService + Portfolio API + Analysis persistence
                             ↑
 ✅ feat/mobile-web-parity                           ← completed backend + AI mobile integration
 
-feat/backend-api-integration
+🚧 feat/backend-api-integration                    ← baseline complete; new features in progress
                 ↓
 feat/backend-deployment
 ```
@@ -1881,8 +1882,9 @@ Historical Market-Data Backfill and Historical Scenario Catalogue are
 complete, as are the Market-Data Scheduler and non-AI React/backend
 integration. The backend AI Agent is complete and merged into `develop`.
 React web AI integration is complete and merged into `develop`. Mobile backend
-and AI integration are complete on `feat/mobile-web-parity`; final backend/API
-integration and deployment remain.
+and AI integration are complete on `feat/mobile-web-parity`. The original
+backend/API integration goal is complete, while newly approved feature work is
+in progress; deployment remains.
 
 This sequence is the approved development order, not a hard dependency claim.
 The completed web and mobile integrations validate authentication, API
@@ -1904,13 +1906,14 @@ into `develop`. Customer React AI integration is complete and merged. Mobile
 backend and AI integration are complete and pushed on
 `feat/mobile-web-parity`.
 
-The recommended next work is to merge the completed mobile branch and proceed
-to final backend/API integration verification:
+The recommended next work is to merge the completed mobile branch, then
+continue the approved feature expansion on the completed backend/API
+integration baseline:
 
 ```text
 merge feat/mobile-web-parity into develop
         ↓
-feat/backend-api-integration
+🚧 feat/backend-api-integration  # baseline complete; new features in progress
 ```
 
 Both completed client integrations preserve the backend as the source of
@@ -1929,7 +1932,7 @@ The approved follow-on order is:
                     ↑
 ✅ feat/mobile-web-parity                   # completed backend + AI mobile workflows
 
-feat/backend-api-integration
+🚧 feat/backend-api-integration             # baseline complete; new features in progress
         ↓
 feat/backend-deployment
 ```
@@ -1964,7 +1967,7 @@ develop
 ├── feat/react-web-ai-integration                  # completed and merged
 ├── feat/mobile-web-parity                        # completed including AI; awaiting develop merge
 ├── mobile AI integration                        # completed on feat/mobile-web-parity
-├── feat/backend-api-integration                  # later final integration
+├── feat/backend-api-integration                  # baseline completed; new features in progress
 ├── feat/backend-deployment                       # later
 └── feat/backend-quality-ci                       # optional
 ```
@@ -2113,9 +2116,9 @@ Documentation changes should not be added to `main` directly.
 ## Final Integration and Deployment Stage
 
 ```text
-feat/backend-api-integration
+🚧 feat/backend-api-integration                  # baseline completed; feature expansion in progress
 feat/backend-deployment
-final backend integration tests
+focused and full regression tests for each new feature
 develop → main release Pull Request
 ```
 
@@ -2133,14 +2136,21 @@ integration and mobile AI integration are complete and pushed on
 `feat/mobile-web-parity`, but that branch has not yet been merged into
 `develop`. React web AI integration is complete and merged into `develop`.
 
+The original `feat/backend-api-integration` goal is complete. The branch is now
+an active feature-expansion workstream, so its overall display status remains
+in progress until the newly approved features and their regression checks are
+complete.
+
 The recommended next work is:
 
 ```text
 merge feat/mobile-web-parity into develop
         ↓
-complete final backend/API integration verification
+continue newly approved features on feat/backend-api-integration
+        ↓
+verify each feature against the completed integration baseline
 ```
 
-This is followed by deployment preparation. React web AI and mobile AI are
-complete; do not treat final backend/API integration or deployment as
-completed.
+This is followed by deployment preparation. React web AI, mobile AI, and the
+original backend/API integration scope are complete; additional feature
+expansion and deployment are still in progress or pending.
