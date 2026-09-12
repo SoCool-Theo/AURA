@@ -6,13 +6,17 @@ import { useFocusEffect } from '@react-navigation/native';
 import { AnalysisResults } from '../../components/analytics/AnalysisResults';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { reportErrorMessage } from '../../report/reportErrors';
 import { formatReportTimestamp } from '../../report/reportFormatting';
 import { useReports } from '../../report/useReports';
 import { colors, spacing } from '../../theme/theme';
-import type { PortfolioReportResponse } from '../../types/report';
+import {
+  isPortfolioReportV2,
+  type PortfolioReportResponse
+} from '../../types/report';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
@@ -30,7 +34,7 @@ export function ReportDetailScreen({
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
   const [loadError, setLoadError] = useState<unknown>(null);
   const [deleting, setDeleting] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const requestRef = useRef(0);
   const deletingRef = useRef(false);
 
@@ -39,7 +43,6 @@ export function ReportDetailScreen({
     requestRef.current = requestId;
     setLoadStatus('loading');
     setLoadError(null);
-    setReport(null);
 
     try {
       const response = await getReport(portfolioId, reportId);
@@ -90,10 +93,7 @@ export function ReportDetailScreen({
                 navigation.goBack();
               }
             } catch (error) {
-              setActionError(reportErrorMessage(
-                error,
-                'Unable to delete report.'
-              ));
+              setActionError(error);
               deletingRef.current = false;
               setDeleting(false);
             }
@@ -103,39 +103,43 @@ export function ReportDetailScreen({
     );
   }
 
-  if (loadStatus === 'loading') {
+  if (loadStatus === 'loading' && !report) {
     return <LoadingState message="Loading immutable report…" />;
   }
 
-  if (loadStatus === 'error' || !report) {
+  if (!report) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <View style={styles.centerState}>
-          <Card style={styles.stateCard}>
-            <Text style={styles.errorTitle}>Report unavailable</Text>
-            <Text style={styles.stateText}>
-              {reportErrorMessage(loadError, 'Report not found.')}
-            </Text>
-            <Button title="Retry" onPress={() => void loadReport()} />
-            <Button
-              title="Back"
-              variant="secondary"
-              onPress={() => navigation.goBack()}
-            />
-          </Card>
-        </View>
+        <ScreenErrorState
+          error={loadError}
+          resourceName="Report"
+          fallbackMessage="Unable to load this report."
+          onRetry={() => void loadReport()}
+          onBack={() => navigation.goBack()}
+        />
       </SafeAreaView>
     );
   }
+
+  const reportVersion = isPortfolioReportV2(report) ? 'V2' : 'V1';
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <PageTitle
-          eyebrow="IMMUTABLE SNAPSHOT"
+          eyebrow={`IMMUTABLE SNAPSHOT · ${reportVersion}`}
           title={`${report.analysis.portfolio_name} Analysis`}
           subtitle={`Created ${formatReportTimestamp(report.created_at)}`}
         />
+
+        {loadStatus === 'error' ? (
+          <InlineErrorCard
+            error={loadError}
+            message={reportErrorMessage(loadError, 'Unable to refresh this report.')}
+            stale
+            onRetry={() => void loadReport()}
+          />
+        ) : null}
 
         <Card style={styles.identityCard}>
           <View style={styles.identityRow}>
@@ -147,18 +151,19 @@ export function ReportDetailScreen({
             <Text style={styles.identityValue}>{report.portfolio_id}</Text>
           </View>
           <Text style={styles.snapshotNote}>
-            This detail uses the stored backend report and does not rerun analysis.
+            This detail uses the stored backend report and does not rerun analysis
+            or request a fresh portfolio valuation.
           </Text>
         </Card>
 
         {actionError ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Unable to delete report</Text>
-            <Text style={styles.stateText}>{actionError}</Text>
-          </Card>
+          <InlineErrorCard
+            error={actionError}
+            message={reportErrorMessage(actionError, 'Unable to delete report.')}
+          />
         ) : null}
 
-        <AnalysisResults analysis={report.analysis} />
+        <AnalysisResults report={report} />
 
         <Button
           title={deleting ? 'Deleting…' : 'Delete Report'}

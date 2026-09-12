@@ -1,7 +1,15 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { PortfolioAnalysisResponse } from '../../types/analytics';
+import {
+  formatCurrentAllocation,
+  formatPortfolioMoney,
+  formatPortfolioQuantity
+} from '../../portfolio/portfolioFormatting';
+import {
+  isPortfolioReportV2,
+  type PortfolioReportResponse
+} from '../../types/report';
 import { colors, spacing } from '../../theme/theme';
 import {
   formatAnalysisNumber,
@@ -17,10 +25,12 @@ import { Tag } from '../ui/Tag';
 import { WebKpiCard } from '../ui/WebKpiCard';
 
 export function AnalysisResults({
-  analysis
+  report
 }: {
-  analysis: PortfolioAnalysisResponse;
+  report: PortfolioReportResponse;
 }) {
+  const analysis = report.analysis;
+  const reportV2 = isPortfolioReportV2(report) ? report : null;
   const metrics = analysis.portfolio_metrics;
   const drawdown = analysis.max_drawdown;
   const diversification = analysis.diversification;
@@ -44,6 +54,38 @@ export function AnalysisResults({
           <Text key={`${index}-${reason}`} style={styles.reason}>• {reason}</Text>
         ))}
       </Card>
+
+      {reportV2 ? (
+        <Card style={styles.snapshotCard}>
+          <View style={styles.rowBetween}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.overline}>FROZEN VALUATION · V2</Text>
+              <Text style={styles.snapshotValue}>
+                {formatPortfolioMoney(
+                  reportV2.valuation.total_current_value,
+                  reportV2.valuation.valuation_currency
+                )}
+              </Text>
+            </View>
+            <Tag label={reportV2.valuation.valuation_currency} tone="primary" />
+          </View>
+          <Text style={styles.cardText}>
+            Captured {reportV2.valuation.requested_date} using prices from {reportV2.valuation.oldest_price_as_of} to {reportV2.valuation.newest_price_as_of}. This saved context is not revalued.
+          </Text>
+          {reportV2.valuation.fx ? (
+            <Text style={styles.cardText}>
+              USD/THB {formatPortfolioQuantity(reportV2.valuation.fx.rate)} as of {reportV2.valuation.fx.as_of}
+            </Text>
+          ) : null}
+        </Card>
+      ) : (
+        <Card style={styles.legacyCard}>
+          <Text style={styles.overline}>LEGACY REPORT · V1</Text>
+          <Text style={styles.cardText}>
+            This snapshot contains saved allocation analytics without real-holding valuation context.
+          </Text>
+        </Card>
+      )}
 
       <View style={styles.metricGrid}>
         <WebKpiCard
@@ -134,9 +176,29 @@ export function AnalysisResults({
         ))}
       </View>
 
-      <SectionHeader title="Individual Asset Metrics" />
+      <SectionHeader title={reportV2 ? 'Per-Asset Valuation and Risk' : 'Individual Asset Metrics'} />
       <View style={styles.list}>
-        {analysis.asset_metrics.map((asset) => (
+        {reportV2 ? reportV2.holdings.map((holding) => (
+          <Card key={holding.id} style={styles.sectionCard}>
+            <View style={styles.rowBetween}>
+              <Text style={styles.assetSymbol}>{holding.symbol}</Text>
+              <Tag label={formatCurrentAllocation(holding.current_allocation)} tone="primary" />
+            </View>
+            <Text style={styles.cardText}>
+              {formatPortfolioQuantity(holding.shares)} shares · invested {holding.invested_currency} {formatPortfolioQuantity(holding.invested_amount)} · purchased {holding.purchase_date}
+            </Text>
+            <View style={styles.dataGrid}>
+              <Metric label="Frozen current value" value={formatPortfolioMoney(holding.current_value, reportV2.valuation.valuation_currency)} />
+              <Metric label="USD asset price" value={formatPortfolioMoney(holding.asset_price, 'USD')} />
+              <Metric label="Price date" value={holding.price_as_of} />
+              <Metric label="Cumulative return" value={formatRatioPercent(holding.asset_metrics.cumulative_return)} />
+              <Metric label="Annualized return" value={formatRatioPercent(holding.asset_metrics.annualized_return)} />
+              <Metric label="Asset volatility" value={formatRatioPercent(holding.asset_metrics.annualized_volatility)} />
+              <Metric label="Max drawdown" value={formatRatioPercent(holding.asset_metrics.max_drawdown)} />
+              <Metric label="Risk contribution" value={formatRatioPercent(holding.risk_driver.percentage_volatility_contribution)} />
+            </View>
+          </Card>
+        )) : analysis.asset_metrics.map((asset) => (
           <Card key={asset.symbol} style={styles.sectionCard}>
             <View style={styles.rowBetween}>
               <Text style={styles.assetSymbol}>{asset.symbol}</Text>
@@ -215,6 +277,9 @@ function Metadata({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   results: { gap: spacing.md, marginTop: spacing.xl },
   summaryCard: { gap: spacing.sm, backgroundColor: colors.summaryBackground },
+  snapshotCard: { gap: spacing.md, backgroundColor: colors.cyanBackground },
+  legacyCard: { gap: spacing.sm, backgroundColor: colors.warningBackground },
+  snapshotValue: { color: colors.text, fontSize: 24, fontWeight: '900', marginTop: spacing.xs },
   summaryHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   overline: { color: colors.primary, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   summaryTitle: { color: colors.text, fontSize: 19, fontWeight: '900', marginTop: 4 },

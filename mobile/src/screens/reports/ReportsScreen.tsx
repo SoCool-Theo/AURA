@@ -13,9 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { PageTitle } from '../../components/ui/PageTitle';
@@ -45,7 +45,7 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
   } = useReports();
   const [query, setQuery] = useState('');
   const [portfolioFilter, setPortfolioFilter] = useState('');
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const deletingIdsRef = useRef(new Set<string>());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
@@ -93,10 +93,7 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
             try {
               await deleteReport(report.portfolio_id, report.id);
             } catch (error) {
-              setActionError(reportErrorMessage(
-                error,
-                'Unable to delete report.'
-              ));
+              setActionError(error);
             } finally {
               deletingIdsRef.current.delete(report.id);
               setDeletingIds(new Set(deletingIdsRef.current));
@@ -117,21 +114,20 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
   }
 
   const blockingError = listStatus === 'error' && !portfolios.length
-    ? portfolioErrorMessage(listError)
+    ? listError
     : historyStatus === 'error' && !reports.length
-      ? reportErrorMessage(historyError, 'Unable to load report history.')
+      ? historyError
       : null;
 
   if (blockingError) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <View style={styles.centerState}>
-          <Card style={styles.stateCard}>
-            <Text style={styles.errorTitle}>Report history unavailable</Text>
-            <Text style={styles.stateText}>{blockingError}</Text>
-            <Button title="Retry" onPress={retry} />
-          </Card>
-        </View>
+        <ScreenErrorState
+          error={blockingError}
+          resourceName="Report history"
+          fallbackMessage="Unable to load report history."
+          onRetry={retry}
+        />
       </SafeAreaView>
     );
   }
@@ -163,28 +159,29 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
         />
 
         {actionError ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Report action failed</Text>
-            <Text style={styles.stateText}>{actionError}</Text>
-          </Card>
+          <InlineErrorCard
+            error={actionError}
+            message={reportErrorMessage(actionError, 'Unable to delete report.')}
+          />
         ) : null}
 
         {listStatus === 'error' && portfolios.length ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Portfolio list refresh failed</Text>
-            <Text style={styles.stateText}>History uses the previously loaded portfolio list. {portfolioErrorMessage(listError)}</Text>
-            <Button title="Retry portfolios" onPress={retry} />
-          </Card>
+          <InlineErrorCard
+            error={listError}
+            message={portfolioErrorMessage(listError)}
+            stale
+            retryTitle="Retry portfolios"
+            onRetry={retry}
+          />
         ) : null}
 
         {historyStatus === 'error' && reports.length ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Could not refresh every report</Text>
-            <Text style={styles.stateText}>
-              {reportErrorMessage(historyError, 'Unable to refresh report history.')}
-            </Text>
-            <Button title="Retry" onPress={retry} />
-          </Card>
+          <InlineErrorCard
+            error={historyError}
+            message={reportErrorMessage(historyError, 'Unable to refresh report history.')}
+            stale
+            onRetry={retry}
+          />
         ) : null}
 
         {reports.length ? (

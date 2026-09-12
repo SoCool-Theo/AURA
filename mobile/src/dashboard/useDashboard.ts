@@ -3,7 +3,12 @@ import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 
 import { usePortfolios } from '../portfolio/usePortfolios';
 import { useReports } from '../report/useReports';
-import type { PortfolioResponse } from '../types/portfolio';
+import {
+  portfolioHoldingMode,
+  type PortfolioCurrency,
+  type PortfolioResponse,
+  type PortfolioValuationResponse
+} from '../types/portfolio';
 import type { PortfolioReportResponse } from '../types/report';
 import type { ReportHistoryItem, ReportHistoryStatus } from '../report/ReportProvider';
 import { ApiError } from '../api/apiClient';
@@ -11,7 +16,14 @@ import { ApiError } from '../api/apiClient';
 export function useDashboard() {
   const portfoliosState = usePortfolios();
   const { getReport, getPortfolioReportHistory } = useReports();
-  const { portfolios, activePortfolioId, selectPortfolio, getPortfolio, refreshPortfolios } = portfoliosState;
+  const {
+    portfolios,
+    activePortfolioId,
+    selectPortfolio,
+    getPortfolio,
+    getPortfolioValuation,
+    refreshPortfolios
+  } = portfoliosState;
   const [history, setHistory] = useState<{ portfolioId: string; reports: ReportHistoryItem[] } | null>(null);
   const [historyStatus, setHistoryStatus] = useState<ReportHistoryStatus>('idle');
   const [historyError, setHistoryError] = useState<unknown>(null);
@@ -21,6 +33,10 @@ export function useDashboard() {
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState<unknown>(null);
+  const [valuationCurrency, setValuationCurrency] = useState<PortfolioCurrency>('USD');
+  const [valuation, setValuation] = useState<PortfolioValuationResponse | null>(null);
+  const [valuationLoading, setValuationLoading] = useState(false);
+  const [valuationError, setValuationError] = useState<unknown>(null);
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<unknown>(null);
@@ -80,6 +96,39 @@ export function useDashboard() {
     return () => { current = false; };
   }, [focused, getPortfolio, selectedId, revision]);
 
+  const selectedPortfolio = portfolio?.id === selectedId ? portfolio : null;
+  useEffect(() => {
+    if (!selectedPortfolio) {
+      setValuation(null);
+      setValuationLoading(false);
+      setValuationError(null);
+      return;
+    }
+    if (!focused) return;
+    if (portfolioHoldingMode(selectedPortfolio.holdings) !== 'real') {
+      setValuation(null);
+      setValuationLoading(false);
+      setValuationError(null);
+      return;
+    }
+
+    let current = true;
+    setValuationLoading(true);
+    setValuationError(null);
+    void getPortfolioValuation(
+      selectedPortfolio.id,
+      valuationCurrency
+    ).then((value) => {
+      if (current) setValuation(value);
+    }).catch((error: unknown) => {
+      if (!current) return;
+      setValuationError(error);
+    }).finally(() => {
+      if (current) setValuationLoading(false);
+    });
+    return () => { current = false; };
+  }, [focused, getPortfolioValuation, revision, selectedPortfolio, valuationCurrency]);
+
   // ReportProvider already orders by created_at descending with deterministic ties.
   const newest = history?.portfolioId === selectedId ? history.reports[0] : undefined;
   const newestId = newest?.id;
@@ -103,6 +152,7 @@ export function useDashboard() {
 
   const refreshing = portfoliosState.isRefreshing || (Boolean(selectedId) && historyRefreshing)
     || (Boolean(selectedId) && portfolioLoading)
+    || (Boolean(selectedId) && valuationLoading)
     || (historyStatus === 'ready' && Boolean(newestId) && reportLoading);
 
   async function refresh() {
@@ -120,9 +170,17 @@ export function useDashboard() {
     portfoliosState,
     reportsState: { historyStatus, historyError, isRefreshing: historyRefreshing },
     selectedId,
-    portfolio: portfolio?.id === selectedId ? portfolio : null,
+    portfolio: selectedPortfolio,
     portfolioLoading,
     portfolioError,
+    valuationCurrency,
+    setValuationCurrency,
+    valuation: valuation?.portfolio_id === selectedId
+      && valuation.valuation_currency === valuationCurrency
+      ? valuation
+      : null,
+    valuationLoading,
+    valuationError,
     report: historyStatus === 'ready' && report?.portfolio_id === selectedId && report.id === newestId ? report : null,
     reportLoading,
     reportError,
