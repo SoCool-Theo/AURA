@@ -59,7 +59,7 @@ export function LearnScreen({ navigation }: { navigation: any }) {
           </View>
         </Card>
 
-        <Input value={query} onChangeText={setQuery} placeholder="Search lessons…" />
+        <Input accessibilityLabel="Search lessons" value={query} onChangeText={setQuery} placeholder="Search lessons…" />
 
         <ScrollView
           horizontal
@@ -67,7 +67,14 @@ export function LearnScreen({ navigation }: { navigation: any }) {
           contentContainerStyle={styles.filters}
         >
           {categories.map((item) => (
-            <Pressable key={item} onPress={() => setCategory(item)}>
+            <Pressable
+              accessibilityLabel={`${item} lesson category`}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: category === item }}
+              key={item}
+              onPress={() => setCategory(item)}
+              style={styles.filterOption}
+            >
               <Tag label={item} tone={category === item ? 'primary' : 'default'} />
             </Pressable>
           ))}
@@ -86,6 +93,8 @@ export function LearnScreen({ navigation }: { navigation: any }) {
 
             return (
               <Pressable
+                accessibilityLabel={`Open ${lesson.title} lesson${done ? ', completed' : ''}`}
+                accessibilityRole="button"
                 key={lesson.id}
                 onPress={() => navigation.navigate('LearnDetail', { lessonId: lesson.id })}
               >
@@ -131,6 +140,7 @@ const styles = StyleSheet.create({
   track: { height: 7, borderRadius: 999, backgroundColor: colors.border, overflow: 'hidden' },
   fill: { height: '100%', backgroundColor: colors.primary, borderRadius: 999 },
   filters: { gap: spacing.sm, paddingVertical: spacing.sm },
+  filterOption: { minHeight: 44, justifyContent: 'center' },
   list: { gap: spacing.md },
   lessonCard: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   lessonIcon: { width: 46, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },

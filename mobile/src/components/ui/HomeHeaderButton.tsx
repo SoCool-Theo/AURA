@@ -17,5 +17,5 @@ export function HomeHeaderButton({ navigation }: { navigation: any }) {
 }
 
 const styles = StyleSheet.create({
-  button: { paddingHorizontal: 8, paddingVertical: 6 }
+  button: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }
 });

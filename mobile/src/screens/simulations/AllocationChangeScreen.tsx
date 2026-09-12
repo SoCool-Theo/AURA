@@ -143,8 +143,8 @@ export function AllocationChangeScreen({ route }: { route: any }) {
               <>
                 <Text style={styles.section}>Analysis period</Text>
                 <View style={styles.dateRow}>
-                  <View style={styles.dateField}><Text style={styles.label}>START</Text><TextInput editable={!running} value={startDate} onChangeText={setStartDate} style={styles.dateInput} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} /></View>
-                  <View style={styles.dateField}><Text style={styles.label}>END</Text><TextInput editable={!running} value={endDate} onChangeText={setEndDate} style={styles.dateInput} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} /></View>
+                  <View style={styles.dateField}><Text style={styles.label}>START</Text><TextInput accessibilityLabel="Simulation start date" accessibilityState={{ disabled: running }} editable={!running} value={startDate} onChangeText={setStartDate} style={styles.dateInput} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} /></View>
+                  <View style={styles.dateField}><Text style={styles.label}>END</Text><TextInput accessibilityLabel="Simulation end date" accessibilityState={{ disabled: running }} editable={!running} value={endDate} onChangeText={setEndDate} style={styles.dateInput} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} /></View>
                 </View>
                 <Text style={styles.section}>Modified allocation</Text>
                 <Text style={styles.state}>
@@ -172,8 +172,8 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.textSecondary, marginTop: 6, marginBottom: spacing.lg, lineHeight: 20 },
   section: { color: colors.text, fontSize: 14, fontWeight: '900', marginTop: spacing.lg, marginBottom: spacing.sm },
   state: { color: colors.textSecondary, marginBottom: spacing.lg },
-  dateRow: { flexDirection: 'row', gap: spacing.md },
-  dateField: { flex: 1 },
+  dateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  dateField: { flexGrow: 1, flexBasis: 140 },
   label: { color: colors.muted, fontSize: 9, fontWeight: '900', marginBottom: spacing.xs },
   dateInput: { minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.text, paddingHorizontal: spacing.md },
   errorCard: { gap: spacing.md, borderColor: colors.dangerBorder, marginTop: spacing.md },

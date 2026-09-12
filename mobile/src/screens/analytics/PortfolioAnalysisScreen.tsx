@@ -285,6 +285,9 @@ export function PortfolioAnalysisScreen({
               const selected = portfolio.id === selectedPortfolioId;
               return (
                 <Pressable
+                  accessibilityLabel={`${portfolio.name} portfolio`}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected, disabled: analyzing }}
                   key={portfolio.id}
                   onPress={() => choosePortfolio(portfolio.id)}
                   disabled={analyzing}
@@ -310,6 +313,7 @@ export function PortfolioAnalysisScreen({
               const selected = currency === option;
               return (
                 <Pressable
+                  accessibilityLabel={`${option} report currency`}
                   accessibilityRole="radio"
                   accessibilityState={{ selected, disabled: analyzing }}
                   disabled={analyzing}
@@ -338,6 +342,8 @@ export function PortfolioAnalysisScreen({
             <View style={styles.dateField}>
               <Text style={styles.dateLabel}>Start date</Text>
               <TextInput
+                accessibilityLabel="Analysis start date"
+                accessibilityState={{ disabled: analyzing }}
                 value={startDate}
                 onChangeText={editStartDate}
                 placeholder="YYYY-MM-DD"
@@ -352,6 +358,8 @@ export function PortfolioAnalysisScreen({
             <View style={styles.dateField}>
               <Text style={styles.dateLabel}>End date</Text>
               <TextInput
+                accessibilityLabel="Analysis end date"
+                accessibilityState={{ disabled: analyzing }}
                 value={endDate}
                 onChangeText={editEndDate}
                 placeholder="YYYY-MM-DD"
@@ -419,7 +427,7 @@ const styles = StyleSheet.create({
   currencyControl: { flexDirection: 'row', gap: spacing.sm },
   currencyOption: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 12,
@@ -428,7 +436,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt
   },
   portfolioOption: {
-    minHeight: 42,
+    minHeight: 44,
     maxWidth: 190,
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
@@ -445,12 +453,13 @@ const styles = StyleSheet.create({
   selectedOptionText: { color: colors.primary },
   periodHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: spacing.sm
   },
-  dateRow: { flexDirection: 'row', gap: spacing.md },
-  dateField: { flex: 1 },
+  dateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  dateField: { flexGrow: 1, flexBasis: 140 },
   dateLabel: { color: colors.muted, fontSize: 10, marginBottom: 6 },
   input: {
     minHeight: 46,

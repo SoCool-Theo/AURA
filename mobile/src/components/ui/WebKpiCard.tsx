@@ -40,7 +40,8 @@ export function WebKpiCard({
 
 const styles = StyleSheet.create({
   card: {
-    width: '48%',
+    flexGrow: 1,
+    flexBasis: 140,
     minHeight: 128,
     gap: spacing.sm
   },

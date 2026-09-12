@@ -150,6 +150,8 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
           subtitle="Immutable analysis snapshots stored by Aura's backend."
           right={(
             <Pressable
+              accessibilityLabel="Create report"
+              accessibilityRole="button"
               style={styles.newButton}
               onPress={() => navigation.navigate('Analytics', {})}
             >
@@ -189,6 +191,7 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
             <View style={styles.search}>
               <Ionicons name="search-outline" color={colors.muted} size={17} />
               <TextInput
+                accessibilityLabel="Search reports"
                 value={query}
                 onChangeText={setQuery}
                 placeholder="Search portfolio name or report ID"
@@ -202,13 +205,23 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.filterRow}
             >
-              <Pressable onPress={() => setPortfolioFilter('')}>
+              <Pressable
+                accessibilityLabel="All portfolios report filter"
+                accessibilityRole="radio"
+                accessibilityState={{ selected: !portfolioFilter }}
+                onPress={() => setPortfolioFilter('')}
+                style={styles.filterOption}
+              >
                 <Tag label="All portfolios" tone={!portfolioFilter ? 'primary' : 'default'} />
               </Pressable>
               {portfolios.map((portfolio) => (
                 <Pressable
+                  accessibilityLabel={`${portfolio.name} report filter`}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: portfolioFilter === portfolio.id }}
                   key={portfolio.id}
                   onPress={() => setPortfolioFilter(portfolio.id)}
+                  style={styles.filterOption}
                 >
                   <Tag
                     label={portfolio.name}
@@ -233,6 +246,9 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
             const deleting = deletingIds.has(report.id);
             return (
               <Pressable
+                accessibilityLabel={`Open ${report.portfolio_name} report`}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: deleting }}
                 key={report.id}
                 onPress={() => navigation.navigate('ReportDetail', {
                   portfolioId: report.portfolio_id,
@@ -258,6 +274,9 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
                     </Text>
                   </View>
                   <Pressable
+                    accessibilityLabel={`Delete ${report.portfolio_name} report`}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: deleting }}
                     onPress={(event) => {
                       event.stopPropagation();
                       confirmDelete(report);
@@ -297,8 +316,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: 110 },
   newButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: colors.primary,
     alignItems: 'center',
@@ -318,6 +337,7 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, color: colors.text, fontSize: 12 },
   filterRow: { gap: spacing.sm, paddingVertical: spacing.lg },
+  filterOption: { minHeight: 44, justifyContent: 'center' },
   list: { gap: spacing.md, marginTop: spacing.lg },
   reportCard: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   icon: {

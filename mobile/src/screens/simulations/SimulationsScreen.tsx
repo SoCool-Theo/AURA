@@ -37,7 +37,12 @@ export function SimulationsScreen({ navigation }: { navigation: any }) {
 
         <View style={styles.modeList}>
           {modes.map((mode) => (
-            <Pressable key={mode.title} onPress={() => navigation.navigate(mode.route, { portfolioId: activePortfolioId ?? undefined })}>
+            <Pressable
+              accessibilityLabel={mode.title}
+              accessibilityRole="button"
+              key={mode.title}
+              onPress={() => navigation.navigate(mode.route, { portfolioId: activePortfolioId ?? undefined })}
+            >
               <Card style={[styles.modeCard, { borderColor: mode.bg }]}>
                 <View style={[styles.modeIcon, { backgroundColor: mode.bg }]}><Ionicons name={mode.icon} color={mode.fg} size={27} /></View>
                 <View style={{ flex: 1 }}><Text style={styles.modeTitle}>{mode.title}</Text><Text style={styles.modeText}>{mode.subtitle}</Text></View>
@@ -58,7 +63,12 @@ export function SimulationsScreen({ navigation }: { navigation: any }) {
         ) : history.length ? (
           <View style={styles.recentList}>
             {history.slice(0, 3).map((item) => (
-              <Pressable key={item.id} onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}>
+              <Pressable
+                accessibilityLabel={`Open ${item.portfolio_name} ${simulationTypeLabel(item.simulation_type)} simulation`}
+                accessibilityRole="button"
+                key={item.id}
+                onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}
+              >
                 <Card style={styles.recentCard}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.recentPortfolio}>{item.portfolio_name}</Text>

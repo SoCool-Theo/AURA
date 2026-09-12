@@ -21,7 +21,14 @@ export function ScenarioSelector({
       {scenarios.map((scenario) => {
         const selected = scenario.id === selectedId;
         return (
-          <Pressable disabled={disabled} key={scenario.id} onPress={() => onSelect(scenario.id)}>
+          <Pressable
+            accessibilityLabel={`${scenario.display_name} scenario`}
+            accessibilityRole="radio"
+            accessibilityState={{ selected, disabled }}
+            disabled={disabled}
+            key={scenario.id}
+            onPress={() => onSelect(scenario.id)}
+          >
             <Card style={[styles.card, selected && styles.selected]}>
               <View style={styles.top}>
                 <Text style={styles.name}>{scenario.display_name}</Text>

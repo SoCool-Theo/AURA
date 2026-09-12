@@ -343,13 +343,13 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
           <Button
             title="Cancel"
             variant="secondary"
-            style={{ flex: 1 }}
+            style={styles.footerSecondary}
             onPress={() => navigation.goBack()}
             disabled={saving}
           />
           <Button
             title={saving ? 'Creating…' : 'Create Portfolio'}
-            style={{ flex: 1.35 }}
+            style={styles.footerPrimary}
             onPress={save}
             disabled={saving}
           />
@@ -374,8 +374,8 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.text, fontSize: 18, fontWeight: '900' },
   sectionText: { color: colors.muted, fontSize: 10, marginTop: 3 },
   addButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: 11,
     backgroundColor: colors.primary,
     alignItems: 'center',
@@ -390,8 +390,8 @@ const styles = StyleSheet.create({
   },
   assetActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   iconButton: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -401,8 +401,8 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1
   },
-  inline: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-end' },
-  amountField: { flex: 1 },
+  inline: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, alignItems: 'flex-end' },
+  amountField: { flexGrow: 1, flexBasis: 150 },
   label: {
     color: colors.textSecondary,
     fontSize: 10,
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     marginBottom: 6
   },
   compactInput: { minHeight: 48 },
-  currencyField: { flex: 1, gap: spacing.sm },
+  currencyField: { flexGrow: 1, flexBasis: 150, gap: spacing.sm },
   currencyControl: {
     minHeight: 48,
     flexDirection: 'row',
@@ -437,6 +437,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.summaryBackground
   },
   textButton: {
+    minHeight: 44,
     flexDirection: 'row',
     gap: 7,
     alignItems: 'center',
@@ -453,5 +454,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs
   },
   formError: { gap: spacing.sm, marginTop: spacing.lg },
-  footerActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl }
+  footerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.xl },
+  footerSecondary: { flexGrow: 1, flexBasis: 120 },
+  footerPrimary: { flexGrow: 1.35, flexBasis: 160 }
 });

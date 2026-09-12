@@ -25,6 +25,9 @@ export function PortfolioSelector({
         const selected = portfolio.id === selectedId;
         return (
           <Pressable
+            accessibilityLabel={`${portfolio.name} portfolio`}
+            accessibilityRole="radio"
+            accessibilityState={{ selected, disabled }}
             disabled={disabled}
             key={portfolio.id}
             onPress={() => onSelect(portfolio.id)}
@@ -43,6 +46,7 @@ export function PortfolioSelector({
 const styles = StyleSheet.create({
   row: { gap: spacing.sm, paddingBottom: spacing.lg },
   chip: {
+    minHeight: 44,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,

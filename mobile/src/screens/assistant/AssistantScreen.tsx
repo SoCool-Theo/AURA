@@ -271,6 +271,8 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
               <Text style={styles.counter}>{message.length}/4000</Text>
             </View>
             <TextInput
+              accessibilityLabel="Question for Aura"
+              accessibilityState={{ disabled: sending }}
               value={message}
               onChangeText={editMessage}
               placeholder="For example: What are the main risk factors in this portfolio?"

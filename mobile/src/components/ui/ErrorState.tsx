@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   compactTitle: { fontSize: 15 },
   message: { color: colors.textSecondary, fontSize: 12, lineHeight: 19 },
   stale: { color: colors.warning, fontSize: 10, lineHeight: 16 },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   compactActions: { marginTop: spacing.xs },
-  action: { flex: 1 }
+  action: { flexGrow: 1, flexBasis: 132 }
 });

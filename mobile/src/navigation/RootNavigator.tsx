@@ -18,6 +18,7 @@ const MINIMUM_SPLASH_DURATION_MS = 1400;
 export function RootNavigator() {
   const {
     status: authStatus,
+    sessionExpired,
     sessionError,
     sessionFailure,
     retrySessionRestore,

@@ -271,6 +271,7 @@ export function PortfolioDetailScreen({
                   const selected = currency === option;
                   return (
                     <Pressable
+                      accessibilityLabel={`${option} valuation currency`}
                       accessibilityRole="radio"
                       accessibilityState={{ selected }}
                       key={option}
@@ -440,6 +441,9 @@ export function PortfolioDetailScreen({
                   {nameAction === 'rename' ? 'Rename portfolio' : 'Duplicate portfolio'}
                 </Text>
                 <Pressable
+                  accessibilityLabel="Close portfolio name editor"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: pendingAction !== null }}
                   style={styles.closeButton}
                   onPress={() => setNameAction(null)}
                   disabled={pendingAction !== null}
@@ -449,6 +453,8 @@ export function PortfolioDetailScreen({
               </View>
               <Text style={styles.inputLabel}>Portfolio name</Text>
               <TextInput
+                accessibilityLabel="Portfolio name"
+                accessibilityState={{ disabled: pendingAction !== null }}
                 value={draftName}
                 onChangeText={(value) => {
                   setDraftName(value);
@@ -492,11 +498,14 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingBottom: 100 },
   primaryActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.md,
     marginTop: spacing.xl
   },
   valuationHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: spacing.xl,
@@ -504,7 +513,7 @@ const styles = StyleSheet.create({
   },
   valuationHeading: { color: colors.text, fontSize: 18, fontWeight: '900' },
   currencyControl: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: 12, padding: 3 },
-  currencyOption: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 9 },
+  currencyOption: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 9 },
   currencyOptionSelected: { backgroundColor: colors.selectedBackground },
   currencyText: { color: colors.muted, fontSize: 11, fontWeight: '900' },
   currencyTextSelected: { color: colors.primary },
@@ -519,12 +528,13 @@ const styles = StyleSheet.create({
   metadataCard: { gap: spacing.md },
   metadataRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     gap: spacing.md
   },
   metadataLabel: { color: colors.textSecondary, fontSize: 11 },
   metadataValue: { color: colors.text, fontSize: 11, fontWeight: '800' },
-  actionGrid: { flexDirection: 'row', gap: spacing.md },
+  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   errorWrap: { flex: 1, justifyContent: 'center', padding: spacing.xl },
   errorCard: { gap: spacing.md },
   errorTitle: { color: colors.danger, fontSize: 16, fontWeight: '900' },
@@ -551,8 +561,8 @@ const styles = StyleSheet.create({
   },
   modalTitle: { color: colors.text, fontSize: 19, fontWeight: '900' },
   closeButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
@@ -575,5 +585,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     fontSize: 14
   },
-  modalActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl }
+  modalActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.xl }
 });

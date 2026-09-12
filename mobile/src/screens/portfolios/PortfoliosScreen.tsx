@@ -79,6 +79,8 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
           subtitle="Create and manage your saved portfolio allocations."
           right={(
             <Pressable
+              accessibilityLabel="Create portfolio"
+              accessibilityRole="button"
               style={styles.newButton}
               onPress={() => navigation.navigate('CreatePortfolio')}
             >
@@ -100,6 +102,7 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
           <View style={styles.searchBar}>
             <Ionicons name="search-outline" size={17} color={colors.muted} />
             <TextInput
+              accessibilityLabel="Search portfolios"
               value={query}
               onChangeText={setQuery}
               placeholder="Search portfolios"
@@ -142,7 +145,11 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
           </Card>
         ) : null}
 
-        <Pressable onPress={() => navigation.navigate('CreatePortfolio')}>
+        <Pressable
+          accessibilityLabel="Create portfolio"
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('CreatePortfolio')}
+        >
           <Card style={styles.createCta}>
             <View style={{ flex: 1 }}>
               <Text style={styles.ctaEyebrow}>CREATE NEW PORTFOLIO</Text>
@@ -165,8 +172,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: 110 },
   newButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: colors.primary,
     alignItems: 'center',

@@ -14,7 +14,12 @@ export function PortfolioCard({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress}>
+    <Pressable
+      accessibilityLabel={`${portfolio.name} portfolio${active ? ', active' : ''}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+    >
       <Card style={[styles.card, active && styles.activeCard]}>
         <View style={styles.top}>
           <View style={styles.main}>

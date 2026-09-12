@@ -81,11 +81,11 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
           <>
             <View style={styles.search}>
               <Ionicons name="search-outline" color={colors.muted} size={17} />
-              <TextInput value={query} onChangeText={setQuery} placeholder="Search portfolio name or simulation ID" placeholderTextColor={colors.muted} style={styles.searchInput} />
+              <TextInput accessibilityLabel="Search simulation history" value={query} onChangeText={setQuery} placeholder="Search portfolio name or simulation ID" placeholderTextColor={colors.muted} style={styles.searchInput} />
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-              <Pressable onPress={() => setPortfolioFilter('')}><Tag label="All portfolios" tone={!portfolioFilter ? 'primary' : 'default'} /></Pressable>
-              {portfolios.map((portfolio) => <Pressable key={portfolio.id} onPress={() => setPortfolioFilter(portfolio.id)}><Tag label={portfolio.name} tone={portfolioFilter === portfolio.id ? 'primary' : 'default'} /></Pressable>)}
+              <Pressable accessibilityLabel="All portfolios simulation filter" accessibilityRole="radio" accessibilityState={{ selected: !portfolioFilter }} onPress={() => setPortfolioFilter('')} style={styles.filterOption}><Tag label="All portfolios" tone={!portfolioFilter ? 'primary' : 'default'} /></Pressable>
+              {portfolios.map((portfolio) => <Pressable accessibilityLabel={`${portfolio.name} simulation filter`} accessibilityRole="radio" accessibilityState={{ selected: portfolioFilter === portfolio.id }} key={portfolio.id} onPress={() => setPortfolioFilter(portfolio.id)} style={styles.filterOption}><Tag label={portfolio.name} tone={portfolioFilter === portfolio.id ? 'primary' : 'default'} /></Pressable>)}
             </ScrollView>
           </>
         ) : null}
@@ -94,7 +94,7 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
           {!history.length ? (
             <Card><EmptyState icon="pulse-outline" title="No simulations yet" description="Run a historical, allocation, or combined simulation to create backend history." /></Card>
           ) : filtered.length ? filtered.map((item) => (
-            <Pressable key={item.id} onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}>
+            <Pressable accessibilityLabel={`Open ${item.portfolio_name} ${simulationTypeLabel(item.simulation_type)} simulation`} accessibilityRole="button" key={item.id} onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}>
               <Card style={styles.card}>
                 <View style={styles.icon}><Ionicons name="pulse-outline" color={colors.primary} size={22} /></View>
                 <View style={{ flex: 1 }}>
@@ -124,6 +124,7 @@ const styles = StyleSheet.create({
   search: { height: 44, borderRadius: 13, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.borderSoft, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
   searchInput: { flex: 1, color: colors.text, fontSize: 12 },
   filters: { gap: spacing.sm, paddingVertical: spacing.lg },
+  filterOption: { minHeight: 44, justifyContent: 'center' },
   list: { gap: spacing.md },
   card: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   icon: { width: 48, height: 48, borderRadius: 15, backgroundColor: colors.cyanBackground, alignItems: 'center', justifyContent: 'center' },

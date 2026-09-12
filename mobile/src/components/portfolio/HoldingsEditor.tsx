@@ -199,6 +199,7 @@ export function HoldingsEditor({
                   <Pressable
                     accessibilityLabel={`Move holding ${index + 1} up`}
                     accessibilityRole="button"
+                    accessibilityState={{ disabled: saving || index === 0 }}
                     disabled={saving || index === 0}
                     onPress={() => moveRow(index, -1)}
                     style={styles.iconButton}
@@ -208,6 +209,7 @@ export function HoldingsEditor({
                   <Pressable
                     accessibilityLabel={`Move holding ${index + 1} down`}
                     accessibilityRole="button"
+                    accessibilityState={{ disabled: saving || index === rows.length - 1 }}
                     disabled={saving || index === rows.length - 1}
                     onPress={() => moveRow(index, 1)}
                     style={styles.iconButton}
@@ -217,6 +219,7 @@ export function HoldingsEditor({
                   <Pressable
                     accessibilityLabel={`Remove holding ${index + 1}`}
                     accessibilityRole="button"
+                    accessibilityState={{ disabled: saving }}
                     onPress={() => setRows((current) => (
                       current.filter((item) => item.id !== row.id)
                     ))}
@@ -296,6 +299,9 @@ export function HoldingsEditor({
         </View>
 
         <Pressable
+          accessibilityLabel="Add holding"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: saving }}
           style={styles.addRow}
           onPress={() => setRows((current) => [
             ...current,
@@ -351,20 +357,20 @@ const styles = StyleSheet.create({
   rowTitle: { color: colors.primary, fontSize: 9, fontWeight: '900' },
   rowActions: { flexDirection: 'row', gap: spacing.xs },
   iconButton: {
-    width: 34,
-    height: 34,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  fields: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-end' },
-  flexField: { flex: 1 },
+  fields: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, alignItems: 'flex-end' },
+  flexField: { flexGrow: 1, flexBasis: 150 },
   fieldLabel: {
     color: colors.muted,
     fontSize: 11,
     fontWeight: '800',
     marginBottom: spacing.sm
   },
-  currencyField: { flex: 1, gap: spacing.sm },
+  currencyField: { flexGrow: 1, flexBasis: 150, gap: spacing.sm },
   currencyControl: {
     minHeight: 48,
     flexDirection: 'row',
@@ -379,6 +385,7 @@ const styles = StyleSheet.create({
   currencyText: { color: colors.muted, fontSize: 12, fontWeight: '900' },
   currencyTextSelected: { color: colors.primary },
   addRow: {
+    minHeight: 44,
     flexDirection: 'row',
     gap: 7,
     alignItems: 'center',

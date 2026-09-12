@@ -13,6 +13,7 @@ import { colors, spacing } from '../../theme/theme';
 type InputProps = TextInputProps & { label?: string; error?: string | null };
 
 export function Input({
+  accessibilityLabel,
   editable,
   error,
   label,
@@ -29,6 +30,8 @@ export function Input({
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <View style={[styles.inputWrapper, error ? styles.errorWrapper : null]}>
         <TextInput
+          accessibilityLabel={accessibilityLabel ?? label}
+          accessibilityState={{ disabled: editable === false }}
           style={[
             styles.input,
             showsPasswordToggle && styles.passwordInput,

@@ -104,7 +104,12 @@ export function MoreScreen({ navigation }: { navigation: any }) {
 
         <View style={styles.list}>
           {items.map((item) => (
-            <Pressable key={item.label} onPress={() => open(item.route)}>
+            <Pressable
+              accessibilityLabel={item.label}
+              accessibilityRole="button"
+              key={item.label}
+              onPress={() => open(item.route)}
+            >
               <Card style={styles.item}>
                 <View style={[styles.icon, { backgroundColor: item.bg }]}>
                   <Ionicons name={item.icon} color={item.color} size={22} />

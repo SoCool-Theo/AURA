@@ -132,6 +132,8 @@ export function SettingsScreen() {
           </View>
 
           <Pressable
+            accessibilityLabel="Edit local display name"
+            accessibilityRole="button"
             style={styles.smallAction}
             onPress={() => setEditingProfile(true)}
           >
@@ -148,6 +150,9 @@ export function SettingsScreen() {
 
           <View style={styles.themeRow}>
             <Pressable
+              accessibilityLabel="Dark color mode"
+              accessibilityRole="radio"
+              accessibilityState={{ selected: themeMode === 'dark' }}
               onPress={() => setThemeMode('dark')}
               style={[
                 styles.themeOption,
@@ -179,6 +184,9 @@ export function SettingsScreen() {
             </Pressable>
 
             <Pressable
+              accessibilityLabel="Light color mode"
+              accessibilityRole="radio"
+              accessibilityState={{ selected: themeMode === 'light' }}
               onPress={() => setThemeMode('light')}
               style={[
                 styles.themeOption,
@@ -249,6 +257,9 @@ export function SettingsScreen() {
         <Text style={styles.sectionTitle}>Data & support</Text>
         <View style={styles.group}>
           <Pressable
+            accessibilityLabel="Reset local data"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: pending }}
             style={[styles.row, styles.rowBorder]}
             onPress={resetEverything}
             disabled={pending}
@@ -270,6 +281,8 @@ export function SettingsScreen() {
           </Pressable>
 
           <Pressable
+            accessibilityLabel="Help and support"
+            accessibilityRole="button"
             style={[styles.row, styles.rowBorder]}
             onPress={showHelp}
           >
@@ -289,7 +302,7 @@ export function SettingsScreen() {
             <Ionicons name="chevron-forward" color={colors.muted} size={18} />
           </Pressable>
 
-          <Pressable style={styles.row} onPress={showAbout}>
+          <Pressable accessibilityLabel="About Aura" accessibilityRole="button" style={styles.row} onPress={showAbout}>
             <View style={styles.rowIcon}>
               <Ionicons
                 name="information-circle-outline"
@@ -336,6 +349,8 @@ export function SettingsScreen() {
                   </Text>
                 </View>
                 <Pressable
+                  accessibilityLabel="Close edit profile"
+                  accessibilityRole="button"
                   style={styles.closeButton}
                   onPress={() => setEditingProfile(false)}
                 >
@@ -345,6 +360,7 @@ export function SettingsScreen() {
 
               <Text style={styles.inputLabel}>Display name</Text>
               <TextInput
+                accessibilityLabel="Display name"
                 value={draftName}
                 onChangeText={setDraftName}
                 placeholder="Your name"
@@ -425,8 +441,8 @@ const styles = StyleSheet.create({
     lineHeight: 15
   },
   smallAction: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
@@ -447,11 +463,13 @@ const styles = StyleSheet.create({
   },
   themeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.md,
     marginTop: spacing.sm
   },
   themeOption: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 130,
     minHeight: 86,
     borderRadius: 15,
     borderWidth: 1,
@@ -550,8 +568,8 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   closeButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
@@ -576,6 +594,7 @@ const styles = StyleSheet.create({
   },
   modalActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.md,
     marginTop: spacing.xl
   }

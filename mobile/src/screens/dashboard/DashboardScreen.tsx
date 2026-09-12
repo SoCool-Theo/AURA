@@ -99,7 +99,14 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
               <Text style={styles.heading}>{selected?.name}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {portfolios.map((item) => (
-                  <Pressable key={item.id} onPress={() => selectPortfolio(item.id)} style={[styles.chip, item.id === selectedId && styles.activeChip]}>
+                  <Pressable
+                    accessibilityLabel={`${item.name} portfolio`}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: item.id === selectedId }}
+                    key={item.id}
+                    onPress={() => selectPortfolio(item.id)}
+                    style={[styles.chip, item.id === selectedId && styles.activeChip]}
+                  >
                     <Text style={styles.chipText}>{item.name}</Text>
                   </Pressable>
                 ))}
@@ -126,6 +133,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                     const active = dashboard.valuationCurrency === currency;
                     return (
                       <Pressable
+                        accessibilityLabel={`${currency} valuation currency`}
                         accessibilityRole="radio"
                         accessibilityState={{ selected: active }}
                         key={currency}
@@ -214,7 +222,14 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                     <Card style={styles.state}>
                       <View style={styles.ranges}>
                         {ranges.map((item) => (
-                          <Pressable key={item} onPress={() => setRange(item)} style={[styles.range, range === item && styles.activeChip]}><Text style={styles.chipText}>{item}</Text></Pressable>
+                          <Pressable
+                            accessibilityLabel={`${item} chart range`}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected: range === item }}
+                            key={item}
+                            onPress={() => setRange(item)}
+                            style={[styles.range, range === item && styles.activeChip]}
+                          ><Text style={styles.chipText}>{item}</Text></Pressable>
                         ))}
                       </View>
                       <PortfolioReturnsChart points={points} />
@@ -277,24 +292,26 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, fontWeight: '800' },
   notice: { color: colors.textSecondary, fontSize: 12, marginTop: spacing.md },
   chips: { gap: spacing.sm },
-  chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt },
   activeChip: { borderColor: colors.primary, backgroundColor: colors.selectedBackground },
   chipText: { color: colors.text, fontSize: 11, fontWeight: '800' },
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.md, marginTop: spacing.md },
   ranges: { flexDirection: 'row', gap: spacing.xs },
-  range: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border },
+  range: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   symbol: { color: colors.text, fontWeight: '800', flex: 1 },
   weight: { color: colors.text, fontWeight: '900' },
   contribution: { alignItems: 'flex-end' },
   valuationControls: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: spacing.lg
   },
   currencyControl: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: 12, padding: 3 },
-  currencyOption: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 9 },
+  currencyOption: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 9 },
   activeCurrency: { backgroundColor: colors.selectedBackground },
   currencyText: { color: colors.muted, fontSize: 11, fontWeight: '900' },
   activeCurrencyText: { color: colors.primary },

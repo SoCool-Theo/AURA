@@ -1354,8 +1354,9 @@ backend AI regression passed 187 tests.
 
 ## Customer Mobile Real-Holdings Integration
 
-**Status:** Priority 0 contracts, Priority 1 core screens, and the shared mobile
-error-state contract are implemented; device verification and Priority 2 remain
+**Status:** Priority 0 contracts, Priority 1 core screens, the shared mobile
+error-state contract, and Priority 2 source-level UX hardening are implemented;
+runtime device verification remains
 
 **Source branch:** `feat/mobile-real-holdings-integration`
 
@@ -1375,9 +1376,22 @@ error-state contract are implemented; device verification and Priority 2 remain
   with field messages when the backend supplies locations; and 500/network
   failures use distinct retryable states. Previously loaded data remains visible
   behind inline stale-data notices when the page can still serve its purpose.
+- Priority 2 accessibility and compact-phone hardening now gives every direct
+  mobile `Pressable` an explicit role, every direct `TextInput` an accessible
+  label, selection controls selected/disabled state, and the audited compact
+  controls at least a 44-point target. Dense holding, date, action, metric,
+  valuation, report, and simulation layouts wrap rather than clipping on narrow
+  screens or with enlarged text. Keyboard-aware form scrolling remains shared
+  across holding, analysis, simulation, search, and Assistant workflows.
+- A missing `sessionExpired` auth-context binding in `RootNavigator` was repaired
+  after the Priority 2 typecheck exposed it, restoring the intended expired-
+  session route and a clean TypeScript build.
 - Mobile TypeScript checking passes, and the production-authority suite passes
-  18 tests. No dependency, backend, database, or financial-formula change was
-  made by this mobile work.
+  19 tests, including a regression guard for interactive accessibility semantics
+  and compact-layout wrapping. Expo web preview is unavailable because the
+  optional web runtime is not installed, and no Android SDK/emulator is present;
+  no dependency was added solely for preview. No backend, database, or financial-
+  formula change was made by this mobile work.
 
 ## Backend API Integration and Feature Expansion
 

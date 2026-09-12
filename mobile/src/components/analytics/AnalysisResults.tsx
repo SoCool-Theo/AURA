@@ -298,6 +298,7 @@ const styles = StyleSheet.create({
   observationCount: { color: colors.muted, fontSize: 10, textAlign: 'center' },
   rowBetween: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: spacing.md
@@ -307,11 +308,12 @@ const styles = StyleSheet.create({
   assetSymbol: { color: colors.primary, fontSize: 18, fontWeight: '900' },
   scoreValue: { color: colors.primary, fontSize: 22, fontWeight: '900' },
   dataGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  metricItem: { width: '47%', gap: 3 },
+  metricItem: { flexGrow: 1, flexBasis: 132, gap: 3 },
   metricLabel: { color: colors.muted, fontSize: 9, lineHeight: 13 },
   metricValue: { color: colors.text, fontSize: 12, fontWeight: '900' },
   metadataRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     gap: spacing.md,
     paddingVertical: spacing.xs

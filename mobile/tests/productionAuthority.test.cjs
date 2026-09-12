@@ -375,6 +375,64 @@ test('blocking, inline, and form error surfaces are shared across mobile workflo
   assert.ok(!/Alert\.alert\(['"](?:Unable|Check)/.test(formScreens));
 });
 
+test('interactive controls expose accessibility semantics and compact layouts can wrap', () => {
+  const sourceRoot = path.join(root, 'src');
+  const sourceFiles = [];
+  const collect = directory => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name);
+      if (entry.isDirectory()) collect(target);
+      else if (/\.tsx$/.test(entry.name)) sourceFiles.push(target);
+    }
+  };
+  collect(sourceRoot);
+
+  let pressableCount = 0;
+  let textInputCount = 0;
+  for (const file of sourceFiles) {
+    const source = ts.createSourceFile(
+      file,
+      fs.readFileSync(file, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX
+    );
+    const visit = node => {
+      if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+        const tag = node.tagName.getText(source);
+        const attributes = new Set(node.attributes.properties
+          .filter(ts.isJsxAttribute)
+          .map(attribute => attribute.name.getText(source)));
+        const location = source.getLineAndCharacterOfPosition(node.getStart(source));
+        const label = `${path.relative(root, file)}:${location.line + 1}`;
+        if (tag === 'Pressable') {
+          pressableCount += 1;
+          assert.ok(attributes.has('accessibilityRole'), `${label} Pressable needs an accessibility role`);
+        }
+        if (tag === 'TextInput') {
+          textInputCount += 1;
+          assert.ok(attributes.has('accessibilityLabel'), `${label} TextInput needs an accessibility label`);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+
+  assert.ok(pressableCount > 20);
+  assert.ok(textInputCount > 5);
+  const compactLayouts = [
+    'src/screens/portfolios/CreatePortfolioScreen.tsx',
+    'src/components/portfolio/HoldingsEditor.tsx',
+    'src/screens/analytics/PortfolioAnalysisScreen.tsx',
+    'src/screens/simulations/AllocationChangeScreen.tsx',
+    'src/components/ui/ErrorState.tsx'
+  ].map(file => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
+  assert.ok((compactLayouts.match(/flexWrap:\s*['"]wrap['"]/g) ?? []).length >= 5);
+  assert.match(fs.readFileSync(path.join(root, 'src/components/ui/DateRangeSelector.tsx'), 'utf8'), /minHeight:\s*44/);
+  assert.match(fs.readFileSync(path.join(root, 'src/components/ui/SegmentedTabs.tsx'), 'utf8'), /minHeight:\s*44/);
+});
+
 test('real holding contracts preserve precision, order, modes, and valuation allocations', () => {
   const validation = load('src/portfolio/portfolioValidation.ts');
   const portfolioTypes = load('src/types/portfolio.ts');

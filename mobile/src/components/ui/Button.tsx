@@ -7,16 +7,24 @@ export function Button({
   onPress,
   variant = 'primary',
   style,
-  disabled
+  disabled,
+  accessibilityLabel,
+  accessibilityHint
 }: {
   title: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   style?: StyleProp<ViewStyle>;
   disabled?: boolean;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }) {
   return (
     <Pressable
+      accessibilityHint={accessibilityHint}
+      accessibilityLabel={accessibilityLabel ?? title}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [

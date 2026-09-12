@@ -25,6 +25,7 @@ type AssetSymbolFieldProps = Omit<
 };
 
 export function AssetSymbolField({
+  accessibilityLabel,
   editable = true,
   error,
   onChangeText,
@@ -55,6 +56,8 @@ export function AssetSymbolField({
     <>
       <View style={[styles.field, error ? styles.errorField : null]}>
         <TextInput
+          accessibilityLabel={accessibilityLabel ?? 'Asset symbol'}
+          accessibilityState={{ disabled: !editable }}
           autoCapitalize="characters"
           autoCorrect={false}
           editable={editable}
@@ -96,6 +99,7 @@ export function AssetSymbolField({
         <View style={styles.backdrop}>
           <Pressable
             accessibilityLabel="Close asset symbol picker"
+            accessibilityRole="button"
             onPress={() => setPickerVisible(false)}
             style={StyleSheet.absoluteFill}
           />
@@ -132,7 +136,8 @@ export function AssetSymbolField({
                 const selected = symbol === normalizedValue;
                 return (
                   <Pressable
-                    accessibilityRole="button"
+                    accessibilityLabel={`${symbol} asset symbol`}
+                    accessibilityRole="radio"
                     accessibilityState={{ selected }}
                     key={symbol}
                     onPress={() => chooseSymbol(symbol)}
@@ -183,10 +188,10 @@ const styles = StyleSheet.create({
   },
   pickerButton: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    bottom: 4,
-    width: 42,
+    top: 2,
+    right: 2,
+    bottom: 2,
+    width: 44,
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
@@ -222,8 +227,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs
   },
   closeButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',

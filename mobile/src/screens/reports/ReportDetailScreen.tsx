@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: 110 },
   identityCard: { gap: spacing.sm, marginTop: spacing.xl },
-  identityRow: { flexDirection: 'row', gap: spacing.md },
+  identityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   identityLabel: { color: colors.muted, fontSize: 9, width: 70 },
   identityValue: { color: colors.text, fontSize: 9, flex: 1 },
   snapshotNote: {
