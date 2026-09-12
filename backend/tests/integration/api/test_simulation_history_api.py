@@ -17,9 +17,12 @@ from app.core.security import create_access_token
 from app.database.models import User
 from app.main import app
 from app.schemas.simulation_history import (
+    SimulationBaselineHolding,
+    SimulationBaselineValuationContext,
     SimulationHistoryDetailResponse,
     SimulationHistoryListResponse,
     SimulationHistorySummary,
+    SimulationHistoryV2DetailResponse,
 )
 from app.services.simulation_history_service import SimulationNotFoundError
 from backend.tests.unit.services.test_simulation_history_mapper import (
@@ -113,6 +116,54 @@ def _detail(simulation_type: str) -> SimulationHistoryDetailResponse:
     return SimulationHistoryDetailResponse(
         **summary.model_dump(),
         result=result,
+    )
+
+
+def _v2_detail() -> SimulationHistoryV2DetailResponse:
+    summary = _summary("allocation")
+    result = _response_for_type("allocation").model_dump(mode="json")
+    result["portfolio_id"] = str(PORTFOLIO_ID)
+    return SimulationHistoryV2DetailResponse(
+        **summary.model_dump(),
+        schema_version="allocation-simulation-response-v2",
+        result=result,
+        baseline=SimulationBaselineValuationContext(
+            valuation_currency="USD",
+            valuation_date=date(2026, 9, 12),
+            oldest_price_as_of=date(2026, 9, 11),
+            newest_price_as_of=date(2026, 9, 12),
+            total_current_value_usd="1000.00",
+            holdings=[
+                SimulationBaselineHolding(
+                    id=UUID("53000000-0000-0000-0000-000000000001"),
+                    symbol="AAPL",
+                    invested_amount="500.00",
+                    invested_currency="THB",
+                    shares="4.00",
+                    purchase_date=date(2026, 1, 2),
+                    position=0,
+                    asset_price="150.00",
+                    asset_quote_currency="USD",
+                    price_as_of=date(2026, 9, 12),
+                    current_value_usd="600.00",
+                    current_allocation="0.60",
+                ),
+                SimulationBaselineHolding(
+                    id=UUID("53000000-0000-0000-0000-000000000002"),
+                    symbol="BND",
+                    invested_amount="400.00",
+                    invested_currency="USD",
+                    shares="5.00",
+                    purchase_date=date(2026, 2, 3),
+                    position=1,
+                    asset_price="80.00",
+                    asset_quote_currency="USD",
+                    price_as_of=date(2026, 9, 11),
+                    current_value_usd="400.00",
+                    current_allocation="0.40",
+                ),
+            ],
+        ),
     )
 
 
@@ -274,6 +325,38 @@ def test_authenticated_detail_returns_exact_validated_result_contract(
     api_harness.service.save.assert_not_called()
     _assert_route_did_not_manage_session(api_harness)
     api_harness.session.rollback.assert_not_called()
+
+
+def test_authenticated_v2_detail_exposes_frozen_baseline_around_same_result(
+    api_harness: ApiHarness,
+) -> None:
+    detail = _v2_detail()
+    api_harness.service.get.return_value = detail
+
+    response = api_harness.client.get(DETAIL_PATH, headers=REQUEST_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json() == detail.model_dump(mode="json")
+    validated = SimulationHistoryV2DetailResponse.model_validate(
+        response.json()
+    )
+    assert validated == detail
+    assert response.json()["schema_version"] == (
+        "allocation-simulation-response-v2"
+    )
+    assert response.json()["baseline"]["valuation_currency"] == "USD"
+    assert response.json()["baseline"]["valuation_date"] == "2026-09-12"
+    assert [
+        holding["symbol"]
+        for holding in response.json()["baseline"]["holdings"]
+    ] == ["AAPL", "BND"]
+    assert response.json()["result"] == detail.result.model_dump(mode="json")
+    api_harness.service.get.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        simulation_id=SIMULATION_ID,
+    )
+    _assert_route_did_not_manage_session(api_harness)
 
 
 @pytest.mark.parametrize("portfolio_state", ["missing", "wrong-owner"])

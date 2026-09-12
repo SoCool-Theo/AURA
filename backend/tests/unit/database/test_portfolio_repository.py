@@ -1,5 +1,6 @@
 import importlib
-from datetime import UTC, datetime
+from copy import deepcopy
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -7,7 +8,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend.app.database.models import Holding, Portfolio, User
@@ -314,6 +315,191 @@ def test_replace_holdings_reuses_symbols_and_positions_without_conflict(
         ("MSFT", 0),
         ("AAPL", 1),
     ]
+
+
+def test_replace_real_holdings_preserves_facts_order_and_decimal_values(
+    database_session: Session,
+) -> None:
+    user = _persist_user(database_session)
+    portfolio = _persist_portfolio(database_session, user)
+    portfolio.holdings.append(
+        Holding(symbol="BND", weight=Decimal("1"), position=0)
+    )
+    database_session.flush()
+    replacements = [
+        (
+            "AAPL",
+            Decimal("1500.000000000000"),
+            "USD",
+            Decimal("10.250000000000"),
+            date(2026, 1, 10),
+        ),
+        (
+            "MSFT",
+            Decimal("90000.000000000000"),
+            "THB",
+            Decimal("4.500000000000"),
+            date(2026, 2, 20),
+        ),
+    ]
+    original = deepcopy(replacements)
+
+    result = PortfolioRepository(database_session).replace_real_holdings(
+        portfolio.id,
+        replacements,
+    )
+    portfolio_id = portfolio.id
+    database_session.commit()
+    with Session(database_session.get_bind()) as fresh_session:
+        loaded = PortfolioRepository(fresh_session).get_with_holdings(
+            portfolio_id
+        )
+
+    assert result is not None
+    assert loaded is not None
+    assert loaded.id == portfolio_id
+    assert replacements == original
+    assert [
+        (
+            holding.symbol,
+            holding.weight,
+            holding.invested_amount,
+            holding.invested_currency,
+            holding.shares,
+            holding.purchase_date,
+            holding.position,
+        )
+        for holding in loaded.holdings
+    ] == [
+        (
+            "AAPL",
+            None,
+            Decimal("1500.000000000000"),
+            "USD",
+            Decimal("10.250000000000"),
+            date(2026, 1, 10),
+            0,
+        ),
+        (
+            "MSFT",
+            None,
+            Decimal("90000.000000000000"),
+            "THB",
+            Decimal("4.500000000000"),
+            date(2026, 2, 20),
+            1,
+        ),
+    ]
+    assert all(holding.symbol != "BND" for holding in loaded.holdings)
+    assert not hasattr(loaded.holdings[0], "current_value")
+    assert not hasattr(loaded.holdings[0], "current_allocation")
+
+
+def test_replace_real_holdings_flushes_delete_before_insert_without_commit() -> None:
+    session = MagicMock(spec=Session)
+    portfolio = Portfolio(id=uuid4(), user_id=uuid4(), name="Core")
+    portfolio.holdings.append(
+        Holding(symbol="BND", weight=Decimal("1"), position=0)
+    )
+    session.scalars.return_value.one_or_none.return_value = portfolio
+    snapshots: list[list[tuple[str, int]]] = []
+    session.flush.side_effect = lambda: snapshots.append(
+        [(holding.symbol, holding.position) for holding in portfolio.holdings]
+    )
+
+    result = PortfolioRepository(session).replace_real_holdings(
+        portfolio.id,
+        [
+            (
+                "AAPL",
+                Decimal("1500"),
+                "USD",
+                Decimal("10"),
+                date(2026, 1, 10),
+            )
+        ],
+    )
+
+    assert result == portfolio.holdings
+    assert snapshots == [[], [("AAPL", 0)]]
+    assert result[0].weight is None
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
+
+
+def test_replace_real_holdings_rejects_duplicates_before_mutation() -> None:
+    session = MagicMock(spec=Session)
+
+    with pytest.raises(ValueError, match="symbols must be unique"):
+        PortfolioRepository(session).replace_real_holdings(
+            uuid4(),
+            [
+                ("AAPL", Decimal("1"), "USD", Decimal("1"), date(2026, 1, 1)),
+                ("AAPL", Decimal("2"), "USD", Decimal("2"), date(2026, 1, 2)),
+            ],
+        )
+
+    session.scalars.assert_not_called()
+    session.flush.assert_not_called()
+
+
+def test_failed_real_replacement_can_rollback_without_losing_legacy_rows(
+    database_session: Session,
+) -> None:
+    user = _persist_user(database_session)
+    portfolio = _persist_portfolio(database_session, user)
+    portfolio.holdings.append(
+        Holding(symbol="BND", weight=Decimal("1"), position=0)
+    )
+    portfolio_id = portfolio.id
+    database_session.commit()
+
+    with pytest.raises(IntegrityError):
+        PortfolioRepository(database_session).replace_real_holdings(
+            portfolio_id,
+            [
+                (
+                    "AAPL",
+                    Decimal("1500"),
+                    "EUR",
+                    Decimal("10"),
+                    date(2026, 1, 10),
+                )
+            ],
+        )
+    database_session.rollback()
+    database_session.expire_all()
+
+    loaded = PortfolioRepository(database_session).get_with_holdings(
+        portfolio_id
+    )
+    assert loaded is not None
+    assert [(holding.symbol, holding.weight) for holding in loaded.holdings] == [
+        ("BND", Decimal("1.000000000000000000"))
+    ]
+
+
+def test_replace_real_missing_portfolio_returns_none_without_flush() -> None:
+    session = MagicMock(spec=Session)
+    session.scalars.return_value.one_or_none.return_value = None
+
+    result = PortfolioRepository(session).replace_real_holdings(
+        uuid4(),
+        [
+            (
+                "AAPL",
+                Decimal("1500"),
+                "USD",
+                Decimal("10"),
+                date(2026, 1, 10),
+            )
+        ],
+    )
+
+    assert result is None
+    session.flush.assert_not_called()
+    session.commit.assert_not_called()
 
 
 def test_replace_missing_portfolio_returns_none_after_validation() -> None:

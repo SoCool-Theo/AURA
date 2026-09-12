@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from ..core.instruments import MARKET_UPDATE_SYMBOLS
 from ..services.market_data_update_service import update_market_data_and_persist
 
 
@@ -14,7 +15,9 @@ def run_scheduled_market_data_update() -> None:
     """Run, log, and propagate one scheduled market-data update."""
     logger.info("Scheduled market-data update starting.")
     try:
-        persisted_result = update_market_data_and_persist()
+        persisted_result = update_market_data_and_persist(
+            symbols=MARKET_UPDATE_SYMBOLS
+        )
     except Exception:
         logger.exception("Scheduled market-data update failed.")
         raise

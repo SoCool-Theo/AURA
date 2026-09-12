@@ -54,9 +54,15 @@ class FakeTools:
             "result": {"comparison": {"return_delta": -0.15}},
         }
         self.calls: list[tuple[str, object | None]] = []
+        self.portfolio_resolution_flags: list[bool] = []
 
-    def get_portfolio_context(self) -> dict[str, object] | None:
+    def get_portfolio_context(
+        self,
+        *,
+        resolve_current_baseline: bool = True,
+    ) -> dict[str, object] | None:
         self.calls.append(("portfolio", None))
+        self.portfolio_resolution_flags.append(resolve_current_baseline)
         return self.portfolio
 
     def get_latest_report(self) -> dict[str, object] | None:
@@ -121,6 +127,7 @@ def test_allowed_request_uses_latest_report_and_one_provider_call() -> None:
     assert request.user_message == "Why is NVDA my biggest risk driver?"
     assert request.grounded_context["simulation"] is None
     assert request.grounded_context["portfolio"] == tools.portfolio
+    assert tools.portfolio_resolution_flags == [True]
     assert [source.type for source in response.sources] == ["portfolio", "report"]
     assert [source.id for source in response.sources] == [_PORTFOLIO_ID, _REPORT_ID]
     assert response.limitations == [HISTORICAL_LIMITATION]
@@ -139,6 +146,7 @@ def test_specific_report_and_simulation_are_the_only_requested_context() -> None
         ("report", _REPORT_ID),
         ("simulation", _SIMULATION_ID),
     ]
+    assert tools.portfolio_resolution_flags == [False]
     context = provider.requests[0].grounded_context
     assert context["report"] == tools.report
     assert context["simulation"] == tools.simulation

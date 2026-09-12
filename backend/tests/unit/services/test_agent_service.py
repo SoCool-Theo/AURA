@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+from datetime import date
 from uuid import UUID, uuid4
 
 import pytest
@@ -21,6 +22,7 @@ from backend.app.services.simulation_history_service import SimulationNotFoundEr
 
 _USER_ID = UUID("40000000-0000-0000-0000-000000000001")
 _PORTFOLIO_ID = UUID("20000000-0000-0000-0000-000000000001")
+_VALUATION_DATE = date(2026, 9, 12)
 
 
 def _request(portfolio_id: UUID = _PORTFOLIO_ID) -> AgentExplainRequest:
@@ -62,12 +64,14 @@ def test_service_binds_trusted_identity_and_delegates_once() -> None:
         result = AgentService(session, provider).explain(
             user_id=_USER_ID,
             request=_request(),
+            valuation_date=_VALUATION_DATE,
         )
 
     tools_type.assert_called_once_with(
         session,
         user_id=_USER_ID,
         portfolio_id=_PORTFOLIO_ID,
+        valuation_date=_VALUATION_DATE,
     )
     agent_type.assert_called_once_with(tools=tools, provider=provider)
     agent.explain.assert_called_once()
@@ -91,19 +95,26 @@ def test_service_invocations_do_not_share_user_or_portfolio_binding() -> None:
         patch.object(service_module, "AuraAgent", agent_type),
     ):
         service = AgentService(session, provider)
-        service.explain(user_id=_USER_ID, request=_request())
+        service.explain(
+            user_id=_USER_ID,
+            request=_request(),
+            valuation_date=_VALUATION_DATE,
+        )
         service.explain(
             user_id=other_user_id,
             request=_request(other_portfolio_id),
+            valuation_date=_VALUATION_DATE,
         )
 
     assert tools_type.call_args_list[0].kwargs == {
         "user_id": _USER_ID,
         "portfolio_id": _PORTFOLIO_ID,
+        "valuation_date": _VALUATION_DATE,
     }
     assert tools_type.call_args_list[1].kwargs == {
         "user_id": other_user_id,
         "portfolio_id": other_portfolio_id,
+        "valuation_date": _VALUATION_DATE,
     }
     assert all(call.args == (session,) for call in tools_type.call_args_list)
     _assert_session_lifecycle_untouched(session)
@@ -134,7 +145,11 @@ def test_service_propagates_agent_and_provider_errors_unchanged(
         patch.object(service_module, "AuraAgent", return_value=agent),
     ):
         with pytest.raises(type(failure)) as raised:
-            AgentService(session, provider).explain(user_id=_USER_ID, request=_request())
+            AgentService(session, provider).explain(
+                user_id=_USER_ID,
+                request=_request(),
+                valuation_date=_VALUATION_DATE,
+            )
 
     assert raised.value is failure
     _assert_session_lifecycle_untouched(session)
@@ -154,12 +169,24 @@ def test_service_rejects_untrusted_identity_keywords() -> None:
 
 
 class _FakeTools:
-    def __init__(self, session: Session, *, user_id: UUID, portfolio_id: UUID) -> None:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        user_id: UUID,
+        portfolio_id: UUID,
+        valuation_date: date,
+    ) -> None:
         self.session = session
         self.user_id = user_id
         self.portfolio_id = portfolio_id
+        self.valuation_date = valuation_date
 
-    def get_portfolio_context(self) -> dict[str, object]:
+    def get_portfolio_context(
+        self,
+        *,
+        resolve_current_baseline: bool = True,
+    ) -> dict[str, object]:
         return {"id": str(self.portfolio_id), "name": "Core", "holdings": []}
 
     def get_latest_report(self) -> dict[str, object]:
@@ -189,6 +216,7 @@ def test_service_integrates_real_agent_with_bound_fake_tools_and_provider() -> N
         response = AgentService(session, provider).explain(
             user_id=_USER_ID,
             request=_request(),
+            valuation_date=_VALUATION_DATE,
         )
 
     assert response.answer == "Aura explains the available portfolio context."

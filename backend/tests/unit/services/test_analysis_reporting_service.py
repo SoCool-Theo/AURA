@@ -1,5 +1,5 @@
 from copy import deepcopy
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, call, patch
 from uuid import UUID, uuid4
@@ -15,22 +15,38 @@ from backend.app.schemas.reporting import (
     PortfolioReportListResponse,
     PortfolioReportResponse,
     PortfolioReportSummary,
+    PortfolioReportV2Response,
 )
 from backend.app.services.analysis_reporting_mapper import (
     PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION,
+    PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
     analysis_record_to_report_summary,
     analysis_response_to_snapshot,
 )
 from backend.app.services.analysis_reporting_service import (
     AnalysisReportingService,
+    ReportAnalysisUnprocessableError,
     ReportNotFoundError,
 )
 from backend.app.services.analysis_service import AnalysisService
+from backend.app.services.market_data_service import MarketDataUnavailableError
+from backend.app.services.portfolio_analysis_preparation_service import (
+    PortfolioAnalysisPreparationService,
+)
+from backend.app.services.portfolio_valuation_service import (
+    PortfolioDisplayCurrency,
+    PortfolioValuationService,
+)
 from backend.app.services.portfolio_service import PortfolioService
 import backend.app.services.analysis_reporting_service as service_module
 from backend.tests.unit.services.test_analysis_reporting_mapper import (
     _analysis_record,
+    _valid_thb_v2_snapshot,
     _valid_response,
+)
+from backend.tests.unit.services.test_portfolio_analysis_composition import (
+    _analysis_response as _real_analysis_response,
+    _real_preparation,
 )
 
 
@@ -191,6 +207,182 @@ def test_create_report_preserves_owned_portfolio_allocation_and_period() -> None
     _assert_session_lifecycle_untouched(session)
 
 
+def test_legacy_creation_with_thb_request_stays_v1_without_valuation() -> None:
+    service, session, portfolio_service, analysis_service, repository = (
+        _service_with_dependencies()
+    )
+    valuation_service = MagicMock(spec=PortfolioValuationService)
+    service._preparation_service._valuation_service = valuation_service
+    portfolio_service.get.return_value = _portfolio()
+    response = _valid_response()
+    analysis_service.analyze.return_value = response
+    snapshot = analysis_response_to_snapshot(response)
+    repository.save_snapshot.return_value = _analysis_record(
+        result_snapshot=snapshot
+    )
+
+    result = service.create_report(
+        user_id=_USER_ID,
+        portfolio_id=_PORTFOLIO_ID,
+        period=_period(),
+        valuation_date=date(2026, 9, 12),
+        display_currency=PortfolioDisplayCurrency.THB,
+    )
+
+    assert isinstance(result, PortfolioReportResponse)
+    valuation_service.value.assert_not_called()
+    repository.save_snapshot.assert_called_once_with(
+        portfolio_id=_PORTFOLIO_ID,
+        start_date=response.start_date,
+        end_date=response.end_date,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION,
+        result_snapshot=snapshot,
+    )
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_real_creation_orchestrates_once_and_persists_v2() -> None:
+    service, session, portfolio_service, analysis_service, repository = (
+        _service_with_dependencies()
+    )
+    preparation_service = MagicMock(spec=PortfolioAnalysisPreparationService)
+    service._preparation_service = preparation_service
+    portfolio = _portfolio()
+    preparation = _real_preparation()
+    response = _real_analysis_response()
+    enriched = object()
+    snapshot = {"schema_version": "portfolio-analysis-response-v2"}
+    saved = _analysis_record(
+        result_snapshot=snapshot,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+        start_date=response.start_date,
+        end_date=response.end_date,
+    )
+    mapped = MagicMock(spec=PortfolioReportV2Response)
+    events: list[str] = []
+    portfolio_service.get.side_effect = lambda **kwargs: (
+        events.append("ownership") or portfolio
+    )
+    preparation_service.prepare.side_effect = lambda **kwargs: (
+        events.append("prepare") or preparation
+    )
+    analysis_service.analyze.side_effect = lambda request: (
+        events.append("analyze") or response
+    )
+    repository.save_snapshot.side_effect = lambda **kwargs: (
+        events.append("save") or saved
+    )
+
+    with (
+        patch.object(
+            service_module,
+            "compose_portfolio_analysis",
+            side_effect=lambda prepared, analyzed: (
+                events.append("compose") or enriched
+            ),
+        ) as composer,
+        patch.object(
+            service_module,
+            "enriched_analysis_to_v2_snapshot",
+            side_effect=lambda result: events.append("snapshot") or snapshot,
+        ) as snapshot_mapper,
+        patch.object(
+            service_module,
+            "analysis_record_to_report_response",
+            side_effect=lambda record: events.append("map") or mapped,
+        ),
+    ):
+        result = service.create_report(
+            user_id=_USER_ID,
+            portfolio_id=_PORTFOLIO_ID,
+            period=_period(),
+            valuation_date=date(2026, 9, 12),
+            display_currency=PortfolioDisplayCurrency.THB,
+        )
+
+    assert result is mapped
+    assert events == [
+        "ownership",
+        "prepare",
+        "analyze",
+        "compose",
+        "snapshot",
+        "save",
+        "map",
+    ]
+    preparation_service.prepare.assert_called_once_with(
+        portfolio=portfolio,
+        analysis_period=_period(),
+        valuation_date=date(2026, 9, 12),
+        display_currency=PortfolioDisplayCurrency.THB,
+    )
+    analysis_service.analyze.assert_called_once_with(
+        preparation.analysis_request
+    )
+    composer.assert_called_once_with(preparation, response)
+    snapshot_mapper.assert_called_once_with(enriched)
+    repository.save_snapshot.assert_called_once_with(
+        portfolio_id=portfolio.id,
+        start_date=response.start_date,
+        end_date=response.end_date,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+        result_snapshot=snapshot,
+    )
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_production_creation_captures_current_utc_date_once_after_ownership(
+) -> None:
+    service, session, portfolio_service, analysis_service, repository = (
+        _service_with_dependencies()
+    )
+    preparation_service = MagicMock(spec=PortfolioAnalysisPreparationService)
+    service._preparation_service = preparation_service
+    portfolio_service.get.return_value = _portfolio()
+    preparation = _real_preparation()
+    preparation_service.prepare.return_value = preparation
+    response = _real_analysis_response()
+    analysis_service.analyze.return_value = response
+    repository.save_snapshot.return_value = _analysis_record(
+        result_snapshot={"v2": True},
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+        start_date=response.start_date,
+        end_date=response.end_date,
+    )
+    captured = datetime(2026, 9, 12, 23, 59, tzinfo=UTC)
+
+    with (
+        patch.object(service_module, "datetime") as clock,
+        patch.object(
+            service_module,
+            "compose_portfolio_analysis",
+            return_value=object(),
+        ),
+        patch.object(
+            service_module,
+            "enriched_analysis_to_v2_snapshot",
+            return_value={"v2": True},
+        ),
+        patch.object(
+            service_module,
+            "analysis_record_to_report_response",
+            return_value=MagicMock(spec=PortfolioReportV2Response),
+        ),
+    ):
+        clock.now.return_value = captured
+        service.create_report(
+            user_id=_USER_ID,
+            portfolio_id=_PORTFOLIO_ID,
+            period=_period(),
+        )
+
+    clock.now.assert_called_once_with(UTC)
+    assert preparation_service.prepare.call_args.kwargs["valuation_date"] == date(
+        2026, 9, 12
+    )
+    _assert_session_lifecycle_untouched(session)
+
+
 def test_create_report_analyzes_before_snapshot_and_persistence() -> None:
     service, session, portfolio_service, analysis_service, repository = (
         _service_with_dependencies()
@@ -248,7 +440,7 @@ def test_create_report_analysis_failure_never_persists_and_propagates() -> None:
             service_module,
             "analysis_record_to_report_response",
         ) as report_mapper,
-        pytest.raises(ValueError) as raised,
+        pytest.raises(ReportAnalysisUnprocessableError) as raised,
     ):
         service.create_report(
             user_id=_USER_ID,
@@ -256,7 +448,7 @@ def test_create_report_analysis_failure_never_persists_and_propagates() -> None:
             period=_period(),
         )
 
-    assert raised.value is failure
+    assert raised.value.__cause__ is failure
     analysis_service.analyze.assert_called_once()
     snapshot_mapper.assert_not_called()
     repository.save_snapshot.assert_not_called()
@@ -332,6 +524,33 @@ def test_list_reports_empty_history_returns_valid_empty_response() -> None:
 
     assert isinstance(result, PortfolioReportListResponse)
     assert result.reports == []
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_list_reports_coexists_across_v1_and_v2_without_snapshot_reads() -> None:
+    service, session, portfolio_service, analysis_service, repository = (
+        _service_with_dependencies()
+    )
+    valuation_service = MagicMock(spec=PortfolioValuationService)
+    service._preparation_service._valuation_service = valuation_service
+    portfolio_service.get.return_value = _portfolio()
+    v2 = _analysis_record(
+        result_snapshot={"not": "inspected"},
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+    )
+    v2.id = UUID("10000000-0000-0000-0000-000000000002")
+    v1 = _analysis_record(result_snapshot={"also": "not inspected"})
+    repository.list_for_portfolio.return_value = [v2, v1]
+
+    result = service.list_reports(
+        user_id=_USER_ID,
+        portfolio_id=_PORTFOLIO_ID,
+    )
+
+    assert result is not None
+    assert [report.id for report in result.reports] == [v2.id, v1.id]
+    valuation_service.value.assert_not_called()
+    analysis_service.analyze.assert_not_called()
     _assert_session_lifecycle_untouched(session)
 
 
@@ -437,6 +656,105 @@ def test_get_report_unowned_parent_returns_none_before_report_lookup(
 
     assert result is None
     repository.get_by_id.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+@pytest.mark.parametrize("failure_stage", ["composition", "mapping"])
+def test_real_creation_failure_before_save_never_persists(
+    failure_stage: str,
+) -> None:
+    service, session, portfolio_service, analysis_service, repository = (
+        _service_with_dependencies()
+    )
+    preparation_service = MagicMock(spec=PortfolioAnalysisPreparationService)
+    service._preparation_service = preparation_service
+    portfolio_service.get.return_value = _portfolio()
+    preparation_service.prepare.return_value = _real_preparation()
+    analysis_service.analyze.return_value = _real_analysis_response()
+    failure = ValueError(f"{failure_stage} failure")
+
+    with (
+        patch.object(
+            service_module,
+            "compose_portfolio_analysis",
+            side_effect=(failure if failure_stage == "composition" else None),
+            return_value=object(),
+        ),
+        patch.object(
+            service_module,
+            "enriched_analysis_to_v2_snapshot",
+            side_effect=(failure if failure_stage == "mapping" else None),
+            return_value={"v2": True},
+        ),
+        pytest.raises(ValueError) as raised,
+    ):
+        service.create_report(
+            user_id=_USER_ID,
+            portfolio_id=_PORTFOLIO_ID,
+            period=_period(),
+            valuation_date=date(2026, 9, 12),
+        )
+
+    assert raised.value is failure
+    repository.save_snapshot.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_real_valuation_failure_never_analyzes_or_persists() -> None:
+    service, session, portfolio_service, analysis_service, repository = (
+        _service_with_dependencies()
+    )
+    preparation_service = MagicMock(spec=PortfolioAnalysisPreparationService)
+    service._preparation_service = preparation_service
+    portfolio_service.get.return_value = _portfolio()
+    failure = MarketDataUnavailableError("current price unavailable")
+    preparation_service.prepare.side_effect = failure
+
+    with pytest.raises(MarketDataUnavailableError) as raised:
+        service.create_report(
+            user_id=_USER_ID,
+            portfolio_id=_PORTFOLIO_ID,
+            period=_period(),
+            valuation_date=date(2026, 9, 12),
+        )
+
+    assert raised.value is failure
+    analysis_service.analyze.assert_not_called()
+    repository.save_snapshot.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_get_saved_thb_v2_uses_snapshot_only_and_never_revalues_or_reanalyzes(
+) -> None:
+    service, session, portfolio_service, analysis_service, repository = (
+        _service_with_dependencies()
+    )
+    valuation_service = MagicMock(spec=PortfolioValuationService)
+    service._preparation_service._valuation_service = valuation_service
+    portfolio_service.get.return_value = _portfolio()
+    repository.get_by_id.return_value = _analysis_record(
+        result_snapshot=_valid_thb_v2_snapshot(),
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+        start_date=date(2022, 1, 1),
+        end_date=date(2022, 12, 31),
+    )
+
+    result = service.get_report(
+        user_id=_USER_ID,
+        portfolio_id=_PORTFOLIO_ID,
+        report_id=_REPORT_ID,
+    )
+
+    assert isinstance(result, PortfolioReportV2Response)
+    assert result.holdings[0].asset_price == Decimal("200.000000000000")
+    assert result.holdings[0].current_value == Decimal(
+        "195000.00000000000000"
+    )
+    assert result.holdings[0].current_allocation == Decimal("0.600000000000")
+    assert result.valuation.fx is not None
+    assert result.valuation.fx.rate == Decimal("32.50")
+    valuation_service.value.assert_not_called()
+    analysis_service.analyze.assert_not_called()
     _assert_session_lifecycle_untouched(session)
 
 

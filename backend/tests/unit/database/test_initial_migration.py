@@ -30,6 +30,7 @@ EXPECTED_TABLES = {
 INITIAL_REVISION = "9f4c2a7b1d3e"
 AUTHENTICATION_REVISION = "2b6e5d4a9c81"
 SIMULATION_REVISION = "7c1e2f4a6b90"
+REAL_HOLDING_REVISION = "d4a6f8c2e1b7"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -51,6 +52,12 @@ def _authentication_revision() -> Script:
 
 def _simulation_revision() -> Script:
     revision = _script_directory().get_revision(SIMULATION_REVISION)
+    assert revision is not None
+    return revision
+
+
+def _real_holding_revision() -> Script:
+    revision = _script_directory().get_revision(REAL_HOLDING_REVISION)
     assert revision is not None
     return revision
 
@@ -136,6 +143,31 @@ def _captured_upgrade() -> tuple[
         )
         for create_call in create_index.call_args_list
     )
+
+    real_holding_revision = _real_holding_revision().module
+    with (
+        patch.object(real_holding_revision.op, "add_column") as add_column,
+        patch.object(real_holding_revision.op, "alter_column") as alter_column,
+        patch.object(
+            real_holding_revision.op,
+            "create_check_constraint",
+        ) as create_check_constraint,
+    ):
+        real_holding_revision.upgrade()
+
+    for add_call in add_column.call_args_list:
+        metadata.tables[add_call.args[0]].append_column(add_call.args[1])
+    for alter_call in alter_column.call_args_list:
+        metadata.tables[alter_call.args[0]].c[
+            alter_call.args[1]
+        ].nullable = alter_call.kwargs["nullable"]
+    for create_call in create_check_constraint.call_args_list:
+        metadata.tables[create_call.args[1]].append_constraint(
+            sa.CheckConstraint(
+                create_call.args[2],
+                name=create_call.args[0],
+            )
+        )
     return metadata, indexes
 
 
@@ -190,22 +222,25 @@ def _model_indexes() -> set[tuple[str, str, tuple[str, ...], bool]]:
     }
 
 
-def test_revisions_form_a_single_simulation_head() -> None:
+def test_revisions_form_a_single_real_holding_head() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
+        REAL_HOLDING_REVISION,
         SIMULATION_REVISION,
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert script.get_current_head() == SIMULATION_REVISION
-    assert revisions[0].down_revision == AUTHENTICATION_REVISION
-    assert revisions[0].module.down_revision == AUTHENTICATION_REVISION
-    assert revisions[1].down_revision == INITIAL_REVISION
-    assert revisions[1].module.down_revision == INITIAL_REVISION
-    assert revisions[2].down_revision is None
-    assert revisions[2].module.down_revision is None
+    assert script.get_current_head() == REAL_HOLDING_REVISION
+    assert revisions[0].down_revision == SIMULATION_REVISION
+    assert revisions[0].module.down_revision == SIMULATION_REVISION
+    assert revisions[1].down_revision == AUTHENTICATION_REVISION
+    assert revisions[1].module.down_revision == AUTHENTICATION_REVISION
+    assert revisions[2].down_revision == INITIAL_REVISION
+    assert revisions[2].module.down_revision == INITIAL_REVISION
+    assert revisions[3].down_revision is None
+    assert revisions[3].module.down_revision is None
     assert all(callable(revision.module.upgrade) for revision in revisions)
     assert all(callable(revision.module.downgrade) for revision in revisions)
 
@@ -253,7 +288,11 @@ def test_migration_table_metadata_matches_existing_base_metadata() -> None:
         migration_table = migration_metadata.tables[table_name]
         model_table = Base.metadata.tables[table_name]
 
-        assert tuple(migration_table.c.keys()) == tuple(model_table.c.keys())
+        assert set(migration_table.c.keys()) == set(model_table.c.keys())
+        if table_name != "holdings":
+            assert tuple(migration_table.c.keys()) == tuple(
+                model_table.c.keys()
+            )
         assert tuple(
             column.name for column in migration_table.primary_key.columns
         ) == tuple(column.name for column in model_table.primary_key.columns)

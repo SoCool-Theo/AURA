@@ -1,6 +1,6 @@
 """Read-only orchestration and mapping for historical scenario simulation."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 import pandas as pd
@@ -20,7 +20,10 @@ from ..schemas.simulation import (
 )
 from .analysis_service import _build_price_frame
 from .market_data_service import MarketDataService
+from .portfolio_baseline_resolver import PortfolioBaselineResolutionService
 from .portfolio_service import PortfolioService
+from .portfolio_valuation_service import PortfolioDisplayCurrency
+from .simulation_execution import SimulationExecutionResult
 
 
 class HistoricalScenarioNotFoundError(Exception):
@@ -98,6 +101,7 @@ class HistoricalScenarioService:
         self._session = session
         self._portfolio_service = PortfolioService(session)
         self._market_data_service = MarketDataService(session)
+        self._baseline_resolver = PortfolioBaselineResolutionService(session)
 
     def run(
         self,
@@ -105,8 +109,26 @@ class HistoricalScenarioService:
         user_id: UUID,
         portfolio_id: UUID,
         request: HistoricalScenarioSimulationRequest,
+        valuation_date: date | None = None,
     ) -> HistoricalScenarioSimulationResponse | None:
         """Run one predefined scenario for an owned saved portfolio."""
+        execution = self.run_with_context(
+            user_id=user_id,
+            portfolio_id=portfolio_id,
+            request=request,
+            valuation_date=valuation_date or datetime.now(UTC).date(),
+        )
+        return None if execution is None else execution.response
+
+    def run_with_context(
+        self,
+        *,
+        user_id: UUID,
+        portfolio_id: UUID,
+        request: HistoricalScenarioSimulationRequest,
+        valuation_date: date,
+    ) -> SimulationExecutionResult[HistoricalScenarioSimulationResponse] | None:
+        """Run one scenario and retain its resolved original baseline."""
         portfolio = self._portfolio_service.get(
             user_id=user_id,
             portfolio_id=portfolio_id,
@@ -126,10 +148,15 @@ class HistoricalScenarioService:
                 "Historical scenario not found"
             )
 
-        symbols = [holding.symbol for holding in holdings]
+        baseline = self._baseline_resolver.resolve(
+            portfolio=portfolio,
+            valuation_date=valuation_date,
+            display_currency=PortfolioDisplayCurrency.USD,
+        )
+        symbols = [holding.symbol for holding in baseline.resolved_weights]
         weights = {
             holding.symbol: float(holding.weight)
-            for holding in holdings
+            for holding in baseline.resolved_weights
         }
         records = self._market_data_service.get_range(
             symbols,
@@ -138,11 +165,14 @@ class HistoricalScenarioService:
         )
         prices = _build_price_frame(records, symbols)
         result = simulate_historical_scenario(prices, weights)
-        return _map_historical_scenario_response(
-            portfolio_id=portfolio.id,
-            portfolio_name=portfolio.name,
-            scenario=scenario,
-            result=result,
+        return SimulationExecutionResult(
+            response=_map_historical_scenario_response(
+                portfolio_id=portfolio.id,
+                portfolio_name=portfolio.name,
+                scenario=scenario,
+                result=result,
+            ),
+            baseline=baseline,
         )
 
 

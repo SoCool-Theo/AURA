@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TypedDict
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -68,3 +68,40 @@ class MarketDataRepository:
             .order_by(MarketData.symbol, MarketData.date)
         )
         return list(self._session.scalars(statement).all())
+
+    def get_latest_on_or_before(
+        self,
+        symbols: Sequence[str],
+        requested_date: date,
+    ) -> list[MarketData]:
+        """Return at most one latest row per symbol in requested order."""
+        selected_symbols = tuple(dict.fromkeys(symbols))
+        if not selected_symbols:
+            return []
+
+        latest_dates = (
+            select(
+                MarketData.symbol.label("symbol"),
+                func.max(MarketData.date).label("latest_date"),
+            )
+            .where(
+                MarketData.symbol.in_(selected_symbols),
+                MarketData.date <= requested_date,
+            )
+            .group_by(MarketData.symbol)
+            .subquery()
+        )
+        statement = select(MarketData).join(
+            latest_dates,
+            and_(
+                MarketData.symbol == latest_dates.c.symbol,
+                MarketData.date == latest_dates.c.latest_date,
+            ),
+        )
+        rows = list(self._session.scalars(statement).all())
+        rows_by_symbol = {row.symbol: row for row in rows}
+        return [
+            rows_by_symbol[symbol]
+            for symbol in selected_symbols
+            if symbol in rows_by_symbol
+        ]

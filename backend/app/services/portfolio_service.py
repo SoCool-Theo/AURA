@@ -1,6 +1,7 @@
 """Portfolio business operations within a caller-owned transaction."""
 
 from collections.abc import Sequence
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -8,6 +9,9 @@ from sqlalchemy.orm import Session
 
 from ..database.models import Portfolio
 from ..database.repositories import PortfolioRepository
+
+
+RealHoldingReplacement = tuple[str, Decimal, str, Decimal, date]
 
 
 class PortfolioService:
@@ -55,18 +59,15 @@ class PortfolioService:
         *,
         user_id: UUID,
         portfolio_id: UUID,
-        holdings: Sequence[tuple[str, float]],
+        holdings: Sequence[RealHoldingReplacement],
     ) -> Portfolio | None:
-        """Replace an owned portfolio's ordered holdings."""
+        """Replace an owned portfolio's ordered real holdings."""
         portfolio = self._repository.get_with_holdings(portfolio_id)
         if not self._is_owned_by(portfolio, user_id):
             return None
 
-        replacements = tuple(
-            (symbol, Decimal(str(weight)))
-            for symbol, weight in holdings
-        )
-        self._repository.replace_holdings(portfolio_id, replacements)
+        replacements = tuple(holdings)
+        self._repository.replace_real_holdings(portfolio_id, replacements)
         return portfolio
 
     def duplicate(
@@ -76,18 +77,57 @@ class PortfolioService:
         portfolio_id: UUID,
         name: str,
     ) -> Portfolio | None:
-        """Copy an owned portfolio and its exact ordered allocation."""
+        """Copy an owned portfolio without converting its holding mode."""
         source = self._repository.get_with_holdings(portfolio_id)
         if not self._is_owned_by(source, user_id):
             return None
 
-        duplicate = self._repository.create(user_id=user_id, name=name)
+        legacy_replacements = None
+        real_replacements = None
         if source.holdings:
-            replacements = tuple(
-                (holding.symbol, holding.weight)
+            legacy_holdings = [
+                holding
                 for holding in source.holdings
+                if holding.weight is not None
+            ]
+            if len(legacy_holdings) == len(source.holdings):
+                legacy_replacements = tuple(
+                    (holding.symbol, holding.weight)
+                    for holding in source.holdings
+                )
+            elif not legacy_holdings and all(
+                holding.invested_amount is not None
+                and holding.invested_currency is not None
+                and holding.shares is not None
+                and holding.purchase_date is not None
+                for holding in source.holdings
+            ):
+                real_replacements = tuple(
+                    (
+                        holding.symbol,
+                        holding.invested_amount,
+                        holding.invested_currency,
+                        holding.shares,
+                        holding.purchase_date,
+                    )
+                    for holding in source.holdings
+                )
+            else:
+                raise ValueError(
+                    "cannot duplicate mixed or incomplete holding state"
+                )
+
+        duplicate = self._repository.create(user_id=user_id, name=name)
+        if legacy_replacements is not None:
+            self._repository.replace_holdings(
+                duplicate.id,
+                legacy_replacements,
             )
-            self._repository.replace_holdings(duplicate.id, replacements)
+        elif real_replacements is not None:
+            self._repository.replace_real_holdings(
+                duplicate.id,
+                real_replacements,
+            )
         return duplicate
 
     def delete(

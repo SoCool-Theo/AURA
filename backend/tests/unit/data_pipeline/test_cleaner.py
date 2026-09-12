@@ -101,3 +101,20 @@ def test_clean_market_data_requires_price_column() -> None:
 
     with pytest.raises(ValueError, match="adjusted_close"):
         clean_market_data(raw)
+
+
+def test_clean_market_data_accepts_internal_fx_without_fabricating_volume() -> None:
+    raw = pd.DataFrame(
+        {
+            "Date": ["2026-09-11"],
+            "Adj Close": [32.96],
+            "symbol": ["THB=X"],
+            "source": ["yfinance"],
+        }
+    )
+
+    result = clean_market_data(raw)
+
+    assert result["symbol"].tolist() == ["THB=X"]
+    assert result["adjusted_close"].tolist() == [32.96]
+    assert pd.isna(result.iloc[0]["volume"])

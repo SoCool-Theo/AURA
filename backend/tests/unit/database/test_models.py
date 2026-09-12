@@ -1,8 +1,10 @@
+from datetime import date
 from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     DateTime,
     Numeric,
     Text,
@@ -70,12 +72,20 @@ def test_required_model_columns_are_not_nullable() -> None:
         "id",
         "portfolio_id",
         "symbol",
-        "weight",
         "position",
         "created_at",
         "updated_at",
     ):
         assert Holding.__table__.c[column_name].nullable is False
+
+    for column_name in (
+        "invested_amount",
+        "invested_currency",
+        "shares",
+        "purchase_date",
+        "weight",
+    ):
+        assert Holding.__table__.c[column_name].nullable is True
 
 
 def test_user_credentials_are_nullable_text_and_support_legacy_construction(
@@ -171,16 +181,48 @@ def test_relationships_link_owned_objects_without_database_access() -> None:
     assert holding.symbol == "AAPL"
 
 
-def test_holding_uses_exact_weight_and_integer_position_types() -> None:
+def test_holding_uses_approved_real_position_and_legacy_weight_types() -> None:
     weight_type = Holding.__table__.c.weight.type
+    invested_amount_type = Holding.__table__.c.invested_amount.type
+    shares_type = Holding.__table__.c.shares.type
 
     assert isinstance(weight_type, Numeric)
     assert weight_type.precision == 20
     assert weight_type.scale == 18
+    assert isinstance(invested_amount_type, Numeric)
+    assert invested_amount_type.precision == 28
+    assert invested_amount_type.scale == 12
+    assert isinstance(Holding.__table__.c.invested_currency.type, Text)
+    assert isinstance(shares_type, Numeric)
+    assert shares_type.precision == 28
+    assert shares_type.scale == 12
+    assert isinstance(Holding.__table__.c.purchase_date.type, Date)
     assert Holding.__table__.c.position.type.python_type is int
 
 
-def test_holding_check_constraints_cover_only_row_level_bounds() -> None:
+def test_holding_supports_complete_legacy_and_real_construction() -> None:
+    legacy = Holding(
+        symbol="AAPL",
+        weight=Decimal("1.000000000000000000"),
+        position=0,
+    )
+    real = Holding(
+        symbol="BTC-USD",
+        invested_amount=Decimal("1000.000000000000"),
+        invested_currency="USD",
+        shares=Decimal("0.010000000000"),
+        purchase_date=date(2026, 1, 2),
+        position=1,
+    )
+
+    assert legacy.invested_amount is None
+    assert legacy.invested_currency is None
+    assert legacy.shares is None
+    assert legacy.purchase_date is None
+    assert real.weight is None
+
+
+def test_holding_check_constraints_cover_approved_row_contract() -> None:
     checks = {
         constraint.name: str(constraint.sqltext)
         for constraint in Holding.__table__.constraints
@@ -189,6 +231,22 @@ def test_holding_check_constraints_cover_only_row_level_bounds() -> None:
 
     assert checks == {
         "ck_holdings_weight_range": "weight >= 0 AND weight <= 1",
+        "ck_holdings_invested_amount_positive": (
+            "invested_amount IS NULL OR invested_amount > 0"
+        ),
+        "ck_holdings_shares_positive": "shares IS NULL OR shares > 0",
+        "ck_holdings_invested_currency": (
+            "invested_currency IS NULL OR "
+            "invested_currency IN ('USD', 'THB')"
+        ),
+        "ck_holdings_complete_mode": (
+            "(weight IS NOT NULL AND invested_amount IS NULL AND "
+            "invested_currency IS NULL AND shares IS NULL AND "
+            "purchase_date IS NULL) OR "
+            "(weight IS NULL AND invested_amount IS NOT NULL AND "
+            "invested_currency IS NOT NULL AND shares IS NOT NULL AND "
+            "purchase_date IS NOT NULL)"
+        ),
         "ck_holdings_position_non_negative": "position >= 0",
     }
     assert all("sum" not in expression.lower() for expression in checks.values())
@@ -207,12 +265,20 @@ def test_holding_has_approved_composite_unique_constraints() -> None:
     }
 
 
-def test_holding_does_not_persist_deferred_financial_values() -> None:
+def test_holding_persists_inputs_but_not_derived_financial_values() -> None:
     column_names = set(Holding.__table__.c.keys())
 
-    assert "shares" not in column_names
-    assert "invested_amount" not in column_names
+    assert "shares" in column_names
+    assert "invested_amount" in column_names
+    assert "invested_currency" in column_names
+    assert "purchase_date" in column_names
     assert "amount_invested" not in column_names
+    assert "current_value" not in column_names
+    assert "current_value_usd" not in column_names
+    assert "current_value_thb" not in column_names
+    assert "current_allocation" not in column_names
+    assert "allocation" not in column_names
+    assert "latest_price" not in column_names
     assert "current_market_value" not in column_names
 
 
@@ -252,5 +318,11 @@ def test_models_compile_as_postgresql_ddl_without_connecting() -> None:
     )
     assert "TIMESTAMP WITH TIME ZONE" in ddl_by_table["users"]
     assert "NUMERIC(20, 18)" in ddl_by_table["holdings"]
+    assert ddl_by_table["holdings"].count("NUMERIC(28, 12)") == 2
+    assert "invested_currency TEXT" in ddl_by_table["holdings"]
+    assert "purchase_date DATE" in ddl_by_table["holdings"]
+    assert "CONSTRAINT ck_holdings_complete_mode CHECK" in (
+        ddl_by_table["holdings"]
+    )
     assert "ON DELETE CASCADE" in ddl_by_table["portfolios"]
     assert "ON DELETE CASCADE" in ddl_by_table["holdings"]

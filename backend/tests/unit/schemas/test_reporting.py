@@ -12,6 +12,7 @@ from backend.app.schemas.reporting import (
     PortfolioReportListResponse,
     PortfolioReportResponse,
     PortfolioReportSummary,
+    PortfolioReportV2Response,
 )
 
 
@@ -32,6 +33,56 @@ def _valid_report_data() -> dict[str, object]:
         "portfolio_id": _PORTFOLIO_ID,
         "created_at": "2026-08-18T17:30:00+07:00",
         "analysis": _valid_analysis_data(),
+    }
+
+
+def _valid_v2_report_data() -> dict[str, object]:
+    analysis = _valid_analysis_data()
+    metrics = analysis["asset_metrics"]
+    risk_drivers = analysis["risk_drivers"]
+    assert isinstance(metrics, list)
+    assert isinstance(risk_drivers, dict)
+    risk_entries = risk_drivers["entries"]
+    assert isinstance(risk_entries, list)
+    risks_by_symbol = {entry["symbol"]: entry for entry in risk_entries}
+    holdings = []
+    for position, metric in enumerate(metrics):
+        symbol = metric["symbol"]
+        holdings.append(
+            {
+                "id": f"30000000-0000-0000-0000-{position + 1:012d}",
+                "symbol": symbol,
+                "invested_amount": "1000.000000000000",
+                "invested_currency": "USD",
+                "shares": "5.000000000000",
+                "purchase_date": "2025-01-01",
+                "position": position,
+                "asset_price": "200.000000000000",
+                "asset_quote_currency": "USD",
+                "price_as_of": "2026-09-11",
+                "current_value_usd": "1000.000000000000",
+                "current_value": "1000.000000000000",
+                "current_allocation": str(metric["weight"]),
+                "asset_metrics": deepcopy(metric),
+                "risk_driver": deepcopy(risks_by_symbol[symbol]),
+            }
+        )
+    return {
+        "id": _REPORT_ID,
+        "portfolio_id": _PORTFOLIO_ID,
+        "created_at": "2026-09-12T10:00:00+00:00",
+        "schema_version": "portfolio-analysis-response-v2",
+        "analysis": analysis,
+        "valuation": {
+            "valuation_currency": "USD",
+            "requested_date": "2026-09-12",
+            "oldest_price_as_of": "2026-09-10",
+            "newest_price_as_of": "2026-09-11",
+            "total_current_value_usd": "3000.000000000000",
+            "total_current_value": "3000.000000000000",
+            "fx": None,
+        },
+        "holdings": holdings,
     }
 
 
@@ -57,6 +108,36 @@ def test_report_response_accepts_valid_persisted_report() -> None:
     assert result.created_at.utcoffset() == timedelta(hours=7)
     assert isinstance(result.analysis, PortfolioAnalysisResponse)
     assert result.analysis.max_drawdown.max_drawdown == -0.01
+
+
+def test_v2_response_accepts_strict_immutable_real_holding_report() -> None:
+    result = PortfolioReportV2Response.model_validate(_valid_v2_report_data())
+
+    assert result.schema_version == "portfolio-analysis-response-v2"
+    assert result.valuation.valuation_currency == "USD"
+    assert result.valuation.fx is None
+    assert [holding.symbol for holding in result.holdings] == [
+        "AAPL",
+        "MSFT",
+        "BND",
+    ]
+    assert result.holdings[0].asset_metrics.symbol == "AAPL"
+    assert result.holdings[0].risk_driver.rank == 1
+    json.dumps(result.model_dump(mode="json"), allow_nan=False)
+
+
+def test_v2_response_requires_fx_for_thb_and_rejects_unknown_fields() -> None:
+    missing_fx = _valid_v2_report_data()
+    valuation = missing_fx["valuation"]
+    assert isinstance(valuation, dict)
+    valuation["valuation_currency"] = "THB"
+    with pytest.raises(ValidationError, match="THB valuation requires FX"):
+        PortfolioReportV2Response.model_validate(missing_fx)
+
+    extra = _valid_v2_report_data()
+    extra["unexpected"] = True
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        PortfolioReportV2Response.model_validate(extra)
 
 
 def test_report_summary_accepts_valid_metadata() -> None:

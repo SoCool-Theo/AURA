@@ -54,7 +54,12 @@ class AuraAgent:
                 limitations=[],
             )
 
-        portfolio = self.tools.get_portfolio_context()
+        has_explicit_saved_context = (
+            request.report_id is not None or request.simulation_id is not None
+        )
+        portfolio = self.tools.get_portfolio_context(
+            resolve_current_baseline=not has_explicit_saved_context,
+        )
         if portfolio is None:
             raise AuraAgentContextUnavailableError()
 

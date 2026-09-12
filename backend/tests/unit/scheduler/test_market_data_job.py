@@ -53,7 +53,7 @@ def test_success_calls_helper_once_and_logs_result(
         result = job_module.run_scheduled_market_data_update()
 
     assert result is None
-    update.assert_called_once_with()
+    update.assert_called_once_with(symbols=job_module.MARKET_UPDATE_SYMBOLS)
     assert "Scheduled market-data update starting" in caplog.text
     assert "processed_rows=2" in caplog.text
     assert "stored_rows=2" in caplog.text
@@ -104,5 +104,5 @@ def test_helper_failure_is_logged_and_original_exception_is_reraised_once(
             job_module.run_scheduled_market_data_update()
 
     assert raised.value is failure
-    update.assert_called_once_with()
+    update.assert_called_once_with(symbols=job_module.MARKET_UPDATE_SYMBOLS)
     assert "Scheduled market-data update failed" in caplog.text

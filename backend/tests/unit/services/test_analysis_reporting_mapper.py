@@ -1,6 +1,8 @@
 import json
 from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
+from decimal import Decimal
 from uuid import UUID
 
 import pytest
@@ -11,12 +13,27 @@ from backend.app.schemas.analytics import PortfolioAnalysisResponse
 from backend.app.schemas.reporting import (
     PortfolioReportResponse,
     PortfolioReportSummary,
+    PortfolioReportV2Response,
+    PortfolioReportV2Snapshot,
 )
 from backend.app.services.analysis_reporting_mapper import (
     PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION,
+    PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
     analysis_record_to_report_response,
     analysis_record_to_report_summary,
     analysis_response_to_snapshot,
+    enriched_analysis_to_v2_snapshot,
+)
+from backend.app.services.portfolio_analysis_composition import (
+    compose_portfolio_analysis,
+)
+from backend.app.services.portfolio_valuation_service import (
+    PortfolioDisplayCurrency,
+    PortfolioFxContext,
+)
+from backend.tests.unit.services.test_portfolio_analysis_composition import (
+    _analysis_response as _real_analysis_response,
+    _real_preparation,
 )
 from backend.tests.unit.schemas.test_reporting import _valid_analysis_data
 
@@ -58,6 +75,150 @@ def test_snapshot_version_constant_uses_approved_token() -> None:
     assert PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION == (
         "portfolio-analysis-response-v1"
     )
+
+
+def _valid_v2_snapshot() -> dict[str, object]:
+    enriched = compose_portfolio_analysis(
+        _real_preparation(),
+        _real_analysis_response(),
+    )
+    return enriched_analysis_to_v2_snapshot(enriched)
+
+
+def _valid_v2_report() -> PortfolioReportV2Response:
+    analysis = _analysis_record(
+        result_snapshot=_valid_v2_snapshot(),
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+        start_date=date(2022, 1, 1),
+        end_date=date(2022, 12, 31),
+    )
+    result = analysis_record_to_report_response(analysis)
+    assert isinstance(result, PortfolioReportV2Response)
+    return result
+
+
+def test_v2_snapshot_version_constant_uses_approved_token() -> None:
+    assert PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION == (
+        "portfolio-analysis-response-v2"
+    )
+
+
+def test_real_enriched_result_maps_to_complete_json_safe_v2_snapshot() -> None:
+    preparation = _real_preparation()
+    analysis = _real_analysis_response()
+    enriched = compose_portfolio_analysis(preparation, analysis)
+
+    snapshot = enriched_analysis_to_v2_snapshot(enriched)
+    validated = PortfolioReportV2Snapshot.model_validate(snapshot)
+
+    json.dumps(snapshot, allow_nan=False)
+    assert validated.schema_version == "portfolio-analysis-response-v2"
+    assert validated.analysis is not analysis
+    assert validated.analysis == analysis
+    assert validated.valuation.valuation_currency == "USD"
+    assert validated.valuation.requested_date == date(2026, 9, 12)
+    assert validated.valuation.total_current_value_usd == Decimal(
+        "10000.000000000000"
+    )
+    assert validated.valuation.fx is None
+    assert [holding.symbol for holding in validated.holdings] == [
+        "AAPL",
+        "BND",
+    ]
+    assert validated.holdings[0].asset_price == Decimal("200.000000000000")
+    assert validated.holdings[0].current_allocation == Decimal(
+        "0.600000000000"
+    )
+    assert validated.holdings[0].asset_metrics == analysis.asset_metrics[1]
+    assert validated.holdings[0].risk_driver == analysis.risk_drivers.entries[1]
+    assert validated.holdings[0].risk_driver.rank == 2
+
+
+def _valid_thb_v2_snapshot() -> dict[str, object]:
+    preparation = _real_preparation()
+    assert preparation.valuation is not None
+    thb_holdings = tuple(
+        replace(
+            holding,
+            current_value=holding.current_value_usd * Decimal("32.50"),
+        )
+        for holding in preparation.valuation.holdings
+    )
+    thb_valuation = replace(
+        preparation.valuation,
+        display_currency=PortfolioDisplayCurrency.THB,
+        total_current_value=Decimal("325000.000000000000"),
+        fx_context=PortfolioFxContext(
+            pair="USD/THB",
+            provider_symbol="THB=X",
+            rate=Decimal("32.50"),
+            as_of=date(2026, 9, 12),
+        ),
+        holdings=thb_holdings,
+    )
+    enriched = compose_portfolio_analysis(
+        replace(preparation, valuation=thb_valuation),
+        _real_analysis_response(),
+    )
+    return enriched_analysis_to_v2_snapshot(enriched)
+
+
+def test_thb_v2_snapshot_freezes_fx_usd_values_and_display_values() -> None:
+    raw_snapshot = _valid_thb_v2_snapshot()
+
+    snapshot = PortfolioReportV2Snapshot.model_validate(
+        raw_snapshot
+    )
+
+    assert snapshot.valuation.valuation_currency == "THB"
+    assert snapshot.valuation.fx is not None
+    assert snapshot.valuation.fx.rate == Decimal("32.50")
+    assert snapshot.holdings[0].current_value_usd == Decimal(
+        "6000.000000000000"
+    )
+    assert snapshot.holdings[0].current_value == Decimal(
+        "195000.00000000000000"
+    )
+    assert snapshot.holdings[0].current_allocation == Decimal(
+        "0.600000000000"
+    )
+
+
+def test_v2_record_maps_snapshot_without_revaluation_or_mutation() -> None:
+    snapshot = _valid_v2_snapshot()
+    frozen_snapshot = deepcopy(snapshot)
+    analysis = _analysis_record(
+        result_snapshot=snapshot,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+        start_date=date(2022, 1, 1),
+        end_date=date(2022, 12, 31),
+    )
+
+    result = analysis_record_to_report_response(analysis)
+
+    assert isinstance(result, PortfolioReportV2Response)
+    assert result.schema_version == "portfolio-analysis-response-v2"
+    assert result.valuation.total_current_value == Decimal(
+        "10000.000000000000"
+    )
+    assert result.holdings[0].asset_price == Decimal("200.000000000000")
+    assert result.holdings[0].current_allocation == Decimal("0.600000000000")
+    assert result.analysis == _real_analysis_response()
+    assert analysis.result_snapshot == frozen_snapshot
+
+
+def test_malformed_v2_snapshot_is_rejected_strictly() -> None:
+    snapshot = _valid_v2_snapshot()
+    snapshot["unexpected"] = "not accepted"
+    analysis = _analysis_record(
+        result_snapshot=snapshot,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+        start_date=date(2022, 1, 1),
+        end_date=date(2022, 12, 31),
+    )
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        analysis_record_to_report_response(analysis)
 
 
 def test_analysis_response_serializes_to_json_safe_snapshot_and_round_trips(
@@ -183,7 +344,7 @@ def test_supported_analysis_record_maps_to_validated_report_response() -> None:
 
 
 def test_unsupported_snapshot_version_is_rejected() -> None:
-    analysis = _analysis_record(schema_version="portfolio-analysis-response-v2")
+    analysis = _analysis_record(schema_version="portfolio-analysis-response-v3")
 
     with pytest.raises(
         ValueError,

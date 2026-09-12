@@ -33,6 +33,13 @@ from app.services.historical_scenario_service import (
     EmptyPortfolioError,
     HistoricalScenarioNotFoundError,
 )
+from app.services.market_data_service import MarketDataUnavailableError
+from app.services.portfolio_baseline_resolver import (
+    PortfolioBaselineKind,
+    PortfolioBaselineResolution,
+)
+from app.services.portfolio_valuation_service import InvalidHoldingModeError
+from app.services.simulation_execution import SimulationExecutionResult
 
 
 OWNER_ID = UUID("62a1279e-bc8d-4c89-876d-a09250b50395")
@@ -50,6 +57,53 @@ COMBINED_SIMULATION_PATH = (
     f"/api/portfolios/{PORTFOLIO_ID}/simulations/combined"
 )
 REQUEST_HEADERS: dict[str, str] = {}
+LEGACY_BASELINE = PortfolioBaselineResolution(
+    baseline_kind=PortfolioBaselineKind.LEGACY,
+    resolved_weights=(),
+    valuation=None,
+    valuation_as_of=None,
+)
+
+
+def _bridge_context_run(service: MagicMock) -> None:
+    def run_with_context(**kwargs: object) -> object:
+        forwarded = dict(kwargs)
+        forwarded.pop("valuation_date")
+        response = service.run(**forwarded)
+        if response is None:
+            return None
+        return SimulationExecutionResult(
+            response=response,
+            baseline=LEGACY_BASELINE,
+        )
+
+    service.run_with_context.side_effect = run_with_context
+
+
+def _post_case(
+    request: pytest.FixtureRequest,
+    fixture_name: str,
+) -> tuple[object, str, dict[str, object], object]:
+    if fixture_name == "api_harness":
+        return (
+            request.getfixturevalue(fixture_name),
+            SIMULATION_PATH,
+            {"scenario_id": "covid-19-shock-2020"},
+            _simulation_response(),
+        )
+    if fixture_name == "allocation_api_harness":
+        return (
+            request.getfixturevalue(fixture_name),
+            ALLOCATION_SIMULATION_PATH,
+            _allocation_request_body(),
+            _allocation_simulation_response(),
+        )
+    return (
+        request.getfixturevalue(fixture_name),
+        COMBINED_SIMULATION_PATH,
+        _combined_request_body(),
+        _combined_simulation_response(),
+    )
 
 
 @dataclass
@@ -102,6 +156,7 @@ def api_harness() -> Iterator[ApiHarness]:
     session.get.return_value = User(id=OWNER_ID)
     session_factory = MagicMock(return_value=session)
     service = MagicMock(spec=route_module.HistoricalScenarioService)
+    _bridge_context_run(service)
     history_service = MagicMock(spec=route_module.SimulationHistoryService)
 
     with (
@@ -137,6 +192,7 @@ def allocation_api_harness() -> Iterator[AllocationApiHarness]:
     session.get.return_value = User(id=OWNER_ID)
     session_factory = MagicMock(return_value=session)
     service = MagicMock(spec=route_module.AllocationSimulationService)
+    _bridge_context_run(service)
     history_service = MagicMock(spec=route_module.SimulationHistoryService)
 
     with (
@@ -172,6 +228,7 @@ def combined_api_harness() -> Iterator[CombinedApiHarness]:
     session.get.return_value = User(id=OWNER_ID)
     session_factory = MagicMock(return_value=session)
     service = MagicMock(spec=route_module.CombinedSimulationService)
+    _bridge_context_run(service)
     history_service = MagicMock(spec=route_module.SimulationHistoryService)
 
     with (
@@ -565,6 +622,7 @@ def test_authenticated_post_passes_validated_identity_portfolio_and_request(
         requested_start_date=date(2020, 2, 1),
         requested_end_date=date(2020, 4, 30),
         response=expected,
+        baseline=LEGACY_BASELINE,
     )
     assert api_harness.history_service.save.call_args.kwargs["response"] is expected
     assert expected.model_dump(mode="python") == response_before
@@ -615,6 +673,7 @@ def test_authenticated_post_accepts_new_q4_scenario_and_persists_response(
         requested_start_date=date(2018, 10, 1),
         requested_end_date=date(2018, 12, 31),
         response=expected,
+        baseline=LEGACY_BASELINE,
     )
     assert api_harness.history_service.save.call_args.kwargs["response"] is expected
     assert expected.model_dump(mode="python") == response_before
@@ -886,6 +945,7 @@ def test_authenticated_allocation_post_persists_and_preserves_response(
         requested_start_date=date(2020, 2, 1),
         requested_end_date=date(2020, 4, 30),
         response=expected,
+        baseline=LEGACY_BASELINE,
     )
     assert (
         allocation_api_harness.history_service.save.call_args.kwargs["response"]
@@ -1130,6 +1190,7 @@ def test_authenticated_combined_post_persists_and_preserves_response(
         requested_start_date=date(2020, 2, 1),
         requested_end_date=date(2020, 4, 30),
         response=expected,
+        baseline=LEGACY_BASELINE,
     )
     assert (
         combined_api_harness.history_service.save.call_args.kwargs["response"]
@@ -1432,3 +1493,93 @@ def test_app_import_and_public_health_keep_database_initialization_lazy() -> Non
 
     assert response.status_code == 200
     create_database_engine.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "fixture_name",
+    ["api_harness", "allocation_api_harness", "combined_api_harness"],
+)
+def test_each_post_captures_one_utc_valuation_date_at_route_boundary(
+    request: pytest.FixtureRequest,
+    fixture_name: str,
+) -> None:
+    harness, path, body, expected = _post_case(request, fixture_name)
+    harness.service.run.return_value = expected
+    harness.history_service.save.return_value = MagicMock()
+    fixed_date = date(2026, 9, 12)
+
+    with patch.object(
+        route_module,
+        "_current_utc_date",
+        return_value=fixed_date,
+    ) as current_date:
+        response = harness.client.post(
+            path,
+            headers=REQUEST_HEADERS,
+            json=body,
+        )
+
+    assert response.status_code == 200
+    current_date.assert_called_once_with()
+    assert harness.service.run_with_context.call_count == 1
+    assert (
+        harness.service.run_with_context.call_args.kwargs["valuation_date"]
+        == fixed_date
+    )
+    harness.history_service.save.assert_called_once()
+    harness.session.commit.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "fixture_name",
+    ["api_harness", "allocation_api_harness", "combined_api_harness"],
+)
+def test_real_incompatible_holding_state_maps_to_private_conflict_without_save(
+    request: pytest.FixtureRequest,
+    fixture_name: str,
+) -> None:
+    harness, path, body, _ = _post_case(request, fixture_name)
+    harness.service.run.side_effect = InvalidHoldingModeError(
+        "sensitive mixed holding details"
+    )
+
+    response = harness.client.post(path, headers=REQUEST_HEADERS, json=body)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Portfolio cannot be simulated in its current holding state"
+    }
+    assert "sensitive mixed holding details" not in response.text
+    harness.history_service.save.assert_not_called()
+    harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "fixture_name",
+    ["api_harness", "allocation_api_harness", "combined_api_harness"],
+)
+@pytest.mark.parametrize(
+    "internal_detail",
+    [
+        "sensitive missing current asset price details",
+        "sensitive stale current asset price details",
+    ],
+    ids=["missing", "stale"],
+)
+def test_current_asset_price_failure_maps_to_503_without_history_or_commit(
+    request: pytest.FixtureRequest,
+    fixture_name: str,
+    internal_detail: str,
+) -> None:
+    harness, path, body, _ = _post_case(request, fixture_name)
+    harness.service.run.side_effect = MarketDataUnavailableError(internal_detail)
+
+    response = harness.client.post(path, headers=REQUEST_HEADERS, json=body)
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Required current market data is unavailable"
+    }
+    assert internal_detail not in response.text
+    harness.history_service.save.assert_not_called()
+    harness.session.commit.assert_not_called()

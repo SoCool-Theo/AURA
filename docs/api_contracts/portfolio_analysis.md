@@ -1,7 +1,8 @@
 # Portfolio analysis request
 
-These models define weight-based input for a future Aura analysis service. They
-do not define portfolio CRUD or persistence.
+These models define the normalized weight-based input consumed by Aura's
+existing analytics and simulation engines. They are not the public portfolio
+CRUD holding contract.
 
 ## `PortfolioHoldingInput`
 
@@ -33,5 +34,8 @@ lists, or nested holding objects.
 Canonical example:
 [`backend/examples/portfolio_request.json`](../../backend/examples/portfolio_request.json).
 
-Amount-based holdings, share quantities, ownership, database IDs, and other
-persistence fields are not part of these contracts.
+Real portfolio CRUD uses `PortfolioRealHoldingInput` through
+`PUT /api/portfolios/{portfolio_id}/holdings`. Before analytics run, the backend
+derives a real portfolio's current USD allocation and adapts it into this
+weight-based engine contract. Legacy portfolios continue to supply their saved
+weights during the temporary compatibility period.

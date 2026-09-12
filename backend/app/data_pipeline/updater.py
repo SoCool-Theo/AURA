@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from ..core.instruments import MARKET_UPDATE_SYMBOLS
 from .cleaner import clean_market_data
 from .fetcher import DEFAULT_START_DATE, DEFAULT_SYMBOLS, fetch_historical_prices
 from .providers import MarketDataProvider
@@ -66,7 +67,9 @@ def _update_market_data_with_frame(
     processed_path: Path = PROCESSED_DATA_PATH,
 ) -> tuple[MarketDataUpdateResult, pd.DataFrame]:
     """Run one update and return its summary and validated canonical rows."""
-    selected_symbols = tuple(symbols) if symbols is not None else DEFAULT_SYMBOLS
+    selected_symbols = (
+        tuple(symbols) if symbols is not None else MARKET_UPDATE_SYMBOLS
+    )
     selected_end_date = end_date if end_date is not None else date.today()
 
     raw_data = fetch_historical_prices(

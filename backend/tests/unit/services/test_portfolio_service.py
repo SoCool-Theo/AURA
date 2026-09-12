@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import UUID, uuid4
@@ -9,6 +10,23 @@ from sqlalchemy.orm import Session
 from backend.app.database.models import Holding, Portfolio
 import backend.app.services.portfolio_service as service_module
 from backend.app.services.portfolio_service import PortfolioService
+
+
+def _real_replacement(
+    symbol: str = "AAPL",
+    *,
+    invested_amount: Decimal = Decimal("1500.000000000000"),
+    invested_currency: str = "USD",
+    shares: Decimal = Decimal("10.000000000000"),
+    purchase_date: date = date(2026, 1, 10),
+) -> tuple[str, Decimal, str, Decimal, date]:
+    return (
+        symbol,
+        invested_amount,
+        invested_currency,
+        shares,
+        purchase_date,
+    )
 
 
 def _portfolio(
@@ -190,32 +208,53 @@ def test_phase3_rename_wrong_owner_returns_none_without_mutation() -> None:
     repository.rename.assert_not_called()
 
 
-def test_phase3_replace_holdings_converts_weights_and_preserves_order() -> None:
+def test_phase6_replace_holdings_preserves_real_facts_and_order() -> None:
     service, session, repository, _ = _service_with_repository()
     user_id = uuid4()
     portfolio = _portfolio(user_id)
     repository.get_with_holdings.return_value = portfolio
     caller_holdings = [
-        ("BETA", 0.2),
-        ("ALPHA", 0.5),
-        ("CASH", 0.3),
+        _real_replacement("AAPL"),
+        _real_replacement(
+            "MSFT",
+            invested_amount=Decimal("3000.000000000000"),
+            invested_currency="THB",
+            shares=Decimal("4.500000000000"),
+            purchase_date=date(2026, 2, 20),
+        ),
     ]
     original = deepcopy(caller_holdings)
 
     def replace(
         portfolio_id: UUID,
-        replacements: tuple[tuple[str, Decimal], ...],
+        replacements: tuple[
+            tuple[str, Decimal, str, Decimal, date], ...
+        ],
     ) -> list[Holding]:
         assert portfolio_id == portfolio.id
         new_holdings = [
-            Holding(symbol=symbol, weight=weight, position=position)
-            for position, (symbol, weight) in enumerate(replacements)
+            Holding(
+                symbol=symbol,
+                weight=None,
+                invested_amount=invested_amount,
+                invested_currency=invested_currency,
+                shares=shares,
+                purchase_date=purchase_date,
+                position=position,
+            )
+            for position, (
+                symbol,
+                invested_amount,
+                invested_currency,
+                shares,
+                purchase_date,
+            ) in enumerate(replacements)
         ]
         portfolio.holdings.clear()
         portfolio.holdings.extend(new_holdings)
         return new_holdings
 
-    repository.replace_holdings.side_effect = replace
+    repository.replace_real_holdings.side_effect = replace
 
     result = service.replace_holdings(
         user_id=user_id,
@@ -225,17 +264,13 @@ def test_phase3_replace_holdings_converts_weights_and_preserves_order() -> None:
 
     assert result is portfolio
     assert caller_holdings == original
-    replacements = repository.replace_holdings.call_args.args[1]
-    assert replacements == (
-        ("BETA", Decimal("0.2")),
-        ("ALPHA", Decimal("0.5")),
-        ("CASH", Decimal("0.3")),
-    )
+    replacements = repository.replace_real_holdings.call_args.args[1]
+    assert replacements == tuple(caller_holdings)
     assert [(holding.symbol, holding.position) for holding in result.holdings] == [
-        ("BETA", 0),
-        ("ALPHA", 1),
-        ("CASH", 2),
+        ("AAPL", 0),
+        ("MSFT", 1),
     ]
+    assert all(holding.weight is None for holding in result.holdings)
     _assert_session_lifecycle_untouched(session)
 
 
@@ -246,11 +281,11 @@ def test_phase3_replace_holdings_returns_none_when_missing() -> None:
     result = service.replace_holdings(
         user_id=uuid4(),
         portfolio_id=uuid4(),
-        holdings=[("AAPL", 1.0)],
+        holdings=[_real_replacement()],
     )
 
     assert result is None
-    repository.replace_holdings.assert_not_called()
+    repository.replace_real_holdings.assert_not_called()
 
 
 def test_phase3_replace_holdings_wrong_owner_never_mutates() -> None:
@@ -261,26 +296,26 @@ def test_phase3_replace_holdings_wrong_owner_never_mutates() -> None:
     result = service.replace_holdings(
         user_id=uuid4(),
         portfolio_id=portfolio.id,
-        holdings=[("AAPL", 1.0)],
+        holdings=[_real_replacement()],
     )
 
     assert result is None
-    repository.replace_holdings.assert_not_called()
+    repository.replace_real_holdings.assert_not_called()
 
 
-def test_phase3_replace_holdings_propagates_repository_value_error() -> None:
+def test_phase6_replace_holdings_propagates_repository_value_error() -> None:
     service, session, repository, _ = _service_with_repository()
     user_id = uuid4()
     portfolio = _portfolio(user_id)
     repository.get_with_holdings.return_value = portfolio
-    failure = ValueError("holding weights must sum to 1.0")
-    repository.replace_holdings.side_effect = failure
+    failure = ValueError("holding symbols must be unique")
+    repository.replace_real_holdings.side_effect = failure
 
     with pytest.raises(ValueError) as raised:
         service.replace_holdings(
             user_id=user_id,
             portfolio_id=portfolio.id,
-            holdings=[("AAPL", 0.9)],
+            holdings=[_real_replacement()],
         )
 
     assert raised.value is failure
@@ -365,6 +400,142 @@ def test_phase3_duplicate_populated_portfolio_preserves_exact_holdings() -> None
         for holding in source.holdings
     ] == source_snapshot
     repository.create.assert_called_once_with(user_id=user_id, name="Copy")
+    repository.replace_real_holdings.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_phase6_duplicate_real_portfolio_preserves_mode_facts_and_order() -> None:
+    service, session, repository, _ = _service_with_repository()
+    user_id = uuid4()
+    source = _portfolio(user_id, name="Real Source")
+    source.holdings.extend(
+        [
+            Holding(
+                id=uuid4(),
+                symbol="AAPL",
+                weight=None,
+                invested_amount=Decimal("1500.000000000000"),
+                invested_currency="USD",
+                shares=Decimal("10.000000000000"),
+                purchase_date=date(2026, 1, 10),
+                position=0,
+            ),
+            Holding(
+                id=uuid4(),
+                symbol="MSFT",
+                weight=None,
+                invested_amount=Decimal("90000.000000000000"),
+                invested_currency="THB",
+                shares=Decimal("4.500000000000"),
+                purchase_date=date(2026, 2, 20),
+                position=1,
+            ),
+        ]
+    )
+    source_snapshot = [
+        (
+            holding.id,
+            holding.symbol,
+            holding.invested_amount,
+            holding.invested_currency,
+            holding.shares,
+            holding.purchase_date,
+            holding.weight,
+            holding.position,
+        )
+        for holding in source.holdings
+    ]
+    duplicate = _portfolio(user_id, name="Real Copy")
+    repository.get_with_holdings.return_value = source
+    repository.create.return_value = duplicate
+
+    def copy_real_holdings(
+        portfolio_id: UUID,
+        replacements: tuple[
+            tuple[str, Decimal, str, Decimal, date], ...
+        ],
+    ) -> list[Holding]:
+        assert portfolio_id == duplicate.id
+        copied = [
+            Holding(
+                id=uuid4(),
+                symbol=symbol,
+                weight=None,
+                invested_amount=invested_amount,
+                invested_currency=invested_currency,
+                shares=shares,
+                purchase_date=purchase_date,
+                position=position,
+            )
+            for position, (
+                symbol,
+                invested_amount,
+                invested_currency,
+                shares,
+                purchase_date,
+            ) in enumerate(replacements)
+        ]
+        duplicate.holdings.extend(copied)
+        return copied
+
+    repository.replace_real_holdings.side_effect = copy_real_holdings
+
+    result = service.duplicate(
+        user_id=user_id,
+        portfolio_id=source.id,
+        name="Real Copy",
+    )
+
+    assert result is duplicate
+    assert result.id != source.id
+    assert [holding.id for holding in result.holdings] != [
+        holding.id for holding in source.holdings
+    ]
+    assert [
+        (
+            holding.symbol,
+            holding.invested_amount,
+            holding.invested_currency,
+            holding.shares,
+            holding.purchase_date,
+            holding.weight,
+            holding.position,
+        )
+        for holding in result.holdings
+    ] == [
+        (
+            "AAPL",
+            Decimal("1500.000000000000"),
+            "USD",
+            Decimal("10.000000000000"),
+            date(2026, 1, 10),
+            None,
+            0,
+        ),
+        (
+            "MSFT",
+            Decimal("90000.000000000000"),
+            "THB",
+            Decimal("4.500000000000"),
+            date(2026, 2, 20),
+            None,
+            1,
+        ),
+    ]
+    assert [
+        (
+            holding.id,
+            holding.symbol,
+            holding.invested_amount,
+            holding.invested_currency,
+            holding.shares,
+            holding.purchase_date,
+            holding.weight,
+            holding.position,
+        )
+        for holding in source.holdings
+    ] == source_snapshot
+    repository.replace_holdings.assert_not_called()
     _assert_session_lifecycle_untouched(session)
 
 
@@ -385,6 +556,60 @@ def test_phase3_duplicate_empty_source_skips_holding_replacement() -> None:
     assert result is duplicate
     assert result.holdings == []
     repository.replace_holdings.assert_not_called()
+    repository.replace_real_holdings.assert_not_called()
+
+
+@pytest.mark.parametrize("state", ["mixed", "incomplete-real"])
+def test_phase6_duplicate_rejects_invalid_modes_before_creating(
+    state: str,
+) -> None:
+    service, session, repository, _ = _service_with_repository()
+    user_id = uuid4()
+    source = _portfolio(user_id)
+    source.holdings.append(
+        Holding(symbol="AAPL", weight=Decimal("1"), position=0)
+    )
+    if state == "mixed":
+        source.holdings.append(
+            Holding(
+                symbol="MSFT",
+                weight=None,
+                invested_amount=Decimal("100"),
+                invested_currency="USD",
+                shares=Decimal("1"),
+                purchase_date=date(2026, 1, 10),
+                position=1,
+            )
+        )
+    else:
+        source.holdings.clear()
+        source.holdings.append(
+            Holding(
+                symbol="AAPL",
+                weight=None,
+                invested_amount=Decimal("100"),
+                invested_currency="USD",
+                shares=None,
+                purchase_date=date(2026, 1, 10),
+                position=0,
+            )
+        )
+    repository.get_with_holdings.return_value = source
+
+    with pytest.raises(
+        ValueError,
+        match="cannot duplicate mixed or incomplete holding state",
+    ):
+        service.duplicate(
+            user_id=user_id,
+            portfolio_id=source.id,
+            name="Copy",
+        )
+
+    repository.create.assert_not_called()
+    repository.replace_holdings.assert_not_called()
+    repository.replace_real_holdings.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
 
 
 def test_phase3_duplicate_missing_source_returns_none() -> None:
@@ -400,6 +625,7 @@ def test_phase3_duplicate_missing_source_returns_none() -> None:
     assert result is None
     repository.create.assert_not_called()
     repository.replace_holdings.assert_not_called()
+    repository.replace_real_holdings.assert_not_called()
 
 
 def test_phase3_duplicate_wrong_owner_returns_none_without_writes() -> None:
@@ -416,6 +642,7 @@ def test_phase3_duplicate_wrong_owner_returns_none_without_writes() -> None:
     assert result is None
     repository.create.assert_not_called()
     repository.replace_holdings.assert_not_called()
+    repository.replace_real_holdings.assert_not_called()
 
 
 def test_phase3_duplicate_copy_failure_propagates_without_transaction_calls() -> None:

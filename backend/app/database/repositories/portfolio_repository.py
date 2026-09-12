@@ -1,6 +1,7 @@
 """Caller-transaction-owned persistence operations for Aura portfolios."""
 
 from collections.abc import Sequence
+from datetime import date
 from decimal import Decimal
 from typing import TypeAlias
 from uuid import UUID
@@ -12,6 +13,13 @@ from ..models import Holding, Portfolio
 
 
 HoldingReplacement: TypeAlias = tuple[str, Decimal]
+RealHoldingReplacement: TypeAlias = tuple[
+    str,
+    Decimal,
+    str,
+    Decimal,
+    date,
+]
 
 _EXPECTED_TOTAL_WEIGHT = Decimal("1.0")
 _TOTAL_WEIGHT_TOLERANCE = Decimal("1e-9")
@@ -92,6 +100,61 @@ class PortfolioRepository:
         self._session.flush()
         return new_holdings
 
+    def replace_real_holdings(
+        self,
+        portfolio_id: UUID,
+        holdings: Sequence[RealHoldingReplacement],
+    ) -> list[Holding] | None:
+        """Replace holdings with complete real rows in caller input order."""
+        replacements = tuple(
+            (
+                symbol,
+                invested_amount,
+                invested_currency,
+                shares,
+                purchase_date,
+            )
+            for (
+                symbol,
+                invested_amount,
+                invested_currency,
+                shares,
+                purchase_date,
+            ) in holdings
+        )
+        self._validate_unique_symbols(
+            [replacement[0] for replacement in replacements]
+        )
+
+        portfolio = self.get_with_holdings(portfolio_id)
+        if portfolio is None:
+            return None
+
+        new_holdings = [
+            Holding(
+                symbol=symbol,
+                weight=None,
+                invested_amount=invested_amount,
+                invested_currency=invested_currency,
+                shares=shares,
+                purchase_date=purchase_date,
+                position=position,
+            )
+            for position, (
+                symbol,
+                invested_amount,
+                invested_currency,
+                shares,
+                purchase_date,
+            ) in enumerate(replacements)
+        ]
+
+        portfolio.holdings.clear()
+        self._session.flush()
+        portfolio.holdings.extend(new_holdings)
+        self._session.flush()
+        return new_holdings
+
     def delete(self, portfolio_id: UUID) -> bool:
         """Delete a portfolio when present without committing."""
         portfolio = self.get_by_id(portfolio_id)
@@ -118,3 +181,8 @@ class PortfolioRepository:
                 "holding weights must sum to 1.0 within an absolute "
                 "tolerance of 1e-9"
             )
+
+    @staticmethod
+    def _validate_unique_symbols(symbols: Sequence[str]) -> None:
+        if len(symbols) != len(set(symbols)):
+            raise ValueError("holding symbols must be unique")

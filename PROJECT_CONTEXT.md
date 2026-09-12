@@ -19,7 +19,7 @@ calculations into understandable explanations.
 - A portfolio risk analysis system
 - An educational system
 - A historical what-if simulator
-- An explainable AI system later
+- An explainable AI system grounded in deterministic backend results
 
 ## Aura is not
 
@@ -50,33 +50,52 @@ calculations into understandable explanations.
 5. Build historical simulator
 6. Build website
 7. Add AI agent
-8. Build mobile app later
+8. Build the mobile app and keep it aligned with the shared backend contract
 
 ## Technical Direction
 
 - Backend: FastAPI
 - Language: Python 3.13
 - Database: PostgreSQL
-- Frontend: Website first
-- Mobile app: Later
+- Frontend: React website
+- Mobile app: React Native client sharing the FastAPI backend
 - Development: Local first, cloud deployment later
 
 ## Main System Flow
 
 1. Market data is fetched and cleaned.
 2. Clean market data is validated and stored.
-3. The user creates a portfolio.
-4. Analytics calculate portfolio risk.
-5. The historical simulator tests the portfolio against past periods.
-6. Services coordinate the application workflow.
-7. The API sends results to the website.
-8. The AI agent later explains computed results in simple language.
+3. The user creates a portfolio and records ordered real holding facts.
+4. The backend values shares from fresh persisted USD market observations and
+   derives the current allocation.
+5. Analytics apply that current allocation to a user-selected historical
+   period; they do not reconstruct historical ownership from share counts.
+6. The historical simulator tests the resolved allocation against past
+   periods.
+7. Reports and simulation history persist immutable, versioned snapshots.
+8. The API sends backend-owned results to customer clients.
+9. The AI agent explains live or frozen backend context in simple language.
 
-## AI Agent Rules (Adding Later)
+## AI Agent Rules
 
 1. The AI agent must explain results produced by Aura's analytics and simulation systems.
 2. The AI agent must not invent portfolio calculations or replace the analytics engine.
 3. Calculated values must come from deterministic backend calculations.
+
+## Current Backend Capability Boundary
+
+The backend on `feat/backend-real-holdings-dynamic-allocation` supports real
+holding facts (`symbol`, `invested_amount`, `invested_currency`, `shares`, and
+`purchase_date`), backend-owned holding order, dynamic USD valuation, optional THB
+display, V2 immutable reports, V2 immutable simulation history, and compatible
+AI grounding. The migration head is `d4a6f8c2e1b7`.
+
+Weight-only legacy portfolios remain temporarily readable and operable. A
+normal holdings replacement converts a legacy portfolio to the real model.
+Customer web and mobile clients still require a later integration branch for
+real holding entry, valuation display, and V2 history rendering. A fresh
+Supabase deployment is also pending; Phase 13 does not deploy or access
+Supabase.
 
 ## Data Principle
 

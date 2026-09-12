@@ -1,13 +1,13 @@
 # Aura API contracts
 
-This directory documents Aura's current Pydantic data contracts. The branch
-defines data structures and validation rules, not HTTP endpoints.
+This directory documents Aura's current Pydantic and HTTP contracts.
 
 ## Supported contract areas
 
 - [Portfolio analysis input](portfolio_analysis.md)
 - [Prepared historical market data](market_data.md)
 - [Portfolio analytics response](analytics_response.md)
+- [Final public HTTP API, holding modes, valuation, versioning, and errors](public_api.md)
 
 Canonical JSON examples:
 
@@ -16,16 +16,15 @@ Canonical JSON examples:
 - [`backend/examples/market_data_response.json`](../../backend/examples/market_data_response.json)
 - [`backend/examples/analysis_response.json`](../../backend/examples/analysis_response.json)
 
-All models reject unknown fields. The contracts are provider-independent and
-database-independent; they do not imply that fetching, persistence, routes, or
-services exist.
+All request models reject unknown fields. Deterministic analytics contracts
+remain provider-independent; the public API now coordinates authenticated
+PostgreSQL persistence, current valuation, immutable reports and simulations,
+and grounded AI explanations.
 
-## Deferred work
+## Current client boundary
 
-- API routes and services
-- Production analytics adapters
-- Database contracts
-- Portfolio CRUD
-- Investment-amount and share-quantity conversion
-- Simulation contracts
-- AI-agent contracts
+- Customer web/mobile real-holding input and valuation rendering
+- Customer web/mobile V2 report and simulation-history rendering
+- Production deployment to a fresh Supabase project
+- Optional capabilities listed in the
+  [frontend/mobile integration backlog](../frontend_mobile_integration_backlog.md)
