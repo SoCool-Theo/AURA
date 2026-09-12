@@ -1,5 +1,5 @@
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 import json
 from unittest.mock import MagicMock, patch
@@ -14,18 +14,36 @@ from backend.app.agents.tools import (
     _reduce_time_series,
 )
 from backend.app.database.models import Holding, Portfolio
-from backend.app.schemas.reporting import PortfolioReportListResponse, PortfolioReportResponse
+from backend.app.schemas.reporting import (
+    PortfolioReportListResponse,
+    PortfolioReportResponse,
+    PortfolioReportV2Response,
+)
 from backend.app.schemas.simulation_history import (
+    SimulationBaselineHolding,
+    SimulationBaselineValuationContext,
     SimulationHistoryDetailResponse,
     SimulationHistoryListResponse,
+    SimulationHistoryV2DetailResponse,
 )
 from backend.app.services.analysis_reporting_service import ReportNotFoundError
+from backend.app.services.market_data_service import MarketDataUnavailableError
+from backend.app.services.portfolio_valuation_service import (
+    PortfolioDisplayCurrency,
+    PortfolioValuationService,
+)
 from backend.app.services.simulation_history_service import SimulationNotFoundError
 import backend.app.agents.tools as tools_module
-from backend.tests.unit.schemas.test_reporting import _valid_report_data
+from backend.tests.unit.schemas.test_reporting import (
+    _valid_report_data,
+    _valid_v2_report_data,
+)
 from backend.tests.unit.schemas.test_simulation_history import (
     _response_for_type,
     _summary_payload,
+)
+from backend.tests.unit.services.test_portfolio_analysis_preparation_service import (
+    _valuation_result,
 )
 
 
@@ -33,6 +51,7 @@ _USER_ID = UUID("30000000-0000-0000-0000-000000000001")
 _PORTFOLIO_ID = UUID("20000000-0000-0000-0000-000000000001")
 _REPORT_ID = UUID("10000000-0000-0000-0000-000000000001")
 _SIMULATION_ID = UUID("40000000-0000-0000-0000-000000000001")
+_VALUATION_DATE = date(2026, 9, 12)
 
 
 def _portfolio() -> Portfolio:
@@ -53,6 +72,41 @@ def _portfolio() -> Portfolio:
                 portfolio_id=_PORTFOLIO_ID,
                 symbol="AAPL",
                 weight=Decimal("1.0"),
+                position=1,
+            ),
+        ]
+    )
+    return portfolio
+
+
+def _real_portfolio() -> Portfolio:
+    portfolio = Portfolio(
+        id=_PORTFOLIO_ID,
+        user_id=_USER_ID,
+        name="Real Holdings",
+    )
+    portfolio.holdings.extend(
+        [
+            Holding(
+                id=UUID("53000000-0000-0000-0000-000000000001"),
+                portfolio_id=_PORTFOLIO_ID,
+                symbol="AAPL",
+                weight=None,
+                invested_amount=Decimal("999999.000000000000"),
+                invested_currency="THB",
+                shares=Decimal("1.000000000000"),
+                purchase_date=date(2026, 1, 1),
+                position=0,
+            ),
+            Holding(
+                id=UUID("53000000-0000-0000-0000-000000000002"),
+                portfolio_id=_PORTFOLIO_ID,
+                symbol="BND",
+                weight=None,
+                invested_amount=Decimal("999999.000000000000"),
+                invested_currency="USD",
+                shares=Decimal("1.000000000000"),
+                purchase_date=date(2026, 1, 2),
                 position=1,
             ),
         ]
@@ -91,6 +145,58 @@ def _simulation_detail(simulation_type: str) -> SimulationHistoryDetailResponse:
     return SimulationHistoryDetailResponse.model_validate(payload)
 
 
+def _v2_simulation_detail() -> SimulationHistoryV2DetailResponse:
+    payload = _summary_payload(
+        "allocation",
+        simulation_id=str(_SIMULATION_ID),
+    )
+    payload["portfolio_id"] = str(_PORTFOLIO_ID)
+    result = _response_for_type("allocation").model_dump(mode="json")
+    result["portfolio_id"] = str(_PORTFOLIO_ID)
+    return SimulationHistoryV2DetailResponse(
+        **payload,
+        schema_version="allocation-simulation-response-v2",
+        result=result,
+        baseline=SimulationBaselineValuationContext(
+            valuation_currency="USD",
+            valuation_date=_VALUATION_DATE,
+            oldest_price_as_of=_VALUATION_DATE,
+            newest_price_as_of=_VALUATION_DATE,
+            total_current_value_usd="100",
+            holdings=[
+                SimulationBaselineHolding(
+                    id=UUID("53000000-0000-0000-0000-000000000001"),
+                    symbol="AAPL",
+                    invested_amount="999999",
+                    invested_currency="THB",
+                    shares="1",
+                    purchase_date=date(2026, 1, 1),
+                    position=0,
+                    asset_price="100",
+                    asset_quote_currency="USD",
+                    price_as_of=_VALUATION_DATE,
+                    current_value_usd="60",
+                    current_allocation="0.6",
+                ),
+                SimulationBaselineHolding(
+                    id=UUID("53000000-0000-0000-0000-000000000002"),
+                    symbol="BND",
+                    invested_amount="999999",
+                    invested_currency="USD",
+                    shares="1",
+                    purchase_date=date(2026, 1, 2),
+                    position=1,
+                    asset_price="100",
+                    asset_quote_currency="USD",
+                    price_as_of=_VALUATION_DATE,
+                    current_value_usd="40",
+                    current_allocation="0.4",
+                ),
+            ],
+        ),
+    )
+
+
 def _tools_with_services() -> tuple[
     AuraAgentTools,
     MagicMock,
@@ -123,7 +229,11 @@ def _tools_with_services() -> tuple[
             session,
             user_id=_USER_ID,
             portfolio_id=_PORTFOLIO_ID,
+            valuation_date=_VALUATION_DATE,
         )
+    valuation_service = MagicMock(spec=PortfolioValuationService)
+    tools._baseline_resolver._valuation_service = valuation_service
+    tools._test_valuation_service = valuation_service
     return tools, session, portfolio_service, reporting_service, simulation_service
 
 
@@ -131,6 +241,7 @@ def _assert_session_lifecycle_untouched(session: MagicMock) -> None:
     session.commit.assert_not_called()
     session.rollback.assert_not_called()
     session.close.assert_not_called()
+    session.flush.assert_not_called()
 
 
 def test_portfolio_context_uses_bound_identity_and_projects_ordered_holdings() -> None:
@@ -154,7 +265,105 @@ def test_portfolio_context_uses_bound_identity_and_projects_ordered_holdings() -
     }
     assert context is not portfolio
     assert all(not isinstance(value, Holding) for value in context["holdings"])
+    tools._test_valuation_service.value.assert_not_called()
     json.dumps(context)
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_real_portfolio_context_uses_one_authoritative_usd_valuation() -> None:
+    tools, session, portfolio_service, _, _ = _tools_with_services()
+    portfolio = _real_portfolio()
+    valuation = _valuation_result()
+    portfolio_service.get.return_value = portfolio
+    tools._test_valuation_service.value.return_value = valuation
+
+    context = tools.get_portfolio_context()
+
+    tools._test_valuation_service.value.assert_called_once_with(
+        tuple(portfolio.holdings),
+        requested_date=_VALUATION_DATE,
+        display_currency=PortfolioDisplayCurrency.USD,
+    )
+    assert context == {
+        "id": str(_PORTFOLIO_ID),
+        "name": "Real Holdings",
+        "valuation": {
+            "valuation_currency": "USD",
+            "valuation_date": "2026-09-12",
+            "oldest_price_as_of": "2026-09-12",
+            "newest_price_as_of": "2026-09-12",
+            "total_current_value_usd": "100",
+        },
+        "holdings": [
+            {
+                "symbol": "AAPL",
+                "weight": 0.6,
+                "invested_amount": "999999.000000000000",
+                "invested_currency": "THB",
+                "shares": "1.000000000000",
+                "purchase_date": "2026-01-01",
+                "position": 0,
+                "asset_price": "100.000000000000",
+                "asset_quote_currency": "USD",
+                "price_as_of": "2026-09-12",
+                "current_value_usd": "60.00000000000000000000000000",
+                "current_allocation": "0.6000000000000000000000000000",
+            },
+            {
+                "symbol": "BND",
+                "weight": 0.4,
+                "invested_amount": "999999.000000000000",
+                "invested_currency": "USD",
+                "shares": "1.000000000000",
+                "purchase_date": "2026-01-02",
+                "position": 1,
+                "asset_price": "100.000000000000",
+                "asset_quote_currency": "USD",
+                "price_as_of": "2026-09-12",
+                "current_value_usd": "40.00000000000000000000000000",
+                "current_allocation": "0.4000000000000000000000000000",
+            },
+        ],
+    }
+    assert valuation.fx_context is None
+    assert "fx" not in context["valuation"]
+    assert all("id" not in holding for holding in context["holdings"])
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_saved_context_preserves_legacy_weights_without_current_data() -> None:
+    tools, session, portfolio_service, _, _ = _tools_with_services()
+    portfolio_service.get.return_value = _portfolio()
+
+    context = tools.get_portfolio_context(resolve_current_baseline=False)
+
+    assert context == {
+        "id": str(_PORTFOLIO_ID),
+        "name": "Learning Portfolio",
+        "holdings": [
+            {"symbol": "BND", "weight": 0.0},
+            {"symbol": "AAPL", "weight": 1.0},
+        ],
+    }
+    tools._test_valuation_service.value.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_saved_context_uses_real_portfolio_identity_without_current_data() -> None:
+    tools, session, portfolio_service, _, _ = _tools_with_services()
+    portfolio_service.get.return_value = _real_portfolio()
+    tools._test_valuation_service.value.side_effect = (
+        MarketDataUnavailableError("stale AAPL price")
+    )
+
+    context = tools.get_portfolio_context(resolve_current_baseline=False)
+
+    assert context is not None
+    assert context == {
+        "id": str(_PORTFOLIO_ID),
+        "name": "Real Holdings",
+    }
+    tools._test_valuation_service.value.assert_not_called()
     _assert_session_lifecycle_untouched(session)
 
 
@@ -251,6 +460,32 @@ def test_report_projection_preserves_authoritative_signed_and_nullable_values() 
     assert report.model_dump(mode="python") == source_before
 
 
+def test_v2_report_projection_preserves_frozen_valuation_and_holdings() -> None:
+    tools, session, _, reporting_service, _ = _tools_with_services()
+    report = PortfolioReportV2Response.model_validate(_valid_v2_report_data())
+    source_before = report.model_dump(mode="python")
+    reporting_service.get_report.return_value = report
+    tools._test_valuation_service.value.side_effect = (
+        MarketDataUnavailableError("current prices are stale")
+    )
+
+    context = tools.get_report(_REPORT_ID)
+
+    assert context is not None
+    assert context["schema_version"] == "portfolio-analysis-response-v2"
+    assert context["valuation"] == report.valuation.model_dump(mode="json")
+    assert [holding["symbol"] for holding in context["holdings"]] == [
+        "AAPL",
+        "MSFT",
+        "BND",
+    ]
+    assert context["holdings"][0]["current_value"] == "1000.000000000000"
+    assert all("id" not in holding for holding in context["holdings"])
+    tools._test_valuation_service.value.assert_not_called()
+    assert report.model_dump(mode="python") == source_before
+    _assert_session_lifecycle_untouched(session)
+
+
 def test_simulation_list_uses_bound_identity_and_preserves_newest_first_order() -> None:
     tools, session, _, _, simulation_service = _tools_with_services()
     newest = _simulation_detail("combined")
@@ -325,6 +560,35 @@ def test_simulation_projection_preserves_negative_drawdown_none_sharpe_and_delta
     assert context["result"]["comparison"] == simulation.result.comparison.model_dump(
         mode="json"
     )
+
+
+def test_v2_simulation_projection_preserves_frozen_baseline_without_ids() -> None:
+    tools, session, _, _, simulation_service = _tools_with_services()
+    simulation = _v2_simulation_detail()
+    source_before = simulation.model_dump(mode="python")
+    simulation_service.get.return_value = simulation
+    tools._test_valuation_service.value.side_effect = (
+        MarketDataUnavailableError("current prices are missing")
+    )
+
+    context = tools.get_simulation(_SIMULATION_ID)
+
+    assert context is not None
+    assert context["schema_version"] == "allocation-simulation-response-v2"
+    assert context["baseline"]["valuation_date"] == "2026-09-12"
+    assert context["baseline"]["total_current_value_usd"] == "100"
+    assert [holding["current_allocation"] for holding in context["baseline"]["holdings"]] == [
+        "0.6",
+        "0.4",
+    ]
+    assert all(
+        "id" not in holding
+        for holding in context["baseline"]["holdings"]
+    )
+    assert context["result"] == simulation.result.model_dump(mode="json")
+    tools._test_valuation_service.value.assert_not_called()
+    assert simulation.model_dump(mode="python") == source_before
+    _assert_session_lifecycle_untouched(session)
 
 
 def test_time_series_reduction_keeps_short_series_and_copies_input() -> None:

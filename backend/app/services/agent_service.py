@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -24,12 +25,14 @@ class AgentService:
         *,
         user_id: UUID,
         request: AgentExplainRequest,
+        valuation_date: date,
     ) -> AgentExplainResponse:
         """Explain one owned portfolio without managing the session lifecycle."""
         tools = AuraAgentTools(
             self._session,
             user_id=user_id,
             portfolio_id=request.portfolio_id,
+            valuation_date=valuation_date,
         )
         return AuraAgent(tools=tools, provider=self._provider).explain(request)
 

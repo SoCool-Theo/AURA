@@ -1,5 +1,6 @@
 """Authenticated, read-only Aura explanation endpoint."""
 
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -18,10 +19,21 @@ from app.core.config import settings
 from app.schemas.agent import AgentExplainRequest, AgentExplainResponse
 from app.services.agent_service import AgentService
 from app.services.analysis_reporting_service import ReportNotFoundError
+from app.services.market_data_service import MarketDataUnavailableError
+from app.services.portfolio_valuation_service import (
+    InvalidHoldingModeError,
+    InvalidPortfolioValueError,
+    UnsupportedHoldingInstrumentError,
+)
 from app.services.simulation_history_service import SimulationNotFoundError
 
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
+
+
+def _current_utc_date() -> date:
+    """Capture one current UTC calendar date per explanation request."""
+    return datetime.now(UTC).date()
 
 
 def _provider_unavailable() -> HTTPException:
@@ -63,6 +75,20 @@ def _internal_error() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Unable to explain portfolio risk",
+    )
+
+
+def _portfolio_holding_conflict() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Portfolio cannot be explained in its current holding state",
+    )
+
+
+def _current_market_data_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Required current market data is unavailable",
     )
 
 
@@ -111,6 +137,7 @@ def explain(
         return AgentService(session, provider).explain(
             user_id=current_user.id,
             request=request,
+            valuation_date=_current_utc_date(),
         )
     except AuraAgentContextUnavailableError as error:
         raise _portfolio_not_found() from error
@@ -118,6 +145,14 @@ def explain(
         raise _report_not_found() from error
     except SimulationNotFoundError as error:
         raise _simulation_not_found() from error
+    except MarketDataUnavailableError as error:
+        raise _current_market_data_unavailable() from error
+    except (
+        InvalidHoldingModeError,
+        InvalidPortfolioValueError,
+        UnsupportedHoldingInstrumentError,
+    ) as error:
+        raise _portfolio_holding_conflict() from error
     except (LLMProviderTimeoutError, LLMProviderUnavailableError) as error:
         raise _provider_unavailable() from error
     except (LLMProviderResponseError, AuraAgentOutputError) as error:
