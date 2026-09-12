@@ -212,11 +212,18 @@ def _validate_valuation_context(
             "real preparation requires valuation context"
         )
     if (
-        valuation.display_currency is not PortfolioDisplayCurrency.USD
-        or valuation.fx_context is not None
+        valuation.display_currency is PortfolioDisplayCurrency.USD
+        and valuation.fx_context is not None
     ):
         raise PortfolioAnalysisCompositionError(
-            "real analysis requires canonical USD valuation context"
+            "USD real analysis must not contain FX context"
+        )
+    if (
+        valuation.display_currency is PortfolioDisplayCurrency.THB
+        and valuation.fx_context is None
+    ):
+        raise PortfolioAnalysisCompositionError(
+            "THB real analysis requires FX context"
         )
     if preparation.valuation_as_of != valuation.requested_date:
         raise PortfolioAnalysisCompositionError(

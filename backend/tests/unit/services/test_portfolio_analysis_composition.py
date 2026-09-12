@@ -24,6 +24,7 @@ from backend.app.services.portfolio_analysis_preparation_service import (
 from backend.app.services.portfolio_valuation_service import (
     HoldingValuationResult,
     PortfolioDisplayCurrency,
+    PortfolioFxContext,
     PortfolioValuationResult,
 )
 
@@ -242,6 +243,39 @@ def _real_preparation() -> PortfolioAnalysisPreparationResult:
         valuation_as_of=VALUATION_DATE,
         analysis_request=_analysis_request(),
     )
+
+
+def test_real_thb_composition_preserves_one_coherent_valuation() -> None:
+    preparation = _real_preparation()
+    assert preparation.valuation is not None
+    thb_holdings = tuple(
+        replace(
+            holding,
+            current_value=holding.current_value_usd * Decimal("32.50"),
+        )
+        for holding in preparation.valuation.holdings
+    )
+    thb_valuation = replace(
+        preparation.valuation,
+        display_currency=PortfolioDisplayCurrency.THB,
+        total_current_value=Decimal("325000.000000000000"),
+        fx_context=PortfolioFxContext(
+            pair="USD/THB",
+            provider_symbol="THB=X",
+            rate=Decimal("32.50"),
+            as_of=VALUATION_DATE,
+        ),
+        holdings=thb_holdings,
+    )
+    thb_preparation = replace(preparation, valuation=thb_valuation)
+
+    result = compose_portfolio_analysis(thb_preparation, _analysis_response())
+
+    assert result.valuation is thb_valuation
+    assert result.holdings[0].current_value == Decimal(
+        "195000.00000000000000"
+    )
+    assert result.holdings[0].current_allocation == Decimal("0.600000000000")
 
 
 def _legacy_preparation() -> PortfolioAnalysisPreparationResult:

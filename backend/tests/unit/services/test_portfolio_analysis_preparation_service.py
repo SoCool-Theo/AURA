@@ -1,4 +1,4 @@
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -34,6 +34,7 @@ from backend.app.services.portfolio_valuation_service import (
     HoldingValuationResult,
     InvalidHoldingModeError,
     PortfolioDisplayCurrency,
+    PortfolioFxContext,
     PortfolioValuationResult,
     PortfolioValuationService,
     UnsupportedHoldingInstrumentError,
@@ -278,6 +279,61 @@ def test_real_baseline_calls_one_explicit_usd_valuation_and_keeps_context() -> N
     session.commit.assert_not_called()
     session.rollback.assert_not_called()
     session.close.assert_not_called()
+
+
+def test_real_thb_baseline_uses_one_requested_currency_valuation() -> None:
+    service, session, valuation_service = _service_with_mocked_valuation()
+    portfolio = _portfolio(
+        [
+            _real_holding(
+                "AAPL",
+                position=0,
+                shares=Decimal("2"),
+                invested_amount=Decimal("1"),
+                invested_currency="THB",
+            ),
+            _real_holding(
+                "BND",
+                position=1,
+                shares=Decimal("4"),
+                invested_amount=Decimal("999999"),
+                invested_currency="USD",
+            ),
+        ]
+    )
+    usd_valuation = _valuation_result()
+    thb_valuation = replace(
+        usd_valuation,
+        display_currency=PortfolioDisplayCurrency.THB,
+        total_current_value=Decimal("3250"),
+        fx_context=PortfolioFxContext(
+            pair="USD/THB",
+            provider_symbol="THB=X",
+            rate=Decimal("32.50"),
+            as_of=VALUATION_DATE,
+        ),
+    )
+    valuation_service.value.return_value = thb_valuation
+
+    result = service.prepare(
+        portfolio=portfolio,
+        analysis_period=_period(),
+        valuation_date=VALUATION_DATE,
+        display_currency=PortfolioDisplayCurrency.THB,
+    )
+
+    valuation_service.value.assert_called_once_with(
+        tuple(portfolio.holdings),
+        requested_date=VALUATION_DATE,
+        display_currency=PortfolioDisplayCurrency.THB,
+    )
+    assert result.valuation is thb_valuation
+    assert [weight.weight for weight in result.resolved_weights] == [
+        holding.current_allocation for holding in thb_valuation.holdings
+    ]
+    assert result.analysis_request.end_date == date(2022, 12, 31)
+    assert result.valuation_as_of == date(2026, 9, 12)
+    session.commit.assert_not_called()
 
 
 def test_real_baseline_uses_canonical_usd_without_fx_lookup() -> None:

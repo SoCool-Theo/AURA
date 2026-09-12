@@ -90,6 +90,9 @@ class PortfolioAnalysisPreparationService:
         portfolio: Portfolio,
         analysis_period: AnalysisPeriod,
         valuation_date: date,
+        display_currency: PortfolioDisplayCurrency = (
+            PortfolioDisplayCurrency.USD
+        ),
     ) -> PortfolioAnalysisPreparationResult:
         """Return a validated fixed-weight request and its source context."""
         if type(valuation_date) is not date:
@@ -113,7 +116,7 @@ class PortfolioAnalysisPreparationService:
             valuation = self._valuation_service.value(
                 holdings,
                 requested_date=valuation_date,
-                display_currency=PortfolioDisplayCurrency.USD,
+                display_currency=display_currency,
             )
             valuation_as_of = valuation.requested_date
             resolved_weights = tuple(

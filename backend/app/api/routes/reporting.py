@@ -7,12 +7,23 @@ from fastapi import APIRouter, HTTPException, Response, status
 from app.api.dependencies import CurrentUser, DatabaseSession
 from app.schemas.common import AnalysisPeriod
 from app.schemas.reporting import (
+    PortfolioReportDetailResponse,
     PortfolioReportListResponse,
-    PortfolioReportResponse,
 )
 from app.services.analysis_reporting_service import (
     AnalysisReportingService,
+    ReportAnalysisUnprocessableError,
     ReportNotFoundError,
+)
+from app.services.market_data_service import MarketDataUnavailableError
+from app.services.portfolio_analysis_composition import (
+    PortfolioAnalysisCompositionError,
+)
+from app.services.portfolio_valuation_service import (
+    InvalidHoldingModeError,
+    InvalidPortfolioValueError,
+    PortfolioDisplayCurrency,
+    UnsupportedHoldingInstrumentError,
 )
 
 
@@ -45,7 +56,7 @@ def _report_not_found() -> HTTPException:
 
 @router.post(
     "",
-    response_model=PortfolioReportResponse,
+    response_model=PortfolioReportDetailResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_report(
@@ -53,13 +64,35 @@ def create_report(
     request: AnalysisPeriod,
     session: DatabaseSession,
     current_user: CurrentUser,
-) -> PortfolioReportResponse:
+    currency: PortfolioDisplayCurrency = PortfolioDisplayCurrency.USD,
+) -> PortfolioReportDetailResponse:
     try:
         report = AnalysisReportingService(session).create_report(
             user_id=current_user.id,
             portfolio_id=portfolio_id,
             period=request,
+            display_currency=currency,
         )
+    except MarketDataUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Required market data is unavailable",
+        ) from error
+    except (
+        InvalidHoldingModeError,
+        InvalidPortfolioValueError,
+        UnsupportedHoldingInstrumentError,
+        PortfolioAnalysisCompositionError,
+    ) as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Portfolio cannot be analyzed in its current holding state",
+        ) from error
+    except ReportAnalysisUnprocessableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Historical analysis cannot process the requested period",
+        ) from error
     except Exception as error:
         raise _internal_error("Unable to create report") from error
 
@@ -98,7 +131,7 @@ def list_reports(
 
 @router.get(
     "/{report_id}",
-    response_model=PortfolioReportResponse,
+    response_model=PortfolioReportDetailResponse,
     status_code=status.HTTP_200_OK,
 )
 def get_report(
@@ -106,7 +139,7 @@ def get_report(
     report_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
-) -> PortfolioReportResponse:
+) -> PortfolioReportDetailResponse:
     try:
         report = AnalysisReportingService(session).get_report(
             user_id=current_user.id,
