@@ -183,6 +183,7 @@ test('Dashboard ignores global-history failure and stale selected-portfolio comp
     react: harness.react,
     '@react-navigation/native': { useIsFocused: () => true, useFocusEffect: fn => harness.react.useEffect(fn, [fn]) },
     '../portfolio/usePortfolios': { usePortfolios: () => state }, '../report/useReports': { useReports: () => reportState },
+    '../types/portfolio': { portfolioHoldingMode: holdings => holdings.some(item => item.weight === null) ? 'real' : holdings.length ? 'legacy' : 'empty' },
     '../api/apiClient': { ApiError: class extends Error {} }
   });
   harness.mount(useDashboard); await harness.settle();
@@ -223,6 +224,7 @@ test('login verification preserves sessions on temporary failure, clears 401, an
     await assert.rejects(() => harness.value.signIn({})); await harness.settle();
     assert.equal(harness.value.user, null);
     assert.equal(harness.value.status, kind === 'authentication' ? 'unauthenticated' : 'error');
+    assert.equal(harness.value.sessionExpired, kind === 'authentication');
     assert.equal(stored === null, kind === 'authentication');
     if (kind === 'authentication') continue;
     failure = null;
@@ -306,6 +308,211 @@ test('financial presentation preserves signs/nulls and allocation preserves save
   assert.equal(result.allocation.map(item => item.symbol).join(), 'B,A');
   assert.equal(result.allocation[0].weight, 0);
   assert.equal(result.allocation[1].weight, 1);
+});
+
+test('mobile error presentation distinguishes auth, not-found, validation, server, and network failures', () => {
+  class ApiError extends Error {
+    constructor(options) {
+      super(options.message ?? 'Request failed');
+      Object.assign(this, options);
+    }
+  }
+  const presentation = load('src/api/apiErrorPresentation.ts', {
+    './apiClient': { ApiError }
+  });
+  const classify = (options, extra) => presentation.apiErrorPresentation(
+    new ApiError(options),
+    extra
+  );
+
+  assert.deepEqual(
+    [
+      classify({ kind: 'authentication', status: 401 }).code,
+      classify({ kind: 'http', status: 404 }, { resourceName: 'Portfolio' }).code,
+      classify({ kind: 'http', status: 422, detail: [] }).code,
+      classify({ kind: 'http', status: 500 }).code,
+      classify({ kind: 'network', status: null }).code
+    ],
+    ['401', '404', '422', '500', 'NETWORK']
+  );
+  assert.equal(classify({ kind: 'http', status: 404 }).retryable, false);
+  assert.equal(classify({ kind: 'http', status: 500 }).retryable, true);
+  assert.equal(classify({ kind: 'network', status: null }).retryable, true);
+
+  const issues = presentation.apiValidationIssues(new ApiError({
+    kind: 'http',
+    status: 422,
+    detail: [
+      { loc: ['body', 'holdings', 0, 'shares'], msg: 'Must be positive' },
+      { loc: ['body', 'name'], msg: 'Required' }
+    ]
+  }));
+  assert.deepEqual(JSON.parse(JSON.stringify(issues)), [
+    { path: 'holdings.0.shares', message: 'Must be positive' },
+    { path: 'name', message: 'Required' }
+  ]);
+});
+
+test('blocking, inline, and form error surfaces are shared across mobile workflows', () => {
+  const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+  const detailScreens = [
+    'src/screens/portfolios/PortfolioDetailScreen.tsx',
+    'src/screens/reports/ReportDetailScreen.tsx',
+    'src/screens/simulations/SimulationResultScreen.tsx'
+  ].map(read).join('\n');
+  const formScreens = [
+    'src/screens/auth/LoginScreen.tsx',
+    'src/screens/auth/RegisterScreen.tsx',
+    'src/screens/portfolios/CreatePortfolioScreen.tsx',
+    'src/components/portfolio/HoldingsEditor.tsx',
+    'src/screens/analytics/PortfolioAnalysisScreen.tsx'
+  ].map(read).join('\n');
+
+  assert.match(detailScreens, /ScreenErrorState/);
+  assert.match(detailScreens, /InlineErrorCard/);
+  assert.match(formScreens, /FormErrorSummary/);
+  assert.match(formScreens, /apiValidationIssues/);
+  assert.ok(!/Alert\.alert\(['"](?:Unable|Check)/.test(formScreens));
+});
+
+test('real holding contracts preserve precision, order, modes, and valuation allocations', () => {
+  const validation = load('src/portfolio/portfolioValidation.ts');
+  const portfolioTypes = load('src/types/portfolio.ts');
+  const simulation = load('src/simulation/simulationValidation.ts');
+
+  const result = validation.validateRealHoldingDrafts([
+    {
+      id: 'first', symbol: ' msft ', investedAmount: '1500.250000000000',
+      investedCurrency: 'THB', shares: '10.125', purchaseDate: '2026-01-10'
+    },
+    {
+      id: 'second', symbol: 'AAPL', investedAmount: '900',
+      investedCurrency: 'USD', shares: '4.5', purchaseDate: '2025-12-01'
+    }
+  ]);
+  assert.equal(result.error, null);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.holdings)), [
+    {
+      symbol: 'MSFT', invested_amount: '1500.250000000000',
+      invested_currency: 'THB', shares: '10.125', purchase_date: '2026-01-10'
+    },
+    {
+      symbol: 'AAPL', invested_amount: '900', invested_currency: 'USD',
+      shares: '4.5', purchase_date: '2025-12-01'
+    }
+  ]);
+  assert.match(
+    validation.validateRealHoldingDrafts([
+      { id: 'a', symbol: 'AAPL', investedAmount: '0', investedCurrency: 'USD', shares: '1', purchaseDate: '2026-01-01' }
+    ]).error,
+    /positive invested amount/i
+  );
+  assert.match(
+    validation.validateRealHoldingDrafts([
+      { id: 'a', symbol: 'AAPL', investedAmount: '1', investedCurrency: 'USD', shares: '1', purchaseDate: '9999-01-01' }
+    ]).error,
+    /not in the future/i
+  );
+
+  const legacy = { symbol: 'AAPL', weight: 1, invested_amount: null, invested_currency: null, shares: null, purchase_date: null, position: 0 };
+  const real = { symbol: 'MSFT', weight: null, invested_amount: '1', invested_currency: 'USD', shares: '1', purchase_date: '2026-01-01', position: 0 };
+  assert.equal(portfolioTypes.portfolioHoldingMode([]), 'empty');
+  assert.equal(portfolioTypes.portfolioHoldingMode([legacy]), 'legacy');
+  assert.equal(portfolioTypes.portfolioHoldingMode([real]), 'real');
+  assert.equal(portfolioTypes.portfolioHoldingMode([legacy, real]), 'mixed');
+
+  const inputs = simulation.allocationInputsFromValuation({ holdings: [
+    { symbol: 'MSFT', current_allocation: '0.625' },
+    { symbol: 'AAPL', current_allocation: '0.375' }
+  ] });
+  assert.deepEqual(JSON.parse(JSON.stringify(inputs)), { MSFT: '62.5', AAPL: '37.5' });
+});
+
+test('real holding API clients send explicit currency and real holding payloads', async () => {
+  const calls = [];
+  const request = async (path, options = {}) => {
+    calls.push({ path, options });
+    return {};
+  };
+  const { portfoliosApi } = load('src/api/portfoliosApi.ts', {
+    './apiClient': { apiRequest: request }
+  });
+  const { analyticsApi } = load('src/api/analyticsApi.ts', {
+    './apiClient': { apiRequest: request }
+  });
+  const portfolioId = 'e6518442-58cb-408f-af47fb00b555';
+  const holdings = [{
+    symbol: 'AAPL', invested_amount: '1000', invested_currency: 'USD',
+    shares: '5', purchase_date: '2026-01-01'
+  }];
+
+  await portfoliosApi.getValuation(portfolioId, 'THB');
+  await portfoliosApi.replaceRealHoldings(portfolioId, holdings);
+  await analyticsApi.analyze(
+    portfolioId,
+    { start_date: '2025-01-01', end_date: '2025-12-31' },
+    'THB'
+  );
+
+  assert.equal(calls[0].path, `/api/portfolios/${portfolioId}/valuation?currency=THB`);
+  assert.equal(calls[1].options.method, 'PUT');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(calls[1].options.body)),
+    { holdings }
+  );
+  assert.equal(calls[2].path, `/api/portfolios/${portfolioId}/reports?currency=THB`);
+  assert.equal(calls[2].options.method, 'POST');
+});
+
+test('Create Portfolio records real holdings and leaves allocation to the backend', () => {
+  const source = fs.readFileSync(
+    path.join(root, 'src/screens/portfolios/CreatePortfolioScreen.tsx'),
+    'utf8'
+  );
+
+  assert.match(source, /createPortfolioWithRealHoldings/);
+  assert.match(source, /validateRealHoldingDrafts/);
+  assert.match(source, /Invested Amount/);
+  assert.match(source, /Shares Owned/);
+  assert.match(source, /Purchase Date/);
+  assert.match(source, /Automatic allocation/);
+  assert.ok(!/Weight %|TOTAL ALLOCATION|totalPercent/.test(source));
+  assert.ok(!/current_allocation|asset_price|current_value/.test(source));
+});
+
+test('all portfolio CRUD screens use real holdings and never submit manual weights', () => {
+  const create = fs.readFileSync(path.join(root, 'src/screens/portfolios/CreatePortfolioScreen.tsx'), 'utf8');
+  const editor = fs.readFileSync(path.join(root, 'src/components/portfolio/HoldingsEditor.tsx'), 'utf8');
+  const provider = fs.readFileSync(path.join(root, 'src/portfolio/PortfolioProvider.tsx'), 'utf8');
+  const api = fs.readFileSync(path.join(root, 'src/api/portfoliosApi.ts'), 'utf8');
+
+  assert.match(editor, /replaceRealHoldings/);
+  assert.match(editor, /Convert legacy allocation/);
+  assert.match(editor, /Invested Amount/);
+  assert.match(editor, /Shares Owned/);
+  assert.match(editor, /Purchase Date/);
+  assert.ok(!/Weight %|TOTAL ALLOCATION|weightPercent/.test(`${create}\n${editor}`));
+  assert.ok(!/createPortfolioWithHoldings|replaceHoldings\s*[:=(]/.test(`${provider}\n${api}`));
+});
+
+test('valuation, report V2, and simulation V2 pages preserve backend authority', () => {
+  const detail = fs.readFileSync(path.join(root, 'src/screens/portfolios/PortfolioDetailScreen.tsx'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(root, 'src/dashboard/useDashboard.ts'), 'utf8');
+  const analysis = fs.readFileSync(path.join(root, 'src/components/analytics/AnalysisResults.tsx'), 'utf8');
+  const reportDetail = fs.readFileSync(path.join(root, 'src/screens/reports/ReportDetailScreen.tsx'), 'utf8');
+  const allocation = fs.readFileSync(path.join(root, 'src/screens/simulations/AllocationChangeScreen.tsx'), 'utf8');
+  const combined = fs.readFileSync(path.join(root, 'src/screens/simulations/CombinedSimulationScreen.tsx'), 'utf8');
+  const simulationDetail = fs.readFileSync(path.join(root, 'src/screens/simulations/SimulationResultScreen.tsx'), 'utf8');
+
+  assert.match(detail, /getPortfolioValuation/);
+  assert.match(detail, /current_allocation/);
+  assert.match(dashboard, /getPortfolioValuation/);
+  assert.match(analysis, /FROZEN VALUATION · V2/);
+  assert.match(reportDetail, /does not rerun analysis[\s\S]*fresh portfolio valuation/);
+  assert.match(allocation, /allocationInputsFromValuation/);
+  assert.match(combined, /allocationInputsFromValuation/);
+  assert.match(simulationDetail, /isSimulationHistoryV2/);
+  assert.ok(!/getPortfolioValuation/.test(`${analysis}\n${reportDetail}\n${simulationDetail}`));
 });
 
 test('AI client uses the authenticated backend contract and rejects malformed success bodies', async () => {

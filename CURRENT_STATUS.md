@@ -1352,6 +1352,33 @@ authoritative local chat history or financial calculations. Mobile verification
 passed TypeScript checking and all 11 production-authority tests; the focused
 backend AI regression passed 187 tests.
 
+## Customer Mobile Real-Holdings Integration
+
+**Status:** Priority 0 contracts, Priority 1 core screens, and the shared mobile
+error-state contract are implemented; device verification and Priority 2 remain
+
+**Source branch:** `feat/mobile-real-holdings-integration`
+
+- Mobile portfolio CRUD now records complete ordered real holding facts and no
+  longer exposes or submits manual portfolio weights.
+- Portfolio Detail and Dashboard request backend-owned USD/THB valuation and
+  keep current values separate from persisted facts and saved analysis.
+- Analysis creation supports USD/THB, while V1 reports remain readable and V2
+  reports display their immutable valuation and per-asset composition.
+- Allocation and Combined simulation editors keep hypothetical percentages but
+  initialize real portfolios from the backend-resolved current USD allocation.
+- Saved Simulation Detail supports V1 and all V2 variants, displaying the
+  frozen real-holding baseline without revaluation.
+- Mobile API failures now retain their original status through presentation:
+  expired authenticated sessions route to a visible 401 sign-in state; missing
+  detail resources use blocking 404 states; 422 responses remain inside forms
+  with field messages when the backend supplies locations; and 500/network
+  failures use distinct retryable states. Previously loaded data remains visible
+  behind inline stale-data notices when the page can still serve its purpose.
+- Mobile TypeScript checking passes, and the production-authority suite passes
+  18 tests. No dependency, backend, database, or financial-formula change was
+  made by this mobile work.
+
 ## Backend API Integration and Feature Expansion
 
 **Status:** Baseline integration completed; additional feature work in progress
