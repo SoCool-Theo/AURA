@@ -1,11 +1,14 @@
 import type { ApiCallOptions, Uuid } from '../types/api';
 import type {
   PortfolioCreateRequest,
+  PortfolioCurrency,
   PortfolioDuplicateRequest,
   PortfolioHoldingsReplaceRequest,
   PortfolioListResponse,
+  PortfolioRealHoldingInput,
   PortfolioResponse,
-  PortfolioUpdateRequest
+  PortfolioUpdateRequest,
+  PortfolioValuationResponse
 } from '../types/portfolio';
 import { apiRequest } from './apiClient';
 
@@ -35,6 +38,17 @@ export const portfoliosApi = {
     return apiRequest<PortfolioResponse>(portfolioPath(portfolioId), options);
   },
 
+  getValuation(
+    portfolioId: Uuid,
+    currency: PortfolioCurrency = 'USD',
+    options: ApiCallOptions = {}
+  ): Promise<PortfolioValuationResponse> {
+    return apiRequest<PortfolioValuationResponse>(
+      `${portfolioPath(portfolioId)}/valuation?currency=${currency}`,
+      options
+    );
+  },
+
   update(
     portfolioId: Uuid,
     request: PortfolioUpdateRequest,
@@ -46,14 +60,14 @@ export const portfoliosApi = {
     );
   },
 
-  replaceHoldings(
+  replaceRealHoldings(
     portfolioId: Uuid,
-    request: PortfolioHoldingsReplaceRequest,
+    holdings: PortfolioRealHoldingInput[],
     options: ApiCallOptions = {}
   ): Promise<PortfolioResponse> {
     return apiRequest<PortfolioResponse, PortfolioHoldingsReplaceRequest>(
       `${portfolioPath(portfolioId)}/holdings`,
-      { ...options, method: 'PUT', body: request }
+      { ...options, method: 'PUT', body: { holdings } }
     );
   },
 

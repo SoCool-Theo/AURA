@@ -1,10 +1,13 @@
 import type { PortfolioResponse } from '../types/portfolio';
-import type { PortfolioHoldingInput } from '../types/portfolio';
+import type {
+  PortfolioAllocationInput,
+  PortfolioValuationResponse
+} from '../types/portfolio';
 
 export type AllocationInputs = Record<string, string>;
 
 export type AllocationValidationResult =
-  | { allocation: PortfolioHoldingInput[]; error: null }
+  | { allocation: PortfolioAllocationInput[]; error: null }
   | { allocation: null; error: string };
 
 export function allocationInputsFromPortfolio(
@@ -12,8 +15,24 @@ export function allocationInputsFromPortfolio(
 ): AllocationInputs {
   return Object.fromEntries(portfolio.holdings.map((holding) => [
     holding.symbol,
-    String(Number((holding.weight * 100).toFixed(10)))
+    holding.weight === null
+      ? ''
+      : String(Number((holding.weight * 100).toFixed(10)))
   ]));
+}
+
+export function allocationInputsFromValuation(
+  valuation: PortfolioValuationResponse
+): AllocationInputs {
+  return Object.fromEntries(valuation.holdings.map((holding) => {
+    const allocation = Number(holding.current_allocation);
+    return [
+      holding.symbol,
+      Number.isFinite(allocation)
+        ? String(Number((allocation * 100).toFixed(10)))
+        : ''
+    ];
+  }));
 }
 
 export function validateModifiedAllocation(
@@ -36,7 +55,7 @@ export function validateModifiedAllocation(
     };
   }
 
-  const allocation: PortfolioHoldingInput[] = [];
+  const allocation: PortfolioAllocationInput[] = [];
   let totalPercent = 0;
   for (const holding of portfolio.holdings) {
     const rawValue = inputs[holding.symbol]?.trim() ?? '';
