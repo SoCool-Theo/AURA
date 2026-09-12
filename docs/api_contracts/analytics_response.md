@@ -1,9 +1,9 @@
 # Portfolio analytics response
 
-`PortfolioAnalysisResponse` is the JSON-safe destination contract for completed
-portfolio analytics. Production conversion from `PortfolioAnalyticsResult` is
-deferred, and no route or service uses this response merely because the schema
-exists.
+`PortfolioAnalysisResponse` is the JSON-safe deterministic analytics contract
+used by report creation and report snapshots. For real portfolios it is
+composed with a frozen valuation and per-asset context in Report V2; legacy
+reports retain the V1 envelope.
 
 ## Top-level fields
 

@@ -1365,6 +1365,73 @@ continuing as an active expansion stage for newly approved features. Those new
 features must be documented and verified individually before they are treated
 as completed. This ongoing expansion does not make deployment complete.
 
+## Real Holdings and Dynamic Allocation Backend
+
+**Status:** Complete and verified; final documentation/readiness phase complete
+
+**Source branch:** `feat/backend-real-holdings-dynamic-allocation`
+
+### Final capability
+
+- Real holdings persist symbol, invested amount/currency, shares, purchase
+  date, and backend-controlled order while keeping persisted weight `NULL`.
+- Weight-only legacy holdings remain temporarily compatible; normal holdings
+  replacement is the explicit legacy-to-real conversion and duplication
+  preserves mode.
+- Current valuation is canonical USD with optional THB display, persisted
+  market observations no more than four calendar days old, and dynamic current
+  allocation.
+- The 17 user assets remain distinct from the internal `THB=X` USD/THB
+  instrument included in default and scheduled market-data updates.
+- Real analysis uses current allocation against the selected historical period
+  without replaying shares or changing financial formulas.
+- Reports retain V1 and add immutable
+  `portfolio-analysis-response-v2` snapshots.
+- Historical, Allocation, and Combined simulations retain V1 and add immutable
+  V2 history with frozen current baselines.
+- AI grounding is mode/version aware for live legacy, live real, saved Report
+  V2, and saved Simulation V2 context.
+- Alembic head is `d4a6f8c2e1b7`.
+
+### Guarded PostgreSQL 18.4 verification
+
+Phase 12 used only the approved local test target at `127.0.0.1:5433`, database
+`aura_test`, role `aura`. It upgraded from `7c1e2f4a6b90` to
+`d4a6f8c2e1b7` and preserved baseline legacy rows.
+
+The guarded end-to-end flow passed real CRUD, USD and THB valuation, Report V2
+and all three Simulation V2 JSONB round-trips, immutability after current
+market-data changes, stale-data behavior, THB-failure independence, privacy,
+transaction rollback, and AI integration with a mock provider. Cleanup
+restored business and market-data counts to baseline. The test database remains
+at the final head intentionally.
+
+### Phase 13 readiness verification
+
+- Database-free unit suite: 2,255 passed
+- Database-free API suite: 253 passed
+- Service suite: 363 passed
+- Analytics suite: 820 passed
+- Retained guarded PostgreSQL end-to-end test: 1 passed
+- Python compilation, application import, health, and dependency checks:
+  passed
+- Generated OpenAPI: exactly 18 paths and 23 operations
+- Production assumption audit: no new backend defect found
+- Git whitespace/scope and Markdown local-link checks: passed
+- Tracked-change/history secret audit: no tracked secret found
+- Documentation now covers architecture, public API changes, legacy
+  compatibility, currency/instrument behavior, report/simulation versions,
+  AI grounding, transaction ownership, fresh-Supabase readiness, and the
+  frontend/mobile integration backlog.
+
+### Remaining boundaries
+
+The React and mobile clients still require a later branch to adopt real
+holding entry, current valuation, dynamic allocation, Report V2, and Simulation
+V2. Production deployment requires a fresh Supabase project and has not been run.
+Frontend/mobile production code was not changed, Supabase was not accessed,
+Docker lifecycle was untouched, and no financial formula changed.
+
 ## Known Issues and Technical Debt
 
 ### Starlette/httpx warning
@@ -1379,36 +1446,33 @@ cause test failures.
 
 ### Recommended next integration work
 
-- Merge the completed `feat/mobile-web-parity` work into `develop`, then
-  continue the newly approved feature expansion on top of the completed
-  backend/API integration baseline.
+- Review and merge `feat/backend-real-holdings-dynamic-allocation` into
+  `develop` after the final commit/push/PR workflow is explicitly authorized.
+- Follow with dedicated React and mobile integration work for the completed
+  real-holding, valuation, and V2 history contracts.
+- Deploy only afterward to a fresh Supabase project using the documented
+  fresh-project checklist.
 
 ```text
-✅ feat/backend-market-data-scheduler
+✅ feat/backend-real-holdings-dynamic-allocation
         ↓
-✅ feat/react-web-backend-integration
+React real-holding/V2 integration
         ↓
-✅ feat/backend-ai-agent
-        ├── ✅ feat/react-web-ai-integration  # completed and merged
-        └── ✅ mobile AI integration          # completed and pushed
-                    ↑
-✅ feat/mobile-web-parity                   # backend + AI mobile integration complete
-
-🚧 feat/backend-api-integration             # baseline complete; new features in progress
+Mobile real-holding/V2 integration
         ↓
-feat/backend-deployment
+Fresh Supabase deployment
 ```
 
 ### Approved follow-on development order
 
-1. Merge the completed `feat/mobile-web-parity` branch into `develop`.
-2. Continue `feat/backend-api-integration` for newly approved features while
-   preserving the completed integration baseline.
-3. Run focused and full regression verification for each added feature.
-4. `feat/backend-deployment` — planned only after the expanded feature set is
-   stable.
+1. Complete the branch commit/push/PR workflow when authorized.
+2. Update the React client to real holding CRUD, current valuation, and V2
+   report/simulation contracts.
+3. Update the mobile client to the same shared contracts.
+4. Run client and cross-feature regression verification.
+5. Provision and migrate a fresh Supabase project using the documented
+   checklist; then run deployment smoke verification.
 
-The backend AI Agent and both customer client AI integrations are complete.
-The original backend/API integration goal is also complete, while additional
-feature development is now in progress. Deployment, optional product gaps,
-and Admin integration remain incomplete.
+The backend real-holding branch is complete. Customer real-holding parity,
+fresh Supabase deployment, optional product gaps, and Admin integration remain
+incomplete.

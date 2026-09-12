@@ -47,5 +47,16 @@ Canonical examples:
 - [`backend/examples/market_data_request.json`](../../backend/examples/market_data_request.json)
 - [`backend/examples/market_data_response.json`](../../backend/examples/market_data_response.json)
 
-Live provider integration, provider-specific symbol validation, fetching,
-cleaning, and persistence are not implemented by this schema branch.
+## Runtime instrument boundary
+
+The production pipeline, PostgreSQL persistence, historical retrieval, and
+scheduled update workflow are implemented outside these transport schemas.
+Aura separates:
+
+- 17 user assets, all quoted in USD; and
+- the internal `THB=X` USD/THB instrument (THB per USD).
+
+Default and scheduled updates include the internal FX series. Explicit user
+asset selection remains the 17-symbol set, so `THB=X` must not be exposed as a
+holding choice. Current valuation accepts a required asset or FX observation
+only when it is no more than four calendar days old.
