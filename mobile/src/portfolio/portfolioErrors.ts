@@ -26,6 +26,16 @@ export function portfolioErrorMessage(
   return validationMessage(error) ?? error.message;
 }
 
+export function portfolioValuationErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.status === 409) {
+    return 'This portfolio cannot be valued until all holdings use one complete real-holding format.';
+  }
+  if (error instanceof ApiError && error.status === 503) {
+    return 'Current valuation is temporarily unavailable because required market or currency data is missing or stale.';
+  }
+  return portfolioErrorMessage(error, 'Current valuation is unavailable.');
+}
+
 export class PortfolioCreatedWithoutHoldingsError extends Error {
   readonly portfolio: PortfolioResponse;
   readonly causeValue: unknown;

@@ -19,6 +19,7 @@ export function RootNavigator() {
   const {
     status: authStatus,
     sessionError,
+    sessionFailure,
     retrySessionRestore,
     signOut
   } = useAuth();
@@ -53,13 +54,14 @@ export function RootNavigator() {
     return (
       <SessionRestoreScreen
         message={sessionError ?? 'Aura could not verify your saved session.'}
+        error={sessionFailure}
         onRetry={retrySessionRestore}
         onSignOut={signOut}
       />
     );
   }
 
-  if (authStatus === 'unauthenticated' && welcomeVisible) {
+  if (authStatus === 'unauthenticated' && welcomeVisible && !sessionExpired) {
     return (
       <WelcomeScreen
         onGetStarted={() => {

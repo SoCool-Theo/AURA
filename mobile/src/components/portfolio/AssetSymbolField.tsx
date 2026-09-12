@@ -19,12 +19,14 @@ type AssetSymbolFieldProps = Omit<
   TextInputProps,
   'onChangeText' | 'value'
 > & {
+  error?: string | null;
   onChangeText: (value: string) => void;
   value: string;
 };
 
 export function AssetSymbolField({
   editable = true,
+  error,
   onChangeText,
   placeholder = 'AAPL',
   style,
@@ -51,7 +53,7 @@ export function AssetSymbolField({
 
   return (
     <>
-      <View style={styles.field}>
+      <View style={[styles.field, error ? styles.errorField : null]}>
         <TextInput
           autoCapitalize="characters"
           autoCorrect={false}
@@ -82,6 +84,7 @@ export function AssetSymbolField({
           />
         </Pressable>
       </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       <Modal
         animationType="fade"
@@ -165,6 +168,8 @@ export function AssetSymbolField({
 
 const styles = StyleSheet.create({
   field: { position: 'relative' },
+  errorField: { borderRadius: 14, borderWidth: 1, borderColor: colors.danger },
+  errorText: { color: colors.danger, fontSize: 11, lineHeight: 16, marginTop: 4 },
   input: {
     minHeight: 48,
     borderRadius: 14,

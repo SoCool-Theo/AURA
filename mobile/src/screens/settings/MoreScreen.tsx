@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../components/ui/Card';
+import { InlineErrorCard } from '../../components/ui/ErrorState';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { usePortfolios } from '../../portfolio/usePortfolios';
 import { useReports } from '../../report/useReports';
@@ -19,15 +20,23 @@ const items = [
 ] as const;
 
 export function MoreScreen({ navigation }: { navigation: any }) {
-  const { portfolios, activePortfolioId, listStatus } = usePortfolios();
+  const {
+    portfolios,
+    activePortfolioId,
+    listStatus,
+    listError,
+    refreshPortfolios
+  } = usePortfolios();
   const {
     reports,
     historyStatus,
+    historyError,
     refreshReportHistory
   } = useReports();
   const {
     history: simulations,
     historyStatus: simulationHistoryStatus,
+    historyError: simulationHistoryError,
     refreshHistory: refreshSimulationHistory
   } = useSimulations();
 
@@ -68,8 +77,29 @@ export function MoreScreen({ navigation }: { navigation: any }) {
           </Card>
         </View>
 
-        {listStatus === 'error' || historyStatus === 'error' || simulationHistoryStatus === 'error' ? (
-          <Text style={styles.description}>Some counts could not refresh. Open Reports or Simulations to retry.</Text>
+        {listStatus === 'error' ? (
+          <InlineErrorCard
+            error={listError}
+            stale={Boolean(portfolios.length)}
+            onRetry={() => void refreshPortfolios()}
+            retryTitle="Retry portfolios"
+          />
+        ) : null}
+        {historyStatus === 'error' ? (
+          <InlineErrorCard
+            error={historyError}
+            stale={Boolean(reports.length)}
+            onRetry={() => void refreshReportHistory(portfolios)}
+            retryTitle="Retry reports"
+          />
+        ) : null}
+        {simulationHistoryStatus === 'error' ? (
+          <InlineErrorCard
+            error={simulationHistoryError}
+            stale={Boolean(simulations.length)}
+            onRetry={() => void refreshSimulationHistory(portfolios)}
+            retryTitle="Retry simulations"
+          />
         ) : null}
 
         <View style={styles.list}>
