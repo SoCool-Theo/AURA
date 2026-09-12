@@ -37,6 +37,15 @@ class PortfolioDisplayCurrency(StrEnum):
     USD = "USD"
     THB = "THB"
 
+    @classmethod
+    def _missing_(cls, value: object) -> PortfolioDisplayCurrency | None:
+        if isinstance(value, str):
+            normalized = value.strip().upper()
+            for member in cls:
+                if member.value == normalized:
+                    return member
+        return None
+
 
 class PortfolioValuationError(ValueError):
     """Base error for invalid portfolio valuation input or results."""

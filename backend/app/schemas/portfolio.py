@@ -58,7 +58,7 @@ _PositiveNumeric28Scale12 = Annotated[
 
 
 class PortfolioRealHoldingInput(AuraBaseModel):
-    """Future write contract for one aggregate real asset position."""
+    """Production write contract for one aggregate real asset position."""
 
     symbol: AssetSymbol
     invested_amount: _PositiveNumeric28Scale12
@@ -105,6 +105,16 @@ def _validate_portfolio_holdings(
         raise ValueError(
             "holding weights must sum to 1.0 within an absolute "
             "tolerance of 1e-9"
+        )
+
+
+def _validate_unique_holding_symbols(
+    holdings: list[PortfolioRealHoldingInput],
+) -> None:
+    symbols = [holding.symbol for holding in holdings]
+    if len(symbols) != len(set(symbols)):
+        raise ValueError(
+            "holding symbols must be unique after normalization"
         )
 
 
@@ -155,16 +165,16 @@ class PortfolioDuplicateRequest(_PortfolioNameRequest):
 
 
 class PortfolioHoldingsReplaceRequest(AuraBaseModel):
-    """Replace a portfolio's complete ordered allocation."""
+    """Replace a portfolio's complete ordered real holdings."""
 
     holdings: Annotated[
-        list[PortfolioHoldingInput],
+        list[PortfolioRealHoldingInput],
         Field(min_length=1),
     ]
 
     @model_validator(mode="after")
     def validate_holdings(self) -> Self:
-        _validate_portfolio_holdings(self.holdings)
+        _validate_unique_holding_symbols(self.holdings)
         return self
 
 
@@ -260,3 +270,75 @@ class PortfolioListResponse(AuraBaseModel):
     """An ordered collection of portfolio summaries."""
 
     portfolios: list[PortfolioSummaryResponse]
+
+
+_PositiveValuationDecimal = Annotated[
+    Decimal,
+    Field(gt=Decimal("0"), allow_inf_nan=False),
+]
+_AllocationDecimal = Annotated[
+    Decimal,
+    Field(ge=Decimal("0"), le=Decimal("1"), allow_inf_nan=False),
+]
+
+
+class PortfolioValuationFxResponse(AuraBaseModel):
+    """Fresh USD/THB context used by one THB portfolio valuation."""
+
+    pair: Literal["USD/THB"]
+    provider_symbol: Literal["THB=X"]
+    rate: _PositiveValuationDecimal
+    as_of: date
+
+
+class PortfolioHoldingValuationResponse(AuraBaseModel):
+    """Public current valuation of one saved real holding."""
+
+    id: UUID
+    symbol: AssetSymbol
+    invested_amount: _PositiveNumeric28Scale12
+    invested_currency: _InvestedCurrency
+    shares: _PositiveNumeric28Scale12
+    purchase_date: date
+    position: Annotated[int, Field(strict=True, ge=0)]
+    asset_price: _PositiveValuationDecimal
+    asset_quote_currency: Literal["USD"]
+    price_as_of: date
+    current_value_usd: _PositiveValuationDecimal
+    current_value: _PositiveValuationDecimal
+    current_allocation: _AllocationDecimal
+
+
+class PortfolioValuationResponse(AuraBaseModel):
+    """Public ordered on-demand valuation of one saved portfolio."""
+
+    portfolio_id: UUID
+    valuation_currency: _InvestedCurrency
+    requested_date: date
+    oldest_price_as_of: date
+    newest_price_as_of: date
+    total_current_value_usd: _PositiveValuationDecimal
+    total_current_value: _PositiveValuationDecimal
+    fx: PortfolioValuationFxResponse | None
+    holdings: Annotated[
+        list[PortfolioHoldingValuationResponse],
+        Field(min_length=1),
+    ]
+
+    @model_validator(mode="after")
+    def validate_context(self) -> Self:
+        if self.oldest_price_as_of > self.newest_price_as_of:
+            raise ValueError(
+                "oldest_price_as_of must not be after newest_price_as_of"
+            )
+        if self.newest_price_as_of > self.requested_date:
+            raise ValueError(
+                "price observation dates must not be after requested_date"
+            )
+        if self.valuation_currency == "USD" and self.fx is not None:
+            raise ValueError("USD valuation must not contain FX context")
+        if self.valuation_currency == "THB" and self.fx is None:
+            raise ValueError("THB valuation requires FX context")
+        if self.fx is not None and self.fx.as_of > self.requested_date:
+            raise ValueError("FX observation date must not be after requested_date")
+        return self
