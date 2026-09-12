@@ -107,7 +107,7 @@ def test_unknown_schema_version_is_rejected_deterministically() -> None:
     ):
         simulation_snapshot_to_response(
             simulation_type="allocation",
-            schema_version="allocation-simulation-response-v2",
+            schema_version="allocation-simulation-response-v3",
             snapshot={},
         )
 

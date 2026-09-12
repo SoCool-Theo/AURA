@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 import backend.app.services.analysis_service as analysis_module
+import backend.app.services.portfolio_baseline_resolver as baseline_module
 import backend.app.services.portfolio_analysis_preparation_service as preparation_module
 import backend.app.services.portfolio_valuation_service as valuation_module
 from backend.app.analytics import PortfolioAnalyticsResult
@@ -150,7 +151,7 @@ def _service_with_mocked_valuation() -> tuple[
     session = MagicMock(spec=Session)
     valuation_service = MagicMock(spec=PortfolioValuationService)
     with patch.object(
-        preparation_module,
+        baseline_module,
         "PortfolioValuationService",
         return_value=valuation_service,
     ):

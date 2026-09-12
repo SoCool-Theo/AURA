@@ -349,7 +349,7 @@ def test_list_preserves_repository_order_for_all_types_without_snapshots() -> No
     repository.list_for_portfolio.return_value = records
 
     with (
-        patch.object(service_module, "simulation_snapshot_to_response") as restore,
+        patch.object(service_module, "restore_simulation_snapshot") as restore,
         patch.object(
             service_module,
             "validate_simulation_snapshot_consistency",
@@ -504,7 +504,7 @@ def test_get_unowned_parent_returns_none_before_simulation_lookup(
         (
             _record(
                 "allocation",
-                schema_version="allocation-simulation-response-v2",
+                schema_version="allocation-simulation-response-v3",
             ),
             "unsupported simulation snapshot schema version",
         ),
