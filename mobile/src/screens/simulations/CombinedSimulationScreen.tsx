@@ -9,13 +9,18 @@ import { SimulationResults } from '../../components/simulations/SimulationResult
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { FormErrorSummary, InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
-import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
+import {
+  portfolioErrorMessage,
+  portfolioValuationErrorMessage
+} from '../../portfolio/portfolioErrors';
 import { simulationErrorMessage } from '../../simulation/simulationErrors';
 import type { SimulationRunResult } from '../../simulation/SimulationProvider';
 import {
   allocationInputsFromPortfolio,
+  allocationInputsFromValuation,
   allocationTotal,
   validateModifiedAllocation,
   type AllocationInputs
@@ -23,6 +28,7 @@ import {
 import { useSimulationPortfolio } from '../../simulation/useSimulationPortfolio';
 import { useSimulations } from '../../simulation/useSimulations';
 import { colors, spacing, typography } from '../../theme/theme';
+import { portfolioHoldingMode } from '../../types/portfolio';
 
 export function CombinedSimulationScreen({ route }: { route: any }) {
   const portfolioState = useSimulationPortfolio(route.params?.portfolioId);
@@ -31,6 +37,7 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
   const [weights, setWeights] = useState<AllocationInputs>({});
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  const [runFailure, setRunFailure] = useState<unknown>(null);
   const [result, setResult] = useState<SimulationRunResult | null>(null);
   const runningRef = useRef(false);
 
@@ -44,23 +51,31 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
 
   useEffect(() => {
     if (portfolioState.portfolio) {
-      setWeights(allocationInputsFromPortfolio(portfolioState.portfolio));
+      const mode = portfolioHoldingMode(portfolioState.portfolio.holdings);
+      setWeights(mode === 'real'
+        ? portfolioState.valuation
+          ? allocationInputsFromValuation(portfolioState.valuation)
+          : {}
+        : allocationInputsFromPortfolio(portfolioState.portfolio));
       setResult(null);
       setRunError(null);
+      setRunFailure(null);
     }
-  }, [portfolioState.portfolio]);
+  }, [portfolioState.portfolio, portfolioState.valuation]);
 
   async function run() {
     const portfolio = portfolioState.portfolio;
     if (runningRef.current || !portfolio || !scenarioId) return;
     const validated = validateModifiedAllocation(portfolio, weights);
     if (!validated.allocation) {
+      setRunFailure(null);
       setRunError(validated.error);
       return;
     }
     runningRef.current = true;
     setRunning(true);
     setRunError(null);
+    setRunFailure(null);
     try {
       const response = await runCombined(portfolio.id, {
         scenario_id: scenarioId,
@@ -68,6 +83,7 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
       });
       setResult({ type: 'combined', response });
     } catch (error) {
+      setRunFailure(error);
       setRunError(simulationErrorMessage(error));
     } finally {
       runningRef.current = false;
@@ -79,16 +95,23 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
     return <LoadingState message="Loading portfolios…" />;
   }
   if (portfolioState.listStatus === 'error' && !portfolioState.portfolios.length) {
-    return <SafeAreaView style={styles.safe}><Card style={styles.errorCard}>
-      <Text style={styles.error}>{portfolioErrorMessage(portfolioState.listError)}</Text>
-      <Button title="Retry portfolios" onPress={() => void portfolioState.refreshPortfolios()} />
-    </Card></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><ScreenErrorState
+      error={portfolioState.listError}
+      resourceName="Portfolio list"
+      fallbackMessage="Unable to load portfolios for simulation."
+      onRetry={() => void portfolioState.refreshPortfolios()}
+      retryTitle="Retry portfolios"
+    /></SafeAreaView>;
   }
   const portfolioFailure = portfolioState.listStatus === 'error'
-    ? portfolioErrorMessage(portfolioState.listError)
+    ? portfolioState.listError
     : portfolioState.detailStatus === 'error'
-      ? portfolioErrorMessage(portfolioState.detailError)
+      ? portfolioState.detailError
       : null;
+  const holdingMode = portfolioState.portfolio
+    ? portfolioHoldingMode(portfolioState.portfolio.holdings)
+    : 'empty';
+  const baselineReady = holdingMode !== 'real' || Boolean(portfolioState.valuation);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -103,12 +126,16 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
             <Text style={styles.section}>Portfolio</Text>
             <PortfolioSelector disabled={running} portfolios={portfolioState.portfolios} selectedId={portfolioState.selectedPortfolioId} onSelect={(id) => { if (!runningRef.current) portfolioState.choosePortfolio(id); }} />
             {portfolioState.detailStatus === 'loading' ? <Text style={styles.state}>Loading holdings…</Text> : null}
-            {portfolioFailure ? <Card style={styles.errorCard}><Text style={styles.error}>{portfolioFailure}</Text><Button title="Retry portfolio" onPress={() => void (portfolioState.listStatus === 'error' ? portfolioState.refreshPortfolios() : portfolioState.retryPortfolio())} /></Card> : null}
+            {portfolioFailure ? <InlineErrorCard error={portfolioFailure} message={portfolioErrorMessage(portfolioFailure)} stale={Boolean(portfolioState.portfolio)} onRetry={() => void (portfolioState.listStatus === 'error' ? portfolioState.refreshPortfolios() : portfolioState.retryPortfolio())} retryTitle="Retry portfolio" /> : null}
+            {portfolioState.valuationStatus === 'loading' ? <Text style={styles.state}>Loading current USD allocation from backend valuation…</Text> : null}
+            {portfolioState.valuationStatus === 'error' ? (
+              <InlineErrorCard error={portfolioState.valuationError} message={portfolioValuationErrorMessage(portfolioState.valuationError)} onRetry={() => void portfolioState.retryPortfolio()} retryTitle="Retry valuation" />
+            ) : null}
 
             <Text style={styles.section}>Scenario</Text>
             {scenarioStatus === 'loading' && !scenarios.length ? <Text style={styles.state}>Loading backend scenarios…</Text> : null}
             {scenarioStatus === 'error' ? (
-              <Card style={styles.errorCard}><Text style={styles.error}>{simulationErrorMessage(scenarioError, 'Unable to load historical scenarios.')}</Text><Button title="Retry scenarios" onPress={() => void refreshScenarios()} /></Card>
+              <InlineErrorCard error={scenarioError} message={simulationErrorMessage(scenarioError, 'Unable to load historical scenarios.')} stale={Boolean(scenarios.length)} onRetry={() => void refreshScenarios()} retryTitle="Retry scenarios" />
             ) : scenarios.length ? (
               <ScenarioSelector disabled={running} scenarios={scenarios} selectedId={scenarioId} onSelect={(id) => { if (runningRef.current) return; setScenarioId(id); setResult(null); }} />
             ) : scenarioStatus === 'ready' ? (
@@ -117,11 +144,12 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
 
             {portfolioState.portfolio && !portfolioState.portfolio.holdings.length ? (
               <Card><EmptyState title="No holdings available" description="Add holdings to this portfolio before changing its allocation." /></Card>
-            ) : portfolioState.portfolio ? (
+            ) : portfolioState.portfolio && baselineReady ? (
               <>
                 <Text style={styles.section}>Modified allocation</Text>
+                <Text style={styles.state}>{holdingMode === 'real' ? 'Initialized from the backend-resolved current USD allocation.' : 'Initialized from the saved legacy allocation.'}</Text>
                 <AllocationEditor disabled={running} portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value) => setWeights((current) => ({ ...current, [symbol]: value }))} />
-                {runError ? <Card style={styles.errorCard}><Text style={styles.error}>{runError}</Text></Card> : null}
+                {runError ? <FormErrorSummary error={runFailure} message={runError} /> : null}
                 <Button title={running ? 'Running…' : 'Run combined simulation'} onPress={() => void run()} disabled={running || !scenarioId || scenarioStatus !== 'ready'} style={{ marginTop: spacing.xl }} />
                 {result ? <SimulationResults result={result} /> : null}
               </>

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { InlineErrorCard } from '../../components/ui/ErrorState';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { SectionHeader } from '../../components/ui/SectionHeader';
@@ -50,16 +50,9 @@ export function SimulationsScreen({ navigation }: { navigation: any }) {
         <SectionHeader title="Recent simulations" action="View all" onPress={() => navigation.navigate('SimulationHistory')} />
 
         {listStatus === 'error' ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Could not refresh portfolios</Text>
-            <Text style={styles.errorText}>{portfolioErrorMessage(listError)}</Text>
-            <Button title="Retry portfolios" onPress={() => void refreshPortfolios()} />
-          </Card>
+          <InlineErrorCard error={listError} message={portfolioErrorMessage(listError)} stale={Boolean(portfolios.length)} onRetry={() => void refreshPortfolios()} retryTitle="Retry portfolios" />
         ) : historyStatus === 'error' ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Complete history unavailable</Text>
-            <Text style={styles.errorText}>{simulationErrorMessage(historyError, 'At least one portfolio history request failed. Retry from Simulation History.')}</Text>
-          </Card>
+          <InlineErrorCard error={historyError} message={simulationErrorMessage(historyError, 'At least one portfolio history request failed. Retry from Simulation History.')} stale={Boolean(history.length)} />
         ) : historyStatus === 'loading' || historyStatus === 'idle' ? (
           <Text style={styles.loading}>Loading backend history…</Text>
         ) : history.length ? (

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { usePortfolios } from '../portfolio/usePortfolios';
-import type { PortfolioResponse } from '../types/portfolio';
+import {
+  portfolioHoldingMode,
+  type PortfolioResponse,
+  type PortfolioValuationResponse
+} from '../types/portfolio';
 
 export function useSimulationPortfolio(requestedPortfolioId?: string) {
   const portfolioState = usePortfolios();
@@ -10,6 +14,7 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
     portfolios,
     listStatus,
     getPortfolio,
+    getPortfolioValuation,
     selectPortfolio
   } = portfolioState;
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(
@@ -18,6 +23,9 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
   const [detailStatus, setDetailStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [detailError, setDetailError] = useState<unknown>(null);
+  const [valuation, setValuation] = useState<PortfolioValuationResponse | null>(null);
+  const [valuationStatus, setValuationStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [valuationError, setValuationError] = useState<unknown>(null);
   const detailRequestRef = useRef(0);
 
   useEffect(() => {
@@ -57,6 +65,40 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
     };
   }, [listStatus, loadPortfolio, selectedPortfolioId]);
 
+  const selectedPortfolio = portfolio?.id === selectedPortfolioId
+    ? portfolio
+    : null;
+
+  useEffect(() => {
+    if (!selectedPortfolio) {
+      setValuation(null);
+      setValuationStatus('idle');
+      setValuationError(null);
+      return;
+    }
+    if (portfolioHoldingMode(selectedPortfolio.holdings) !== 'real') {
+      setValuation(null);
+      setValuationStatus('idle');
+      setValuationError(null);
+      return;
+    }
+
+    let current = true;
+    setValuation(null);
+    setValuationStatus('loading');
+    setValuationError(null);
+    void getPortfolioValuation(selectedPortfolio.id, 'USD').then((response) => {
+      if (!current) return;
+      setValuation(response);
+      setValuationStatus('ready');
+    }).catch((error: unknown) => {
+      if (!current) return;
+      setValuationError(error);
+      setValuationStatus('error');
+    });
+    return () => { current = false; };
+  }, [getPortfolioValuation, selectedPortfolio]);
+
   const choosePortfolio = useCallback((portfolioId: string) => {
     setSelectedPortfolioId(portfolioId);
     selectPortfolio(portfolioId);
@@ -65,9 +107,14 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
   return {
     ...portfolioState,
     selectedPortfolioId,
-    portfolio: portfolio?.id === selectedPortfolioId ? portfolio : null,
+    portfolio: selectedPortfolio,
     detailStatus,
     detailError,
+    valuation: valuation?.portfolio_id === selectedPortfolio?.id
+      ? valuation
+      : null,
+    valuationStatus,
+    valuationError,
     choosePortfolio,
     retryPortfolio: () => selectedPortfolioId
       ? loadPortfolio(selectedPortfolioId)

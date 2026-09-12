@@ -4,14 +4,17 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SimulationResults } from '../../components/simulations/SimulationResults';
-import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { simulationErrorMessage } from '../../simulation/simulationErrors';
 import { formatSimulationTimestamp } from '../../simulation/simulationFormatting';
 import type { SimulationRunResult } from '../../simulation/SimulationProvider';
 import { useSimulations } from '../../simulation/useSimulations';
-import type { SimulationHistoryDetailResponse } from '../../types/simulation';
+import {
+  isSimulationHistoryV2,
+  type SimulationHistoryDetailResponse
+} from '../../types/simulation';
 import { colors, spacing, typography } from '../../theme/theme';
 
 function toRunResult(detail: SimulationHistoryDetailResponse): SimulationRunResult {
@@ -24,7 +27,7 @@ function toRunResult(detail: SimulationHistoryDetailResponse): SimulationRunResu
   return { type: 'combined', response: detail.result };
 }
 
-export function SimulationResultScreen({ route }: { route: any }) {
+export function SimulationResultScreen({ route, navigation }: { route: any; navigation: any }) {
   const { getHistoryDetail } = useSimulations();
   const { portfolioId, simulationId } = route.params;
   const [detail, setDetail] = useState<SimulationHistoryDetailResponse | null>(null);
@@ -36,7 +39,6 @@ export function SimulationResultScreen({ route }: { route: any }) {
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
     setLoading(true);
-    setDetail(null);
     setError(null);
     try {
       const response = await getHistoryDetail(portfolioId, simulationId);
@@ -59,23 +61,26 @@ export function SimulationResultScreen({ route }: { route: any }) {
   if (error && !detail) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <View style={styles.center}>
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Simulation unavailable</Text>
-            <Text style={styles.errorText}>{simulationErrorMessage(error, 'Unable to load this simulation result.')}</Text>
-            <Button title="Retry" onPress={() => void load()} />
-          </Card>
-        </View>
+        <ScreenErrorState
+          error={error}
+          resourceName="Simulation"
+          fallbackMessage="Unable to load this simulation result."
+          onRetry={() => void load()}
+          onBack={() => navigation.goBack()}
+        />
       </SafeAreaView>
     );
   }
   if (!detail) return null;
+  const detailV2 = isSimulationHistoryV2(detail) ? detail : null;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Saved Simulation</Text>
-        <Text style={styles.subtitle}>Immutable backend history detail.</Text>
+        <Text style={styles.subtitle}>
+          Immutable backend history detail · {detailV2 ? 'V2 real baseline' : 'V1 legacy allocation'}.
+        </Text>
         <Card style={styles.metadata}>
           <Text style={styles.metaLabel}>SIMULATION ID</Text>
           <Text selectable style={styles.metaValue}>{detail.id}</Text>
@@ -84,8 +89,18 @@ export function SimulationResultScreen({ route }: { route: any }) {
           <Text style={styles.metaLabel}>CREATED</Text>
           <Text style={styles.metaValue}>{formatSimulationTimestamp(detail.created_at)}</Text>
         </Card>
-        {error ? <Text style={styles.refreshError}>Refresh failed; showing the previously loaded immutable result.</Text> : null}
-        <SimulationResults result={toRunResult(detail)} />
+        {error ? (
+          <InlineErrorCard
+            error={error}
+            message={simulationErrorMessage(error, 'Unable to refresh this simulation result.')}
+            stale
+            onRetry={() => void load()}
+          />
+        ) : null}
+        <SimulationResults
+          result={toRunResult(detail)}
+          baseline={detailV2?.baseline}
+        />
       </ScrollView>
     </SafeAreaView>
   );

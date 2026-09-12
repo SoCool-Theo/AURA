@@ -8,13 +8,18 @@ import { SimulationResults } from '../../components/simulations/SimulationResult
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { FormErrorSummary, InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
-import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
+import {
+  portfolioErrorMessage,
+  portfolioValuationErrorMessage
+} from '../../portfolio/portfolioErrors';
 import { simulationErrorMessage } from '../../simulation/simulationErrors';
 import type { SimulationRunResult } from '../../simulation/SimulationProvider';
 import {
   allocationInputsFromPortfolio,
+  allocationInputsFromValuation,
   allocationTotal,
   defaultSimulationPeriod,
   isValidIsoDate,
@@ -24,6 +29,7 @@ import {
 import { useSimulationPortfolio } from '../../simulation/useSimulationPortfolio';
 import { useSimulations } from '../../simulation/useSimulations';
 import { colors, spacing, typography } from '../../theme/theme';
+import { portfolioHoldingMode } from '../../types/portfolio';
 
 export function AllocationChangeScreen({ route }: { route: any }) {
   const portfolioState = useSimulationPortfolio(route.params?.portfolioId);
@@ -34,26 +40,35 @@ export function AllocationChangeScreen({ route }: { route: any }) {
   const [weights, setWeights] = useState<AllocationInputs>({});
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  const [runFailure, setRunFailure] = useState<unknown>(null);
   const [result, setResult] = useState<SimulationRunResult | null>(null);
   const runningRef = useRef(false);
 
   useEffect(() => {
     if (portfolioState.portfolio) {
-      setWeights(allocationInputsFromPortfolio(portfolioState.portfolio));
+      const mode = portfolioHoldingMode(portfolioState.portfolio.holdings);
+      setWeights(mode === 'real'
+        ? portfolioState.valuation
+          ? allocationInputsFromValuation(portfolioState.valuation)
+          : {}
+        : allocationInputsFromPortfolio(portfolioState.portfolio));
       setResult(null);
       setRunError(null);
+      setRunFailure(null);
     }
-  }, [portfolioState.portfolio]);
+  }, [portfolioState.portfolio, portfolioState.valuation]);
 
   async function run() {
     const portfolio = portfolioState.portfolio;
     if (runningRef.current || !portfolio) return;
     if (!isValidIsoDate(startDate) || !isValidIsoDate(endDate) || startDate > endDate) {
+      setRunFailure(null);
       setRunError('Enter a valid start and end date in YYYY-MM-DD format, with the start no later than the end.');
       return;
     }
     const validated = validateModifiedAllocation(portfolio, weights);
     if (!validated.allocation) {
+      setRunFailure(null);
       setRunError(validated.error);
       return;
     }
@@ -61,6 +76,7 @@ export function AllocationChangeScreen({ route }: { route: any }) {
     runningRef.current = true;
     setRunning(true);
     setRunError(null);
+    setRunFailure(null);
     try {
       const response = await runAllocation(portfolio.id, {
         start_date: startDate,
@@ -69,6 +85,7 @@ export function AllocationChangeScreen({ route }: { route: any }) {
       });
       setResult({ type: 'allocation', response });
     } catch (error) {
+      setRunFailure(error);
       setRunError(simulationErrorMessage(error));
     } finally {
       runningRef.current = false;
@@ -80,16 +97,23 @@ export function AllocationChangeScreen({ route }: { route: any }) {
     return <LoadingState message="Loading portfolios…" />;
   }
   if (portfolioState.listStatus === 'error' && !portfolioState.portfolios.length) {
-    return <SafeAreaView style={styles.safe}><Card style={styles.errorCard}>
-      <Text style={styles.error}>{portfolioErrorMessage(portfolioState.listError)}</Text>
-      <Button title="Retry portfolios" onPress={() => void portfolioState.refreshPortfolios()} />
-    </Card></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><ScreenErrorState
+      error={portfolioState.listError}
+      resourceName="Portfolio list"
+      fallbackMessage="Unable to load portfolios for simulation."
+      onRetry={() => void portfolioState.refreshPortfolios()}
+      retryTitle="Retry portfolios"
+    /></SafeAreaView>;
   }
   const portfolioFailure = portfolioState.listStatus === 'error'
-    ? portfolioErrorMessage(portfolioState.listError)
+    ? portfolioState.listError
     : portfolioState.detailStatus === 'error'
-      ? portfolioErrorMessage(portfolioState.detailError)
+      ? portfolioState.detailError
       : null;
+  const holdingMode = portfolioState.portfolio
+    ? portfolioHoldingMode(portfolioState.portfolio.holdings)
+    : 'empty';
+  const baselineReady = holdingMode !== 'real' || Boolean(portfolioState.valuation);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -105,11 +129,17 @@ export function AllocationChangeScreen({ route }: { route: any }) {
             <PortfolioSelector disabled={running} portfolios={portfolioState.portfolios} selectedId={portfolioState.selectedPortfolioId} onSelect={(id) => { if (!runningRef.current) portfolioState.choosePortfolio(id); }} />
             {portfolioState.detailStatus === 'loading' ? <Text style={styles.state}>Loading holdings…</Text> : null}
             {portfolioFailure ? (
-              <Card style={styles.errorCard}><Text style={styles.error}>{portfolioFailure}</Text><Button title="Retry portfolio" onPress={() => void (portfolioState.listStatus === 'error' ? portfolioState.refreshPortfolios() : portfolioState.retryPortfolio())} /></Card>
+              <InlineErrorCard error={portfolioFailure} message={portfolioErrorMessage(portfolioFailure)} stale={Boolean(portfolioState.portfolio)} onRetry={() => void (portfolioState.listStatus === 'error' ? portfolioState.refreshPortfolios() : portfolioState.retryPortfolio())} retryTitle="Retry portfolio" />
+            ) : null}
+            {portfolioState.valuationStatus === 'loading' ? (
+              <Text style={styles.state}>Loading current USD allocation from backend valuation…</Text>
+            ) : null}
+            {portfolioState.valuationStatus === 'error' ? (
+              <InlineErrorCard error={portfolioState.valuationError} message={portfolioValuationErrorMessage(portfolioState.valuationError)} onRetry={() => void portfolioState.retryPortfolio()} retryTitle="Retry valuation" />
             ) : null}
             {portfolioState.portfolio && !portfolioState.portfolio.holdings.length ? (
               <Card><EmptyState title="No holdings available" description="Add holdings to this portfolio before changing its allocation." /></Card>
-            ) : portfolioState.portfolio ? (
+            ) : portfolioState.portfolio && baselineReady ? (
               <>
                 <Text style={styles.section}>Analysis period</Text>
                 <View style={styles.dateRow}>
@@ -117,8 +147,13 @@ export function AllocationChangeScreen({ route }: { route: any }) {
                   <View style={styles.dateField}><Text style={styles.label}>END</Text><TextInput editable={!running} value={endDate} onChangeText={setEndDate} style={styles.dateInput} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} /></View>
                 </View>
                 <Text style={styles.section}>Modified allocation</Text>
+                <Text style={styles.state}>
+                  {holdingMode === 'real'
+                    ? 'Initialized from the backend-resolved current USD allocation.'
+                    : 'Initialized from the saved legacy allocation.'}
+                </Text>
                 <AllocationEditor disabled={running} portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value) => setWeights((current) => ({ ...current, [symbol]: value }))} />
-                {runError ? <Card style={styles.errorCard}><Text style={styles.error}>{runError}</Text></Card> : null}
+                {runError ? <FormErrorSummary error={runFailure} message={runError} /> : null}
                 <Button title={running ? 'Running…' : 'Compare allocation'} onPress={() => void run()} disabled={running} style={{ marginTop: spacing.xl }} />
                 {result ? <SimulationResults result={result} /> : null}
               </>

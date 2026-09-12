@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { Tag } from '../../components/ui/Tag';
@@ -46,19 +46,15 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
   }
 
   const blockingError = listStatus === 'error' && !portfolios.length
-    ? portfolioErrorMessage(listError)
+    ? listError
     : historyStatus === 'error' && !history.length
-      ? simulationErrorMessage(historyError, 'Unable to load complete simulation history.')
+      ? historyError
       : null;
 
   if (blockingError) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <View style={styles.center}><Card style={styles.errorCard}>
-          <Text style={styles.errorTitle}>Simulation history unavailable</Text>
-          <Text style={styles.errorText}>{blockingError}</Text>
-          <Button title="Retry" onPress={retry} />
-        </Card></View>
+        <ScreenErrorState error={blockingError} resourceName="Simulation history" fallbackMessage="Unable to load complete simulation history." onRetry={retry} />
       </SafeAreaView>
     );
   }
@@ -74,19 +70,11 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
         <Text style={styles.subtitle}>Immutable simulation runs stored by Aura's backend, newest first.</Text>
 
         {listStatus === 'error' && portfolios.length ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Portfolio list refresh failed</Text>
-            <Text style={styles.errorText}>History uses the previously loaded portfolio list. {portfolioErrorMessage(listError)}</Text>
-            <Button title="Retry portfolios" onPress={retry} />
-          </Card>
+          <InlineErrorCard error={listError} message={portfolioErrorMessage(listError)} stale onRetry={retry} retryTitle="Retry portfolios" />
         ) : null}
 
         {historyStatus === 'error' && history.length ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Could not refresh complete history</Text>
-            <Text style={styles.errorText}>{simulationErrorMessage(historyError, 'At least one portfolio history request failed. The prior complete list remains visible.')}</Text>
-            <Button title="Retry" onPress={retry} />
-          </Card>
+          <InlineErrorCard error={historyError} message={simulationErrorMessage(historyError, 'Unable to refresh complete simulation history.')} stale onRetry={retry} />
         ) : null}
 
         {history.length ? (
