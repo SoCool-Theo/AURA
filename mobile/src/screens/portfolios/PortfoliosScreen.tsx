@@ -11,9 +11,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { PortfolioCard } from '../../components/portfolio/PortfolioCard';
-import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { PageTitle } from '../../components/ui/PageTitle';
@@ -48,6 +48,19 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
     return <LoadingState message="Loading portfolios…" />;
   }
 
+  if (listStatus === 'error' && !portfolios.length) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScreenErrorState
+          error={listError}
+          resourceName="Portfolio list"
+          fallbackMessage="Unable to load your portfolios."
+          onRetry={() => void refreshPortfolios()}
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAwareScrollView
@@ -75,13 +88,12 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
         />
 
         {listStatus === 'error' ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Unable to load portfolios</Text>
-            <Text style={styles.errorText}>
-              {portfolioErrorMessage(listError)}
-            </Text>
-            <Button title="Retry" onPress={() => void refreshPortfolios()} />
-          </Card>
+          <InlineErrorCard
+            error={listError}
+            message={portfolioErrorMessage(listError)}
+            stale
+            onRetry={() => void refreshPortfolios()}
+          />
         ) : null}
 
         {portfolios.length ? (
@@ -101,7 +113,7 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
           <Card style={styles.emptyCard}>
             <EmptyState
               title="No portfolios yet"
-              description="Create your first portfolio and add a complete symbol-and-weight allocation."
+              description="Create your first portfolio and record the real holdings you own."
             />
           </Card>
         ) : filtered.length ? (
@@ -135,7 +147,7 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
             <View style={{ flex: 1 }}>
               <Text style={styles.ctaEyebrow}>CREATE NEW PORTFOLIO</Text>
               <Text style={styles.ctaTitle}>
-                Build an ordered allocation using symbols and percentage weights.
+                Record an ordered list of holdings and let Aura calculate allocation.
               </Text>
               <View style={styles.ctaLink}>
                 <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
