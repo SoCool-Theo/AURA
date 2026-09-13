@@ -5,7 +5,11 @@ import {
 } from '../../api/reportsApi';
 import { go } from '../../app/routes';
 import { Icon } from '../../components/ui/Icon';
-import type { PortfolioReportResponse } from '../../types/report';
+import {
+  isPortfolioReportV2,
+  isPortfolioReportV3,
+  type PortfolioReportResponse,
+} from '../../types/report';
 import { analysisErrorMessage, formatReportTimestamp } from '../analytics/analyticsUi';
 import { AnalysisResults } from '../analytics/components/AnalysisResults';
 import styles from './ReportDetailPage.module.css';
@@ -80,6 +84,12 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
     );
   }
 
+  const reportType = isPortfolioReportV3(report)
+    ? 'Planned Portfolio'
+    : isPortfolioReportV2(report)
+      ? 'Current Portfolio'
+      : 'Legacy Portfolio';
+
   return (
     <div className={`page ${styles.page}`}>
       <button className={styles.backLink} onClick={() => go('reports')}>← Reports <span>/</span> Saved Analysis</button>
@@ -88,7 +98,7 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
       )}
       <header className={styles.header}>
         <div>
-          <div className={styles.titleRow}><h1>{report.analysis.portfolio_name} Analysis</h1><span>Immutable Snapshot</span></div>
+          <div className={styles.titleRow}><h1>{report.analysis.portfolio_name} Analysis</h1><span>{reportType}</span><span>Immutable Snapshot</span></div>
           <p>Created {formatReportTimestamp(report.created_at)}<i>•</i>Report {report.id}</p>
         </div>
         <div className={styles.headerActions} aria-label="Report actions">
@@ -99,11 +109,20 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
           >
             {deleting ? 'Deleting…' : 'Delete Report'}
           </button>
-          <button className="secondary-btn" onClick={() => go(`analytics/${report.portfolio_id}`)}>Analyze Current Portfolio</button>
+          <button className="secondary-btn" onClick={() => go(`analytics/${report.portfolio_id}`)}>Run New Analysis</button>
         </div>
       </header>
 
-      <AnalysisResults analysis={report.analysis} />
+      <AnalysisResults report={report} />
+
+      <section className={`card ${styles.assistantCard}`}>
+        <div>
+          <small>NEED HELP UNDERSTANDING THE RESULTS?</small>
+          <h2>Ask Aura about this saved report</h2>
+          <p>Aura can explain this {isPortfolioReportV3(report) ? 'planned allocation' : 'portfolio'} using the exact snapshot shown above.</p>
+        </div>
+        <button className="primary-btn" onClick={() => go(`assistant/${report.portfolio_id}/${report.id}`)}><Icon name="assistant" size={17} /> Ask Aura</button>
+      </section>
     </div>
   );
 }

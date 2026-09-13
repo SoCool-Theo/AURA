@@ -28,9 +28,18 @@ function sourceLabel(source: AgentSourceReference): string {
   return source.type.charAt(0).toUpperCase() + source.type.slice(1);
 }
 
-export function AssistantPage() {
+interface AssistantPageProps {
+  portfolioId?: string;
+  reportId?: string;
+}
+
+export function AssistantPage({
+  portfolioId: requestedPortfolioId,
+  reportId,
+}: AssistantPageProps) {
   const [portfolios, setPortfolios] = useState<PortfolioSummaryResponse[]>([]);
   const [portfolioId, setPortfolioId] = useState('');
+  const [groundedReportId, setGroundedReportId] = useState<string | null>(reportId ?? null);
   const [message, setMessage] = useState('');
   const [response, setResponse] = useState<AgentExplainResponse | null>(null);
   const [loadingPortfolios, setLoadingPortfolios] = useState(true);
@@ -47,8 +56,15 @@ export function AssistantPage() {
       .then(result => {
         if (controller.signal.aborted) return;
         setPortfolios(result.portfolios);
-        setPortfolioId(current => current && result.portfolios.some(item => item.id === current)
-          ? current : result.portfolios[0]?.id ?? '');
+        const requestedExists = requestedPortfolioId
+          ? result.portfolios.some(item => item.id === requestedPortfolioId)
+          : false;
+        setPortfolioId(current => requestedExists
+          ? requestedPortfolioId ?? ''
+          : current && result.portfolios.some(item => item.id === current)
+            ? current
+            : result.portfolios[0]?.id ?? '');
+        setGroundedReportId(requestedExists && reportId ? reportId : null);
       })
       .catch(requestError => {
         if (!controller.signal.aborted) setError(assistantErrorMessage(requestError));
@@ -57,7 +73,7 @@ export function AssistantPage() {
         if (!controller.signal.aborted) setLoadingPortfolios(false);
       });
     return () => controller.abort();
-  }, [reloadKey]);
+  }, [reloadKey, reportId, requestedPortfolioId]);
 
   async function submit() {
     if (sendingRef.current) return;
@@ -75,7 +91,11 @@ export function AssistantPage() {
     setError(null);
     setResponse(null);
     try {
-      setResponse(await explainPortfolio({ portfolio_id: portfolioId, message: normalizedMessage }));
+      setResponse(await explainPortfolio({
+        portfolio_id: portfolioId,
+        message: normalizedMessage,
+        ...(groundedReportId ? { report_id: groundedReportId } : {}),
+      }));
     } catch (requestError) {
       setError(assistantErrorMessage(requestError));
     } finally {
@@ -89,7 +109,15 @@ export function AssistantPage() {
     label: loadingPortfolios ? 'Loading portfolios…' : portfolios.length ? 'Select a portfolio' : 'No portfolios available',
     description: 'Choose one of your saved portfolios', icon: 'wallet', tone: 'neutral', disabled: true,
   }, ...portfolios.map(portfolio => ({
-    value: portfolio.id, label: portfolio.name, description: 'Saved portfolio', icon: 'wallet', tone: 'teal' as const,
+    value: portfolio.id,
+    label: portfolio.name,
+    description: portfolio.portfolio_type === 'PLANNED'
+      ? 'Planned allocation'
+      : portfolio.portfolio_type === 'LEGACY'
+        ? 'Legacy allocation'
+        : 'Current holdings',
+    icon: 'wallet',
+    tone: 'teal' as const,
   }))];
 
   return <div className={`page ${styles.page}`}>
@@ -98,15 +126,15 @@ export function AssistantPage() {
       <div className={styles.safetyNote}><Icon name="shield" size={18} /><span>Educational explanations only</span></div>
     </header>
     <Card className={styles.askCard}>
-      <div className={styles.field}><span>Portfolio</span><AuraSelect ariaLabel="Select portfolio for Aura explanation" value={portfolioId} options={portfolioOptions} onChange={nextPortfolioId => { setPortfolioId(nextPortfolioId); setResponse(null); setError(null); }} disabled={loadingPortfolios || sending} /></div>
+      <div className={styles.field}><span>Portfolio</span><AuraSelect ariaLabel="Select portfolio for Aura explanation" value={portfolioId} options={portfolioOptions} onChange={nextPortfolioId => { setPortfolioId(nextPortfolioId); setGroundedReportId(null); setResponse(null); setError(null); }} disabled={loadingPortfolios || sending} /></div>
       <label className={styles.field}><span>Your question</span><textarea value={message} onChange={event => { setMessage(event.target.value); setError(null); }} placeholder="For example: What are the main risk factors in this portfolio?" maxLength={4000} disabled={sending} /></label>
-      <div className={styles.actionRow}><small>Only the selected portfolio and your question are sent for this explanation.</small><button type="button" className="primary-btn" onClick={() => void submit()} disabled={loadingPortfolios || sending || !portfolioId || !message.trim()}><Icon name="spark" size={17} /> {sending ? 'Asking Aura…' : 'Ask Aura'}</button></div>
+      <div className={styles.actionRow}><small>{groundedReportId ? 'Aura will use the selected saved report as context.' : 'Aura will use the selected portfolio as context.'}</small><button type="button" className="primary-btn" onClick={() => void submit()} disabled={loadingPortfolios || sending || !portfolioId || !message.trim()}><Icon name="spark" size={17} /> {sending ? 'Asking Aura…' : 'Ask Aura'}</button></div>
     </Card>
     {error && <p className={styles.error} role="alert">{error}</p>}
     {loadingPortfolios && <Card className={styles.stateCard}><h2>Loading portfolios</h2><p role="status">Retrieving your saved portfolios.</p></Card>}
     {!loadingPortfolios && error && !portfolios.length && <Card className={styles.stateCard}><h2>Portfolios unavailable</h2><p>Aura needs an available portfolio before it can provide a grounded explanation.</p><button className="primary-btn" onClick={() => setReloadKey(key => key + 1)}>Try again</button></Card>}
     {!loadingPortfolios && !error && !portfolios.length && <Card className={styles.stateCard}><h2>No portfolios available</h2><p>Create a saved portfolio before asking Aura to explain its risk results.</p></Card>}
-    {sending && <Card className={styles.stateCard}><h2>Aura is preparing an explanation</h2><p role="status">Aura is using backend-calculated portfolio context.</p></Card>}
+    {sending && <Card className={styles.stateCard}><h2>Aura is preparing an explanation</h2><p role="status">Aura is using your selected saved context.</p></Card>}
     {response && !sending && <section className={styles.responseSection} aria-live="polite">
       <Card className={styles.answerCard}><div className={styles.answerHeading}><span><Icon name="spark" size={19} /></span><div><small>AURA’S EXPLANATION</small><h2>Grounded response</h2></div></div><p className={styles.answer}>{response.answer}</p></Card>
       <div className={styles.detailsGrid}>

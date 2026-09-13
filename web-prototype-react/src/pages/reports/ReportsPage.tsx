@@ -120,7 +120,7 @@ export function ReportsPage() {
 
       <Card className="reports-library-card">
         <div className="reports-library-heading">
-          <div><h2>Report Library</h2><p>Analysis snapshots are listed in portfolio order and backend history order.</p></div>
+          <div><h2>Report Library</h2><p>Browse immutable analysis snapshots for each portfolio.</p></div>
           <span>{visible.length} {visible.length === 1 ? 'report' : 'reports'}</span>
         </div>
 
@@ -152,7 +152,7 @@ export function ReportsPage() {
       </Card>
       <div className="reports-education-note">
         <Icon name="shield" size={16} />
-        <p>Deletion permanently removes the saved backend report. Export, sharing, and download generation remain unavailable.</p>
+        <p>Deletion permanently removes the saved report. Export, sharing, and download generation remain unavailable.</p>
       </div>
     </div>
   );

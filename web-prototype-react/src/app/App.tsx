@@ -44,7 +44,7 @@ function App() {
     case 'simulations': content = route.id && route.reportId
       ? <SimulationHistoryDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} simulationId={route.reportId} />
       : <SimulationsPage key={route.id} portfolioId={route.id} />; break;
-    case 'assistant': content = <AssistantPage />; break;
+    case 'assistant': content = <AssistantPage key={`${route.id ?? ''}/${route.reportId ?? ''}`} portfolioId={route.id} reportId={route.reportId} />; break;
     case 'reports': content = route.id && route.reportId
       ? <ReportDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} reportId={route.reportId} />
       : <ReportsPage />; break;

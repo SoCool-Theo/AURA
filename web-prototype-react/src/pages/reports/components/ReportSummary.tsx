@@ -18,7 +18,7 @@ export function ReportSummary({ reports, portfolioCount }: ReportSummaryProps) {
       </Card>
       <Card className="report-summary-card blue">
         <span><Icon name="analysis" size={19} /></span>
-        <div><small>Analysis Snapshots</small><strong>{reports.length}</strong><p>Immutable backend reports</p></div>
+        <div><small>Analysis Snapshots</small><strong>{reports.length}</strong><p>Immutable saved reports</p></div>
       </Card>
       <Card className="report-summary-card amber">
         <span><Icon name="wallet" size={19} /></span>
