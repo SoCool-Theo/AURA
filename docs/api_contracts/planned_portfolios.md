@@ -256,7 +256,7 @@ it is not a portfolio-wide `503` because estimates are non-authoritative.
 
 ## Delivery sequence
 
-Steps 1 through 4 are implemented. Steps 5 through 8 remain pending.
+Steps 1 through 5 are implemented. Steps 6 through 8 remain pending.
 
 1. Freeze the planned-portfolio product, data, API, and provenance contract.
 2. Add and verify the database discriminator, planned fields, constraints, and
@@ -264,7 +264,9 @@ Steps 1 through 4 are implemented. Steps 5 through 8 remain pending.
 3. Add type-aware portfolio CRUD and price-independent target allocation.
 4. Add optional estimated-share preview, then extend the shared baseline
    resolver and analysis composition.
-5. Add immutable planned report and simulation snapshot variants.
+5. Add immutable planned report and simulation snapshot variants. Implemented
+   as Report V3 and three Simulation V3 formats; V3 freezes only authoritative
+   planned inputs and results and never recalculates on retrieval.
 6. Add mode-aware AI grounding.
 7. Integrate customer mobile and web workflows.
 8. Run migration, rollback, privacy, immutability, and full regression

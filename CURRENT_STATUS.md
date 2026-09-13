@@ -1533,7 +1533,7 @@ incomplete.
 
 ## Planned Portfolio Expansion
 
-**Status:** Step 4 planned preview and canonical analysis baseline complete
+**Status:** Step 5 immutable planned report and simulation history complete
 
 ### Approved product target contract
 
@@ -1632,8 +1632,44 @@ incomplete.
 - No database, Docker, external LLM, branch, commit, or dependency operation was
   performed.
 
+### Completed Step 5 immutable planned history
+
+- Planned analysis now uses its canonical proposed-amount target allocation and
+  persists `portfolio-analysis-response-v3`. The snapshot freezes the plan
+  currency, ordered proposed amounts, exact backend target weights, complete
+  analytics, and an explicit hypothetical/non-forecast notice.
+- Historical Scenario, Allocation, and Combined simulations now accept planned
+  baselines. Their immutable history uses the exact V3 versions
+  `historical-scenario-simulation-response-v3`,
+  `allocation-simulation-response-v3`, and
+  `combined-simulation-response-v3`.
+- Allocation and Combined V3 snapshots verify that the result's original
+  allocation matches the frozen plan baseline. Snapshot validation also
+  verifies proposed totals, exact amount-derived weights, unique holdings, and
+  saved ordering.
+- V1 legacy and V2 current report/simulation readers remain unchanged and
+  readable. V3 history retrieval revalidates only the stored JSONB snapshot and
+  never requests current market data, FX, valuation, or recomputation.
+- Estimated shares are intentionally excluded from V3 snapshots because they
+  are optional display context and do not control planned analytics.
+- Existing AI tools continue to reject V3 context with a sanitized compatibility
+  error until the dedicated mode-aware grounding step.
+- No migration was needed because the existing report and simulation tables
+  already persist an explicit schema version and JSONB payload.
+
+### Step 5 verification
+
+- Focused report, simulation, snapshot, AI guard, and API suite: 399 passed.
+- Complete backend unit suite: 2,332 passed.
+- Non-PostgreSQL API integration suite: 273 passed with 50 existing short JWT
+  test-key warnings. The three explicitly live PostgreSQL API modules were
+  excluded; an accidentally broad collection that reached those modules was
+  stopped during setup before any test body or database mutation.
+- Python compile verification completed for `backend/app` and `backend/tests`.
+- No database, Docker, external LLM, branch, commit, or dependency operation was
+  performed.
+
 ### Remaining planned-portfolio work
 
-Immutable planned report/simulation variants, mode-aware AI grounding,
-conversion to a new current portfolio, and customer web/mobile integration are
-not implemented yet.
+Mode-aware AI grounding, conversion to a new current portfolio, and customer
+web/mobile integration are not implemented yet.

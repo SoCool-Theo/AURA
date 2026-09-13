@@ -15,14 +15,18 @@ from backend.app.schemas.reporting import (
     PortfolioReportSummary,
     PortfolioReportV2Response,
     PortfolioReportV2Snapshot,
+    PortfolioReportV3Response,
+    PortfolioReportV3Snapshot,
 )
 from backend.app.services.analysis_reporting_mapper import (
     PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION,
     PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+    PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
     analysis_record_to_report_response,
     analysis_record_to_report_summary,
     analysis_response_to_snapshot,
     enriched_analysis_to_v2_snapshot,
+    enriched_analysis_to_v3_snapshot,
 )
 from backend.app.services.portfolio_analysis_composition import (
     compose_portfolio_analysis,
@@ -34,6 +38,7 @@ from backend.app.services.portfolio_valuation_service import (
 from backend.tests.unit.services.test_portfolio_analysis_composition import (
     _analysis_response as _real_analysis_response,
     _real_preparation,
+    _planned_preparation,
 )
 from backend.tests.unit.schemas.test_reporting import _valid_analysis_data
 
@@ -101,6 +106,65 @@ def test_v2_snapshot_version_constant_uses_approved_token() -> None:
     assert PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION == (
         "portfolio-analysis-response-v2"
     )
+
+
+def _valid_v3_snapshot() -> dict[str, object]:
+    enriched = compose_portfolio_analysis(
+        _planned_preparation(),
+        _real_analysis_response(),
+    )
+    return enriched_analysis_to_v3_snapshot(enriched)
+
+
+def test_v3_snapshot_version_constant_uses_approved_token() -> None:
+    assert PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION == (
+        "portfolio-analysis-response-v3"
+    )
+
+
+def test_planned_enriched_result_maps_to_complete_json_safe_v3_snapshot() -> None:
+    preparation = _planned_preparation()
+    analysis = _real_analysis_response()
+    enriched = compose_portfolio_analysis(preparation, analysis)
+
+    snapshot = enriched_analysis_to_v3_snapshot(enriched)
+    validated = PortfolioReportV3Snapshot.model_validate(snapshot)
+
+    json.dumps(snapshot, allow_nan=False)
+    assert validated.schema_version == "portfolio-analysis-response-v3"
+    assert validated.analysis == analysis
+    assert validated.baseline.portfolio_type == "PLANNED"
+    assert validated.baseline.baseline_source == (
+        "proposed-amount-target-allocation"
+    )
+    assert validated.baseline.total_proposed_amount == Decimal("1000")
+    assert [holding.symbol for holding in validated.baseline.holdings] == [
+        "AAPL",
+        "BND",
+    ]
+    assert [
+        holding.proposed_amount for holding in validated.baseline.holdings
+    ] == [Decimal("600"), Decimal("400")]
+    assert "estimated_shares" not in snapshot["baseline"]["holdings"][0]
+
+
+def test_v3_record_restores_frozen_plan_without_recalculation_or_mutation() -> None:
+    snapshot = _valid_v3_snapshot()
+    frozen_snapshot = deepcopy(snapshot)
+    analysis = _analysis_record(
+        result_snapshot=snapshot,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+        start_date=date(2022, 1, 1),
+        end_date=date(2022, 12, 31),
+    )
+
+    result = analysis_record_to_report_response(analysis)
+
+    assert isinstance(result, PortfolioReportV3Response)
+    assert result.schema_version == "portfolio-analysis-response-v3"
+    assert result.baseline.total_proposed_amount == Decimal("1000")
+    assert result.analysis == _real_analysis_response()
+    assert analysis.result_snapshot == frozen_snapshot
 
 
 def test_real_enriched_result_maps_to_complete_json_safe_v2_snapshot() -> None:
@@ -344,7 +408,7 @@ def test_supported_analysis_record_maps_to_validated_report_response() -> None:
 
 
 def test_unsupported_snapshot_version_is_rejected() -> None:
-    analysis = _analysis_record(schema_version="portfolio-analysis-response-v3")
+    analysis = _analysis_record(schema_version="portfolio-analysis-response-v4")
 
     with pytest.raises(
         ValueError,

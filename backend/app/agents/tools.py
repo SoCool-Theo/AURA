@@ -12,11 +12,13 @@ from ..database.models import Portfolio
 from ..schemas.reporting import (
     PortfolioReportDetailResponse,
     PortfolioReportV2Response,
+    PortfolioReportV3Response,
 )
 from ..schemas.simulation_history import (
     SimulationHistoryDetail,
     SimulationHistoryListResponse,
     SimulationHistoryV2DetailResponse,
+    SimulationHistoryV3DetailResponse,
 )
 from ..services.analysis_reporting_service import AnalysisReportingService
 from ..services.portfolio_baseline_resolver import (
@@ -57,6 +59,10 @@ def _reduce_time_series(
 
 def _project_report(report: PortfolioReportDetailResponse) -> dict[str, Any]:
     """Return the validated report fields suitable for a grounded explanation."""
+    if isinstance(report, PortfolioReportV3Response):
+        raise InvalidHoldingModeError(
+            "planned AI grounding is not implemented"
+        )
     analysis = report.analysis.model_dump(mode="json")
     projected = {
         "id": str(report.id),
@@ -95,6 +101,10 @@ def _project_simulation(
     simulation: SimulationHistoryDetail,
 ) -> dict[str, Any]:
     """Return one validated saved simulation with reduced trajectories only."""
+    if isinstance(simulation, SimulationHistoryV3DetailResponse):
+        raise InvalidHoldingModeError(
+            "planned AI grounding is not implemented"
+        )
     result = simulation.result.model_dump(mode="json")
     if simulation.simulation_type == "historical-scenario":
         result["trajectory"] = _reduce_time_series(result["trajectory"])

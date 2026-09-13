@@ -249,9 +249,8 @@ The currently implemented compatibility architecture below is being extended
 by the approved [planned-portfolio target contract](../api_contracts/planned_portfolios.md).
 Type-aware CRUD exposes user-facing `CURRENT` and `PLANNED` portfolio types
 while retaining `LEGACY` as internal compatibility state. The shared baseline
-resolver and analysis composition now support all three modes. Planned report
-snapshots, simulations, and AI grounding remain guarded until their dedicated
-contract versions are implemented.
+resolver, analysis composition, reporting, and simulations now support all
+three modes. Planned AI grounding remains guarded until its dedicated step.
 
 Aura supports three complete, mutually exclusive persisted holding modes:
 
@@ -326,10 +325,13 @@ not make the asset itself more volatile, although a larger current allocation
 can increase its contribution to portfolio risk.
 
 Report persistence supports `portfolio-analysis-response-v1` for legacy
-portfolios and `portfolio-analysis-response-v2` for real portfolios. V2 freezes
-the valuation currency/date, price dates, USD/display totals, optional FX,
-holding facts, prices, values, dynamic allocations, complete analytics,
-per-asset metrics, and risk contribution/rank.
+portfolios, `portfolio-analysis-response-v2` for current portfolios, and
+`portfolio-analysis-response-v3` for planned portfolios. V2 freezes the
+valuation currency/date, price dates, USD/display totals, optional FX, holding
+facts, prices, values, dynamic allocations, complete analytics, per-asset
+metrics, and risk contribution/rank. V3 freezes the plan currency, ordered
+proposed amounts, exact backend target weights, complete analytics, and the
+hypothetical/non-forecast limitation. It does not store estimated shares.
 
 Simulation history supports the existing V1 formats and these V2 formats:
 
@@ -337,17 +339,26 @@ Simulation history supports the existing V1 formats and these V2 formats:
 - `allocation-simulation-response-v2`
 - `combined-simulation-response-v2`
 
+Planned simulation history uses separate V3 formats:
+
+- `historical-scenario-simulation-response-v3`
+- `allocation-simulation-response-v3`
+- `combined-simulation-response-v3`
+
 The real simulation's original allocation is the current canonical USD
 allocation. Allocation and Combined retain the user's hypothetical percentages
-as the modified allocation. V2 history freezes the baseline used at creation.
-Opening a saved report or simulation restores the JSONB snapshot and never
-revalues or reruns it.
+as the modified allocation. For planned simulations, the original allocation
+is the target allocation resolved from proposed amounts; modified percentages
+remain separate hypothetical input. V2 and V3 history freeze their baseline at
+creation. Opening a saved report or simulation restores the JSONB snapshot and
+never revalues or reruns it.
 
 AI grounding follows the same source boundary: live legacy portfolios use
 saved weights, live real portfolios use current USD valuation, Report V2 uses
 the frozen report snapshot, and Simulation V2 uses the frozen snapshot. Saved
 resources do not require current market prices. AI remains educational,
-non-advisory, and cannot produce buy/sell recommendations.
+non-advisory, and cannot produce buy/sell recommendations. Planned V3 reports
+and simulations remain guarded until mode-aware AI language is implemented.
 
 ## Transaction Ownership
 

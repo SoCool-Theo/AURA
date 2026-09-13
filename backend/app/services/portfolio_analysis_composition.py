@@ -14,7 +14,10 @@ from .portfolio_analysis_preparation_service import (
     PortfolioAnalysisBaselineKind,
     PortfolioAnalysisPreparationResult,
 )
-from .portfolio_planned_allocation_service import PlannedAllocationHolding
+from .portfolio_planned_allocation_service import (
+    PlannedAllocationHolding,
+    PlannedPortfolioAllocation,
+)
 from .portfolio_valuation_service import (
     HoldingValuationResult,
     PortfolioDisplayCurrency,
@@ -66,6 +69,7 @@ class PortfolioEnrichedAnalysisResult:
     baseline_kind: PortfolioAnalysisBaselineKind
     analysis: PortfolioAnalysisResponse
     valuation: PortfolioValuationResult | None
+    planned_allocation: PlannedPortfolioAllocation | None
     holdings: tuple[PortfolioEnrichedHoldingAnalysis, ...]
 
 
@@ -439,6 +443,7 @@ def compose_portfolio_analysis(
         baseline_kind=preparation.baseline_kind,
         analysis=analysis,
         valuation=preparation.valuation,
+        planned_allocation=preparation.planned_allocation,
         holdings=tuple(enriched_holdings),
     )
 

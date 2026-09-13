@@ -235,13 +235,18 @@ def test_history_contracts_are_direct_imports_without_package_expansion(
         "SimulationHistoryListResponse",
         "SimulationHistoryDetailResponse",
         "SimulationHistoryV2DetailResponse",
+        "SimulationHistoryV3DetailResponse",
         "SimulationHistoryDetail",
         "SimulationBaselineHolding",
         "SimulationBaselineValuationContext",
         "HistoricalScenarioSimulationV2Snapshot",
         "AllocationSimulationV2Snapshot",
         "CombinedSimulationV2Snapshot",
+        "HistoricalScenarioSimulationV3Snapshot",
+        "AllocationSimulationV3Snapshot",
+        "CombinedSimulationV3Snapshot",
         "SimulationV2SchemaVersion",
+        "SimulationV3SchemaVersion",
     ]
 
     assert history_module.__all__ == expected_names

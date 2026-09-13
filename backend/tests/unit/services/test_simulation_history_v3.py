@@ -1,12 +1,16 @@
 from copy import deepcopy
 from decimal import Decimal
+import json
 from unittest.mock import patch
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
 
 from backend.app.database.models import Simulation
-from backend.app.schemas.simulation_history import SimulationHistoryV2DetailResponse
+from backend.app.schemas.simulation_history import (
+    SimulationHistoryV3DetailResponse,
+)
 from backend.app.services.market_data_service import MarketDataService
 from backend.app.services.portfolio_baseline_resolver import (
     PortfolioBaselineKind,
@@ -16,17 +20,17 @@ from backend.app.services.portfolio_baseline_resolver import (
 from backend.app.services.portfolio_valuation_service import (
     PortfolioValuationService,
 )
-from backend.app.services.simulation_history_mapper import (
-    ALLOCATION_SIMULATION_RESPONSE_V2_SCHEMA_VERSION,
-    COMBINED_SIMULATION_RESPONSE_V2_SCHEMA_VERSION,
-    HISTORICAL_SCENARIO_SIMULATION_RESPONSE_V2_SCHEMA_VERSION,
-    restore_simulation_snapshot,
-    simulation_response_to_v2_snapshot,
-    simulation_snapshot_to_response,
+from backend.app.services.portfolio_planned_allocation_service import (
+    PlannedAllocationHolding,
+    PlannedPortfolioAllocation,
 )
-from backend.tests.unit.services.test_portfolio_analysis_preparation_service import (
-    VALUATION_DATE,
-    _valuation_result,
+from backend.app.services.simulation_history_mapper import (
+    ALLOCATION_SIMULATION_RESPONSE_V3_SCHEMA_VERSION,
+    COMBINED_SIMULATION_RESPONSE_V3_SCHEMA_VERSION,
+    HISTORICAL_SCENARIO_SIMULATION_RESPONSE_V3_SCHEMA_VERSION,
+    restore_simulation_snapshot,
+    simulation_response_to_v3_snapshot,
+    simulation_snapshot_to_response,
 )
 from backend.tests.unit.services.test_simulation_history_mapper import (
     _response_for_type,
@@ -40,28 +44,56 @@ from backend.tests.unit.services.test_simulation_history_service import (
 )
 
 
-_V2_VERSION_BY_TYPE = {
+_V3_VERSION_BY_TYPE = {
     "historical-scenario": (
-        HISTORICAL_SCENARIO_SIMULATION_RESPONSE_V2_SCHEMA_VERSION
+        HISTORICAL_SCENARIO_SIMULATION_RESPONSE_V3_SCHEMA_VERSION
     ),
-    "allocation": ALLOCATION_SIMULATION_RESPONSE_V2_SCHEMA_VERSION,
-    "combined": COMBINED_SIMULATION_RESPONSE_V2_SCHEMA_VERSION,
+    "allocation": ALLOCATION_SIMULATION_RESPONSE_V3_SCHEMA_VERSION,
+    "combined": COMBINED_SIMULATION_RESPONSE_V3_SCHEMA_VERSION,
 }
 
 
-def _real_baseline() -> PortfolioBaselineResolution:
-    valuation = _valuation_result()
-    return PortfolioBaselineResolution(
-        baseline_kind=PortfolioBaselineKind.REAL,
-        resolved_weights=tuple(
-            ResolvedPortfolioWeight(
-                symbol=holding.symbol,
-                weight=holding.current_allocation,
-            )
-            for holding in valuation.holdings
+def _planned_baseline() -> PortfolioBaselineResolution:
+    allocation = PlannedPortfolioAllocation(
+        portfolio_id=UUID("62000000-0000-0000-0000-000000000001"),
+        plan_currency="USD",
+        total_proposed_amount=Decimal("1000"),
+        holdings=(
+            PlannedAllocationHolding(
+                holding_id=UUID(
+                    "63000000-0000-0000-0000-000000000001"
+                ),
+                symbol="MSFT",
+                proposed_amount=Decimal("600"),
+                target_allocation=Decimal("0.600000000000"),
+                position=0,
+            ),
+            PlannedAllocationHolding(
+                holding_id=UUID(
+                    "63000000-0000-0000-0000-000000000002"
+                ),
+                symbol="AAPL",
+                proposed_amount=Decimal("400"),
+                target_allocation=Decimal("0.400000000000"),
+                position=1,
+            ),
         ),
-        valuation=valuation,
-        valuation_as_of=VALUATION_DATE,
+    )
+    return PortfolioBaselineResolution(
+        baseline_kind=PortfolioBaselineKind.PLANNED,
+        resolved_weights=(
+            ResolvedPortfolioWeight(
+                symbol="MSFT",
+                weight=Decimal("0.600000000000"),
+            ),
+            ResolvedPortfolioWeight(
+                symbol="AAPL",
+                weight=Decimal("0.400000000000"),
+            ),
+        ),
+        valuation=None,
+        valuation_as_of=None,
+        planned_allocation=allocation,
     )
 
 
@@ -69,102 +101,110 @@ def _real_baseline() -> PortfolioBaselineResolution:
     "simulation_type",
     ["historical-scenario", "allocation", "combined"],
 )
-def test_v2_mapper_preserves_complete_result_and_exact_usd_baseline(
+def test_v3_mapper_freezes_complete_result_and_planned_baseline(
     simulation_type: str,
 ) -> None:
     response = _response_for_type(simulation_type)
     before = response.model_dump(mode="python")
-    valuation = _real_baseline().valuation
-    assert valuation is not None
+    allocation = _planned_baseline().planned_allocation
+    assert allocation is not None
 
-    snapshot = simulation_response_to_v2_snapshot(
+    snapshot = simulation_response_to_v3_snapshot(
         simulation_type=simulation_type,
         response=response,
-        valuation=valuation,
+        planned_allocation=allocation,
     )
 
-    assert snapshot["schema_version"] == _V2_VERSION_BY_TYPE[simulation_type]
+    assert snapshot["schema_version"] == _V3_VERSION_BY_TYPE[simulation_type]
     assert snapshot["result"] == response.model_dump(mode="json")
     assert snapshot["baseline"] == {
-        "valuation_currency": "USD",
-        "valuation_date": "2026-09-12",
-        "oldest_price_as_of": "2026-09-12",
-        "newest_price_as_of": "2026-09-12",
-        "total_current_value_usd": "100",
+        "portfolio_type": "PLANNED",
+        "baseline_source": "proposed-amount-target-allocation",
+        "plan_currency": "USD",
+        "total_proposed_amount": "1000",
+        "hypothetical_notice": (
+            "Hypothetical historical analysis only; not a forecast, "
+            "recommendation, or executable order."
+        ),
         "holdings": [
             {
                 "id": str(holding.holding_id),
                 "symbol": holding.symbol,
-                "invested_amount": str(holding.invested_amount),
-                "invested_currency": holding.invested_currency,
-                "shares": str(holding.shares),
-                "purchase_date": holding.purchase_date.isoformat(),
+                "proposed_amount": str(holding.proposed_amount),
+                "target_allocation": str(holding.target_allocation),
                 "position": holding.position,
-                "asset_price": str(holding.asset_price),
-                "asset_quote_currency": "USD",
-                "price_as_of": holding.price_as_of.isoformat(),
-                "current_value_usd": str(holding.current_value_usd),
-                "current_allocation": str(holding.current_allocation),
             }
-            for holding in valuation.holdings
+            for holding in allocation.holdings
         ],
     }
-    assert "fx_context" not in snapshot["baseline"]
-    assert "current_value" not in snapshot["baseline"]["holdings"][0]
+    assert "estimated_shares" not in snapshot["baseline"]["holdings"][0]
+    json.dumps(snapshot, allow_nan=False)
     assert response.model_dump(mode="python") == before
 
     restored = restore_simulation_snapshot(
         simulation_type=simulation_type,
-        schema_version=_V2_VERSION_BY_TYPE[simulation_type],
+        schema_version=_V3_VERSION_BY_TYPE[simulation_type],
         snapshot=snapshot,
     )
     assert restored.response == response
     assert restored.baseline is not None
-    assert restored.baseline.valuation_date == VALUATION_DATE
-    assert [holding.current_allocation for holding in restored.baseline.holdings] == [
-        Decimal("0.6000000000000000000000000000"),
-        Decimal("0.4000000000000000000000000000"),
-    ]
+    assert restored.baseline.portfolio_type == "PLANNED"
+    assert restored.baseline.total_proposed_amount == Decimal("1000")
     assert simulation_snapshot_to_response(
         simulation_type=simulation_type,
-        schema_version=_V2_VERSION_BY_TYPE[simulation_type],
+        schema_version=_V3_VERSION_BY_TYPE[simulation_type],
         snapshot=snapshot,
     ) == response
 
 
-def test_v2_mapper_rejects_malformed_and_cross_type_snapshots() -> None:
+def test_v3_mapper_rejects_malformed_and_cross_type_snapshots() -> None:
     response = _response_for_type("allocation")
-    valuation = _real_baseline().valuation
-    assert valuation is not None
-    snapshot = simulation_response_to_v2_snapshot(
+    allocation = _planned_baseline().planned_allocation
+    assert allocation is not None
+    snapshot = simulation_response_to_v3_snapshot(
         simulation_type="allocation",
         response=response,
-        valuation=valuation,
+        planned_allocation=allocation,
     )
     malformed = deepcopy(snapshot)
-    malformed["baseline"]["holdings"] = []
+    malformed["baseline"]["holdings"][0]["proposed_amount"] = "0"
 
     with pytest.raises(ValidationError):
         restore_simulation_snapshot(
             simulation_type="allocation",
-            schema_version=ALLOCATION_SIMULATION_RESPONSE_V2_SCHEMA_VERSION,
+            schema_version=ALLOCATION_SIMULATION_RESPONSE_V3_SCHEMA_VERSION,
             snapshot=malformed,
         )
 
     with pytest.raises(ValueError, match="do not match"):
         restore_simulation_snapshot(
             simulation_type="combined",
-            schema_version=ALLOCATION_SIMULATION_RESPONSE_V2_SCHEMA_VERSION,
+            schema_version=ALLOCATION_SIMULATION_RESPONSE_V3_SCHEMA_VERSION,
             snapshot=snapshot,
         )
 
+
+def test_v3_restore_rejects_original_allocation_that_differs_from_plan() -> None:
+    response = _response_for_type("allocation")
+    allocation = _planned_baseline().planned_allocation
+    assert allocation is not None
+    snapshot = simulation_response_to_v3_snapshot(
+        simulation_type="allocation",
+        response=response,
+        planned_allocation=allocation,
+    )
+    snapshot["baseline"]["holdings"][0]["proposed_amount"] = "500"
+    snapshot["baseline"]["holdings"][0]["target_allocation"] = "0.5"
+    snapshot["baseline"]["holdings"][1]["proposed_amount"] = "500"
+    snapshot["baseline"]["holdings"][1]["target_allocation"] = "0.5"
+
     with pytest.raises(
-        ValueError,
-        match="unsupported simulation snapshot schema version",
+        ValidationError,
+        match="baseline weight does not match original allocation",
     ):
         restore_simulation_snapshot(
             simulation_type="allocation",
-            schema_version="allocation-simulation-response-v4",
+            schema_version=ALLOCATION_SIMULATION_RESPONSE_V3_SCHEMA_VERSION,
             snapshot=snapshot,
         )
 
@@ -173,7 +213,7 @@ def test_v2_mapper_rejects_malformed_and_cross_type_snapshots() -> None:
     "simulation_type",
     ["historical-scenario", "allocation", "combined"],
 )
-def test_real_save_creates_v2_and_returns_validated_immutable_detail(
+def test_planned_save_creates_v3_and_returns_immutable_detail(
     simulation_type: str,
 ) -> None:
     service, session, portfolio_service, repository = _service_with_dependencies()
@@ -181,7 +221,7 @@ def test_real_save_creates_v2_and_returns_validated_immutable_detail(
     portfolio_service.get.return_value = portfolio
     response = _response_for_type(simulation_type)
     scenario_id, start_date, end_date = _metadata_for_type(simulation_type)
-    baseline = _real_baseline()
+    baseline = _planned_baseline()
 
     def persist(**kwargs: object) -> Simulation:
         return Simulation(
@@ -203,14 +243,13 @@ def test_real_save_creates_v2_and_returns_validated_immutable_detail(
         baseline=baseline,
     )
 
-    assert isinstance(detail, SimulationHistoryV2DetailResponse)
-    assert detail.schema_version == _V2_VERSION_BY_TYPE[simulation_type]
+    assert isinstance(detail, SimulationHistoryV3DetailResponse)
+    assert detail.schema_version == _V3_VERSION_BY_TYPE[simulation_type]
     assert detail.result == response
-    assert detail.baseline.valuation_date == VALUATION_DATE
-    assert detail.baseline.total_current_value_usd == Decimal("100")
+    assert detail.baseline.plan_currency == "USD"
+    assert detail.baseline.total_proposed_amount == Decimal("1000")
     saved = repository.create.call_args.kwargs
-    assert saved["schema_version"] == _V2_VERSION_BY_TYPE[simulation_type]
-    assert saved["result_snapshot"]["result"] == response.model_dump(mode="json")
+    assert saved["schema_version"] == _V3_VERSION_BY_TYPE[simulation_type]
     assert saved["result_snapshot"]["baseline"] == detail.baseline.model_dump(
         mode="json"
     )
@@ -219,17 +258,17 @@ def test_real_save_creates_v2_and_returns_validated_immutable_detail(
     session.close.assert_not_called()
 
 
-def test_v2_get_uses_only_saved_snapshot_after_external_prices_change() -> None:
+def test_v3_get_uses_only_frozen_snapshot_after_plan_and_prices_change() -> None:
     service, session, portfolio_service, repository = _service_with_dependencies()
     portfolio = _portfolio()
     portfolio_service.get.return_value = portfolio
     response = _response_for_type("allocation")
-    valuation = _real_baseline().valuation
-    assert valuation is not None
-    snapshot = simulation_response_to_v2_snapshot(
+    allocation = _planned_baseline().planned_allocation
+    assert allocation is not None
+    snapshot = simulation_response_to_v3_snapshot(
         simulation_type="allocation",
         response=response,
-        valuation=valuation,
+        planned_allocation=allocation,
     )
     repository.get_for_portfolio.return_value = Simulation(
         id=_SIMULATION_ID,
@@ -238,7 +277,7 @@ def test_v2_get_uses_only_saved_snapshot_after_external_prices_change() -> None:
         scenario_id=None,
         requested_start_date=response.start_date,
         requested_end_date=response.end_date,
-        schema_version=ALLOCATION_SIMULATION_RESPONSE_V2_SCHEMA_VERSION,
+        schema_version=ALLOCATION_SIMULATION_RESPONSE_V3_SCHEMA_VERSION,
         result_snapshot=snapshot,
         created_at=_CREATED_AT,
     )
@@ -261,7 +300,7 @@ def test_v2_get_uses_only_saved_snapshot_after_external_prices_change() -> None:
             simulation_id=_SIMULATION_ID,
         )
 
-    assert isinstance(detail, SimulationHistoryV2DetailResponse)
+    assert isinstance(detail, SimulationHistoryV3DetailResponse)
     assert detail.result == response
     assert detail.baseline.model_dump(mode="json") == snapshot["baseline"]
     revalue.assert_not_called()

@@ -1,7 +1,7 @@
 """Pydantic contracts for portfolio analysis, CRUD, and holding facts."""
 
 from datetime import UTC, date, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN, localcontext
 import math
 from typing import Annotated, Literal, Self
 from uuid import UUID
@@ -405,6 +405,87 @@ class PortfolioPlannedAllocationResponse(AuraBaseModel):
         list[PortfolioPlannedAllocationHoldingResponse],
         Field(min_length=1),
     ]
+
+
+PLANNED_PORTFOLIO_HYPOTHETICAL_NOTICE = (
+    "Hypothetical historical analysis only; not a forecast, recommendation, "
+    "or executable order."
+)
+
+
+class PlannedPortfolioSnapshotHolding(AuraBaseModel):
+    """One immutable proposed amount and backend-derived target weight."""
+
+    id: UUID
+    symbol: AssetSymbol
+    proposed_amount: _PositiveNumeric28Scale12
+    target_allocation: _AllocationDecimal
+    position: Annotated[int, Field(strict=True, ge=0)]
+
+
+class PlannedPortfolioBaselineContext(AuraBaseModel):
+    """Immutable authoritative input baseline for a hypothetical plan."""
+
+    portfolio_type: Literal["PLANNED"]
+    baseline_source: Literal["proposed-amount-target-allocation"]
+    plan_currency: _InvestedCurrency
+    total_proposed_amount: _PositiveValuationDecimal
+    hypothetical_notice: Literal[
+        "Hypothetical historical analysis only; not a forecast, "
+        "recommendation, or executable order."
+    ]
+    holdings: Annotated[
+        list[PlannedPortfolioSnapshotHolding],
+        Field(min_length=1),
+    ]
+
+    @model_validator(mode="after")
+    def validate_baseline(self) -> Self:
+        symbols = [holding.symbol for holding in self.holdings]
+        ids = [holding.id for holding in self.holdings]
+        positions = [holding.position for holding in self.holdings]
+        if len(symbols) != len(set(symbols)):
+            raise ValueError("planned snapshot symbols must be unique")
+        if len(ids) != len(set(ids)):
+            raise ValueError("planned snapshot holding IDs must be unique")
+        if positions != list(range(len(self.holdings))):
+            raise ValueError("planned snapshot positions must be contiguous")
+        if sum(
+            (holding.proposed_amount for holding in self.holdings),
+            start=Decimal("0"),
+        ) != self.total_proposed_amount:
+            raise ValueError("planned snapshot proposed total is inconsistent")
+        if sum(
+            (holding.target_allocation for holding in self.holdings),
+            start=Decimal("0"),
+        ) != Decimal("1"):
+            raise ValueError("planned snapshot target allocations must total 1")
+        with localcontext() as context:
+            context.prec = 80
+            expected_weights = [
+                (holding.proposed_amount / self.total_proposed_amount).quantize(
+                    Decimal("0.000000000000000001"),
+                    rounding=ROUND_DOWN,
+                )
+                for holding in self.holdings[:-1]
+            ]
+            expected_weights.append(
+                Decimal("1")
+                - sum(expected_weights, start=Decimal("0"))
+            )
+        if any(
+            holding.target_allocation != expected_weight
+            for holding, expected_weight in zip(
+                self.holdings,
+                expected_weights,
+                strict=True,
+            )
+        ):
+            raise ValueError(
+                "planned snapshot target allocation is inconsistent with "
+                "proposed amounts"
+            )
+        return self
 
 
 class PortfolioValuationFxResponse(AuraBaseModel):

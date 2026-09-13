@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..database.models import Simulation
 from ..database.repositories import SimulationRepository
+from ..schemas.portfolio import PlannedPortfolioBaselineContext
 from ..schemas.simulation_history import (
     SimulationHistoryDetail,
     SimulationHistoryDetailResponse,
@@ -14,6 +15,7 @@ from ..schemas.simulation_history import (
     SimulationHistoryResult,
     SimulationHistorySummary,
     SimulationHistoryV2DetailResponse,
+    SimulationHistoryV3DetailResponse,
     SimulationType,
 )
 from .portfolio_baseline_resolver import (
@@ -24,8 +26,10 @@ from .portfolio_service import PortfolioService
 from .simulation_history_mapper import (
     simulation_response_to_snapshot,
     simulation_response_to_v2_snapshot,
+    simulation_response_to_v3_snapshot,
     simulation_type_to_schema_version,
     simulation_type_to_v2_schema_version,
+    simulation_type_to_v3_schema_version,
     restore_simulation_snapshot,
     validate_simulation_snapshot_consistency,
 )
@@ -71,6 +75,13 @@ def _simulation_to_detail(
     if restored.baseline is None:
         return SimulationHistoryDetailResponse(
             **summary,
+            result=restored.response,
+        )
+    if isinstance(restored.baseline, PlannedPortfolioBaselineContext):
+        return SimulationHistoryV3DetailResponse(
+            **summary,
+            schema_version=restored.schema_version,
+            baseline=restored.baseline,
             result=restored.response,
         )
     return SimulationHistoryV2DetailResponse(
@@ -122,6 +133,25 @@ class SimulationHistoryService:
                 simulation_type=simulation_type,
                 response=response,
                 valuation=baseline.valuation,
+            )
+        elif (
+            baseline is not None
+            and baseline.baseline_kind is PortfolioBaselineKind.PLANNED
+        ):
+            if (
+                baseline.planned_allocation is None
+                or baseline.valuation is not None
+            ):
+                raise ValueError(
+                    "planned simulation baseline requires planned allocation"
+                )
+            schema_version = simulation_type_to_v3_schema_version(
+                simulation_type
+            )
+            snapshot = simulation_response_to_v3_snapshot(
+                simulation_type=simulation_type,
+                response=response,
+                planned_allocation=baseline.planned_allocation,
             )
         else:
             schema_version = simulation_type_to_schema_version(simulation_type)

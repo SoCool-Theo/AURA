@@ -3,7 +3,8 @@
 `PortfolioAnalysisResponse` is the JSON-safe deterministic analytics contract
 used by report creation and report snapshots. For real portfolios it is
 composed with a frozen valuation and per-asset context in Report V2; legacy
-reports retain the V1 envelope.
+reports retain the V1 envelope. For planned portfolios it is composed with the
+frozen proposed-amount target baseline in Report V3.
 
 ## Top-level fields
 
@@ -158,6 +159,6 @@ rejected.
 Canonical example:
 [`backend/examples/analysis_response.json`](../../backend/examples/analysis_response.json).
 
-This destination contract contains no AI explanation or recommendation field.
-Routes, services, and production conversion from `PortfolioAnalyticsResult`
-remain deferred.
+This contract contains no AI explanation or recommendation field. Production
+analysis/report services convert deterministic `PortfolioAnalyticsResult`
+values into this response; planned V3 AI grounding remains deferred.

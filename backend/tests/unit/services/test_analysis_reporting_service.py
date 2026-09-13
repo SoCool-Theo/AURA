@@ -16,10 +16,12 @@ from backend.app.schemas.reporting import (
     PortfolioReportResponse,
     PortfolioReportSummary,
     PortfolioReportV2Response,
+    PortfolioReportV3Response,
 )
 from backend.app.services.analysis_reporting_mapper import (
     PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION,
     PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+    PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
     analysis_record_to_report_summary,
     analysis_response_to_snapshot,
 )
@@ -30,9 +32,6 @@ from backend.app.services.analysis_reporting_service import (
 )
 from backend.app.services.analysis_service import AnalysisService
 from backend.app.services.market_data_service import MarketDataUnavailableError
-from backend.app.services.portfolio_analysis_composition import (
-    PortfolioAnalysisCompositionError,
-)
 from backend.app.services.portfolio_analysis_preparation_service import (
     PortfolioAnalysisPreparationService,
 )
@@ -45,6 +44,7 @@ import backend.app.services.analysis_reporting_service as service_module
 from backend.tests.unit.services.test_analysis_reporting_mapper import (
     _analysis_record,
     _valid_thb_v2_snapshot,
+    _valid_v3_snapshot,
     _valid_response,
 )
 from backend.tests.unit.services.test_portfolio_analysis_composition import (
@@ -335,7 +335,70 @@ def test_real_creation_orchestrates_once_and_persists_v2() -> None:
     _assert_session_lifecycle_untouched(session)
 
 
-def test_planned_report_stays_guarded_until_snapshot_contract_exists() -> None:
+def test_planned_creation_orchestrates_once_and_persists_v3() -> None:
+    service, session, portfolio_service, analysis_service, repository = (
+        _service_with_dependencies()
+    )
+    preparation_service = MagicMock(spec=PortfolioAnalysisPreparationService)
+    service._preparation_service = preparation_service
+    portfolio = _portfolio()
+    preparation = _planned_preparation()
+    response = _real_analysis_response()
+    enriched = object()
+    snapshot = {"schema_version": "portfolio-analysis-response-v3"}
+    saved = _analysis_record(
+        result_snapshot=snapshot,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+        start_date=response.start_date,
+        end_date=response.end_date,
+    )
+    mapped = MagicMock(spec=PortfolioReportV3Response)
+    portfolio_service.get.return_value = portfolio
+    preparation_service.prepare.return_value = preparation
+    analysis_service.analyze.return_value = response
+    repository.save_snapshot.return_value = saved
+
+    with (
+        patch.object(
+            service_module,
+            "compose_portfolio_analysis",
+            return_value=enriched,
+        ) as composer,
+        patch.object(
+            service_module,
+            "enriched_analysis_to_v3_snapshot",
+            return_value=snapshot,
+        ) as snapshot_mapper,
+        patch.object(
+            service_module,
+            "analysis_record_to_report_response",
+            return_value=mapped,
+        ),
+    ):
+        result = service.create_report(
+            user_id=_USER_ID,
+            portfolio_id=_PORTFOLIO_ID,
+            period=_period(),
+            valuation_date=date(2026, 9, 12),
+        )
+
+    assert result is mapped
+    analysis_service.analyze.assert_called_once_with(
+        preparation.analysis_request
+    )
+    composer.assert_called_once_with(preparation, response)
+    snapshot_mapper.assert_called_once_with(enriched)
+    repository.save_snapshot.assert_called_once_with(
+        portfolio_id=portfolio.id,
+        start_date=response.start_date,
+        end_date=response.end_date,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+        result_snapshot=snapshot,
+    )
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_planned_creation_maps_analysis_failure_without_persisting() -> None:
     service, session, portfolio_service, analysis_service, repository = (
         _service_with_dependencies()
     )
@@ -343,11 +406,9 @@ def test_planned_report_stays_guarded_until_snapshot_contract_exists() -> None:
     service._preparation_service = preparation_service
     portfolio_service.get.return_value = _portfolio()
     preparation_service.prepare.return_value = _planned_preparation()
+    analysis_service.analyze.side_effect = ValueError("insufficient history")
 
-    with pytest.raises(
-        PortfolioAnalysisCompositionError,
-        match="planned report snapshots are not implemented",
-    ):
+    with pytest.raises(ReportAnalysisUnprocessableError):
         service.create_report(
             user_id=_USER_ID,
             portfolio_id=_PORTFOLIO_ID,
@@ -355,7 +416,6 @@ def test_planned_report_stays_guarded_until_snapshot_contract_exists() -> None:
             valuation_date=date(2026, 9, 12),
         )
 
-    analysis_service.analyze.assert_not_called()
     repository.save_snapshot.assert_not_called()
     _assert_session_lifecycle_untouched(session)
 
@@ -782,6 +842,34 @@ def test_get_saved_thb_v2_uses_snapshot_only_and_never_revalues_or_reanalyzes(
     assert result.holdings[0].current_allocation == Decimal("0.600000000000")
     assert result.valuation.fx is not None
     assert result.valuation.fx.rate == Decimal("32.50")
+    valuation_service.value.assert_not_called()
+    analysis_service.analyze.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_get_saved_v3_uses_frozen_plan_without_revaluation_or_reanalysis() -> None:
+    service, session, portfolio_service, analysis_service, repository = (
+        _service_with_dependencies()
+    )
+    valuation_service = MagicMock(spec=PortfolioValuationService)
+    service._preparation_service._valuation_service = valuation_service
+    portfolio_service.get.return_value = _portfolio()
+    repository.get_by_id.return_value = _analysis_record(
+        result_snapshot=_valid_v3_snapshot(),
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+        start_date=date(2022, 1, 1),
+        end_date=date(2022, 12, 31),
+    )
+
+    result = service.get_report(
+        user_id=_USER_ID,
+        portfolio_id=_PORTFOLIO_ID,
+        report_id=_REPORT_ID,
+    )
+
+    assert isinstance(result, PortfolioReportV3Response)
+    assert result.baseline.portfolio_type == "PLANNED"
+    assert result.baseline.total_proposed_amount == Decimal("1000")
     valuation_service.value.assert_not_called()
     analysis_service.analyze.assert_not_called()
     _assert_session_lifecycle_untouched(session)

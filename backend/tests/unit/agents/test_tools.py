@@ -18,6 +18,7 @@ from backend.app.schemas.reporting import (
     PortfolioReportListResponse,
     PortfolioReportResponse,
     PortfolioReportV2Response,
+    PortfolioReportV3Response,
 )
 from backend.app.schemas.simulation_history import (
     SimulationBaselineHolding,
@@ -25,7 +26,9 @@ from backend.app.schemas.simulation_history import (
     SimulationHistoryDetailResponse,
     SimulationHistoryListResponse,
     SimulationHistoryV2DetailResponse,
+    SimulationHistoryV3DetailResponse,
 )
+from backend.app.schemas.portfolio import PlannedPortfolioBaselineContext
 from backend.app.services.analysis_reporting_service import ReportNotFoundError
 from backend.app.services.market_data_service import MarketDataUnavailableError
 from backend.app.services.portfolio_valuation_service import (
@@ -38,6 +41,7 @@ import backend.app.agents.tools as tools_module
 from backend.tests.unit.schemas.test_reporting import (
     _valid_report_data,
     _valid_v2_report_data,
+    _valid_v3_report_data,
 )
 from backend.tests.unit.schemas.test_simulation_history import (
     _response_for_type,
@@ -222,6 +226,47 @@ def _v2_simulation_detail() -> SimulationHistoryV2DetailResponse:
                     current_value_usd="40",
                     current_allocation="0.4",
                 ),
+            ],
+        ),
+    )
+
+
+def _v3_simulation_detail() -> SimulationHistoryV3DetailResponse:
+    payload = _summary_payload(
+        "allocation",
+        simulation_id=str(_SIMULATION_ID),
+    )
+    payload["portfolio_id"] = str(_PORTFOLIO_ID)
+    result = _response_for_type("allocation").model_dump(mode="json")
+    result["portfolio_id"] = str(_PORTFOLIO_ID)
+    return SimulationHistoryV3DetailResponse(
+        **payload,
+        schema_version="allocation-simulation-response-v3",
+        result=result,
+        baseline=PlannedPortfolioBaselineContext(
+            portfolio_type="PLANNED",
+            baseline_source="proposed-amount-target-allocation",
+            plan_currency="USD",
+            total_proposed_amount="1000",
+            hypothetical_notice=(
+                "Hypothetical historical analysis only; not a forecast, "
+                "recommendation, or executable order."
+            ),
+            holdings=[
+                {
+                    "id": "53000000-0000-0000-0000-000000000001",
+                    "symbol": "MSFT",
+                    "proposed_amount": "600",
+                    "target_allocation": "0.6",
+                    "position": 0,
+                },
+                {
+                    "id": "53000000-0000-0000-0000-000000000002",
+                    "symbol": "AAPL",
+                    "proposed_amount": "400",
+                    "target_allocation": "0.4",
+                    "position": 1,
+                },
             ],
         ),
     )
@@ -534,6 +579,20 @@ def test_v2_report_projection_preserves_frozen_valuation_and_holdings() -> None:
     _assert_session_lifecycle_untouched(session)
 
 
+def test_v3_report_stays_guarded_until_mode_aware_ai_step() -> None:
+    tools, session, _, reporting_service, _ = _tools_with_services()
+    report = PortfolioReportV3Response.model_validate(_valid_v3_report_data())
+    reporting_service.get_report.return_value = report
+
+    with pytest.raises(
+        InvalidHoldingModeError,
+        match="planned AI grounding is not implemented",
+    ):
+        tools.get_report(_REPORT_ID)
+
+    _assert_session_lifecycle_untouched(session)
+
+
 def test_simulation_list_uses_bound_identity_and_preserves_newest_first_order() -> None:
     tools, session, _, _, simulation_service = _tools_with_services()
     newest = _simulation_detail("combined")
@@ -636,6 +695,19 @@ def test_v2_simulation_projection_preserves_frozen_baseline_without_ids() -> Non
     assert context["result"] == simulation.result.model_dump(mode="json")
     tools._test_valuation_service.value.assert_not_called()
     assert simulation.model_dump(mode="python") == source_before
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_v3_simulation_stays_guarded_until_mode_aware_ai_step() -> None:
+    tools, session, _, _, simulation_service = _tools_with_services()
+    simulation_service.get.return_value = _v3_simulation_detail()
+
+    with pytest.raises(
+        InvalidHoldingModeError,
+        match="planned AI grounding is not implemented",
+    ):
+        tools.get_simulation(_SIMULATION_ID)
+
     _assert_session_lifecycle_untouched(session)
 
 

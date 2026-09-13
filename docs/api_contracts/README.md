@@ -25,7 +25,7 @@ and grounded AI explanations.
 ## Current client boundary
 
 - Customer web/mobile real-holding input and valuation rendering
-- Customer web/mobile V2 report and simulation-history rendering
+- Customer web/mobile V1/V2/V3 report and simulation-history rendering
 - Production deployment to a fresh Supabase project
 - Optional capabilities listed in the
   [frontend/mobile integration backlog](../frontend_mobile_integration_backlog.md)

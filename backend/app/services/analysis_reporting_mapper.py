@@ -13,7 +13,10 @@ from ..schemas.reporting import (
     PortfolioReportV2Response,
     PortfolioReportV2Snapshot,
     PortfolioReportV2ValuationContext,
+    PortfolioReportV3Response,
+    PortfolioReportV3Snapshot,
 )
+from .planned_snapshot_mapper import planned_allocation_to_snapshot_baseline
 from .portfolio_analysis_composition import PortfolioEnrichedAnalysisResult
 from .portfolio_analysis_preparation_service import (
     PortfolioAnalysisBaselineKind,
@@ -25,6 +28,9 @@ PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION = (
 )
 PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION = (
     "portfolio-analysis-response-v2"
+)
+PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION = (
+    "portfolio-analysis-response-v3"
 )
 
 
@@ -92,6 +98,27 @@ def enriched_analysis_to_v2_snapshot(
     return snapshot.model_dump(mode="json")
 
 
+def enriched_analysis_to_v3_snapshot(
+    enriched: PortfolioEnrichedAnalysisResult,
+) -> dict[str, Any]:
+    """Map a planned analysis and its immutable target-allocation baseline."""
+    if (
+        enriched.baseline_kind is not PortfolioAnalysisBaselineKind.PLANNED
+        or enriched.valuation is not None
+        or enriched.planned_allocation is None
+    ):
+        raise ValueError("V3 snapshots require a planned allocation result")
+
+    snapshot = PortfolioReportV3Snapshot(
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+        analysis=enriched.analysis,
+        baseline=planned_allocation_to_snapshot_baseline(
+            enriched.planned_allocation
+        ),
+    )
+    return snapshot.model_dump(mode="json")
+
+
 def analysis_record_to_report_summary(
     analysis: Analysis,
 ) -> PortfolioReportSummary:
@@ -127,6 +154,18 @@ def analysis_record_to_report_response(
         )
         _validate_relational_period(analysis, validated_snapshot.analysis)
         return PortfolioReportV2Response(
+            id=analysis.id,
+            portfolio_id=analysis.portfolio_id,
+            created_at=analysis.created_at,
+            **validated_snapshot.model_dump(),
+        )
+
+    if analysis.schema_version == PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION:
+        validated_snapshot = PortfolioReportV3Snapshot.model_validate(
+            analysis.result_snapshot
+        )
+        _validate_relational_period(analysis, validated_snapshot.analysis)
+        return PortfolioReportV3Response(
             id=analysis.id,
             portfolio_id=analysis.portfolio_id,
             created_at=analysis.created_at,

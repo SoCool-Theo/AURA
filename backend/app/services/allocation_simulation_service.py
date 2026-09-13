@@ -18,15 +18,9 @@ from ..schemas.simulation import (
 )
 from .analysis_service import _build_price_frame
 from .market_data_service import MarketDataService
-from .portfolio_baseline_resolver import (
-    PortfolioBaselineKind,
-    PortfolioBaselineResolutionService,
-)
+from .portfolio_baseline_resolver import PortfolioBaselineResolutionService
 from .portfolio_service import PortfolioService
-from .portfolio_valuation_service import (
-    InvalidHoldingModeError,
-    PortfolioDisplayCurrency,
-)
+from .portfolio_valuation_service import PortfolioDisplayCurrency
 from .simulation_execution import SimulationExecutionResult
 
 
@@ -191,10 +185,6 @@ class AllocationSimulationService:
             valuation_date=valuation_date,
             display_currency=PortfolioDisplayCurrency.USD,
         )
-        if baseline.baseline_kind is PortfolioBaselineKind.PLANNED:
-            raise InvalidHoldingModeError(
-                "planned simulation snapshots are not implemented"
-            )
         original_weights = {
             holding.symbol: float(holding.weight)
             for holding in baseline.resolved_weights

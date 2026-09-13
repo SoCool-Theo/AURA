@@ -31,7 +31,6 @@ from backend.app.services.portfolio_baseline_resolver import (
     PortfolioBaselineResolutionService,
     ResolvedPortfolioWeight,
 )
-from backend.app.services.portfolio_valuation_service import InvalidHoldingModeError
 
 
 _PORTFOLIO_ID = UUID("12345678-1234-5678-1234-567812345678")
@@ -159,33 +158,51 @@ def _assert_session_lifecycle_untouched(session: MagicMock) -> None:
     session.flush.assert_not_called()
 
 
-def test_planned_simulation_stays_guarded_until_snapshot_contract_exists(
-) -> None:
+def test_planned_simulation_uses_target_weights_without_current_valuation() -> None:
     service, session, portfolio_service, market_data, _, _ = (
         _service_with_dependencies()
     )
     portfolio_service.get.return_value = _portfolio()
     baseline_resolver = MagicMock(spec=PortfolioBaselineResolutionService)
-    baseline_resolver.resolve.return_value = PortfolioBaselineResolution(
+    baseline = PortfolioBaselineResolution(
         baseline_kind=PortfolioBaselineKind.PLANNED,
-        resolved_weights=(ResolvedPortfolioWeight("BETA", Decimal("1")),),
+        resolved_weights=(
+            ResolvedPortfolioWeight("BETA", Decimal("0.25")),
+            ResolvedPortfolioWeight("ALPHA", Decimal("0.75")),
+        ),
         valuation=None,
         valuation_as_of=None,
     )
+    baseline_resolver.resolve.return_value = baseline
     service._baseline_resolver = baseline_resolver
+    market_data.get_range.return_value = [MagicMock(name="historical-row")]
+    prices = pd.DataFrame(
+        {"BETA": [100.0, 101.0, 102.0], "ALPHA": [50.0, 51.0, 52.0]},
+        index=pd.date_range("2020-02-03", periods=3),
+    )
 
-    with pytest.raises(
-        InvalidHoldingModeError,
-        match="planned simulation snapshots are not implemented",
+    with (
+        patch.object(service_module, "_build_price_frame", return_value=prices),
+        patch.object(
+            service_module,
+            "simulate_historical_scenario",
+            return_value=_simulation_result(),
+        ) as simulate,
     ):
-        service.run_with_context(
+        execution = service.run_with_context(
             user_id=_USER_ID,
             portfolio_id=_PORTFOLIO_ID,
             request=_request(),
             valuation_date=date(2026, 9, 12),
         )
 
-    market_data.get_range.assert_not_called()
+    assert execution is not None
+    assert execution.baseline is baseline
+    simulate.assert_called_once_with(
+        prices,
+        {"BETA": 0.25, "ALPHA": 0.75},
+    )
+    baseline_resolver.resolve.assert_called_once()
     _assert_session_lifecycle_untouched(session)
 
 

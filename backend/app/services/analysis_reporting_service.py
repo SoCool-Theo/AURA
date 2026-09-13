@@ -15,16 +15,15 @@ from ..schemas.reporting import (
 from .analysis_reporting_mapper import (
     PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION,
     PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+    PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
     analysis_record_to_report_response,
     analysis_record_to_report_summary,
     analysis_response_to_snapshot,
     enriched_analysis_to_v2_snapshot,
+    enriched_analysis_to_v3_snapshot,
 )
 from .analysis_service import AnalysisService
-from .portfolio_analysis_composition import (
-    PortfolioAnalysisCompositionError,
-    compose_portfolio_analysis,
-)
+from .portfolio_analysis_composition import compose_portfolio_analysis
 from .portfolio_analysis_preparation_service import (
     PortfolioAnalysisBaselineKind,
     PortfolioAnalysisPreparationService,
@@ -77,10 +76,6 @@ class AnalysisReportingService:
             valuation_date=selected_valuation_date,
             display_currency=display_currency,
         )
-        if preparation.baseline_kind is PortfolioAnalysisBaselineKind.PLANNED:
-            raise PortfolioAnalysisCompositionError(
-                "planned report snapshots are not implemented"
-            )
         try:
             response = self._analysis_service.analyze(
                 preparation.analysis_request
@@ -91,6 +86,10 @@ class AnalysisReportingService:
         if preparation.baseline_kind is PortfolioAnalysisBaselineKind.LEGACY:
             schema_version = PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION
             snapshot = analysis_response_to_snapshot(response)
+        elif preparation.baseline_kind is PortfolioAnalysisBaselineKind.PLANNED:
+            enriched = compose_portfolio_analysis(preparation, response)
+            schema_version = PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION
+            snapshot = enriched_analysis_to_v3_snapshot(enriched)
         else:
             enriched = compose_portfolio_analysis(preparation, response)
             schema_version = PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION

@@ -93,8 +93,10 @@ The additive planned-portfolio database foundation is implemented at migration
 `e5b7c9d2a4f1`. Type-aware `CURRENT`/`PLANNED` CRUD, backend-derived
 price-independent target allocation, optional estimated-share previews, and
 shared `CURRENT`/`PLANNED`/`LEGACY` analysis baseline resolution are
-implemented. Planned immutable snapshots, planned simulations, mode-aware AI,
-conversion, and client behavior remain sequenced follow-on work.
+implemented. Planned analysis and all three simulation modes now persist new
+immutable V3 snapshots containing the authoritative proposed-amount baseline;
+opening V3 history never queries current prices or recalculates results.
+Mode-aware AI, conversion, and client behavior remain sequenced follow-on work.
 
 Weight-only legacy portfolios remain temporarily readable and operable. A
 normal holdings replacement converts a legacy portfolio to the real model.

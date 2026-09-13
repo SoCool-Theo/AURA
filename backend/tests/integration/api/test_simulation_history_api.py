@@ -23,7 +23,9 @@ from app.schemas.simulation_history import (
     SimulationHistoryListResponse,
     SimulationHistorySummary,
     SimulationHistoryV2DetailResponse,
+    SimulationHistoryV3DetailResponse,
 )
+from app.schemas.portfolio import PlannedPortfolioBaselineContext
 from app.services.simulation_history_service import SimulationNotFoundError
 from backend.tests.unit.services.test_simulation_history_mapper import (
     _response_for_type,
@@ -162,6 +164,43 @@ def _v2_detail() -> SimulationHistoryV2DetailResponse:
                     current_value_usd="400.00",
                     current_allocation="0.40",
                 ),
+            ],
+        ),
+    )
+
+
+def _v3_detail() -> SimulationHistoryV3DetailResponse:
+    summary = _summary("allocation")
+    result = _response_for_type("allocation").model_dump(mode="json")
+    result["portfolio_id"] = str(PORTFOLIO_ID)
+    return SimulationHistoryV3DetailResponse(
+        **summary.model_dump(),
+        schema_version="allocation-simulation-response-v3",
+        result=result,
+        baseline=PlannedPortfolioBaselineContext(
+            portfolio_type="PLANNED",
+            baseline_source="proposed-amount-target-allocation",
+            plan_currency="THB",
+            total_proposed_amount="10000",
+            hypothetical_notice=(
+                "Hypothetical historical analysis only; not a forecast, "
+                "recommendation, or executable order."
+            ),
+            holdings=[
+                {
+                    "id": "53000000-0000-0000-0000-000000000001",
+                    "symbol": "MSFT",
+                    "proposed_amount": "6000",
+                    "target_allocation": "0.6",
+                    "position": 0,
+                },
+                {
+                    "id": "53000000-0000-0000-0000-000000000002",
+                    "symbol": "AAPL",
+                    "proposed_amount": "4000",
+                    "target_allocation": "0.4",
+                    "position": 1,
+                },
             ],
         ),
     )
@@ -357,6 +396,44 @@ def test_authenticated_v2_detail_exposes_frozen_baseline_around_same_result(
         simulation_id=SIMULATION_ID,
     )
     _assert_route_did_not_manage_session(api_harness)
+
+
+def test_authenticated_v3_detail_exposes_frozen_planned_baseline(
+    api_harness: ApiHarness,
+) -> None:
+    detail = _v3_detail()
+    api_harness.service.get.return_value = detail
+
+    response = api_harness.client.get(DETAIL_PATH, headers=REQUEST_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json() == detail.model_dump(mode="json")
+    validated = SimulationHistoryV3DetailResponse.model_validate(
+        response.json()
+    )
+    assert validated == detail
+    assert response.json()["schema_version"] == (
+        "allocation-simulation-response-v3"
+    )
+    assert response.json()["baseline"]["portfolio_type"] == "PLANNED"
+    assert response.json()["baseline"]["plan_currency"] == "THB"
+    assert "estimated_shares" not in response.json()["baseline"]["holdings"][0]
+    _assert_route_did_not_manage_session(api_harness)
+
+
+def test_openapi_history_detail_includes_all_snapshot_generations(
+    api_harness: ApiHarness,
+) -> None:
+    schema = api_harness.client.get("/openapi.json").json()
+    response_schema = schema["paths"][
+        "/api/portfolios/{portfolio_id}/simulations/{simulation_id}"
+    ]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+
+    assert response_schema["anyOf"] == [
+        {"$ref": "#/components/schemas/SimulationHistoryDetailResponse"},
+        {"$ref": "#/components/schemas/SimulationHistoryV2DetailResponse"},
+        {"$ref": "#/components/schemas/SimulationHistoryV3DetailResponse"},
+    ]
 
 
 @pytest.mark.parametrize("portfolio_state", ["missing", "wrong-owner"])
