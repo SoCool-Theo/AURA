@@ -21,7 +21,10 @@ from .analysis_reporting_mapper import (
     enriched_analysis_to_v2_snapshot,
 )
 from .analysis_service import AnalysisService
-from .portfolio_analysis_composition import compose_portfolio_analysis
+from .portfolio_analysis_composition import (
+    PortfolioAnalysisCompositionError,
+    compose_portfolio_analysis,
+)
 from .portfolio_analysis_preparation_service import (
     PortfolioAnalysisBaselineKind,
     PortfolioAnalysisPreparationService,
@@ -74,6 +77,10 @@ class AnalysisReportingService:
             valuation_date=selected_valuation_date,
             display_currency=display_currency,
         )
+        if preparation.baseline_kind is PortfolioAnalysisBaselineKind.PLANNED:
+            raise PortfolioAnalysisCompositionError(
+                "planned report snapshots are not implemented"
+            )
         try:
             response = self._analysis_service.analyze(
                 preparation.analysis_request

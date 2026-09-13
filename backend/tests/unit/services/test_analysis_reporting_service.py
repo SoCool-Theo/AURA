@@ -30,6 +30,9 @@ from backend.app.services.analysis_reporting_service import (
 )
 from backend.app.services.analysis_service import AnalysisService
 from backend.app.services.market_data_service import MarketDataUnavailableError
+from backend.app.services.portfolio_analysis_composition import (
+    PortfolioAnalysisCompositionError,
+)
 from backend.app.services.portfolio_analysis_preparation_service import (
     PortfolioAnalysisPreparationService,
 )
@@ -46,6 +49,7 @@ from backend.tests.unit.services.test_analysis_reporting_mapper import (
 )
 from backend.tests.unit.services.test_portfolio_analysis_composition import (
     _analysis_response as _real_analysis_response,
+    _planned_preparation,
     _real_preparation,
 )
 
@@ -328,6 +332,31 @@ def test_real_creation_orchestrates_once_and_persists_v2() -> None:
         schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
         result_snapshot=snapshot,
     )
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_planned_report_stays_guarded_until_snapshot_contract_exists() -> None:
+    service, session, portfolio_service, analysis_service, repository = (
+        _service_with_dependencies()
+    )
+    preparation_service = MagicMock(spec=PortfolioAnalysisPreparationService)
+    service._preparation_service = preparation_service
+    portfolio_service.get.return_value = _portfolio()
+    preparation_service.prepare.return_value = _planned_preparation()
+
+    with pytest.raises(
+        PortfolioAnalysisCompositionError,
+        match="planned report snapshots are not implemented",
+    ):
+        service.create_report(
+            user_id=_USER_ID,
+            portfolio_id=_PORTFOLIO_ID,
+            period=_period(),
+            valuation_date=date(2026, 9, 12),
+        )
+
+    analysis_service.analyze.assert_not_called()
+    repository.save_snapshot.assert_not_called()
     _assert_session_lifecycle_untouched(session)
 
 

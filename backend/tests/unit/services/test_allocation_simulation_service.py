@@ -28,6 +28,13 @@ from backend.app.services.allocation_simulation_service import (
     EmptyPortfolioError,
     _map_allocation_simulation_response,
 )
+from backend.app.services.portfolio_baseline_resolver import (
+    PortfolioBaselineKind,
+    PortfolioBaselineResolution,
+    PortfolioBaselineResolutionService,
+    ResolvedPortfolioWeight,
+)
+from backend.app.services.portfolio_valuation_service import InvalidHoldingModeError
 
 
 _PORTFOLIO_ID = UUID("12345678-1234-5678-1234-567812345678")
@@ -160,6 +167,36 @@ def _original_weights() -> dict[str, float]:
 
 def _modified_weights() -> dict[str, float]:
     return {"BETA": 0.5, "ZERO": 0.0, "ALPHA": 0.5}
+
+
+def test_planned_simulation_stays_guarded_until_snapshot_contract_exists(
+) -> None:
+    service, session, portfolio_service, market_data, _, _ = (
+        _service_with_dependencies()
+    )
+    portfolio_service.get.return_value = _portfolio()
+    baseline_resolver = MagicMock(spec=PortfolioBaselineResolutionService)
+    baseline_resolver.resolve.return_value = PortfolioBaselineResolution(
+        baseline_kind=PortfolioBaselineKind.PLANNED,
+        resolved_weights=(ResolvedPortfolioWeight("BETA", Decimal("1")),),
+        valuation=None,
+        valuation_as_of=None,
+    )
+    service._baseline_resolver = baseline_resolver
+
+    with pytest.raises(
+        InvalidHoldingModeError,
+        match="planned simulation snapshots are not implemented",
+    ):
+        service.run_with_context(
+            user_id=_USER_ID,
+            portfolio_id=_PORTFOLIO_ID,
+            request=_request(),
+            valuation_date=date(2026, 9, 12),
+        )
+
+    market_data.get_range.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
 
 
 def _map_response(

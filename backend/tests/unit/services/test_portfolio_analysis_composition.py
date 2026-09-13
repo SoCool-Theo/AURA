@@ -21,6 +21,10 @@ from backend.app.services.portfolio_analysis_preparation_service import (
     PortfolioAnalysisPreparationResult,
     ResolvedPortfolioAnalysisWeight,
 )
+from backend.app.services.portfolio_planned_allocation_service import (
+    PlannedAllocationHolding,
+    PlannedPortfolioAllocation,
+)
 from backend.app.services.portfolio_valuation_service import (
     HoldingValuationResult,
     PortfolioDisplayCurrency,
@@ -288,6 +292,38 @@ def _legacy_preparation() -> PortfolioAnalysisPreparationResult:
     )
 
 
+def _planned_preparation() -> PortfolioAnalysisPreparationResult:
+    allocation = PlannedPortfolioAllocation(
+        portfolio_id=UUID("62000000-0000-0000-0000-000000000001"),
+        plan_currency="USD",
+        total_proposed_amount=Decimal("1000"),
+        holdings=(
+            PlannedAllocationHolding(
+                holding_id=UUID("63000000-0000-0000-0000-000000000001"),
+                symbol="AAPL",
+                proposed_amount=Decimal("600"),
+                target_allocation=Decimal("0.600000000000"),
+                position=0,
+            ),
+            PlannedAllocationHolding(
+                holding_id=UUID("63000000-0000-0000-0000-000000000002"),
+                symbol="BND",
+                proposed_amount=Decimal("400"),
+                target_allocation=Decimal("0.400000000000"),
+                position=1,
+            ),
+        ),
+    )
+    return PortfolioAnalysisPreparationResult(
+        baseline_kind=PortfolioAnalysisBaselineKind.PLANNED,
+        resolved_weights=BASELINE_WEIGHTS,
+        valuation=None,
+        valuation_as_of=None,
+        analysis_request=_analysis_request(),
+        planned_allocation=allocation,
+    )
+
+
 def _asset_metric(symbol: str, weight: float) -> AssetMetrics:
     return AssetMetrics(
         symbol=symbol,
@@ -382,6 +418,56 @@ def test_legacy_composition_retains_analytics_without_fabricating_facts() -> Non
     assert result.holdings[0].risk_driver_entry is (
         analysis.risk_drivers.entries[1]
     )
+
+
+def test_planned_composition_preserves_amounts_without_ownership_facts() -> None:
+    preparation = _planned_preparation()
+    analysis = _analysis_response()
+
+    result = compose_portfolio_analysis(preparation, analysis)
+
+    assert result.baseline_kind is PortfolioAnalysisBaselineKind.PLANNED
+    assert result.valuation is None
+    assert [holding.symbol for holding in result.holdings] == ["AAPL", "BND"]
+    assert [holding.proposed_amount for holding in result.holdings] == [
+        Decimal("600"),
+        Decimal("400"),
+    ]
+    assert [holding.position for holding in result.holdings] == [0, 1]
+    assert [holding.holding_id for holding in result.holdings] == [
+        UUID("63000000-0000-0000-0000-000000000001"),
+        UUID("63000000-0000-0000-0000-000000000002"),
+    ]
+    for holding in result.holdings:
+        assert holding.invested_amount is None
+        assert holding.invested_currency is None
+        assert holding.shares is None
+        assert holding.purchase_date is None
+        assert holding.asset_price is None
+        assert holding.current_value_usd is None
+        assert holding.current_allocation is None
+
+
+def test_planned_composition_rejects_target_weight_mismatch() -> None:
+    preparation = _planned_preparation()
+    assert preparation.planned_allocation is not None
+    invalid = replace(
+        preparation.planned_allocation.holdings[0],
+        target_allocation=Decimal("0.61"),
+    )
+    invalid_allocation = replace(
+        preparation.planned_allocation,
+        holdings=(invalid, preparation.planned_allocation.holdings[1]),
+    )
+
+    with pytest.raises(
+        PortfolioAnalysisCompositionError,
+        match="planned allocation does not match prepared baseline: AAPL",
+    ):
+        compose_portfolio_analysis(
+            replace(preparation, planned_allocation=invalid_allocation),
+            _analysis_response(),
+        )
 
 
 @pytest.mark.parametrize(

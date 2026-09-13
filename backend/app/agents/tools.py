@@ -24,7 +24,10 @@ from ..services.portfolio_baseline_resolver import (
     PortfolioBaselineResolutionService,
 )
 from ..services.portfolio_service import PortfolioService
-from ..services.portfolio_valuation_service import PortfolioDisplayCurrency
+from ..services.portfolio_valuation_service import (
+    InvalidHoldingModeError,
+    PortfolioDisplayCurrency,
+)
 from ..services.simulation_history_service import SimulationHistoryService
 
 
@@ -222,6 +225,11 @@ class AuraAgentTools:
                     for holding in baseline.resolved_weights
                 ],
             }
+
+        if baseline.baseline_kind is PortfolioBaselineKind.PLANNED:
+            raise InvalidHoldingModeError(
+                "planned AI grounding is not implemented"
+            )
 
         valuation = baseline.valuation
         if valuation is None:

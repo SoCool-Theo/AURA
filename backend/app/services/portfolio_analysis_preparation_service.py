@@ -14,6 +14,7 @@ from .portfolio_baseline_resolver import (
     PortfolioBaselineResolutionService,
     ResolvedPortfolioWeight,
 )
+from .portfolio_planned_allocation_service import PlannedPortfolioAllocation
 from .portfolio_valuation_service import (
     PortfolioDisplayCurrency,
     PortfolioValuationResult,
@@ -33,6 +34,7 @@ class PortfolioAnalysisPreparationResult:
     valuation: PortfolioValuationResult | None
     valuation_as_of: date | None
     analysis_request: PortfolioAnalysisRequest
+    planned_allocation: PlannedPortfolioAllocation | None = None
 
 
 def _build_analysis_request(
@@ -95,6 +97,7 @@ class PortfolioAnalysisPreparationService:
             valuation=resolution.valuation,
             valuation_as_of=resolution.valuation_as_of,
             analysis_request=analysis_request,
+            planned_allocation=resolution.planned_allocation,
         )
 
 

@@ -25,6 +25,13 @@ from backend.app.services.historical_scenario_service import (
     HistoricalScenarioService,
     _map_historical_scenario_response,
 )
+from backend.app.services.portfolio_baseline_resolver import (
+    PortfolioBaselineKind,
+    PortfolioBaselineResolution,
+    PortfolioBaselineResolutionService,
+    ResolvedPortfolioWeight,
+)
+from backend.app.services.portfolio_valuation_service import InvalidHoldingModeError
 
 
 _PORTFOLIO_ID = UUID("12345678-1234-5678-1234-567812345678")
@@ -150,6 +157,36 @@ def _assert_session_lifecycle_untouched(session: MagicMock) -> None:
     session.rollback.assert_not_called()
     session.close.assert_not_called()
     session.flush.assert_not_called()
+
+
+def test_planned_simulation_stays_guarded_until_snapshot_contract_exists(
+) -> None:
+    service, session, portfolio_service, market_data, _, _ = (
+        _service_with_dependencies()
+    )
+    portfolio_service.get.return_value = _portfolio()
+    baseline_resolver = MagicMock(spec=PortfolioBaselineResolutionService)
+    baseline_resolver.resolve.return_value = PortfolioBaselineResolution(
+        baseline_kind=PortfolioBaselineKind.PLANNED,
+        resolved_weights=(ResolvedPortfolioWeight("BETA", Decimal("1")),),
+        valuation=None,
+        valuation_as_of=None,
+    )
+    service._baseline_resolver = baseline_resolver
+
+    with pytest.raises(
+        InvalidHoldingModeError,
+        match="planned simulation snapshots are not implemented",
+    ):
+        service.run_with_context(
+            user_id=_USER_ID,
+            portfolio_id=_PORTFOLIO_ID,
+            request=_request(),
+            valuation_date=date(2026, 9, 12),
+        )
+
+    market_data.get_range.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
 
 
 def test_mapper_returns_valid_response_with_portfolio_identity() -> None:

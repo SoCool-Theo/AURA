@@ -13,7 +13,7 @@ from backend.app.agents.tools import (
     AuraAgentTools,
     _reduce_time_series,
 )
-from backend.app.database.models import Holding, Portfolio
+from backend.app.database.models import Holding, Portfolio, PortfolioType
 from backend.app.schemas.reporting import (
     PortfolioReportListResponse,
     PortfolioReportResponse,
@@ -29,6 +29,7 @@ from backend.app.schemas.simulation_history import (
 from backend.app.services.analysis_reporting_service import ReportNotFoundError
 from backend.app.services.market_data_service import MarketDataUnavailableError
 from backend.app.services.portfolio_valuation_service import (
+    InvalidHoldingModeError,
     PortfolioDisplayCurrency,
     PortfolioValuationService,
 )
@@ -107,6 +108,35 @@ def _real_portfolio() -> Portfolio:
                 invested_currency="USD",
                 shares=Decimal("1.000000000000"),
                 purchase_date=date(2026, 1, 2),
+                position=1,
+            ),
+        ]
+    )
+    return portfolio
+
+
+def _planned_portfolio() -> Portfolio:
+    portfolio = Portfolio(
+        id=_PORTFOLIO_ID,
+        user_id=_USER_ID,
+        name="Planned Portfolio",
+        portfolio_type=PortfolioType.PLANNED.value,
+        plan_currency="USD",
+    )
+    portfolio.holdings.extend(
+        [
+            Holding(
+                id=UUID("53000000-0000-0000-0000-000000000001"),
+                portfolio_id=_PORTFOLIO_ID,
+                symbol="AAPL",
+                proposed_amount=Decimal("600"),
+                position=0,
+            ),
+            Holding(
+                id=UUID("53000000-0000-0000-0000-000000000002"),
+                portfolio_id=_PORTFOLIO_ID,
+                symbol="BND",
+                proposed_amount=Decimal("400"),
                 position=1,
             ),
         ]
@@ -328,6 +358,24 @@ def test_real_portfolio_context_uses_one_authoritative_usd_valuation() -> None:
     assert valuation.fx_context is None
     assert "fx" not in context["valuation"]
     assert all("id" not in holding for holding in context["holdings"])
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_planned_portfolio_context_stays_guarded_until_ai_step() -> None:
+    tools, session, portfolio_service, reporting_service, simulation_service = (
+        _tools_with_services()
+    )
+    portfolio_service.get.return_value = _planned_portfolio()
+
+    with pytest.raises(
+        InvalidHoldingModeError,
+        match="planned AI grounding is not implemented",
+    ):
+        tools.get_portfolio_context()
+
+    tools._test_valuation_service.value.assert_not_called()
+    reporting_service.assert_not_called()
+    simulation_service.assert_not_called()
     _assert_session_lifecycle_untouched(session)
 
 
