@@ -41,6 +41,10 @@ class Holding(Base):
             name="ck_holdings_invested_amount_positive",
         ),
         CheckConstraint(
+            "proposed_amount IS NULL OR proposed_amount > 0",
+            name="ck_holdings_proposed_amount_positive",
+        ),
+        CheckConstraint(
             "shares IS NULL OR shares > 0",
             name="ck_holdings_shares_positive",
         ),
@@ -50,12 +54,17 @@ class Holding(Base):
             name="ck_holdings_invested_currency",
         ),
         CheckConstraint(
-            "(weight IS NOT NULL AND invested_amount IS NULL AND "
+            "(weight IS NOT NULL AND proposed_amount IS NULL AND "
+            "invested_amount IS NULL AND "
             "invested_currency IS NULL AND shares IS NULL AND "
             "purchase_date IS NULL) OR "
-            "(weight IS NULL AND invested_amount IS NOT NULL AND "
+            "(weight IS NULL AND proposed_amount IS NULL AND "
+            "invested_amount IS NOT NULL AND "
             "invested_currency IS NOT NULL AND shares IS NOT NULL AND "
-            "purchase_date IS NOT NULL)",
+            "purchase_date IS NOT NULL) OR "
+            "(weight IS NULL AND proposed_amount IS NOT NULL AND "
+            "invested_amount IS NULL AND invested_currency IS NULL AND "
+            "shares IS NULL AND purchase_date IS NULL)",
             name="ck_holdings_complete_mode",
         ),
         CheckConstraint(
@@ -86,6 +95,10 @@ class Holding(Base):
     )
     symbol: Mapped[str] = mapped_column(Text, nullable=False)
     invested_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=28, scale=12),
+        nullable=True,
+    )
+    proposed_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(precision=28, scale=12),
         nullable=True,
     )

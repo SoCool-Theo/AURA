@@ -1530,3 +1530,50 @@ Fresh Supabase deployment
 The backend real-holding branch is complete. Customer real-holding parity,
 fresh Supabase deployment, optional product gaps, and Admin integration remain
 incomplete.
+
+## Planned Portfolio Expansion
+
+**Status:** Step 2 database foundation complete; runtime integration pending
+
+### Approved product target contract
+
+- Customer-facing portfolio types are `CURRENT` and `PLANNED`; `LEGACY` is
+  internal compatibility state and cannot be selected for new portfolios.
+- Current holdings keep actual ownership facts. Planned holdings persist only
+  positive proposed amounts under one USD/THB plan currency.
+- Planned target weights are backend-derived from proposed amounts. Estimated
+  shares are optional display context and never analytics authority.
+- The existing shared baseline resolver will be extended in a later step so
+  analytics, reports, simulations, and AI consume one provenance-aware
+  canonical allocation.
+
+### Completed database foundation
+
+- Added explicit `portfolios.portfolio_type`, nullable `plan_currency`, and
+  optional self-referencing `source_plan_id` with database constraints.
+- Added nullable positive `holdings.proposed_amount` and extended the complete
+  holding-shape constraint for mutually exclusive legacy, current, and planned
+  rows.
+- Added additive Alembic revision `e5b7c9d2a4f1`. It classifies existing real
+  and empty portfolios as `CURRENT`, saved-weight portfolios as `LEGACY`, and
+  refuses mixed/incomplete source state before mutation.
+- Downgrade refuses to discard planned holdings or source-plan provenance. A
+  safe downgrade restores the prior real/legacy schema without rewriting
+  holding facts or fabricating weights.
+
+### Step 2 verification
+
+- Database unit suite: 142 passed.
+- Complete backend unit suite: 2,261 passed.
+- Credential-safe preflight confirmed the approved local PostgreSQL 18.4 test
+  database at starting revision `d4a6f8c2e1b7`.
+- Guarded live upgrade, backfill, constraints, downgrade refusal, cleanup, and
+  restoration: 2 passed.
+- The preserved local database was restored to `d4a6f8c2e1b7`; repository
+  Alembic head is `e5b7c9d2a4f1`.
+
+### Remaining planned-portfolio work
+
+Type-aware schemas, CRUD, planned allocation/estimate preview, shared baseline
+resolution, immutable report/simulation variants, AI grounding, and customer
+web/mobile integration are not implemented yet.

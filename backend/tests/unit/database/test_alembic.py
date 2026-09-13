@@ -19,6 +19,7 @@ INITIAL_REVISION = "9f4c2a7b1d3e"
 AUTHENTICATION_REVISION = "2b6e5d4a9c81"
 SIMULATION_REVISION = "7c1e2f4a6b90"
 REAL_HOLDING_REVISION = "d4a6f8c2e1b7"
+PLANNED_PORTFOLIO_REVISION = "e5b7c9d2a4f1"
 
 
 def _alembic_config() -> Config:
@@ -78,7 +79,7 @@ def test_alembic_configuration_loads_without_connecting(
     script = ScriptDirectory.from_config(config)
 
     assert script.dir == str(ALEMBIC_DIRECTORY)
-    assert len(list(script.walk_revisions())) == 4
+    assert len(list(script.walk_revisions())) == 5
 
 
 def test_offline_migration_operation_does_not_connect(
@@ -96,24 +97,26 @@ def test_offline_migration_operation_does_not_connect(
     command.upgrade(_alembic_config(), "head", sql=True)
 
 
-def test_real_holding_revision_extends_the_simulation_revision() -> None:
+def test_planned_portfolio_revision_extends_real_holdings() -> None:
     revision_files = [
         path
         for path in VERSIONS_DIRECTORY.rglob("*.py")
         if path.name != "__init__.py"
     ]
 
-    assert len(revision_files) == 4
+    assert len(revision_files) == 5
     script = ScriptDirectory.from_config(_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        PLANNED_PORTFOLIO_REVISION,
         REAL_HOLDING_REVISION,
         SIMULATION_REVISION,
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert revisions[0].down_revision == SIMULATION_REVISION
-    assert revisions[1].down_revision == AUTHENTICATION_REVISION
-    assert revisions[2].down_revision == INITIAL_REVISION
-    assert revisions[3].down_revision is None
-    assert script.get_current_head() == REAL_HOLDING_REVISION
+    assert revisions[0].down_revision == REAL_HOLDING_REVISION
+    assert revisions[1].down_revision == SIMULATION_REVISION
+    assert revisions[2].down_revision == AUTHENTICATION_REVISION
+    assert revisions[3].down_revision == INITIAL_REVISION
+    assert revisions[4].down_revision is None
+    assert script.get_current_head() == PLANNED_PORTFOLIO_REVISION

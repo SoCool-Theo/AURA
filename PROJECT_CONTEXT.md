@@ -88,7 +88,10 @@ The backend on `feat/backend-real-holdings-dynamic-allocation` supports real
 holding facts (`symbol`, `invested_amount`, `invested_currency`, `shares`, and
 `purchase_date`), backend-owned holding order, dynamic USD valuation, optional THB
 display, V2 immutable reports, V2 immutable simulation history, and compatible
-AI grounding. The migration head is `d4a6f8c2e1b7`.
+AI grounding. The last fully integrated runtime migration is `d4a6f8c2e1b7`.
+The additive planned-portfolio database foundation is implemented at repository
+head `e5b7c9d2a4f1`; its CRUD, baseline, snapshot, AI, and client behavior remain
+sequenced follow-on work.
 
 Weight-only legacy portfolios remain temporarily readable and operable. A
 normal holdings replacement converts a legacy portfolio to the real model.

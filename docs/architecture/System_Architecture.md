@@ -245,6 +245,13 @@ AURA/
 
 ## Current Holding and Valuation Architecture
 
+The currently implemented compatibility architecture below is being extended
+by the approved [planned-portfolio target contract](../api_contracts/planned_portfolios.md).
+That target introduces user-facing `CURRENT` and `PLANNED` portfolio types while
+retaining `LEGACY` as internal compatibility state. Until its sequenced backend
+steps are implemented and verified, the two-mode runtime behavior documented
+below remains authoritative.
+
 Aura supports two complete, mutually exclusive persisted holding modes during
 the compatibility period:
 
