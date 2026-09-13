@@ -1706,7 +1706,39 @@ incomplete.
 - No database, Docker, external LLM, migration, dependency, branch, commit, or
   push operation was performed.
 
+### Completed Step 7A mobile planned-portfolio integration
+
+- Mobile portfolio contracts and API clients now distinguish `CURRENT`,
+  `PLANNED`, and `LEGACY`, submit planned proposed amounts, and consume the
+  backend planned-allocation and planned-preview endpoints.
+- Create Portfolio offers explicit current/planned choices. Planned entry uses
+  one USD/THB plan currency plus symbol and proposed amount only; current entry
+  retains actual shares, invested amount/currency, and purchase date. Edit
+  Holdings preserves the saved type and cannot mix the two holding shapes.
+- Portfolio list/detail and Dashboard identify hypothetical plans, display the
+  backend-derived total and target allocation, and show estimated shares only
+  as optional, non-authoritative preview information.
+- Mobile analytics and saved reports render immutable Report V3 planned
+  baselines and the hypothetical notice. Report V1/V2 behavior remains intact.
+- Allocation and Combined simulation editors initialize planned portfolios
+  from `planned-allocation`, never from on-device amount division. Saved
+  simulation detail renders all planned V3 baseline variants without current
+  price or FX requests.
+- The Assistant keeps its unchanged authenticated request shape while the UI
+  identifies planned context; wording and limitations remain backend-owned.
+
+### Step 7A verification
+
+- Mobile TypeScript compilation completed with no errors.
+- Mobile production-authority suite: 23 passed, including planned amount
+  validation, exact API payload/path checks, backend target-weight consumption,
+  display-only estimate guards, and V3 report/simulation presentation checks.
+- No web client, backend, database, Docker, external LLM, dependency, branch,
+  commit, or push operation was performed.
+
 ### Remaining planned-portfolio work
 
-Conversion to a new current portfolio and customer web/mobile integration are
-not implemented yet.
+Customer web integration, the atomic plan-to-new-current conversion capability
+and its client flow, and final guarded regression/deployment verification remain
+pending. Conversion was not exposed in mobile because the required backend
+operation does not exist yet.

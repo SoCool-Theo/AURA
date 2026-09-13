@@ -256,7 +256,8 @@ it is not a portfolio-wide `503` because estimates are non-authoritative.
 
 ## Delivery sequence
 
-Steps 1 through 6 are implemented. Steps 7 and 8 remain pending.
+Steps 1 through 6 and the mobile portion of Step 7 are implemented. Web
+integration, conversion, and Step 8 remain pending.
 
 1. Freeze the planned-portfolio product, data, API, and provenance contract.
 2. Add and verify the database discriminator, planned fields, constraints, and
@@ -270,6 +271,9 @@ Steps 1 through 6 are implemented. Steps 7 and 8 remain pending.
 6. Add mode-aware AI grounding. Implemented for live planned portfolios and
    frozen Report/Simulation V3 context with planned-language instructions,
    explicit hypothetical limitations, and ownership-claim output rejection.
-7. Integrate customer mobile and web workflows.
+7. Integrate customer mobile and web workflows. Mobile now supports typed
+   create/edit/detail/dashboard, Report V3, Simulation V3, planned simulation
+   baselines, and mode-aware Assistant context. Web integration and the
+   conversion workflow remain pending.
 8. Run migration, rollback, privacy, immutability, and full regression
    verification before deployment readiness is claimed.
