@@ -1742,3 +1742,35 @@ Customer web integration, the atomic plan-to-new-current conversion capability
 and its client flow, and final guarded regression/deployment verification remain
 pending. Conversion was not exposed in mobile because the required backend
 operation does not exist yet.
+
+### Completed Step 8M mobile readiness verification
+
+- The committed mobile planned-portfolio integration was verified on branch
+  `feat/mobile-real-holdings-integration`; the worktree was clean before this
+  documentation update and no web files were changed.
+- Mobile TypeScript compilation completed successfully and the complete mobile
+  production-authority/regression suite passed 23 tests.
+- The installed dependency tree resolved successfully with no missing package.
+- Expo/Metro resolved 1,153 modules and produced a release Android Hermes
+  bundle plus its assets and metadata. The temporary export directory was
+  removed after verification.
+- The production mobile source audit found no embedded LLM keys, database URLs,
+  PostgreSQL credentials, or Supabase service-role configuration. Backend-only
+  financial authority remains enforced: current valuation, planned target
+  allocation, planned share previews, reports, simulations, and AI context are
+  consumed from authenticated API responses.
+- `CURRENT`, `PLANNED`, and `LEGACY` presentation remains distinct. Planned
+  estimates remain display-only, planned V3 history remains immutable, and
+  error presentation continues to distinguish authentication, not-found,
+  validation, server, and network failures.
+- No database, migration, rollback, Docker, external LLM, dependency install,
+  branch change, commit, or push operation was performed during this step.
+
+### Mobile-only readiness boundary
+
+The checked mobile source is ready for device/API acceptance testing, but this
+is not a claim that the entire product is deployment-ready. A signed native
+binary, physical-device or emulator E2E run against a deployed backend, web
+planned-portfolio integration, plan-to-current conversion, and the broader
+database/deployment verification are outside this mobile-only Step 8M. The web
+integration is intentionally skipped by current product direction.

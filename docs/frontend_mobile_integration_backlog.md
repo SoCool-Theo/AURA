@@ -1,9 +1,10 @@
 # Real-Holding Frontend and Mobile Integration Backlog
 
 The backend contracts are complete. The mobile client now supports current,
-planned, and legacy portfolio modes; the customer React client still requires
-the equivalent planned-portfolio integration. Plan-to-current conversion
-remains unavailable in both clients until its atomic backend operation exists.
+planned, and legacy portfolio modes and has passed its mobile-only readiness
+verification. The equivalent customer React integration is intentionally
+skipped by current product direction. Plan-to-current conversion remains
+unavailable until its atomic backend operation exists.
 
 ## Required real-holding integration
 

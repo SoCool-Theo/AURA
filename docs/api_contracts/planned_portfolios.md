@@ -256,8 +256,10 @@ it is not a portfolio-wide `503` because estimates are non-authoritative.
 
 ## Delivery sequence
 
-Steps 1 through 6 and the mobile portion of Step 7 are implemented. Web
-integration, conversion, and Step 8 remain pending.
+Steps 1 through 6, the mobile portion of Step 7, and the mobile-only Step 8M
+readiness verification are implemented. Web integration is intentionally
+skipped by current product direction. Conversion and full-system deployment
+verification remain pending.
 
 1. Freeze the planned-portfolio product, data, API, and provenance contract.
 2. Add and verify the database discriminator, planned fields, constraints, and
@@ -273,7 +275,10 @@ integration, conversion, and Step 8 remain pending.
    explicit hypothetical limitations, and ownership-claim output rejection.
 7. Integrate customer mobile and web workflows. Mobile now supports typed
    create/edit/detail/dashboard, Report V3, Simulation V3, planned simulation
-   baselines, and mode-aware Assistant context. Web integration and the
-   conversion workflow remain pending.
+   baselines, and mode-aware Assistant context. Web integration is skipped; the
+   conversion workflow remains pending.
 8. Run migration, rollback, privacy, immutability, and full regression
-   verification before deployment readiness is claimed.
+   verification before deployment readiness is claimed. The mobile-only Step
+   8M compiler, production-authority tests, dependency resolution, source
+   security audit, and Android Hermes export pass; this does not replace the
+   remaining full-system verification.
