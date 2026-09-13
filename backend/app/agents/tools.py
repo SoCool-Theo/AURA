@@ -1,4 +1,4 @@
-"""Controlled read-only Aura context tools for a future AI agent."""
+"""Controlled read-only Aura context tools for the grounded AI agent."""
 
 from collections.abc import Sequence
 from copy import deepcopy
@@ -8,7 +8,8 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ..database.models import Portfolio
+from ..database.models import Portfolio, PortfolioType
+from ..schemas.portfolio import PLANNED_PORTFOLIO_HYPOTHETICAL_NOTICE
 from ..schemas.reporting import (
     PortfolioReportDetailResponse,
     PortfolioReportV2Response,
@@ -26,10 +27,7 @@ from ..services.portfolio_baseline_resolver import (
     PortfolioBaselineResolutionService,
 )
 from ..services.portfolio_service import PortfolioService
-from ..services.portfolio_valuation_service import (
-    InvalidHoldingModeError,
-    PortfolioDisplayCurrency,
-)
+from ..services.portfolio_valuation_service import PortfolioDisplayCurrency
 from ..services.simulation_history_service import SimulationHistoryService
 
 
@@ -59,15 +57,16 @@ def _reduce_time_series(
 
 def _project_report(report: PortfolioReportDetailResponse) -> dict[str, Any]:
     """Return the validated report fields suitable for a grounded explanation."""
-    if isinstance(report, PortfolioReportV3Response):
-        raise InvalidHoldingModeError(
-            "planned AI grounding is not implemented"
-        )
     analysis = report.analysis.model_dump(mode="json")
     projected = {
         "id": str(report.id),
         "portfolio_id": str(report.portfolio_id),
         "created_at": report.created_at.isoformat(),
+        "schema_version": getattr(
+            report,
+            "schema_version",
+            "portfolio-analysis-response-v1",
+        ),
         "analysis": {
             "portfolio_name": analysis["portfolio_name"],
             "start_date": analysis["start_date"],
@@ -88,12 +87,27 @@ def _project_report(report: PortfolioReportDetailResponse) -> dict[str, Any]:
         },
     }
     if isinstance(report, PortfolioReportV2Response):
-        projected["schema_version"] = report.schema_version
+        projected["portfolio_type"] = PortfolioType.CURRENT.value
+        projected["baseline_source"] = "current-valuation"
         projected["valuation"] = report.valuation.model_dump(mode="json")
         projected["holdings"] = [
             _without_internal_id(holding.model_dump(mode="json"))
             for holding in report.holdings
         ]
+    elif isinstance(report, PortfolioReportV3Response):
+        projected["portfolio_type"] = PortfolioType.PLANNED.value
+        projected["baseline_source"] = (
+            "proposed-amount-target-allocation"
+        )
+        baseline = report.baseline.model_dump(mode="json")
+        baseline["holdings"] = [
+            _without_internal_id(holding)
+            for holding in baseline["holdings"]
+        ]
+        projected["baseline"] = baseline
+    else:
+        projected["portfolio_type"] = PortfolioType.LEGACY.value
+        projected["baseline_source"] = "saved-weights"
     return projected
 
 
@@ -101,10 +115,6 @@ def _project_simulation(
     simulation: SimulationHistoryDetail,
 ) -> dict[str, Any]:
     """Return one validated saved simulation with reduced trajectories only."""
-    if isinstance(simulation, SimulationHistoryV3DetailResponse):
-        raise InvalidHoldingModeError(
-            "planned AI grounding is not implemented"
-        )
     result = simulation.result.model_dump(mode="json")
     if simulation.simulation_type == "historical-scenario":
         result["trajectory"] = _reduce_time_series(result["trajectory"])
@@ -124,15 +134,36 @@ def _project_simulation(
         "requested_start_date": simulation.requested_start_date.isoformat(),
         "requested_end_date": simulation.requested_end_date.isoformat(),
         "created_at": simulation.created_at.isoformat(),
+        "schema_version": getattr(
+            simulation,
+            "schema_version",
+            f"{simulation.simulation_type}-simulation-response-v1",
+        ),
         "result": result,
     }
     if isinstance(simulation, SimulationHistoryV2DetailResponse):
+        projected["portfolio_type"] = PortfolioType.CURRENT.value
+        projected["baseline_source"] = "current-valuation"
+    elif isinstance(simulation, SimulationHistoryV3DetailResponse):
+        projected["portfolio_type"] = PortfolioType.PLANNED.value
+        projected["baseline_source"] = (
+            "proposed-amount-target-allocation"
+        )
+    else:
+        projected["portfolio_type"] = PortfolioType.LEGACY.value
+        projected["baseline_source"] = "saved-weights"
+    if isinstance(
+        simulation,
+        (
+            SimulationHistoryV2DetailResponse,
+            SimulationHistoryV3DetailResponse,
+        ),
+    ):
         baseline = simulation.baseline.model_dump(mode="json")
         baseline["holdings"] = [
             _without_internal_id(holding)
             for holding in baseline["holdings"]
         ]
-        projected["schema_version"] = simulation.schema_version
         projected["baseline"] = baseline
     return projected
 
@@ -147,9 +178,9 @@ def _without_internal_id(payload: dict[str, Any]) -> dict[str, Any]:
 def _project_persisted_portfolio(portfolio: Portfolio) -> dict[str, Any]:
     """Return safe portfolio identity plus legacy weights when available.
 
-    A selected immutable V2 report or simulation owns the authoritative real
-    holding baseline. Current REAL holding facts are intentionally omitted so
-    they cannot conflict with that frozen context after a portfolio edit.
+    A selected immutable V2 or V3 report/simulation owns its authoritative
+    baseline. Current or planned holding facts are intentionally omitted so
+    they cannot conflict with frozen context after a portfolio edit.
     """
     projected: dict[str, Any] = {
         "id": str(portfolio.id),
@@ -158,12 +189,15 @@ def _project_persisted_portfolio(portfolio: Portfolio) -> dict[str, Any]:
     holdings = tuple(portfolio.holdings)
     if holdings and all(
         holding.weight is not None
+        and holding.proposed_amount is None
         and holding.invested_amount is None
         and holding.invested_currency is None
         and holding.shares is None
         and holding.purchase_date is None
         for holding in holdings
     ):
+        projected["portfolio_type"] = PortfolioType.LEGACY.value
+        projected["baseline_source"] = "saved-weights"
         projected["holdings"] = [
             {
                 "symbol": holding.symbol,
@@ -171,6 +205,10 @@ def _project_persisted_portfolio(portfolio: Portfolio) -> dict[str, Any]:
             }
             for holding in holdings
         ]
+    elif portfolio.portfolio_type == PortfolioType.PLANNED.value:
+        projected["portfolio_type"] = PortfolioType.PLANNED.value
+    else:
+        projected["portfolio_type"] = PortfolioType.CURRENT.value
     return projected
 
 
@@ -227,6 +265,8 @@ class AuraAgentTools:
             return {
                 "id": str(portfolio.id),
                 "name": portfolio.name,
+                "portfolio_type": PortfolioType.LEGACY.value,
+                "baseline_source": "saved-weights",
                 "holdings": [
                     {
                         "symbol": holding.symbol,
@@ -237,9 +277,54 @@ class AuraAgentTools:
             }
 
         if baseline.baseline_kind is PortfolioBaselineKind.PLANNED:
-            raise InvalidHoldingModeError(
-                "planned AI grounding is not implemented"
-            )
+            allocation = baseline.planned_allocation
+            if allocation is None or baseline.valuation is not None:
+                raise ValueError(
+                    "planned AI portfolio baseline is inconsistent"
+                )
+            if len(baseline.resolved_weights) != len(allocation.holdings):
+                raise ValueError(
+                    "planned AI portfolio baseline is inconsistent"
+                )
+            holdings: list[dict[str, Any]] = []
+            for resolved, holding in zip(
+                baseline.resolved_weights,
+                allocation.holdings,
+                strict=True,
+            ):
+                if (
+                    resolved.symbol != holding.symbol
+                    or resolved.weight != holding.target_allocation
+                ):
+                    raise ValueError(
+                        "planned AI portfolio baseline is inconsistent"
+                    )
+                holdings.append(
+                    {
+                        "symbol": holding.symbol,
+                        "proposed_amount": str(holding.proposed_amount),
+                        "target_allocation": str(
+                            holding.target_allocation
+                        ),
+                        "position": holding.position,
+                    }
+                )
+            return {
+                "id": str(portfolio.id),
+                "name": portfolio.name,
+                "portfolio_type": PortfolioType.PLANNED.value,
+                "baseline_source": (
+                    "proposed-amount-target-allocation"
+                ),
+                "plan_currency": allocation.plan_currency,
+                "total_proposed_amount": str(
+                    allocation.total_proposed_amount
+                ),
+                "hypothetical_notice": (
+                    PLANNED_PORTFOLIO_HYPOTHETICAL_NOTICE
+                ),
+                "holdings": holdings,
+            }
 
         valuation = baseline.valuation
         if valuation is None:
@@ -278,6 +363,8 @@ class AuraAgentTools:
         return {
             "id": str(portfolio.id),
             "name": portfolio.name,
+            "portfolio_type": PortfolioType.CURRENT.value,
+            "baseline_source": "current-valuation",
             "valuation": {
                 "valuation_currency": "USD",
                 "valuation_date": valuation.requested_date.isoformat(),

@@ -1533,7 +1533,7 @@ incomplete.
 
 ## Planned Portfolio Expansion
 
-**Status:** Step 5 immutable planned report and simulation history complete
+**Status:** Step 6 mode-aware planned AI grounding complete
 
 ### Approved product target contract
 
@@ -1669,7 +1669,44 @@ incomplete.
 - No database, Docker, external LLM, branch, commit, or dependency operation was
   performed.
 
+### Completed Step 6 mode-aware AI grounding
+
+- Live AI context now identifies `CURRENT`, `PLANNED`, and `LEGACY` portfolio
+  types and their authoritative baseline source. Planned context contains only
+  plan currency, proposed amounts, exact target weights, order, and the explicit
+  hypothetical notice; it never includes estimated shares or internal holding
+  IDs.
+- Saved Report V3 and all Simulation V3 variants are projected from their frozen
+  snapshots. Their schema version, portfolio type, baseline source, proposed
+  amounts, target weights, results, and historical period/scenario are preserved
+  without live price, FX, valuation, or recomputation calls.
+- Saved-context portfolio projection exposes identity and portfolio type while
+  omitting mutable live planned/current facts, so a later portfolio edit cannot
+  conflict with the selected immutable snapshot.
+- System instructions require mode-aware wording: actual/current terminology
+  for `CURRENT`, planned/proposed/hypothetical terminology for `PLANNED`, and
+  saved-allocation terminology for `LEGACY`.
+- Planned explanations receive a deterministic hypothetical/non-forecast/
+  non-order limitation. A planned response that claims the user currently owns
+  the proposed assets is rejected before it reaches the API response.
+- Existing advice refusal, prompt-injection resistance, signed/null/zero value
+  preservation, source attribution, ownership privacy, and output-safety rules
+  remain in force.
+
+### Step 6 verification
+
+- Focused AI tool, prompt, guardrail, orchestration, API, Report V3, and
+  Simulation V3 regression suite: 422 passed with 54 existing short JWT test-key
+  warnings.
+- Complete backend unit suite: 2,339 passed.
+- Isolated non-PostgreSQL API integration suite: 275 passed with 54 existing
+  short JWT test-key warnings. The three explicitly live PostgreSQL API modules
+  were not run.
+- Python compile verification completed for `backend/app` and `backend/tests`.
+- No database, Docker, external LLM, migration, dependency, branch, commit, or
+  push operation was performed.
+
 ### Remaining planned-portfolio work
 
-Mode-aware AI grounding, conversion to a new current portfolio, and customer
-web/mobile integration are not implemented yet.
+Conversion to a new current portfolio and customer web/mobile integration are
+not implemented yet.

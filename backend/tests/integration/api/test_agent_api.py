@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 import app.api.dependencies as dependency_module
 import app.api.routes.agent as route_module
 import app.services.agent_service as agent_service_module
+from app.agents.guardrails import PLANNED_PORTFOLIO_LIMITATION
 from app.agents.provider import (
     LLMProviderResponseError,
     LLMProviderTimeoutError,
@@ -42,12 +43,13 @@ class FakeProvider:
     def __init__(self) -> None:
         self.requests: list[ProviderRequest] = []
         self.error: Exception | None = None
+        self.text = "Aura explains the stored portfolio result."
 
     def generate(self, request: ProviderRequest) -> ProviderResponse:
         self.requests.append(request)
         if self.error is not None:
             raise self.error
-        return ProviderResponse("Aura explains the stored portfolio result.")
+        return ProviderResponse(self.text)
 
 
 class FakeTools:
@@ -86,6 +88,23 @@ class FakeTools:
             raise MarketDataUnavailableError(self.mode)
         if resolve_current_baseline and self.mode == "incompatible-holdings":
             raise InvalidHoldingModeError(self.mode)
+        if self.mode == "planned":
+            return {
+                "id": str(self.portfolio_id),
+                "name": "Proposed Mix",
+                "portfolio_type": "PLANNED",
+                "baseline_source": "proposed-amount-target-allocation",
+                "plan_currency": "USD",
+                "total_proposed_amount": "1000",
+                "holdings": [
+                    {
+                        "symbol": "AAPL",
+                        "proposed_amount": "1000",
+                        "target_allocation": "1",
+                        "position": 0,
+                    }
+                ],
+            }
         return {"id": str(self.portfolio_id), "name": "Core", "holdings": []}
 
     def get_latest_report(self) -> dict[str, object] | None:
@@ -211,6 +230,49 @@ def test_owned_request_returns_public_response_with_grounded_sources(
     assert FakeTools.instances[0].portfolio_resolution_flags == [True]
     api_harness.session.commit.assert_not_called()
     api_harness.session.flush.assert_not_called()
+
+
+def test_planned_request_returns_mode_aware_grounding_and_limitation(
+    api_harness: ApiHarness,
+) -> None:
+    FakeTools.mode = "planned"
+
+    response = api_harness.client.post(
+        PATH,
+        headers=_headers(),
+        json=_payload(message="Explain my proposed allocation risk."),
+    )
+
+    assert response.status_code == 200
+    assert PLANNED_PORTFOLIO_LIMITATION in response.json()["limitations"]
+    context = api_harness.provider.requests[0].grounded_context["portfolio"]
+    assert context["portfolio_type"] == "PLANNED"
+    assert context["baseline_source"] == (
+        "proposed-amount-target-allocation"
+    )
+    assert context["holdings"][0]["proposed_amount"] == "1000"
+    api_harness.session.commit.assert_not_called()
+
+
+def test_planned_provider_ownership_claim_is_not_returned(
+    api_harness: ApiHarness,
+) -> None:
+    FakeTools.mode = "planned"
+    api_harness.provider.text = (
+        "You currently own AAPL in your current portfolio."
+    )
+
+    response = api_harness.client.post(
+        PATH,
+        headers=_headers(),
+        json=_payload(message="Explain my proposed allocation."),
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "AI explanation service returned an invalid response."
+    }
+    assert "currently own" not in response.text
 
 
 def test_agent_route_captures_one_utc_valuation_date(

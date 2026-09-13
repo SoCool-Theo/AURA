@@ -96,7 +96,9 @@ shared `CURRENT`/`PLANNED`/`LEGACY` analysis baseline resolution are
 implemented. Planned analysis and all three simulation modes now persist new
 immutable V3 snapshots containing the authoritative proposed-amount baseline;
 opening V3 history never queries current prices or recalculates results.
-Mode-aware AI, conversion, and client behavior remain sequenced follow-on work.
+Mode-aware AI grounding now supports live planned allocations and frozen V3
+report/simulation context with explicit hypothetical language and ownership-
+claim rejection. Conversion and client behavior remain sequenced follow-on work.
 
 Weight-only legacy portfolios remain temporarily readable and operable. A
 normal holdings replacement converts a legacy portfolio to the real model.

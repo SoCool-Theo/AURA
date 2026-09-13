@@ -249,8 +249,8 @@ The currently implemented compatibility architecture below is being extended
 by the approved [planned-portfolio target contract](../api_contracts/planned_portfolios.md).
 Type-aware CRUD exposes user-facing `CURRENT` and `PLANNED` portfolio types
 while retaining `LEGACY` as internal compatibility state. The shared baseline
-resolver, analysis composition, reporting, and simulations now support all
-three modes. Planned AI grounding remains guarded until its dedicated step.
+resolver, analysis composition, reporting, simulations, and AI grounding now
+support all three modes.
 
 Aura supports three complete, mutually exclusive persisted holding modes:
 
@@ -354,11 +354,15 @@ creation. Opening a saved report or simulation restores the JSONB snapshot and
 never revalues or reruns it.
 
 AI grounding follows the same source boundary: live legacy portfolios use
-saved weights, live real portfolios use current USD valuation, Report V2 uses
-the frozen report snapshot, and Simulation V2 uses the frozen snapshot. Saved
-resources do not require current market prices. AI remains educational,
-non-advisory, and cannot produce buy/sell recommendations. Planned V3 reports
-and simulations remain guarded until mode-aware AI language is implemented.
+saved weights, live current portfolios use current USD valuation, and live
+planned portfolios use proposed amounts and their exact target weights. Report
+V2/V3 and Simulation V2/V3 use their frozen snapshots. Saved resources do not
+require current market prices. Context carries `portfolio_type`,
+`baseline_source`, and snapshot version so the model uses current, planned, or
+saved-allocation language correctly. Planned context excludes estimated shares
+and adds an explicit hypothetical/non-forecast limitation. AI remains
+educational, non-advisory, cannot claim proposed assets are currently owned,
+and cannot produce buy/sell recommendations.
 
 ## Transaction Ownership
 

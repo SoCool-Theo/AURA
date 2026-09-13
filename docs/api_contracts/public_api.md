@@ -172,11 +172,17 @@ The public AI request and response shapes are unchanged. Grounding selects:
 
 - live legacy portfolio: saved weights;
 - live real portfolio: current USD valuation and dynamic allocation;
+- live planned portfolio: proposed amounts and backend target allocation;
 - saved Report V2: frozen report snapshot;
-- saved Simulation V2: frozen simulation snapshot.
+- saved Report V3: frozen planned report snapshot;
+- saved Simulation V2: frozen current simulation snapshot;
+- saved Simulation V3: frozen planned simulation snapshot.
 
-Planned Report V3 and Simulation V3 context remains intentionally unavailable
-to AI until mode-aware planned wording and guardrails are implemented.
+Grounding includes portfolio type, baseline source, and snapshot version.
+Planned context excludes internal holding IDs and estimated shares, uses
+planned/proposed rather than owned/current language, and adds an explicit
+hypothetical/non-forecast/non-order limitation. Provider output that claims a
+planned asset is currently owned is rejected.
 
 Saved resources do not require current prices. The agent explains
 backend-owned results; it does not calculate financial truth, give personalized

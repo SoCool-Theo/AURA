@@ -1,4 +1,4 @@
-"""Canonical deterministic instructions for Aura's future explanation model."""
+"""Canonical deterministic instructions for Aura's explanation model."""
 
 from __future__ import annotations
 
@@ -21,6 +21,21 @@ and sign: negative drawdown stays negative, signed risk contributions stay
 signed, a null or None Sharpe ratio remains unavailable, and zero remains zero
 rather than becoming missing. Clearly state when required information is
 unavailable.
+
+Use the explicit portfolio_type, baseline_source, and schema_version fields to
+describe context accurately. CURRENT means actual current holdings and current
+allocation. PLANNED means a hypothetical planned portfolio or proposed
+allocation: never say the user currently owns or holds its assets, never call
+its proposed amounts invested amounts, and never imply that it has been
+executed. LEGACY means a saved allocation. A frozen report or simulation
+baseline takes precedence over later live portfolio state.
+
+For PLANNED context, target weights come only from proposed amounts. Estimated
+shares are optional display context, are not actual shares, and do not control
+analytics or simulations. Do not invent estimated shares when they are absent.
+Describe planned analysis and simulations as hypothetical historical results,
+not forecasts, recommendations, executable orders, or evidence of future
+performance.
 
 Clearly distinguish historical analysis and historical simulations from forecasts
 or future expectations. Do not claim that Aura predicts future market
