@@ -56,6 +56,86 @@
   margin-top: 13px;
 }
 
+.modeFieldset,
+.currencyFieldset {
+  margin: 0;
+  padding: 0 0 22px;
+  border: 0;
+}
+
+.modeFieldset legend,
+.currencyFieldset legend {
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.modeSelector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.modeSelector button {
+  min-height: 82px;
+  padding: 15px;
+  border: 1px solid var(--border-control);
+  border-radius: 11px;
+  background: var(--control-bg);
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.modeSelector button:hover:not(:disabled),
+.modeSelected {
+  border-color: var(--purple-primary) !important;
+  background: rgba(53, 215, 192, .1) !important;
+}
+
+.modeSelector strong,
+.modeSelector span {
+  display: block;
+}
+
+.modeSelector strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.modeSelector span {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.currencySelector {
+  display: inline-flex;
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid var(--border-control);
+  border-radius: 10px;
+  background: var(--control-bg);
+}
+
+.currencySelector button {
+  min-width: 76px;
+  min-height: 38px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 800;
+}
+
+.currencySelected {
+  background: rgba(53, 215, 192, .16) !important;
+  color: var(--purple-light) !important;
+}
+
 .holdingTable {
   width: 100%;
   border-collapse: collapse;
@@ -82,6 +162,37 @@
   border-radius: 8px;
   background: var(--control-bg);
   color: var(--text-primary);
+}
+
+.holdingTable select {
+  width: 100%;
+  min-width: 82px;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid var(--border-control);
+  border-radius: 8px;
+  background: var(--control-bg);
+  color: var(--text-primary);
+}
+
+.dateField {
+  position: relative;
+  display: block;
+  min-width: 168px;
+}
+
+.dateField input {
+  padding-right: 38px;
+  color-scheme: dark;
+}
+
+.dateField svg {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--purple-light);
+  pointer-events: none;
+  transform: translateY(-50%);
 }
 
 .orderActions {
@@ -137,6 +248,10 @@
   }
 
   .holdingTable {
-    min-width: 650px;
+    min-width: 760px;
+  }
+
+  .modeSelector {
+    grid-template-columns: 1fr;
   }
 }
