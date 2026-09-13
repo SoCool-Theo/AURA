@@ -1794,13 +1794,15 @@ integration is intentionally skipped by current product direction.
 - The mobile client does not calculate these financial amounts. It formats the
   decimal strings supplied by the authenticated report response and remains
   compatible with older responses that omit `monetary_metrics`.
+- Report Detail opened through More now has an explicit accessible back arrow
+  that returns to the Reports list; the existing Home action remains available.
 
 ### Monetary metric verification
 
 - Focused report schema, mapper, service, and API suite: 124 passed.
 - Complete backend unit suite: 2,341 passed.
 - Mobile TypeScript compilation completed with no errors.
-- Mobile production-authority suite: 23 passed, including signed currency
+- Mobile production-authority suite: 24 passed, including signed currency
   formatting and guards against client-side reference-amount multiplication.
 - No database, migration, Docker, external LLM, dependency, branch, commit, or
   push operation was performed.
