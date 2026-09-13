@@ -19,6 +19,15 @@ type PortfolioReportEnvelope = {
   created_at: IsoDateTime;
 };
 
+export type PortfolioReportMonetaryMetrics = {
+  currency: PortfolioCurrency;
+  basis: 'saved-current-valuation' | 'planned-proposed-amount';
+  reference_amount: DecimalString;
+  cumulative_return_amount: DecimalString;
+  annualized_return_amount: DecimalString;
+  maximum_drawdown_amount: DecimalString | null;
+};
+
 export type PortfolioReportV1Response = PortfolioReportEnvelope & {
   analysis: PortfolioAnalysisResponse;
 };
@@ -43,12 +52,14 @@ export type PortfolioReportV2Response = PortfolioReportEnvelope & {
   analysis: PortfolioAnalysisResponse;
   valuation: PortfolioReportV2ValuationContext;
   holdings: PortfolioReportV2Holding[];
+  monetary_metrics?: PortfolioReportMonetaryMetrics | null;
 };
 
 export type PortfolioReportV3Response = PortfolioReportEnvelope & {
   schema_version: 'portfolio-analysis-response-v3';
   analysis: PortfolioAnalysisResponse;
   baseline: PlannedPortfolioBaselineContext;
+  monetary_metrics?: PortfolioReportMonetaryMetrics | null;
 };
 
 export type PortfolioReportResponse =

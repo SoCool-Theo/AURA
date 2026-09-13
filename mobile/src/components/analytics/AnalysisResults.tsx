@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import {
   formatCurrentAllocation,
   formatPortfolioMoney,
-  formatPortfolioQuantity
+  formatPortfolioQuantity,
+  formatSignedPortfolioMoney
 } from '../../portfolio/portfolioFormatting';
 import {
   isPortfolioReportV2,
   isPortfolioReportV3,
+  type PortfolioReportMonetaryMetrics,
   type PortfolioReportResponse
 } from '../../types/report';
 import { colors, spacing } from '../../theme/theme';
@@ -19,11 +21,68 @@ import {
 } from '../../report/reportFormatting';
 import { AssetRelationshipBars } from '../charts/AssetRelationshipBars';
 import { PortfolioReturnsChart } from '../charts/PortfolioReturnsChart';
+import {
+  MetricAmountSheet,
+  type MetricAmountSheetContent
+} from './MetricAmountSheet';
 import { Card } from '../ui/Card';
 import { RiskBadge } from '../ui/RiskBadge';
 import { SectionHeader } from '../ui/SectionHeader';
 import { Tag } from '../ui/Tag';
 import { WebKpiCard } from '../ui/WebKpiCard';
+
+type MonetaryMetricKey = 'cumulative' | 'annualized' | 'drawdown';
+
+function amountSheetContent(
+  key: MonetaryMetricKey | null,
+  monetary: PortfolioReportMonetaryMetrics | null,
+  report: PortfolioReportResponse
+): MetricAmountSheetContent | null {
+  if (!key || !monetary) return null;
+  const metrics = report.analysis.portfolio_metrics;
+  const drawdown = report.analysis.max_drawdown;
+  const reference = monetary.basis === 'planned-proposed-amount'
+    ? `Based on your hypothetical ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} planned investment.`
+    : `Based on the ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} portfolio valuation saved with this report.`;
+
+  if (key === 'cumulative') {
+    return {
+      title: 'Cumulative Return',
+      percentage: formatRatioPercent(metrics.cumulative_return),
+      amount: formatSignedPortfolioMoney(monetary.cumulative_return_amount, monetary.currency),
+      amountLabel: 'Estimated change over this analysis period',
+      reference,
+      explanation: `This applies the historical cumulative return from ${report.analysis.start_date} to ${report.analysis.end_date} to the saved reference amount. It is not actual profit or a forecast.`,
+      tone: metrics.cumulative_return < 0 ? 'danger' : 'success'
+    };
+  }
+
+  if (key === 'annualized') {
+    return {
+      title: 'Annualized Return',
+      percentage: formatRatioPercent(metrics.annualized_return),
+      amount: formatSignedPortfolioMoney(monetary.annualized_return_amount, monetary.currency),
+      amountLabel: 'Estimated annual equivalent',
+      reference,
+      explanation: 'This converts the historical annualized rate into a one-year money equivalent. It is not guaranteed profit, actual account performance, or a forecast.',
+      tone: metrics.annualized_return < 0 ? 'danger' : 'success'
+    };
+  }
+
+  if (monetary.maximum_drawdown_amount === null) return null;
+  const period = drawdown.peak_date && drawdown.trough_date
+    ? ` from ${drawdown.peak_date} to ${drawdown.trough_date}`
+    : '';
+  return {
+    title: 'Maximum Drawdown',
+    percentage: formatRatioPercent(drawdown.max_drawdown),
+    amount: formatSignedPortfolioMoney(monetary.maximum_drawdown_amount, monetary.currency),
+    amountLabel: 'Estimated peak-to-trough decline',
+    reference,
+    explanation: `This is the money equivalent of the same largest historical decline${period}. It is not a prediction of future loss.`,
+    tone: 'danger'
+  };
+}
 
 export function AnalysisResults({
   report
@@ -33,6 +92,8 @@ export function AnalysisResults({
   const analysis = report.analysis;
   const reportV2 = isPortfolioReportV2(report) ? report : null;
   const reportV3 = isPortfolioReportV3(report) ? report : null;
+  const monetary = reportV3?.monetary_metrics ?? reportV2?.monetary_metrics ?? null;
+  const [selectedMetric, setSelectedMetric] = useState<MonetaryMetricKey | null>(null);
   const metrics = analysis.portfolio_metrics;
   const drawdown = analysis.max_drawdown;
   const diversification = analysis.diversification;
@@ -128,15 +189,19 @@ export function AnalysisResults({
           icon="trending-up-outline"
           label="Cumulative Return"
           value={formatRatioPercent(metrics.cumulative_return)}
-          meta="Saved period"
+          meta={monetary ? 'Saved period · Tap for amount' : 'Saved period'}
           tone={metrics.cumulative_return < 0 ? 'danger' : 'success'}
+          onPress={monetary ? () => setSelectedMetric('cumulative') : undefined}
+          accessibilityHint={monetary ? 'Shows the percentage and estimated money amount' : undefined}
         />
         <WebKpiCard
           icon="analytics-outline"
           label="Annualized Return"
           value={formatRatioPercent(metrics.annualized_return)}
-          meta="Saved analysis"
+          meta={monetary ? 'Historical equivalent · Tap for amount' : 'Saved analysis'}
           tone={metrics.annualized_return < 0 ? 'danger' : 'success'}
+          onPress={monetary ? () => setSelectedMetric('annualized') : undefined}
+          accessibilityHint={monetary ? 'Shows the percentage and estimated annual money amount' : undefined}
         />
         <WebKpiCard
           icon="pulse-outline"
@@ -158,6 +223,12 @@ export function AnalysisResults({
           value={formatRatioPercent(drawdown.max_drawdown)}
           meta={`${drawdown.peak_date ?? 'N/A'} → ${drawdown.trough_date ?? 'N/A'}`}
           tone="danger"
+          onPress={monetary?.maximum_drawdown_amount !== null && monetary?.maximum_drawdown_amount !== undefined
+            ? () => setSelectedMetric('drawdown')
+            : undefined}
+          accessibilityHint={monetary?.maximum_drawdown_amount !== null && monetary?.maximum_drawdown_amount !== undefined
+            ? 'Shows the percentage and estimated peak-to-trough money amount'
+            : undefined}
         />
       </View>
 
@@ -281,6 +352,10 @@ export function AnalysisResults({
       <Text style={styles.education}>
         Historical analytics are educational, not investment recommendations. These metrics reflect the saved Aura analysis.
       </Text>
+      <MetricAmountSheet
+        content={amountSheetContent(selectedMetric, monetary, report)}
+        onClose={() => setSelectedMetric(null)}
+      />
     </View>
   );
 }

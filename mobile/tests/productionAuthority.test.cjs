@@ -292,11 +292,15 @@ test('local storage reads only Learn progress and rejects malformed values', asy
 
 test('financial presentation preserves signs/nulls and allocation preserves saved order and zero weights', () => {
   const formatting = load('src/report/reportFormatting.ts');
+  const portfolioFormatting = load('src/portfolio/portfolioFormatting.ts');
   const dashboard = load('src/dashboard/dashboardPresentation.ts', { '../report/reportFormatting': formatting });
   assert.equal(dashboard.dashboardPercent(null), 'N/A');
   assert.equal(dashboard.dashboardPercent(undefined), 'N/A');
   assert.equal(dashboard.dashboardPercent(-0.25), '-25.00%');
   assert.equal(dashboard.dashboardPercent(0), '0.00%');
+  assert.equal(portfolioFormatting.formatSignedPortfolioMoney('820', 'USD'), '+$820.00');
+  assert.equal(portfolioFormatting.formatSignedPortfolioMoney('-2380', 'USD'), '−$2,380.00');
+  assert.equal(portfolioFormatting.formatSignedPortfolioMoney('0', 'THB'), '฿0.00');
   const points = [{ date: '2026-02-01', return: -0.2 }, { date: '2026-04-01', return: 0.1 }];
   const filtered = dashboard.filterDashboardReturns(points, '1M');
   assert.equal(filtered.length, 1);
@@ -557,6 +561,12 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(detail, /Estimated shares are display-only/);
   assert.match(analysis, /SAVED PLANNED ALLOCATION/);
   assert.match(analysis, /Estimated shares are for display only/);
+  assert.match(analysis, /MetricAmountSheet/);
+  assert.match(analysis, /Tap for amount/);
+  assert.match(analysis, /cumulative_return_amount/);
+  assert.match(analysis, /annualized_return_amount/);
+  assert.match(analysis, /maximum_drawdown_amount/);
+  assert.ok(!/reference_amount\s*\*/.test(analysis));
   assert.match(simulation, /Saved planned allocation/);
   assert.match(history, /isSimulationHistoryV3/);
   assert.ok(!/proposedAmount\s*\/|proposed_amount\s*\//.test(`${create}\n${editor}\n${detail}`));
