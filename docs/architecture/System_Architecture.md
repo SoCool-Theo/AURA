@@ -247,10 +247,11 @@ AURA/
 
 The currently implemented compatibility architecture below is being extended
 by the approved [planned-portfolio target contract](../api_contracts/planned_portfolios.md).
-Type-aware CRUD now exposes user-facing `CURRENT` and `PLANNED` portfolio types
-while retaining `LEGACY` as internal compatibility state. Analytics, reports,
-simulations, and AI continue to use the existing current/legacy baseline until
-the shared baseline resolver is extended in the next sequenced step.
+Type-aware CRUD exposes user-facing `CURRENT` and `PLANNED` portfolio types
+while retaining `LEGACY` as internal compatibility state. The shared baseline
+resolver and analysis composition now support all three modes. Planned report
+snapshots, simulations, and AI grounding remain guarded until their dedicated
+contract versions are implemented.
 
 Aura supports three complete, mutually exclusive persisted holding modes:
 
@@ -269,8 +270,29 @@ the portfolio's current value.
 
 For a planned holding, the user controls `symbol` and positive
 `proposed_amount` in the portfolio's single `plan_currency`. The backend derives
-the total and exact canonical target allocation without market or FX data;
-estimated shares are not part of this completed step.
+the total and exact canonical target allocation without market or FX data.
+`GET /api/portfolios/{portfolio_id}/planned-preview` may also derive estimated
+shares from a best-effort current USD asset price and, for THB plans, USD/THB
+FX. Each estimate carries explicit availability and provenance; estimates are
+never persisted and never influence canonical weights or analytics.
+
+`PortfolioBaselineResolutionService` is the sole analysis baseline resolver:
+
+```text
+CURRENT -> current valuation -> dynamic weights
+PLANNED -> proposed amounts -> target weights
+LEGACY  -> saved weights
+                            |
+                            v
+                   canonical weights
+                            |
+                            v
+                 analysis composition
+```
+
+Planned analysis therefore does not require current-price or FX availability.
+It still requires sufficient aligned historical price data under the same
+no-fabrication rules as other portfolio modes.
 
 Current valuation is calculated once in `PortfolioValuationService`:
 

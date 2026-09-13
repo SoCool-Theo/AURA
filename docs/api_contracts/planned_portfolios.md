@@ -142,6 +142,12 @@ rate/date where applicable. Calculation retains full decimal precision;
 rounding is presentation-only. Missing or stale price/FX context makes only the
 affected estimate unavailable and does not block saving or analyzing the plan.
 
+`GET /api/portfolios/{portfolio_id}/planned-preview` uses one server-selected
+UTC request date and returns the canonical allocation even when estimates are
+unavailable. Each holding reports `AVAILABLE`, `PRICE_UNAVAILABLE`, or
+`FX_UNAVAILABLE`. The endpoint is owner-scoped and read-only; it never persists
+prices, FX, estimated shares, or derived weights.
+
 ## Shared baseline allocation resolver
 
 The existing `PortfolioBaselineResolutionService` remains the single entry
@@ -249,6 +255,8 @@ Planned estimate unavailability is represented in a successful plan preview;
 it is not a portfolio-wide `503` because estimates are non-authoritative.
 
 ## Delivery sequence
+
+Steps 1 through 4 are implemented. Steps 5 through 8 remain pending.
 
 1. Freeze the planned-portfolio product, data, API, and provenance contract.
 2. Add and verify the database discriminator, planned fields, constraints, and

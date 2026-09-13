@@ -1533,7 +1533,7 @@ incomplete.
 
 ## Planned Portfolio Expansion
 
-**Status:** Step 3 type-aware CRUD and planned target allocation complete
+**Status:** Step 4 planned preview and canonical analysis baseline complete
 
 ### Approved product target contract
 
@@ -1543,9 +1543,8 @@ incomplete.
   positive proposed amounts under one USD/THB plan currency.
 - Planned target weights are backend-derived from proposed amounts. Estimated
   shares are optional display context and never analytics authority.
-- The existing shared baseline resolver will be extended in a later step so
-  analytics, reports, simulations, and AI consume one provenance-aware
-  canonical allocation.
+- The shared baseline resolver now produces one provenance-aware canonical
+  allocation for `CURRENT`, `PLANNED`, and `LEGACY` analysis preparation.
 
 ### Completed database foundation
 
@@ -1603,9 +1602,38 @@ incomplete.
 - Python compile verification completed for `backend/app` and `backend/tests`.
 - Ruff was not available in the existing environment; no dependency was added.
 
+### Completed Step 4 preview and analysis integration
+
+- `GET /api/portfolios/{portfolio_id}/planned-preview` returns canonical target
+  allocations plus optional current-price estimated shares. Estimate status is
+  explicit per holding, and missing price or THB FX data does not prevent the
+  successful allocation response.
+- Estimated shares retain full calculation precision, include their price/FX
+  provenance when available, remain read-only, and never become saved ownership
+  facts or analytics inputs.
+- `PortfolioBaselineResolutionService` is now the common baseline source:
+  `CURRENT` uses current valuation weights, `PLANNED` uses proposed-amount target
+  weights, and `LEGACY` uses saved weights.
+- Analysis preparation and composition accept the planned baseline and enrich
+  per-asset output with proposed amount and holding position without requiring
+  current prices. Historical-data sufficiency rules remain unchanged.
+- Planned report snapshots, simulations, and AI grounding remain deliberately
+  guarded with sanitized compatibility errors until their dedicated steps. No
+  later-stage persistence contract was activated early.
+
+### Step 4 verification
+
+- Focused preview, schema, baseline, composition, reporting/simulation guard,
+  AI guard, and API suite: 362 passed.
+- Complete backend unit suite: 2,310 passed.
+- Non-PostgreSQL API integration suite: 270 passed. Live PostgreSQL modules were
+  intentionally excluded because Step 4 makes no schema change.
+- Python compile verification completed for `backend/app` and `backend/tests`.
+- No database, Docker, external LLM, branch, commit, or dependency operation was
+  performed.
+
 ### Remaining planned-portfolio work
 
-Optional estimated-share preview, shared baseline resolution and analysis
-composition, immutable report/simulation variants, AI grounding, conversion to
-a new current portfolio, and customer web/mobile integration are not
-implemented yet.
+Immutable planned report/simulation variants, mode-aware AI grounding,
+conversion to a new current portfolio, and customer web/mobile integration are
+not implemented yet.
