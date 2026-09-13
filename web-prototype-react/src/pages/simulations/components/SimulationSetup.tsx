@@ -18,7 +18,7 @@ export function SimulationSetup(props: Props) {
         : props.portfolios.length
           ? 'Select a portfolio'
           : 'No portfolios available',
-      description: 'Choose an owned saved portfolio',
+      description: 'Choose a saved portfolio',
       icon: 'wallet',
       tone: 'neutral',
       disabled: true,
@@ -26,7 +26,11 @@ export function SimulationSetup(props: Props) {
     ...props.portfolios.map(portfolio => ({
       value: portfolio.id,
       label: portfolio.name,
-      description: 'Saved portfolio',
+      description: portfolio.portfolio_type === 'PLANNED'
+        ? `Planned allocation · ${portfolio.plan_currency ?? 'USD'}`
+        : portfolio.portfolio_type === 'LEGACY'
+          ? 'Legacy saved allocation'
+          : 'Current holdings',
       icon: 'wallet',
       tone: 'teal' as const,
     })),
@@ -35,7 +39,7 @@ export function SimulationSetup(props: Props) {
   return <Card className="simulation-setup-card">
     <div className="simulation-setup-heading"><div><span>SIMULATION SETUP</span><h2>Configure your test</h2></div><small>Historical results are educational, not predictive.</small></div>
     <div className="simulation-controls-grid">
-      <div className="simulation-control-field"><span>Portfolio</span><small>Owner-scoped saved portfolio</small><AuraSelect className={styles.portfolioSelect} ariaLabel="Select portfolio for simulation" value={props.portfolioId} options={portfolioOptions} onChange={nextPortfolioId => go(`simulations/${nextPortfolioId}`)} disabled={props.loading || props.running} /></div>
+      <div className="simulation-control-field"><span>Portfolio</span><small>Choose current holdings, a planned allocation, or a legacy portfolio</small><AuraSelect className={styles.portfolioSelect} ariaLabel="Select portfolio for simulation" value={props.portfolioId} options={portfolioOptions} onChange={nextPortfolioId => go(`simulations/${nextPortfolioId}`)} disabled={props.loading || props.running} /></div>
       {props.mode === 'allocation' ? <div className={styles.dateFields}><label>Requested start date<input type="date" value={props.startDate} onChange={event => props.onStartDateChange(event.target.value)} disabled={props.running} /></label><label>Requested end date<input type="date" value={props.endDate} onChange={event => props.onEndDateChange(event.target.value)} disabled={props.running} /></label></div> : <HistoricalScenarioSelector scenarios={props.scenarios} scenarioId={props.scenarioId} onChange={props.onScenarioChange} loading={props.loading} disabled={props.running} />}
       <button className="primary-btn run-simulation-btn" onClick={props.onRun} disabled={props.loading || props.running || !props.portfolioId}><span>▶</span> {props.running ? 'Running…' : 'Run Simulation'}</button>
     </div>
