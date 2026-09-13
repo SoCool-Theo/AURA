@@ -11,7 +11,7 @@ export function RiskDriverTable({ riskDrivers }: RiskDriverTableProps) {
   return (
     <Card className={styles.section}>
       <div className={styles.sectionHeading}>
-        <div><h2>Risk Drivers</h2><p>Backend-ranked, signed volatility contributions.</p></div>
+        <div><h2>Risk Drivers</h2><p>Ranked contributors to the portfolio's historical volatility.</p></div>
         <span className={styles.badge}>Top driver: {riskDrivers.top_driver}</span>
       </div>
       <div className={styles.tableWrap}>

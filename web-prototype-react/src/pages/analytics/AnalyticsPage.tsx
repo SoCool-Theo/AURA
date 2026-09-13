@@ -105,7 +105,7 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
         : portfolios.length
           ? 'Select a portfolio'
           : 'No portfolios available',
-      description: 'Choose an owned saved portfolio',
+      description: 'Choose a saved portfolio',
       icon: 'wallet',
       tone: 'neutral',
       disabled: true,
@@ -113,7 +113,11 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
     ...portfolios.map(portfolio => ({
       value: portfolio.id,
       label: portfolio.name,
-      description: 'Saved portfolio',
+      description: portfolio.portfolio_type === 'PLANNED'
+        ? `Planned allocation · ${portfolio.plan_currency ?? 'USD'}`
+        : portfolio.portfolio_type === 'LEGACY'
+          ? 'Legacy saved allocation'
+          : 'Current holdings',
       icon: 'wallet',
       tone: 'teal' as const,
     })),
@@ -128,7 +132,7 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
   return (
     <div className="page analytics-page">
       <header className="analytics-header">
-        <div><h1>Portfolio Analysis</h1><p>Run Aura’s backend analysis and save an immutable report snapshot.</p></div>
+        <div><h1>Portfolio Analysis</h1><p>Explore historical risk and save an immutable report snapshot.</p></div>
         <div>
           <button className="secondary-btn" onClick={() => go('reports')}><Icon name="reports" size={17} /> Report History</button>
           {selectedPortfolio && <button className="secondary-btn" onClick={() => go(`portfolio/${selectedPortfolio.id}`)}>View Portfolio</button>}
@@ -137,7 +141,7 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
 
       <Card className={styles.controls}>
         <div className={styles.controlsHeading}>
-          <div><h2>Analysis period</h2><p>The exact requested calendar dates are sent to the reporting endpoint without trading-day adjustment.</p></div>
+          <div><h2>Analysis period</h2><p>Choose the exact calendar dates you want Aura to analyze.</p></div>
           <span className={styles.badge}>Creates one saved report</span>
         </div>
         <div className={styles.controlGrid}>
@@ -161,7 +165,7 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
       </Card>
 
       {error && <p className={styles.error} role="alert">{error}</p>}
-      {loadingPortfolios && <Card className={styles.stateCard}><h2>Loading portfolios</h2><p role="status">Retrieving your real portfolio list.</p></Card>}
+      {loadingPortfolios && <Card className={styles.stateCard}><h2>Loading portfolios</h2><p role="status">Retrieving your saved portfolios.</p></Card>}
       {!loadingPortfolios && error && !portfolios.length && <Card className={styles.stateCard}><h2>Portfolios unavailable</h2><p>Analysis cannot begin until the portfolio list loads.</p><button className="primary-btn" onClick={() => setReloadKey(key => key + 1)}>Try again</button></Card>}
       {!loadingPortfolios && !error && !portfolios.length && <Card className={styles.stateCard}><h2>No portfolios to analyze</h2><p>Create a portfolio with an ordered allocation before running analysis.</p><button className="primary-btn" onClick={() => go('create')}>Create Portfolio</button></Card>}
       {analyzing && <Card className={styles.stateCard}><h2>Running portfolio analysis</h2><p role="status">Aura is calculating the requested period and saving the report snapshot.</p></Card>}
@@ -170,7 +174,7 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
           <span><strong>Report saved.</strong> Created {formatReportTimestamp(report.created_at)} with ID {report.id}.</span>
           <div><button className="secondary-btn" onClick={() => go(`reports/${report.portfolio_id}/${report.id}`)}>Open Saved Report</button><button className="secondary-btn" onClick={() => go('reports')}>All Reports</button></div>
         </div>
-        <AnalysisResults analysis={report.analysis} />
+        <AnalysisResults report={report} />
       </>}
     </div>
   );

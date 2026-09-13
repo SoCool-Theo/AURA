@@ -49,6 +49,22 @@ export function formatPortfolioMoney(
   })}`;
 }
 
+export function formatSignedPortfolioMoney(
+  value: DecimalString,
+  currency: PortfolioCurrency,
+): string {
+  const parsed = finiteDecimal(value);
+  if (parsed === null) return 'N/A';
+  const symbol = currency === 'THB' ? '฿' : '$';
+  const magnitude = Math.abs(parsed).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  if (parsed > 0) return `+${symbol}${magnitude}`;
+  if (parsed < 0) return `−${symbol}${magnitude}`;
+  return `${symbol}${magnitude}`;
+}
+
 export function formatPortfolioQuantity(value: DecimalString): string {
   const parsed = finiteDecimal(value);
   return parsed === null
