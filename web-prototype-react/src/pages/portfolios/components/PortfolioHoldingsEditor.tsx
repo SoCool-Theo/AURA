@@ -3,6 +3,7 @@ import {
   replacePlannedPortfolioHoldings,
   replaceRealPortfolioHoldings,
 } from '../../../api/portfoliosApi';
+import { FormErrorSummary } from '../../../components/ui/ApiErrorState';
 import { Card } from '../../../components/ui/Card';
 import { Icon } from '../../../components/ui/Icon';
 import {
@@ -16,7 +17,6 @@ import {
   type PortfolioResponse,
 } from '../../../types/portfolio';
 import styles from '../PortfolioIntegration.module.css';
-import { portfolioErrorMessage } from '../portfolioUi';
 import {
   createPlannedHoldingDraft,
   createRealHoldingDraft,
@@ -84,7 +84,7 @@ export function PortfolioHoldingsEditor({
   const planned = mode === 'planned';
   const nextId = useRef(portfolio.holdings.length || 1);
   const [holdings, setHoldings] = useState(() => editableHoldings(portfolio));
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
   const maximumPurchaseDate = todayInputValue();
 
@@ -132,7 +132,7 @@ export function PortfolioHoldingsEditor({
         );
       onSaved(updated);
     } catch (requestError) {
-      setError(portfolioErrorMessage(requestError, 'Unable to save portfolio holdings.'));
+      setError(requestError);
     } finally {
       setSaving(false);
     }
@@ -165,7 +165,7 @@ export function PortfolioHoldingsEditor({
           </div>
         )}
 
-        {error && <p className={styles.error} role="alert">{error}</p>}
+        {Boolean(error) && <FormErrorSummary error={error} />}
 
         <div className="table-scroll">
           <table className={styles.holdingTable}>

@@ -10,6 +10,7 @@ import {
 import { go } from '../../app/routes';
 import { AllocationLegend } from '../../components/portfolio/AllocationLegend';
 import { HoldingsTable } from '../../components/portfolio/HoldingsTable';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
 import { SymbolBadge } from '../../components/ui/SymbolBadge';
@@ -25,7 +26,6 @@ import {
   formatPortfolioAllocation,
   formatPortfolioDate,
   formatPortfolioMoney,
-  portfolioErrorMessage,
   portfolioTypeLabel,
   resolvedPortfolioAllocation,
 } from './portfolioUi';
@@ -35,9 +35,9 @@ type DetailTab = 'Overview' | 'Holdings' | 'Record';
 export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [contextError, setContextError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
+  const [contextError, setContextError] = useState<unknown>(null);
   const [contextLoading, setContextLoading] = useState(false);
   const [valuationCurrency, setValuationCurrency] = useState<PortfolioCurrency>('USD');
   const [valuation, setValuation] = useState<PortfolioValuationResponse | null>(null);
@@ -62,7 +62,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
       .then(setPortfolio)
       .catch(error => {
         if (!controller.signal.aborted) {
-          setLoadError(portfolioErrorMessage(error, 'Unable to retrieve portfolio.'));
+          setLoadError(error);
         }
       })
       .finally(() => {
@@ -91,12 +91,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
     void request
       .catch(error => {
         if (!controller.signal.aborted) {
-          setContextError(portfolioErrorMessage(
-            error,
-            portfolio.portfolio_type === 'PLANNED'
-              ? 'Unable to load the planned portfolio preview.'
-              : 'Unable to load the current portfolio value.',
-          ));
+          setContextError(error);
         }
       })
       .finally(() => {
@@ -116,7 +111,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
     try {
       setPortfolio(await updatePortfolio(portfolio.id, { name: name.trim() }));
     } catch (error) {
-      setActionError(portfolioErrorMessage(error, 'Unable to rename portfolio.'));
+      setActionError(error);
     } finally {
       setBusy(false);
     }
@@ -134,7 +129,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
       const duplicated = await duplicatePortfolio(portfolio.id, { name: name.trim() });
       go(`portfolio/${duplicated.id}`);
     } catch (error) {
-      setActionError(portfolioErrorMessage(error, 'Unable to duplicate portfolio.'));
+      setActionError(error);
     } finally {
       setBusy(false);
     }
@@ -151,7 +146,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
       setPortfolio(null);
       go('portfolios');
     } catch (error) {
-      setActionError(portfolioErrorMessage(error, 'Unable to delete portfolio.'));
+      setActionError(error);
       setBusy(false);
     }
   }
@@ -160,18 +155,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
     return <div className="page portfolio-detail-page"><Card className={styles.stateCard}><p role="status">Loading portfolio…</p></Card></div>;
   }
 
-  if (loadError || !portfolio) {
-    return (
-      <div className="page portfolio-detail-page">
-        <button className="detail-back-link" onClick={() => go('portfolios')}>← Back to Portfolios</button>
-        <Card className={styles.stateCard}>
-          <h1>Portfolio unavailable</h1>
-          <p role="alert">{loadError || 'Portfolio not found'}</p>
-          {portfolioId && <button className="primary-btn" onClick={() => setReloadKey(key => key + 1)}>Try again</button>}
-        </Card>
-      </div>
-    );
-  }
+  if (loadError || !portfolio) return <ScreenErrorState error={loadError ?? 'Portfolio not found.'} fallbackMessage="Unable to retrieve this portfolio." resourceName="Portfolio" onRetry={portfolioId ? () => setReloadKey(key => key + 1) : undefined} onBack={() => go('portfolios')} backTitle="Back to Portfolios" />;
 
   const allocation = resolvedPortfolioAllocation(portfolio, valuation, plannedPreview);
   const typeLabel = portfolioTypeLabel(portfolio.portfolio_type);
@@ -195,7 +179,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   return (
     <div className="page portfolio-detail-page">
       <button className="detail-back-link" onClick={() => go('portfolios')}>← Back to Portfolios</button>
-      {actionError && <p className={styles.error} role="alert">{actionError}</p>}
+      {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to update this portfolio." />}
       <section className="portfolio-detail-header">
         <div className="detail-identity">
           <SymbolBadge symbol={portfolio.name.slice(0, 2).toUpperCase()} />
@@ -238,12 +222,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
           </div>
         )}
 
-        {contextError && (
-          <div className={styles.contextNotice} role="alert">
-            <span><strong>{portfolio.portfolio_type === 'PLANNED' ? 'Plan preview unavailable.' : 'Current valuation unavailable.'}</strong> {contextError}</span>
-            <button className="secondary-btn" onClick={() => setContextReloadKey(value => value + 1)}>Try again</button>
-          </div>
-        )}
+        {Boolean(contextError) && <InlineErrorCard error={contextError} fallbackMessage={portfolio.portfolio_type === 'PLANNED' ? 'Unable to load the planned portfolio preview.' : 'Unable to load the current portfolio value.'} stale onRetry={() => setContextReloadKey(value => value + 1)} />}
 
         <div className={`${styles.metadataGrid} ${styles.overviewMetrics}`}>
           <div><small>Holdings</small><strong>{portfolio.holdings.length}</strong></div>

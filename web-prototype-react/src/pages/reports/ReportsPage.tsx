@@ -7,9 +7,9 @@ import {
 import { go } from '../../app/routes';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import type { PortfolioSummaryResponse } from '../../types/portfolio';
 import type { PortfolioReportHistoryItem } from '../../types/report';
-import { analysisErrorMessage } from '../analytics/analyticsUi';
 import { ReportFilters } from './components/ReportFilters';
 import { ReportSummary } from './components/ReportSummary';
 import { ReportTable } from './components/ReportTable';
@@ -21,8 +21,8 @@ export function ReportsPage() {
   const [query, setQuery] = useState('');
   const [portfolioId, setPortfolioId] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const deletingReportIdsRef = useRef(new Set<string>());
   const [deletingReportIds, setDeletingReportIds] = useState<Set<string>>(
@@ -54,7 +54,7 @@ export function ReportsPage() {
         )));
       })
       .catch(requestError => {
-        if (!controller.signal.aborted) setError(analysisErrorMessage(requestError, 'Unable to load report history.'));
+        if (!controller.signal.aborted) setError(requestError);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -89,10 +89,7 @@ export function ReportsPage() {
       await deletePortfolioReport(report.portfolio_id, report.id);
       setReports(previous => previous.filter(item => item.id !== report.id));
     } catch (requestError) {
-      setActionError(analysisErrorMessage(
-        requestError,
-        'Unable to delete report.',
-      ));
+      setActionError(requestError);
     } finally {
       deletingReportIdsRef.current.delete(report.id);
       setDeletingReportIds(new Set(deletingReportIdsRef.current));
@@ -112,9 +109,7 @@ export function ReportsPage() {
         </button>
       </header>
 
-      {actionError && (
-        <p className={styles.actionError} role="alert">{actionError}</p>
-      )}
+      {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to delete report." />}
 
       {!loading && !error && <ReportSummary reports={reports} portfolioCount={portfolios.length} />}
 
@@ -134,7 +129,7 @@ export function ReportsPage() {
         />}
 
         {loading && <div className="reports-empty-state" role="status"><span><Icon name="reports" size={28} /></span><h3>Loading report history</h3><p>Retrieving owned portfolios and their saved reports.</p></div>}
-        {error && <div className="reports-empty-state" role="alert"><span><Icon name="reports" size={28} /></span><h3>Report history unavailable</h3><p>{error}</p><button className="primary-btn" onClick={() => setReloadKey(key => key + 1)}>Try Again</button></div>}
+        {Boolean(error) && <ScreenErrorState error={error} fallbackMessage="Unable to load report history." resourceName="Report history" onRetry={() => setReloadKey(key => key + 1)} />}
         {!loading && !error && <ReportTable
           reports={visible}
           totalReportCount={reports.length}

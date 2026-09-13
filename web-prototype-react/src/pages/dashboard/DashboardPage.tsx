@@ -8,6 +8,7 @@ import {
 import { getPortfolioReport, listPortfolioReports } from '../../api/reportsApi';
 import { useAuth } from '../../auth/useAuth';
 import { go } from '../../app/routes';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
 import type {
   PortfolioCurrency,
@@ -26,7 +27,6 @@ import { PortfolioAllocation } from './components/PortfolioAllocation';
 import { PortfolioAnalysisCard } from './components/PortfolioAnalysisCard';
 import { PortfolioPerformance } from './components/PortfolioPerformance';
 import { RiskDrivers } from './components/RiskDrivers';
-import { dashboardErrorMessage } from './dashboardUi';
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -40,18 +40,18 @@ export function DashboardPage() {
   const [listLoading, setListLoading] = useState(true);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
-  const [listError, setListError] = useState<string | null>(null);
-  const [portfolioError, setPortfolioError] = useState<string | null>(null);
-  const [reportError, setReportError] = useState<string | null>(null);
+  const [listError, setListError] = useState<unknown>(null);
+  const [portfolioError, setPortfolioError] = useState<unknown>(null);
+  const [reportError, setReportError] = useState<unknown>(null);
   const [contextLoading, setContextLoading] = useState(false);
-  const [contextError, setContextError] = useState<string | null>(null);
+  const [contextError, setContextError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [reportReloadKey, setReportReloadKey] = useState(0);
   const [contextReloadKey, setContextReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController(); setListLoading(true); setListError(null); setPortfolios([]); setSelectedId('');
-    void listPortfolios({ signal: controller.signal }).then(response => { setPortfolios(response.portfolios); setSelectedId(response.portfolios[0]?.id ?? ''); }).catch(error => { if (!controller.signal.aborted) setListError(dashboardErrorMessage(error, 'Unable to load portfolios.')); }).finally(() => { if (!controller.signal.aborted) setListLoading(false); });
+    void listPortfolios({ signal: controller.signal }).then(response => { setPortfolios(response.portfolios); setSelectedId(response.portfolios[0]?.id ?? ''); }).catch(error => { if (!controller.signal.aborted) setListError(error); }).finally(() => { if (!controller.signal.aborted) setListLoading(false); });
     return () => controller.abort();
   }, [reloadKey]);
 
@@ -59,13 +59,13 @@ export function DashboardPage() {
     setPortfolio(null); setReport(null); setPortfolioError(null); setReportError(null);
     if (!selectedId) { setPortfolioLoading(false); setReportLoading(false); return; }
     const controller = new AbortController(); setPortfolioLoading(true); setReportLoading(true);
-    void getPortfolio(selectedId, { signal: controller.signal }).then(setPortfolio).catch(error => { if (!controller.signal.aborted) setPortfolioError(dashboardErrorMessage(error, 'Unable to load the selected portfolio.')); }).finally(() => { if (!controller.signal.aborted) setPortfolioLoading(false); });
+    void getPortfolio(selectedId, { signal: controller.signal }).then(setPortfolio).catch(error => { if (!controller.signal.aborted) setPortfolioError(error); }).finally(() => { if (!controller.signal.aborted) setPortfolioLoading(false); });
     void listPortfolioReports(selectedId, { signal: controller.signal }).then(async response => {
       const latest = response.reports[0];
       if (!latest) return;
       const detail = await getPortfolioReport(selectedId, latest.id, { signal: controller.signal });
       if (!controller.signal.aborted) setReport(detail);
-    }).catch(error => { if (!controller.signal.aborted) setReportError(dashboardErrorMessage(error, 'Unable to load the latest report.')); }).finally(() => { if (!controller.signal.aborted) setReportLoading(false); });
+    }).catch(error => { if (!controller.signal.aborted) setReportError(error); }).finally(() => { if (!controller.signal.aborted) setReportLoading(false); });
     return () => controller.abort();
   }, [selectedId, reportReloadKey]);
 
@@ -89,12 +89,7 @@ export function DashboardPage() {
     void request
       .catch(error => {
         if (!controller.signal.aborted) {
-          setContextError(dashboardErrorMessage(
-            error,
-            portfolio.portfolio_type === 'PLANNED'
-              ? 'Unable to load the planned target allocation.'
-              : 'Unable to load the current portfolio value.',
-          ));
+          setContextError(error);
         }
       })
       .finally(() => {
@@ -111,7 +106,7 @@ export function DashboardPage() {
 
   const firstName = user?.email.split('@')[0] || 'Investor';
   if (listLoading) return <Card className={styles.state}><h2>Loading Dashboard</h2><p role="status">Loading your portfolios.</p></Card>;
-  if (listError) return <div role="alert"><Card className={styles.state}><h2>Dashboard unavailable</h2><p>{listError}</p><button className="primary-btn" onClick={() => setReloadKey(value => value + 1)}>Try Again</button></Card></div>;
+  if (listError) return <ScreenErrorState error={listError} fallbackMessage="Unable to load your dashboard portfolios." resourceName="Dashboard" onRetry={() => setReloadKey(value => value + 1)} />;
   if (!portfolios.length) return <Card className={styles.state}><h2>No portfolios yet</h2><p>Create a Current portfolio for investments you own or a Planned portfolio to evaluate before investing.</p><button className="primary-btn" onClick={() => go('create')}>Create Portfolio</button></Card>;
 
   const allocation = portfolio
@@ -120,7 +115,7 @@ export function DashboardPage() {
 
   return <div className="page dashboard-page">
     <DashboardHeader firstName={firstName} portfolios={portfolios} selectedId={selectedId} report={report} onSelectPortfolio={selectPortfolio} />
-    {portfolioError && <p className={styles.error} role="alert">{portfolioError}</p>}
+    {Boolean(portfolioError) && <InlineErrorCard error={portfolioError} fallbackMessage="Unable to load the selected portfolio." resourceName="Portfolio" onRetry={() => setReportReloadKey(value => value + 1)} />}
     {portfolioLoading && <Card className={styles.state}><h2>Loading selected portfolio</h2><p role="status">Loading its holdings and saved analysis.</p></Card>}
     {!portfolioLoading && !portfolio && !portfolioError && <Card className={styles.state}><h2>Portfolio unavailable</h2><p>The selected portfolio could not be displayed.</p></Card>}
     {portfolio && <>
@@ -141,8 +136,8 @@ export function DashboardPage() {
           </div>
         )}
       </div>
-      {contextError && <div className={styles.reportNotice} role="alert"><span><strong>{portfolio.portfolio_type === 'PLANNED' ? 'Target allocation unavailable.' : 'Current valuation unavailable.'}</strong> {contextError}</span><button className="secondary-btn" onClick={() => setContextReloadKey(value => value + 1)}>Retry</button></div>}
-      {reportError && <div className={styles.reportNotice} role="alert"><span><strong>Report metrics unavailable.</strong> {reportError}</span><button className="secondary-btn" onClick={() => setReportReloadKey(value => value + 1)}>Retry Report</button></div>}
+      {Boolean(contextError) && <InlineErrorCard error={contextError} fallbackMessage={portfolio.portfolio_type === 'PLANNED' ? 'Unable to load the planned target allocation.' : 'Unable to load the current portfolio value.'} stale onRetry={() => setContextReloadKey(value => value + 1)} />}
+      {Boolean(reportError) && <InlineErrorCard error={reportError} fallbackMessage="Unable to load the latest report." resourceName="Latest report" stale onRetry={() => setReportReloadKey(value => value + 1)} retryTitle="Retry report" />}
       {!reportLoading && !reportError && !report && <div className={styles.reportNotice}><span><strong>This portfolio has not been analyzed.</strong> Risk and performance metrics will appear after you create an analysis.</span><button className="primary-btn" onClick={() => go(`analytics/${portfolio.id}`)}>Analyze Portfolio</button></div>}
       <DashboardKpiGrid portfolio={portfolio} valuation={valuation} plannedAllocation={plannedAllocation} contextLoading={contextLoading} contextFailed={Boolean(contextError)} report={report} reportLoading={reportLoading} reportFailed={Boolean(reportError)} />
       <div className="dashboard-primary-grid"><PortfolioPerformance key={report?.id ?? portfolio.id} portfolioId={portfolio.id} report={report} loading={reportLoading} failed={Boolean(reportError)} /><RiskDrivers portfolioId={portfolio.id} drivers={report?.analysis.risk_drivers.entries ?? null} loading={reportLoading} failed={Boolean(reportError)} /></div>

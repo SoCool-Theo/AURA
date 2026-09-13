@@ -7,6 +7,7 @@ import {
 } from '../../api/portfoliosApi';
 import { listHistoricalScenarios, runAllocationSimulation, runCombinedSimulation, runHistoricalScenario } from '../../api/simulationsApi';
 import { go } from '../../app/routes';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
 import type { PortfolioResponse, PortfolioSummaryResponse } from '../../types/portfolio';
 import type { HistoricalScenarioResponse, SimulationAllocation, SimulationMode, SimulationRunResult } from '../../types/simulation';
@@ -20,7 +21,6 @@ import {
   allocationInputsFromPlannedAllocation,
   allocationInputsFromPortfolio,
   allocationInputsFromValuation,
-  simulationErrorMessage,
   validateModifiedAllocation,
 } from './simulationUi';
 
@@ -43,17 +43,18 @@ export function SimulationsPage({ portfolioId }: Props) {
   const [result, setResult] = useState<SimulationRunResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [historyReloadKey, setHistoryReloadKey] = useState(0);
 
   useEffect(() => {
-    const controller = new AbortController(); setLoading(true); setError(null); setPortfolio(null); setResult(null); setAllocation({}); setBaselineAllocation({});
+    const controller = new AbortController(); setLoading(true); setLoadError(null); setActionError(null); setPortfolio(null); setResult(null); setAllocation({}); setBaselineAllocation({});
     Promise.all([listPortfolios({ signal: controller.signal }), listHistoricalScenarios(controller.signal)])
       .then(([portfolioResponse, scenarioResponse]) => {
         setPortfolios(portfolioResponse.portfolios); setScenarios(scenarioResponse.scenarios);
         const requestedExists = portfolioId ? portfolioResponse.portfolios.some(item => item.id === portfolioId) : false;
-        if (portfolioId && !requestedExists) { setSelectedPortfolioId(''); setError('Portfolio not found'); return; }
+        if (portfolioId && !requestedExists) { setSelectedPortfolioId(''); setLoadError('Portfolio not found.'); return; }
         const selected = portfolioId || portfolioResponse.portfolios[0]?.id || '';
         setSelectedPortfolioId(selected); setScenarioId(current => scenarioResponse.scenarios.some(item => item.id === current) ? current : scenarioResponse.scenarios[0]?.id ?? '');
         if (selected) return getPortfolio(selected, { signal: controller.signal }).then(async detail => {
@@ -67,28 +68,28 @@ export function SimulationsPage({ portfolioId }: Props) {
           setBaselineAllocation(inputs);
         });
       })
-      .catch(requestError => { if (!controller.signal.aborted) setError(simulationErrorMessage(requestError, 'Unable to load simulation setup.')); })
+      .catch(requestError => { if (!controller.signal.aborted) setLoadError(requestError); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [portfolioId, reloadKey]);
 
   const totalAllocation = Object.values(allocation).reduce((sum, value) => sum + Number(value), 0);
-  function clearOutput() { setResult(null); setError(null); }
+  function clearOutput() { setResult(null); setActionError(null); }
   function resetAllocation() { setAllocation(baselineAllocation); clearOutput(); }
 
   async function run() {
     if (running) return;
-    if (!selectedPortfolioId || !portfolio) { setError('Choose a portfolio before running a simulation.'); return; }
-    if (!portfolio.holdings.length) { setError('This portfolio has no saved holdings to simulate.'); return; }
-    if (mode === 'allocation' && (!startDate || !endDate)) { setError('Choose both requested dates.'); return; }
-    if (mode === 'allocation' && startDate > endDate) { setError('Start date must be on or before end date.'); return; }
-    if (mode !== 'allocation' && !scenarioId) { setError('Choose a historical scenario.'); return; }
+    if (!selectedPortfolioId || !portfolio) { setActionError('Choose a portfolio before running a simulation.'); return; }
+    if (!portfolio.holdings.length) { setActionError('This portfolio has no saved holdings to simulate.'); return; }
+    if (mode === 'allocation' && (!startDate || !endDate)) { setActionError('Choose both requested dates.'); return; }
+    if (mode === 'allocation' && startDate > endDate) { setActionError('Start date must be on or before end date.'); return; }
+    if (mode !== 'allocation' && !scenarioId) { setActionError('Choose a historical scenario.'); return; }
     const validatedAllocation = mode === 'historical-scenario'
       ? null
       : validateModifiedAllocation(portfolio, allocation);
-    if (validatedAllocation?.error) { setError(validatedAllocation.error); return; }
+    if (validatedAllocation?.error) { setActionError(validatedAllocation.error); return; }
     const modified_allocation = validatedAllocation?.allocation ?? [];
-    setRunning(true); setError(null); setResult(null);
+    setRunning(true); setActionError(null); setResult(null);
     try {
       const nextResult: SimulationRunResult = mode === 'historical-scenario'
         ? { type: mode, response: await runHistoricalScenario(selectedPortfolioId, { scenario_id: scenarioId }) }
@@ -96,7 +97,7 @@ export function SimulationsPage({ portfolioId }: Props) {
           ? { type: mode, response: await runAllocationSimulation(selectedPortfolioId, { start_date: startDate, end_date: endDate, modified_allocation }) }
           : { type: mode, response: await runCombinedSimulation(selectedPortfolioId, { scenario_id: scenarioId, modified_allocation }) };
       setResult(nextResult); setHistoryReloadKey(value => value + 1);
-    } catch (requestError) { setError(simulationErrorMessage(requestError, 'Unable to run this simulation.')); }
+    } catch (requestError) { setActionError(requestError); }
     finally { setRunning(false); }
   }
 
@@ -109,10 +110,10 @@ export function SimulationsPage({ portfolioId }: Props) {
       <span>{portfolio.portfolio_type === 'PLANNED' ? 'Results describe how the proposed allocation would have behaved historically. They are not a forecast or an investment recommendation.' : portfolio.portfolio_type === 'CURRENT' ? 'The original allocation is derived from the current value of the saved shares.' : 'The original allocation uses the portfolio’s saved compatibility weights.'}</span>
     </div>}
     {mode !== 'historical-scenario' && portfolio && <AllocationEditor mode={mode} portfolio={portfolio} allocation={allocation} totalAllocation={totalAllocation} disabled={running} onReset={resetAllocation} onChange={(symbol, value) => { setAllocation(current => ({ ...current, [symbol]: value })); clearOutput(); }} />}
-    {error && <p className={styles.error} role="alert">{error}</p>}
+    {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to run this simulation." />}
     {loading && <Card className={styles.state}><h2>Loading simulation setup</h2><p role="status">Retrieving your portfolios and Aura’s historical scenario catalogue.</p></Card>}
-    {!loading && !error && !portfolios.length && <Card className={styles.state}><h2>No portfolios to simulate</h2><p>Create a portfolio and save its complete allocation first.</p><button className="primary-btn" onClick={() => go('create')}>Create Portfolio</button></Card>}
-    {!loading && error && !portfolio && <Card className={styles.state}><h2>Simulation setup unavailable</h2><p>The requested portfolio is unavailable or setup could not be loaded.</p><button className="primary-btn" onClick={() => setReloadKey(value => value + 1)}>Try Again</button></Card>}
+    {!loading && !loadError && !portfolios.length && <Card className={styles.state}><h2>No portfolios to simulate</h2><p>Create a portfolio and save its complete allocation first.</p><button className="primary-btn" onClick={() => go('create')}>Create Portfolio</button></Card>}
+    {!loading && Boolean(loadError) && !portfolio && <ScreenErrorState error={loadError} fallbackMessage="Unable to load simulation setup." resourceName="Portfolio" onRetry={() => setReloadKey(value => value + 1)} />}
     {running && <Card className={styles.state}><h2>Running simulation</h2><p role="status">Aura is calculating and saving one immutable simulation snapshot.</p></Card>}
     {result && !running && <><div className={styles.saved}><strong>Simulation saved.</strong> This successful run is already available in history.</div><SimulationResults result={result} /></>}
     {!loading && selectedPortfolioId && <SimulationHistory portfolioId={selectedPortfolioId} reloadKey={historyReloadKey} />}

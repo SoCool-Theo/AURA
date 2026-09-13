@@ -35,6 +35,10 @@ export function Icon({ name, size = 20 }: IconProps) {
     case 'drawdown': return <svg {...common}><path d="m3 7 6 6 4-4 8 8"/><path d="M15 17h6v-6"/></svg>;
     case 'spark': return <svg {...common}><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/></svg>;
     case 'analysis': return <svg {...common}><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="2"/></svg>;
+    case 'offline': return <svg {...common}><path d="M4.5 9.5A6.5 6.5 0 0 1 15 5l1.5 2A4.5 4.5 0 0 1 19 15H8"/><path d="m3 3 18 18"/></svg>;
+    case 'lock': return <svg {...common}><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg>;
+    case 'alert': return <svg {...common}><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/></svg>;
+    case 'server': return <svg {...common}><rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M8 7h.01M8 17h.01"/></svg>;
     default: return null;
   }
 }

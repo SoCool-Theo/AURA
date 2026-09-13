@@ -5,6 +5,7 @@ import {
   replaceRealPortfolioHoldings,
 } from '../../api/portfoliosApi';
 import { go } from '../../app/routes';
+import { FormErrorSummary } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
 import type {
@@ -14,7 +15,6 @@ import type {
   PortfolioResponse,
 } from '../../types/portfolio';
 import styles from './PortfolioIntegration.module.css';
-import { portfolioErrorMessage } from './portfolioUi';
 import {
   createPlannedHoldingDraft,
   createRealHoldingDraft,
@@ -44,8 +44,8 @@ export function PortfolioCreateFlow() {
   const [holdings, setHoldings] = useState<DraftHolding[]>([
     createRealHoldingDraft(0),
   ]);
-  const [error, setError] = useState<string | null>(null);
-  const [partialError, setPartialError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [partialError, setPartialError] = useState<unknown>(null);
   const [createdPortfolio, setCreatedPortfolio] = useState<PortfolioResponse | null>(null);
   const [saving, setSaving] = useState(false);
   const maximumPurchaseDate = todayInputValue();
@@ -124,7 +124,7 @@ export function PortfolioCreateFlow() {
           });
         setCreatedPortfolio(target);
       } catch (requestError) {
-        setError(portfolioErrorMessage(requestError, 'Unable to create portfolio.'));
+        setError(requestError);
         setSaving(false);
         return;
       }
@@ -142,7 +142,7 @@ export function PortfolioCreateFlow() {
         );
       go(`portfolio/${saved.id}`);
     } catch (requestError) {
-      setPartialError(portfolioErrorMessage(requestError, 'Unable to save portfolio holdings.'));
+      setPartialError(requestError);
     } finally {
       setSaving(false);
     }
@@ -160,10 +160,11 @@ export function PortfolioCreateFlow() {
         </div>
       </section>
 
-      {partialError && createdPortfolio && (
+      {Boolean(partialError) && createdPortfolio && (
         <div className={styles.partialSuccess} role="alert">
           <strong>Portfolio created; holdings still need attention</strong>
-          <p>“{createdPortfolio.name}” was created, but its holdings could not be saved: {partialError}</p>
+          <p>“{createdPortfolio.name}” was created, but its holdings could not be saved.</p>
+          <FormErrorSummary error={partialError} message="Review the holdings and retry saving them." />
           <div className={styles.partialActions}>
             <button className="primary-btn" onClick={() => void savePortfolio()} disabled={saving}>Retry holdings</button>
             <button className="secondary-btn" onClick={() => go(`portfolio/${createdPortfolio.id}`)} disabled={saving}>Open empty portfolio</button>
@@ -171,7 +172,7 @@ export function PortfolioCreateFlow() {
         </div>
       )}
 
-      {error && <p className={styles.error} role="alert">{error}</p>}
+      {Boolean(error) && <FormErrorSummary error={error} />}
 
       <div className="create-workspace">
         <Card className="wizard-main">

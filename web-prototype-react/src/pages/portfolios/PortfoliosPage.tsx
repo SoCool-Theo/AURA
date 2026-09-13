@@ -8,6 +8,7 @@ import {
 } from '../../api/portfoliosApi';
 import { listPortfolioReports } from '../../api/reportsApi';
 import { PortfolioCard } from '../../components/portfolio/PortfolioCard';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
 import { AuraSelect } from '../../components/ui/AuraSelect';
@@ -18,7 +19,6 @@ import type {
 } from '../../types/portfolio';
 import type { PortfolioReportSummary } from '../../types/report';
 import styles from './PortfolioIntegration.module.css';
-import { portfolioErrorMessage } from './portfolioUi';
 
 interface PortfolioSummaryProps {
   label: string;
@@ -57,8 +57,8 @@ function toSummary(portfolio: PortfolioResponse): PortfolioSummaryResponse {
 export function PortfoliosPage() {
   const [portfolios, setPortfolios] = useState<PortfolioSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState('updated');
@@ -76,7 +76,7 @@ export function PortfoliosPage() {
       .then(response => setPortfolios(response.portfolios))
       .catch(error => {
         if (!controller.signal.aborted) {
-          setLoadError(portfolioErrorMessage(error, 'Unable to load portfolios.'));
+          setLoadError(error);
         }
       })
       .finally(() => {
@@ -148,7 +148,7 @@ export function PortfoliosPage() {
         item.id === portfolio.id ? toSummary(updated) : item
       )));
     } catch (error) {
-      setActionError(portfolioErrorMessage(error, 'Unable to rename portfolio.'));
+      setActionError(error);
     } finally {
       setBusyId(null);
     }
@@ -165,7 +165,7 @@ export function PortfoliosPage() {
       const duplicated = await duplicatePortfolio(portfolio.id, { name: name.trim() });
       setPortfolios(previous => [...previous, toSummary(duplicated)]);
     } catch (error) {
-      setActionError(portfolioErrorMessage(error, 'Unable to duplicate portfolio.'));
+      setActionError(error);
     } finally {
       setBusyId(null);
     }
@@ -181,7 +181,7 @@ export function PortfoliosPage() {
       await deletePortfolio(portfolio.id);
       setPortfolios(previous => previous.filter(item => item.id !== portfolio.id));
     } catch (error) {
-      setActionError(portfolioErrorMessage(error, 'Unable to delete portfolio.'));
+      setActionError(error);
     } finally {
       setBusyId(null);
     }
@@ -205,20 +205,14 @@ export function PortfoliosPage() {
         <PortfolioSummary label="Access" value="Private" detail="Available only in your account" icon="shield" tone="green" />
       </div>}
 
-      {actionError && <p className={styles.error} role="alert">{actionError}</p>}
+      {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to update this portfolio." />}
       {reportLookupError && <p className={styles.contextNotice} role="alert">Some latest-report shortcuts are temporarily unavailable. Portfolios can still be opened normally.</p>}
 
       {loading && (
         <Card className={styles.stateCard}><p role="status">Loading your portfolios…</p></Card>
       )}
 
-      {!loading && loadError && (
-        <Card className={styles.stateCard}>
-          <h2>Unable to load portfolios</h2>
-          <p role="alert">{loadError}</p>
-          <button className="primary-btn" onClick={() => setReloadKey(key => key + 1)}>Try again</button>
-        </Card>
-      )}
+      {!loading && Boolean(loadError) && <ScreenErrorState error={loadError} fallbackMessage="Unable to load your portfolios." resourceName="Portfolio list" onRetry={() => setReloadKey(key => key + 1)} />}
 
       {!loading && !loadError && portfolios.length > 0 && <Card className="portfolio-toolbar">
         <label className="portfolio-search">
