@@ -61,7 +61,7 @@ export function PortfolioReturnChart({ points }: { points: PortfolioReturnPoint[
       {ticks.map(tick => <span key={tick} style={{ top: `${((domainMax - tick) / domainSpan) * 100}%` }}>{formatPercentTick(tick, domainSpan)}</span>)}
     </div>
     <div className={styles.plot}>
-      <svg className={styles.chart} viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} preserveAspectRatio="none" role="img" aria-label="Backend-returned periodic portfolio returns by date">
+      <svg className={styles.chart} viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} preserveAspectRatio="none" role="img" aria-label="Saved periodic portfolio returns by date">
         {ticks.map(tick => {
           const y = ((domainMax - tick) / domainSpan) * PLOT_HEIGHT;
           const isZero = Math.abs(tick) < domainSpan * 0.0001;
