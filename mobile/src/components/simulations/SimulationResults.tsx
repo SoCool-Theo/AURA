@@ -13,6 +13,7 @@ import type {
   HistoricalScenarioMetrics,
   SimulationBaselineValuationContext
 } from '../../types/simulation';
+import type { PlannedPortfolioBaselineContext } from '../../types/portfolio';
 import {
   formatCurrentAllocation,
   formatPortfolioMoney,
@@ -83,7 +84,7 @@ export function SimulationResults({
   baseline
 }: {
   result: SimulationRunResult;
-  baseline?: SimulationBaselineValuationContext;
+  baseline?: SimulationBaselineValuationContext | PlannedPortfolioBaselineContext;
 }) {
   const baselineCard = baseline ? <BaselineCard baseline={baseline} /> : null;
   if (result.type === 'historical-scenario') {
@@ -142,7 +143,36 @@ export function SimulationResults({
   );
 }
 
-function BaselineCard({ baseline }: { baseline: SimulationBaselineValuationContext }) {
+function BaselineCard({ baseline }: {
+  baseline: SimulationBaselineValuationContext | PlannedPortfolioBaselineContext;
+}) {
+  if ('portfolio_type' in baseline) {
+    return (
+      <Card style={styles.plannedBaselineCard}>
+        <Text style={styles.cardTitle}>Frozen planned baseline</Text>
+        <Text style={styles.baselineValue}>
+          {formatPortfolioMoney(baseline.total_proposed_amount, baseline.plan_currency)}
+        </Text>
+        <Text style={styles.baselineMeta}>{baseline.hypothetical_notice}</Text>
+        {baseline.holdings.map((holding) => (
+          <View key={holding.id} style={styles.baselineRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.allocationSymbol}>{holding.symbol}</Text>
+              <Text style={styles.baselineMeta}>
+                Proposed {formatPortfolioMoney(holding.proposed_amount, baseline.plan_currency)}
+              </Text>
+            </View>
+            <Text style={styles.allocationWeight}>
+              {formatSimulationPercent(Number(holding.target_allocation))}
+            </Text>
+          </View>
+        ))}
+        <Text style={styles.baselineMeta}>
+          This immutable target baseline does not include display-only estimated shares.
+        </Text>
+      </Card>
+    );
+  }
   return (
     <Card style={styles.baselineCard}>
       <Text style={styles.cardTitle}>Frozen real-holding baseline</Text>
@@ -212,6 +242,7 @@ const styles = StyleSheet.create({
   comparisonLabel: { color: colors.textSecondary, fontSize: 12, flexGrow: 1, flexBasis: 120 },
   comparisonValue: { color: colors.text, fontSize: 12, fontWeight: '900', flexShrink: 1, textAlign: 'right' },
   baselineCard: { gap: spacing.md, backgroundColor: colors.cyanBackground },
+  plannedBaselineCard: { gap: spacing.md, backgroundColor: colors.summaryBackground, borderColor: colors.primary },
   baselineValue: { color: colors.text, fontSize: 23, fontWeight: '900' },
   baselineMeta: { color: colors.textSecondary, fontSize: 10, lineHeight: 15 },
   baselineRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, alignItems: 'center' },

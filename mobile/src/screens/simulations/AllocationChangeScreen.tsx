@@ -19,6 +19,7 @@ import { simulationErrorMessage } from '../../simulation/simulationErrors';
 import type { SimulationRunResult } from '../../simulation/SimulationProvider';
 import {
   allocationInputsFromPortfolio,
+  allocationInputsFromPlannedAllocation,
   allocationInputsFromValuation,
   allocationTotal,
   defaultSimulationPeriod,
@@ -47,16 +48,20 @@ export function AllocationChangeScreen({ route }: { route: any }) {
   useEffect(() => {
     if (portfolioState.portfolio) {
       const mode = portfolioHoldingMode(portfolioState.portfolio.holdings);
-      setWeights(mode === 'real'
-        ? portfolioState.valuation
-          ? allocationInputsFromValuation(portfolioState.valuation)
+      setWeights(mode === 'planned'
+        ? portfolioState.plannedAllocation
+          ? allocationInputsFromPlannedAllocation(portfolioState.plannedAllocation)
           : {}
-        : allocationInputsFromPortfolio(portfolioState.portfolio));
+        : mode === 'real'
+          ? portfolioState.valuation
+            ? allocationInputsFromValuation(portfolioState.valuation)
+            : {}
+          : allocationInputsFromPortfolio(portfolioState.portfolio));
       setResult(null);
       setRunError(null);
       setRunFailure(null);
     }
-  }, [portfolioState.portfolio, portfolioState.valuation]);
+  }, [portfolioState.plannedAllocation, portfolioState.portfolio, portfolioState.valuation]);
 
   async function run() {
     const portfolio = portfolioState.portfolio;
@@ -113,7 +118,9 @@ export function AllocationChangeScreen({ route }: { route: any }) {
   const holdingMode = portfolioState.portfolio
     ? portfolioHoldingMode(portfolioState.portfolio.holdings)
     : 'empty';
-  const baselineReady = holdingMode !== 'real' || Boolean(portfolioState.valuation);
+  const baselineReady = holdingMode === 'planned'
+    ? Boolean(portfolioState.plannedAllocation)
+    : holdingMode !== 'real' || Boolean(portfolioState.valuation);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -132,10 +139,12 @@ export function AllocationChangeScreen({ route }: { route: any }) {
               <InlineErrorCard error={portfolioFailure} message={portfolioErrorMessage(portfolioFailure)} stale={Boolean(portfolioState.portfolio)} onRetry={() => void (portfolioState.listStatus === 'error' ? portfolioState.refreshPortfolios() : portfolioState.retryPortfolio())} retryTitle="Retry portfolio" />
             ) : null}
             {portfolioState.valuationStatus === 'loading' ? (
-              <Text style={styles.state}>Loading current USD allocation from backend valuation…</Text>
+              <Text style={styles.state}>{holdingMode === 'planned'
+                ? 'Loading target allocation from proposed amounts…'
+                : 'Loading current USD allocation from backend valuation…'}</Text>
             ) : null}
             {portfolioState.valuationStatus === 'error' ? (
-              <InlineErrorCard error={portfolioState.valuationError} message={portfolioValuationErrorMessage(portfolioState.valuationError)} onRetry={() => void portfolioState.retryPortfolio()} retryTitle="Retry valuation" />
+              <InlineErrorCard error={portfolioState.valuationError} message={holdingMode === 'planned' ? portfolioErrorMessage(portfolioState.valuationError, 'Unable to load the planned target allocation.') : portfolioValuationErrorMessage(portfolioState.valuationError)} onRetry={() => void portfolioState.retryPortfolio()} retryTitle={holdingMode === 'planned' ? 'Retry allocation' : 'Retry valuation'} />
             ) : null}
             {portfolioState.portfolio && !portfolioState.portfolio.holdings.length ? (
               <Card><EmptyState title="No holdings available" description="Add holdings to this portfolio before changing its allocation." /></Card>
@@ -150,6 +159,8 @@ export function AllocationChangeScreen({ route }: { route: any }) {
                 <Text style={styles.state}>
                   {holdingMode === 'real'
                     ? 'Initialized from the backend-resolved current USD allocation.'
+                    : holdingMode === 'planned'
+                      ? 'Initialized from the backend-derived target allocation for this hypothetical plan.'
                     : 'Initialized from the saved legacy allocation.'}
                 </Text>
                 <AllocationEditor disabled={running} portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value) => setWeights((current) => ({ ...current, [symbol]: value }))} />

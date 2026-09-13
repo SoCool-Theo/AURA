@@ -13,6 +13,7 @@ import type { SimulationRunResult } from '../../simulation/SimulationProvider';
 import { useSimulations } from '../../simulation/useSimulations';
 import {
   isSimulationHistoryV2,
+  isSimulationHistoryV3,
   type SimulationHistoryDetailResponse
 } from '../../types/simulation';
 import { colors, spacing, typography } from '../../theme/theme';
@@ -73,13 +74,18 @@ export function SimulationResultScreen({ route, navigation }: { route: any; navi
   }
   if (!detail) return null;
   const detailV2 = isSimulationHistoryV2(detail) ? detail : null;
+  const detailV3 = isSimulationHistoryV3(detail) ? detail : null;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Saved Simulation</Text>
         <Text style={styles.subtitle}>
-          Immutable backend history detail · {detailV2 ? 'V2 real baseline' : 'V1 legacy allocation'}.
+          Immutable backend history detail · {detailV3
+            ? 'V3 planned hypothetical baseline'
+            : detailV2
+              ? 'V2 real baseline'
+              : 'V1 legacy allocation'}.
         </Text>
         <Card style={styles.metadata}>
           <Text style={styles.metaLabel}>SIMULATION ID</Text>
@@ -99,7 +105,7 @@ export function SimulationResultScreen({ route, navigation }: { route: any; navi
         ) : null}
         <SimulationResults
           result={toRunResult(detail)}
-          baseline={detailV2?.baseline}
+          baseline={detailV3?.baseline ?? detailV2?.baseline}
         />
       </ScrollView>
     </SafeAreaView>

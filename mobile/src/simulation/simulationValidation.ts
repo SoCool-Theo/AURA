@@ -1,6 +1,7 @@
 import type { PortfolioResponse } from '../types/portfolio';
 import type {
   PortfolioAllocationInput,
+  PortfolioPlannedAllocationResponse,
   PortfolioValuationResponse
 } from '../types/portfolio';
 
@@ -30,6 +31,20 @@ export function allocationInputsFromValuation(
       holding.symbol,
       Number.isFinite(allocation)
         ? String(Number((allocation * 100).toFixed(10)))
+        : ''
+    ];
+  }));
+}
+
+export function allocationInputsFromPlannedAllocation(
+  allocation: PortfolioPlannedAllocationResponse
+): AllocationInputs {
+  return Object.fromEntries(allocation.holdings.map((holding) => {
+    const target = Number(holding.target_allocation);
+    return [
+      holding.symbol,
+      Number.isFinite(target)
+        ? String(Number((target * 100).toFixed(10)))
         : ''
     ];
   }));

@@ -2,6 +2,7 @@ import type { AnalysisPeriod, MaximumDrawdownMetrics } from './analytics';
 import type { IsoDate, IsoDateTime, Uuid } from './api';
 import type {
   DecimalString,
+  PlannedPortfolioBaselineContext,
   PortfolioAllocationInput,
   PortfolioCurrency
 } from './portfolio';
@@ -186,12 +187,42 @@ export type SimulationHistoryV2DetailResponse =
   | AllocationHistoryV2Detail
   | CombinedHistoryV2Detail;
 
+export type HistoricalScenarioHistoryV3Detail = HistoricalScenarioHistorySummary & {
+  schema_version: 'historical-scenario-simulation-response-v3';
+  baseline: PlannedPortfolioBaselineContext;
+  result: HistoricalScenarioSimulationResponse;
+};
+
+export type AllocationHistoryV3Detail = AllocationHistorySummary & {
+  schema_version: 'allocation-simulation-response-v3';
+  baseline: PlannedPortfolioBaselineContext;
+  result: AllocationSimulationResponse;
+};
+
+export type CombinedHistoryV3Detail = CombinedHistorySummary & {
+  schema_version: 'combined-simulation-response-v3';
+  baseline: PlannedPortfolioBaselineContext;
+  result: CombinedSimulationResponse;
+};
+
+export type SimulationHistoryV3DetailResponse =
+  | HistoricalScenarioHistoryV3Detail
+  | AllocationHistoryV3Detail
+  | CombinedHistoryV3Detail;
+
 export type SimulationHistoryDetailResponse =
   | SimulationHistoryV1DetailResponse
-  | SimulationHistoryV2DetailResponse;
+  | SimulationHistoryV2DetailResponse
+  | SimulationHistoryV3DetailResponse;
 
 export function isSimulationHistoryV2(
   detail: SimulationHistoryDetailResponse
 ): detail is SimulationHistoryV2DetailResponse {
-  return 'schema_version' in detail;
+  return 'schema_version' in detail && detail.schema_version.endsWith('-v2');
+}
+
+export function isSimulationHistoryV3(
+  detail: SimulationHistoryDetailResponse
+): detail is SimulationHistoryV3DetailResponse {
+  return 'schema_version' in detail && detail.schema_version.endsWith('-v3');
 }

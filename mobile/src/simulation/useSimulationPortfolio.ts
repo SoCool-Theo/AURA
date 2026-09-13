@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePortfolios } from '../portfolio/usePortfolios';
 import {
   portfolioHoldingMode,
+  type PortfolioPlannedAllocationResponse,
   type PortfolioResponse,
   type PortfolioValuationResponse
 } from '../types/portfolio';
@@ -15,6 +16,7 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
     listStatus,
     getPortfolio,
     getPortfolioValuation,
+    getPlannedAllocation,
     selectPortfolio
   } = portfolioState;
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(
@@ -24,6 +26,7 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
   const [detailStatus, setDetailStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [detailError, setDetailError] = useState<unknown>(null);
   const [valuation, setValuation] = useState<PortfolioValuationResponse | null>(null);
+  const [plannedAllocation, setPlannedAllocation] = useState<PortfolioPlannedAllocationResponse | null>(null);
   const [valuationStatus, setValuationStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [valuationError, setValuationError] = useState<unknown>(null);
   const detailRequestRef = useRef(0);
@@ -72,12 +75,31 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
   useEffect(() => {
     if (!selectedPortfolio) {
       setValuation(null);
+      setPlannedAllocation(null);
       setValuationStatus('idle');
       setValuationError(null);
       return;
     }
+    if (selectedPortfolio.portfolio_type === 'PLANNED' && selectedPortfolio.holdings.length) {
+      let current = true;
+      setValuation(null);
+      setPlannedAllocation(null);
+      setValuationStatus('loading');
+      setValuationError(null);
+      void getPlannedAllocation(selectedPortfolio.id).then((response) => {
+        if (!current) return;
+        setPlannedAllocation(response);
+        setValuationStatus('ready');
+      }).catch((error: unknown) => {
+        if (!current) return;
+        setValuationError(error);
+        setValuationStatus('error');
+      });
+      return () => { current = false; };
+    }
     if (portfolioHoldingMode(selectedPortfolio.holdings) !== 'real') {
       setValuation(null);
+      setPlannedAllocation(null);
       setValuationStatus('idle');
       setValuationError(null);
       return;
@@ -85,6 +107,7 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
 
     let current = true;
     setValuation(null);
+    setPlannedAllocation(null);
     setValuationStatus('loading');
     setValuationError(null);
     void getPortfolioValuation(selectedPortfolio.id, 'USD').then((response) => {
@@ -97,7 +120,7 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
       setValuationStatus('error');
     });
     return () => { current = false; };
-  }, [getPortfolioValuation, selectedPortfolio]);
+  }, [getPlannedAllocation, getPortfolioValuation, selectedPortfolio]);
 
   const choosePortfolio = useCallback((portfolioId: string) => {
     setSelectedPortfolioId(portfolioId);
@@ -112,6 +135,9 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
     detailError,
     valuation: valuation?.portfolio_id === selectedPortfolio?.id
       ? valuation
+      : null,
+    plannedAllocation: plannedAllocation?.portfolio_id === selectedPortfolio?.id
+      ? plannedAllocation
       : null,
     valuationStatus,
     valuationError,
