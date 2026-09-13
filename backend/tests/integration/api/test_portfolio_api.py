@@ -22,6 +22,11 @@ from app.services.portfolio_planned_allocation_service import (
     PlannedAllocationHolding,
     PlannedPortfolioAllocation,
 )
+from app.services.portfolio_planned_preview_service import (
+    PlannedEstimateStatus,
+    PlannedHoldingPreview,
+    PlannedPortfolioPreview,
+)
 from app.services.portfolio_valuation_service import (
     HoldingValuationResult,
     InvalidHoldingModeError,
@@ -47,6 +52,7 @@ class ApiHarness:
     service: MagicMock
     valuation_service: MagicMock
     planned_allocation_service: MagicMock
+    planned_preview_service: MagicMock
     session_factory: MagicMock
 
 
@@ -192,6 +198,9 @@ def api_harness() -> ApiHarness:
     planned_allocation_service = MagicMock(
         spec=route_module.PortfolioPlannedAllocationService
     )
+    planned_preview_service = MagicMock(
+        spec=route_module.PortfolioPlannedPreviewService
+    )
 
     with (
         patch.object(
@@ -214,6 +223,11 @@ def api_harness() -> ApiHarness:
             "PortfolioPlannedAllocationService",
             return_value=planned_allocation_service,
         ),
+        patch.object(
+            route_module,
+            "PortfolioPlannedPreviewService",
+            return_value=planned_preview_service,
+        ),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
         yield ApiHarness(
@@ -222,6 +236,7 @@ def api_harness() -> ApiHarness:
             service=service,
             valuation_service=valuation_service,
             planned_allocation_service=planned_allocation_service,
+            planned_preview_service=planned_preview_service,
             session_factory=session_factory,
         )
 
@@ -851,6 +866,159 @@ def test_step3_planned_allocation_unexpected_failure_is_sanitized_500(
         "detail": "Unable to resolve planned allocation"
     }
     assert "sensitive resolver failure" not in response.text
+    api_harness.session.commit.assert_not_called()
+
+
+def test_step4_planned_preview_maps_optional_estimates_without_commit(
+    api_harness: ApiHarness,
+) -> None:
+    portfolio = _portfolio(
+        portfolio_type=PortfolioType.PLANNED,
+        plan_currency="THB",
+    )
+    holdings = [
+        _planned_holding("AAPL", position=0, proposed_amount="6500"),
+        _planned_holding("BND", position=1, proposed_amount="3250"),
+    ]
+    portfolio.holdings.extend(holdings)
+    api_harness.service.get.return_value = portfolio
+    api_harness.planned_preview_service.preview.return_value = (
+        PlannedPortfolioPreview(
+            portfolio_id=PORTFOLIO_ID,
+            plan_currency="THB",
+            requested_date=date(2026, 9, 12),
+            total_proposed_amount=Decimal("9750"),
+            fx_context=PortfolioFxContext(
+                pair="USD/THB",
+                provider_symbol="THB=X",
+                rate=Decimal("32.5"),
+                as_of=date(2026, 9, 11),
+            ),
+            holdings=(
+                PlannedHoldingPreview(
+                    holding_id=holdings[0].id,
+                    symbol="AAPL",
+                    proposed_amount=Decimal("6500"),
+                    target_allocation=Decimal("0.666666666666666666"),
+                    position=0,
+                    estimate_status=PlannedEstimateStatus.AVAILABLE,
+                    estimated_shares=Decimal("1"),
+                    asset_price=Decimal("200"),
+                    asset_quote_currency="USD",
+                    price_as_of=date(2026, 9, 11),
+                ),
+                PlannedHoldingPreview(
+                    holding_id=holdings[1].id,
+                    symbol="BND",
+                    proposed_amount=Decimal("3250"),
+                    target_allocation=Decimal("0.333333333333333334"),
+                    position=1,
+                    estimate_status=PlannedEstimateStatus.PRICE_UNAVAILABLE,
+                    estimated_shares=None,
+                    asset_price=None,
+                    asset_quote_currency=None,
+                    price_as_of=None,
+                ),
+            ),
+        )
+    )
+
+    with patch.object(
+        route_module,
+        "_current_utc_date",
+        return_value=date(2026, 9, 12),
+    ):
+        response = api_harness.client.get(
+            f"/api/portfolios/{PORTFOLIO_ID}/planned-preview",
+            headers=REQUEST_HEADERS,
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["portfolio_type"] == "PLANNED"
+    assert body["plan_currency"] == "THB"
+    assert body["requested_date"] == "2026-09-12"
+    assert body["total_proposed_amount"] == "9750"
+    assert body["fx"] == {
+        "pair": "USD/THB",
+        "provider_symbol": "THB=X",
+        "rate": "32.5",
+        "as_of": "2026-09-11",
+    }
+    assert body["holdings"][0]["estimated_shares"] == "1"
+    assert body["holdings"][0]["estimate_status"] == "AVAILABLE"
+    assert body["holdings"][1]["estimated_shares"] is None
+    assert body["holdings"][1]["estimate_status"] == "PRICE_UNAVAILABLE"
+    api_harness.planned_preview_service.preview.assert_called_once_with(
+        portfolio=portfolio,
+        requested_date=date(2026, 9, 12),
+    )
+    api_harness.valuation_service.value.assert_not_called()
+    api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("resource_state", ["missing", "wrong-owner"])
+def test_step4_planned_preview_preserves_owner_scoped_404(
+    api_harness: ApiHarness,
+    resource_state: str,
+) -> None:
+    api_harness.service.get.return_value = None
+
+    response = api_harness.client.get(
+        f"/api/portfolios/{PORTFOLIO_ID}/planned-preview",
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Portfolio not found"}
+    api_harness.planned_preview_service.preview.assert_not_called()
+    api_harness.session.commit.assert_not_called()
+
+
+def test_step4_planned_preview_invalid_mode_is_sanitized_conflict(
+    api_harness: ApiHarness,
+) -> None:
+    api_harness.service.get.return_value = _portfolio(
+        portfolio_type=PortfolioType.CURRENT
+    )
+    api_harness.planned_preview_service.preview.side_effect = (
+        InvalidPlannedPortfolioError("sensitive invalid plan detail")
+    )
+
+    response = api_harness.client.get(
+        f"/api/portfolios/{PORTFOLIO_ID}/planned-preview",
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Portfolio cannot provide a planned preview"
+    }
+    assert "sensitive invalid plan detail" not in response.text
+    api_harness.session.commit.assert_not_called()
+
+
+def test_step4_planned_preview_unexpected_failure_is_sanitized_500(
+    api_harness: ApiHarness,
+) -> None:
+    api_harness.service.get.return_value = _portfolio(
+        portfolio_type=PortfolioType.PLANNED,
+        plan_currency="USD",
+    )
+    api_harness.planned_preview_service.preview.side_effect = RuntimeError(
+        "sensitive preview failure"
+    )
+
+    response = api_harness.client.get(
+        f"/api/portfolios/{PORTFOLIO_ID}/planned-preview",
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Unable to preview planned portfolio"
+    }
+    assert "sensitive preview failure" not in response.text
     api_harness.session.commit.assert_not_called()
 
 
@@ -1697,6 +1865,7 @@ def test_phase6_openapi_exposes_only_approved_portfolio_contract_changes() -> No
         "/api/portfolios": {"get", "post"},
         "/api/portfolios/{portfolio_id}": {"delete", "get", "patch"},
         "/api/portfolios/{portfolio_id}/planned-allocation": {"get"},
+        "/api/portfolios/{portfolio_id}/planned-preview": {"get"},
         "/api/portfolios/{portfolio_id}/valuation": {"get"},
         "/api/portfolios/{portfolio_id}/holdings": {"put"},
         "/api/portfolios/{portfolio_id}/duplicate": {"post"},
@@ -1763,6 +1932,14 @@ def test_phase6_openapi_exposes_only_approved_portfolio_contract_changes() -> No
         "application/json"
     ]["schema"] == {
         "$ref": "#/components/schemas/PortfolioPlannedAllocationResponse"
+    }
+    planned_preview_operation = schema["paths"][
+        "/api/portfolios/{portfolio_id}/planned-preview"
+    ]["get"]
+    assert planned_preview_operation["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {
+        "$ref": "#/components/schemas/PortfolioPlannedPreviewResponse"
     }
     valuation_operation = schema["paths"][
         "/api/portfolios/{portfolio_id}/valuation"

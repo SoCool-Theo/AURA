@@ -416,6 +416,90 @@ class PortfolioValuationFxResponse(AuraBaseModel):
     as_of: date
 
 
+class PortfolioPlannedPreviewHoldingResponse(AuraBaseModel):
+    """One planned holding with optional non-authoritative share estimate."""
+
+    id: UUID
+    symbol: AssetSymbol
+    proposed_amount: _PositiveNumeric28Scale12
+    target_allocation: _AllocationDecimal
+    position: Annotated[int, Field(strict=True, ge=0)]
+    estimate_status: Literal[
+        "AVAILABLE",
+        "PRICE_UNAVAILABLE",
+        "FX_UNAVAILABLE",
+    ]
+    estimated_shares: _PositiveValuationDecimal | None
+    asset_price: _PositiveValuationDecimal | None
+    asset_quote_currency: Literal["USD"] | None
+    price_as_of: date | None
+
+    @model_validator(mode="after")
+    def validate_estimate_context(self) -> Self:
+        price_context = (
+            self.asset_price,
+            self.asset_quote_currency,
+            self.price_as_of,
+        )
+        if self.estimate_status == "AVAILABLE":
+            if self.estimated_shares is None or not all(
+                value is not None for value in price_context
+            ):
+                raise ValueError("available estimate requires price context")
+        elif self.estimate_status == "PRICE_UNAVAILABLE":
+            if self.estimated_shares is not None or any(
+                value is not None for value in price_context
+            ):
+                raise ValueError("unavailable price must not expose price context")
+        elif self.estimated_shares is not None or not all(
+            value is not None for value in price_context
+        ):
+            raise ValueError("unavailable FX requires asset price context")
+        return self
+
+
+class PortfolioPlannedPreviewResponse(AuraBaseModel):
+    """Planned allocation with best-effort current estimate context."""
+
+    portfolio_id: UUID
+    portfolio_type: Literal["PLANNED"]
+    plan_currency: _InvestedCurrency
+    requested_date: date
+    total_proposed_amount: _PositiveValuationDecimal
+    fx: PortfolioValuationFxResponse | None
+    holdings: Annotated[
+        list[PortfolioPlannedPreviewHoldingResponse],
+        Field(min_length=1),
+    ]
+
+    @model_validator(mode="after")
+    def validate_currency_context(self) -> Self:
+        if self.plan_currency == "USD" and self.fx is not None:
+            raise ValueError("USD planned preview must not include FX")
+        if self.fx is not None and self.fx.as_of > self.requested_date:
+            raise ValueError("FX observation date must not be after requested_date")
+        if any(
+            holding.price_as_of is not None
+            and holding.price_as_of > self.requested_date
+            for holding in self.holdings
+        ):
+            raise ValueError(
+                "price observation dates must not be after requested_date"
+            )
+
+        statuses = {holding.estimate_status for holding in self.holdings}
+        if self.plan_currency == "USD" and "FX_UNAVAILABLE" in statuses:
+            raise ValueError("USD planned preview cannot require FX")
+        if self.plan_currency == "THB":
+            if self.fx is None and "AVAILABLE" in statuses:
+                raise ValueError("available THB estimates require FX context")
+            if self.fx is not None and "FX_UNAVAILABLE" in statuses:
+                raise ValueError(
+                    "THB estimates cannot report unavailable FX with FX context"
+                )
+        return self
+
+
 class PortfolioHoldingValuationResponse(AuraBaseModel):
     """Public current valuation of one saved real holding."""
 

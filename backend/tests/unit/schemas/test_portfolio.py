@@ -16,6 +16,7 @@ from backend.app.schemas.portfolio import (
     PortfolioListResponse,
     PortfolioPlannedAllocationResponse,
     PortfolioPlannedHoldingsReplaceRequest,
+    PortfolioPlannedPreviewResponse,
     PortfolioResponse,
     PortfolioSummaryResponse,
     PortfolioUpdateRequest,
@@ -905,6 +906,195 @@ def test_planned_allocation_response_preserves_decimal_authority() -> None:
     assert serialized["holdings"][0]["target_allocation"] == (
         "0.400000000000000000"
     )
+
+
+def test_planned_preview_response_preserves_available_estimate_context() -> None:
+    result = PortfolioPlannedPreviewResponse.model_validate(
+        {
+            "portfolio_id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
+            "portfolio_type": "PLANNED",
+            "plan_currency": "THB",
+            "requested_date": "2026-09-12",
+            "total_proposed_amount": "6500",
+            "fx": {
+                "pair": "USD/THB",
+                "provider_symbol": "THB=X",
+                "rate": "32.5",
+                "as_of": "2026-09-11",
+            },
+            "holdings": [
+                {
+                    "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+                    "symbol": "AAPL",
+                    "proposed_amount": "6500",
+                    "target_allocation": "1",
+                    "position": 0,
+                    "estimate_status": "AVAILABLE",
+                    "estimated_shares": "1",
+                    "asset_price": "200",
+                    "asset_quote_currency": "USD",
+                    "price_as_of": "2026-09-11",
+                }
+            ],
+        }
+    )
+
+    serialized = result.model_dump(mode="json")
+    assert serialized["fx"]["rate"] == "32.5"
+    assert serialized["holdings"][0]["estimated_shares"] == "1"
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {
+            "estimate_status": "AVAILABLE",
+            "estimated_shares": None,
+            "asset_price": "200",
+            "asset_quote_currency": "USD",
+            "price_as_of": "2026-09-11",
+        },
+        {
+            "estimate_status": "PRICE_UNAVAILABLE",
+            "estimated_shares": None,
+            "asset_price": "200",
+            "asset_quote_currency": "USD",
+            "price_as_of": "2026-09-11",
+        },
+        {
+            "estimate_status": "FX_UNAVAILABLE",
+            "estimated_shares": None,
+            "asset_price": None,
+            "asset_quote_currency": None,
+            "price_as_of": None,
+        },
+    ],
+)
+def test_planned_preview_rejects_inconsistent_estimate_context(
+    changes: dict[str, object],
+) -> None:
+    holding = {
+        "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+        "symbol": "AAPL",
+        "proposed_amount": "6500",
+        "target_allocation": "1",
+        "position": 0,
+        **changes,
+    }
+
+    with pytest.raises(ValidationError):
+        PortfolioPlannedPreviewResponse.model_validate(
+            {
+                "portfolio_id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
+                "portfolio_type": "PLANNED",
+                "plan_currency": "USD",
+                "requested_date": "2026-09-12",
+                "total_proposed_amount": "6500",
+                "fx": None,
+                "holdings": [holding],
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("plan_currency", "fx", "estimate_status", "error"),
+    [
+        (
+            "USD",
+            None,
+            "FX_UNAVAILABLE",
+            "USD planned preview cannot require FX",
+        ),
+        (
+            "THB",
+            None,
+            "AVAILABLE",
+            "available THB estimates require FX context",
+        ),
+        (
+            "THB",
+            {
+                "pair": "USD/THB",
+                "provider_symbol": "THB=X",
+                "rate": "32.5",
+                "as_of": "2026-09-11",
+            },
+            "FX_UNAVAILABLE",
+            "cannot report unavailable FX",
+        ),
+    ],
+)
+def test_planned_preview_rejects_currency_status_mismatch(
+    plan_currency: str,
+    fx: dict[str, str] | None,
+    estimate_status: str,
+    error: str,
+) -> None:
+    holding = {
+        "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+        "symbol": "AAPL",
+        "proposed_amount": "6500",
+        "target_allocation": "1",
+        "position": 0,
+        "estimate_status": estimate_status,
+        "estimated_shares": "1" if estimate_status == "AVAILABLE" else None,
+        "asset_price": "200",
+        "asset_quote_currency": "USD",
+        "price_as_of": "2026-09-11",
+    }
+
+    with pytest.raises(ValidationError, match=error):
+        PortfolioPlannedPreviewResponse.model_validate(
+            {
+                "portfolio_id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
+                "portfolio_type": "PLANNED",
+                "plan_currency": plan_currency,
+                "requested_date": "2026-09-12",
+                "total_proposed_amount": "6500",
+                "fx": fx,
+                "holdings": [holding],
+            }
+        )
+
+
+def test_planned_preview_rejects_future_price_and_fx_context() -> None:
+    base = {
+        "portfolio_id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
+        "portfolio_type": "PLANNED",
+        "plan_currency": "THB",
+        "requested_date": "2026-09-12",
+        "total_proposed_amount": "6500",
+        "fx": {
+            "pair": "USD/THB",
+            "provider_symbol": "THB=X",
+            "rate": "32.5",
+            "as_of": "2026-09-11",
+        },
+        "holdings": [
+            {
+                "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+                "symbol": "AAPL",
+                "proposed_amount": "6500",
+                "target_allocation": "1",
+                "position": 0,
+                "estimate_status": "AVAILABLE",
+                "estimated_shares": "1",
+                "asset_price": "200",
+                "asset_quote_currency": "USD",
+                "price_as_of": "2026-09-11",
+            }
+        ],
+    }
+
+    future_price = deepcopy(base)
+    future_price["holdings"][0]["price_as_of"] = "2026-09-13"
+    with pytest.raises(ValidationError, match="price observation dates"):
+        PortfolioPlannedPreviewResponse.model_validate(future_price)
+
+    future_fx = deepcopy(base)
+    future_fx["fx"]["as_of"] = "2026-09-13"
+    with pytest.raises(ValidationError, match="FX observation date"):
+        PortfolioPlannedPreviewResponse.model_validate(future_fx)
 
 
 def test_crud_summary_response_rejects_unknown_field() -> None:

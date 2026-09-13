@@ -1,6 +1,7 @@
 """Core portfolio creation and retrieval endpoints."""
 
 from collections.abc import Sequence
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
@@ -18,6 +19,8 @@ from app.schemas.portfolio import (
     PortfolioPlannedAllocationHoldingResponse,
     PortfolioPlannedAllocationResponse,
     PortfolioPlannedHoldingsReplaceRequest,
+    PortfolioPlannedPreviewHoldingResponse,
+    PortfolioPlannedPreviewResponse,
     PortfolioResponse,
     PortfolioSummaryResponse,
     PortfolioUpdateRequest,
@@ -31,6 +34,10 @@ from app.services.portfolio_planned_allocation_service import (
     PlannedPortfolioAllocation,
     PortfolioPlannedAllocationService,
 )
+from app.services.portfolio_planned_preview_service import (
+    PlannedPortfolioPreview,
+    PortfolioPlannedPreviewService,
+)
 from app.services.portfolio_valuation_service import (
     InvalidHoldingModeError,
     InvalidPortfolioValueError,
@@ -42,6 +49,11 @@ from app.services.portfolio_valuation_service import (
 
 
 router = APIRouter(prefix="/portfolios", tags=["Portfolios"])
+
+
+def _current_utc_date() -> date:
+    """Capture one current UTC calendar date per preview request."""
+    return datetime.now(UTC).date()
 
 
 def _response_portfolio_type(
@@ -102,6 +114,44 @@ def _to_planned_allocation_response(
                 position=holding.position,
             )
             for holding in allocation.holdings
+        ],
+    )
+
+
+def _to_planned_preview_response(
+    preview: PlannedPortfolioPreview,
+) -> PortfolioPlannedPreviewResponse:
+    fx = (
+        None
+        if preview.fx_context is None
+        else PortfolioValuationFxResponse(
+            pair=preview.fx_context.pair,
+            provider_symbol=preview.fx_context.provider_symbol,
+            rate=preview.fx_context.rate,
+            as_of=preview.fx_context.as_of,
+        )
+    )
+    return PortfolioPlannedPreviewResponse(
+        portfolio_id=preview.portfolio_id,
+        portfolio_type="PLANNED",
+        plan_currency=preview.plan_currency,
+        requested_date=preview.requested_date,
+        total_proposed_amount=preview.total_proposed_amount,
+        fx=fx,
+        holdings=[
+            PortfolioPlannedPreviewHoldingResponse(
+                id=holding.holding_id,
+                symbol=holding.symbol,
+                proposed_amount=holding.proposed_amount,
+                target_allocation=holding.target_allocation,
+                position=holding.position,
+                estimate_status=holding.estimate_status.value,
+                estimated_shares=holding.estimated_shares,
+                asset_price=holding.asset_price,
+                asset_quote_currency=holding.asset_quote_currency,
+                price_as_of=holding.price_as_of,
+            )
+            for holding in preview.holdings
         ],
     )
 
@@ -282,6 +332,42 @@ def get_planned_portfolio_allocation(
         ) from error
     except Exception as error:
         raise _internal_error("Unable to resolve planned allocation") from error
+
+
+@router.get(
+    "/{portfolio_id}/planned-preview",
+    response_model=PortfolioPlannedPreviewResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_planned_portfolio_preview(
+    portfolio_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> PortfolioPlannedPreviewResponse:
+    try:
+        portfolio = PortfolioService(session).get(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+        )
+    except Exception as error:
+        raise _internal_error("Unable to preview planned portfolio") from error
+
+    if portfolio is None:
+        raise _portfolio_not_found()
+
+    try:
+        preview = PortfolioPlannedPreviewService(session).preview(
+            portfolio=portfolio,
+            requested_date=_current_utc_date(),
+        )
+        return _to_planned_preview_response(preview)
+    except InvalidPlannedPortfolioError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Portfolio cannot provide a planned preview",
+        ) from error
+    except Exception as error:
+        raise _internal_error("Unable to preview planned portfolio") from error
 
 
 @router.get(
