@@ -20,9 +20,9 @@ export function agentErrorMessage(error: unknown): string {
 
   switch (error.kind) {
     case 'configuration':
-      return 'Aura is not configured to reach the backend API.';
+      return 'Aura is not configured to connect to its service.';
     case 'network':
-      return 'Unable to reach Aura\u2019s backend. Check the connection and try again.';
+      return 'Unable to reach Aura. Check your connection and try again.';
     case 'malformed-response':
       return 'Aura returned an unexpected AI response. Please try again.';
     default:

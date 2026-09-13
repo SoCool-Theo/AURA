@@ -228,7 +228,7 @@ export function AssistantScreen({
             <EmptyState
               icon="sparkles-outline"
               title="Create a portfolio first"
-              description="Aura needs a saved backend portfolio before it can provide a grounded explanation."
+              description="Create and save a portfolio before asking Aura about its risk."
             />
             <Button
               title="Create Portfolio"
@@ -253,7 +253,7 @@ export function AssistantScreen({
         <PageTitle
           eyebrow="GROUNDED PORTFOLIO EXPLANATIONS"
           title="Ask Aura"
-          subtitle="Understand backend-calculated portfolio risk in plain language."
+          subtitle="Understand your portfolio risk in plain language."
         />
 
         <Card style={styles.safetyCard}>
@@ -314,9 +314,9 @@ export function AssistantScreen({
           </View>
 
           <Text style={styles.contextNote}>
-            The backend uses {selectedPortfolio?.portfolio_type === 'PLANNED'
-              ? 'this hypothetical plan, its proposed-amount target allocation,'
-              : 'this portfolio'} and its newest saved report when available. No financial calculations run on this device.
+            Aura uses {selectedPortfolio?.portfolio_type === 'PLANNED'
+              ? 'this hypothetical plan and its target allocation'
+              : 'this portfolio'} together with its newest saved report when available.
           </Text>
           <Button
             title={sending ? 'Asking Aura…' : 'Ask Aura'}
@@ -335,7 +335,7 @@ export function AssistantScreen({
             <View style={styles.statusCopy}>
               <Text style={styles.statusTitle}>Aura is preparing an explanation</Text>
               <Text style={styles.body}>
-                Using backend-owned portfolio and saved-report context.
+                Reviewing your portfolio and latest saved analysis.
               </Text>
             </View>
           </Card>

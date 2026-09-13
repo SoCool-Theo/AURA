@@ -16,7 +16,7 @@ import { colors, spacing } from '../../theme/theme';
 const features = [
   ['analytics-outline', 'Analyze\nPortfolio Risk'],
   ['pulse-outline', 'Run Historical\nSimulations'],
-  ['document-text-outline', 'Save Immutable\nReports']
+  ['document-text-outline', 'Save Analysis\nReports']
 ] as const;
 
 function WelcomeBackdrop() {
@@ -77,7 +77,7 @@ function ProductPreview() {
         <View style={styles.ring}>
           <View style={styles.ringInner} />
         </View>
-        <Text style={styles.reportTitle}>Backend analytics</Text>
+        <Text style={styles.reportTitle}>Portfolio analytics</Text>
         <Text style={styles.reportText}>Risk · Return · Drawdown</Text>
       </View>
     </View>

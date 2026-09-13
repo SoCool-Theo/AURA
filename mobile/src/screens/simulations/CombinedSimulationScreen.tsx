@@ -124,7 +124,7 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Combined Simulation</Text>
-        <Text style={styles.subtitle}>Compare original and modified allocations during one backend-defined scenario.</Text>
+        <Text style={styles.subtitle}>Compare original and modified allocations during one historical scenario.</Text>
 
         {!portfolioState.portfolios.length ? (
           <Card><EmptyState title="No portfolio available" description="Create a portfolio with holdings before running a simulation." /></Card>
@@ -134,19 +134,19 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
             <PortfolioSelector disabled={running} portfolios={portfolioState.portfolios} selectedId={portfolioState.selectedPortfolioId} onSelect={(id) => { if (!runningRef.current) portfolioState.choosePortfolio(id); }} />
             {portfolioState.detailStatus === 'loading' ? <Text style={styles.state}>Loading holdings…</Text> : null}
             {portfolioFailure ? <InlineErrorCard error={portfolioFailure} message={portfolioErrorMessage(portfolioFailure)} stale={Boolean(portfolioState.portfolio)} onRetry={() => void (portfolioState.listStatus === 'error' ? portfolioState.refreshPortfolios() : portfolioState.retryPortfolio())} retryTitle="Retry portfolio" /> : null}
-            {portfolioState.valuationStatus === 'loading' ? <Text style={styles.state}>{holdingMode === 'planned' ? 'Loading target allocation from proposed amounts…' : 'Loading current USD allocation from backend valuation…'}</Text> : null}
+            {portfolioState.valuationStatus === 'loading' ? <Text style={styles.state}>{holdingMode === 'planned' ? 'Loading target allocation from proposed amounts…' : 'Loading current USD allocation…'}</Text> : null}
             {portfolioState.valuationStatus === 'error' ? (
               <InlineErrorCard error={portfolioState.valuationError} message={holdingMode === 'planned' ? portfolioErrorMessage(portfolioState.valuationError, 'Unable to load the planned target allocation.') : portfolioValuationErrorMessage(portfolioState.valuationError)} onRetry={() => void portfolioState.retryPortfolio()} retryTitle={holdingMode === 'planned' ? 'Retry allocation' : 'Retry valuation'} />
             ) : null}
 
             <Text style={styles.section}>Scenario</Text>
-            {scenarioStatus === 'loading' && !scenarios.length ? <Text style={styles.state}>Loading backend scenarios…</Text> : null}
+            {scenarioStatus === 'loading' && !scenarios.length ? <Text style={styles.state}>Loading historical scenarios…</Text> : null}
             {scenarioStatus === 'error' ? (
               <InlineErrorCard error={scenarioError} message={simulationErrorMessage(scenarioError, 'Unable to load historical scenarios.')} stale={Boolean(scenarios.length)} onRetry={() => void refreshScenarios()} retryTitle="Retry scenarios" />
             ) : scenarios.length ? (
               <ScenarioSelector disabled={running} scenarios={scenarios} selectedId={scenarioId} onSelect={(id) => { if (runningRef.current) return; setScenarioId(id); setResult(null); }} />
             ) : scenarioStatus === 'ready' ? (
-              <Card><EmptyState title="No scenarios available" description="The backend did not return any historical scenarios." /></Card>
+              <Card><EmptyState title="No scenarios available" description="Aura could not find any historical scenarios." /></Card>
             ) : null}
 
             {portfolioState.portfolio && !portfolioState.portfolio.holdings.length ? (
@@ -154,7 +154,7 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
             ) : portfolioState.portfolio && baselineReady ? (
               <>
                 <Text style={styles.section}>Modified allocation</Text>
-                <Text style={styles.state}>{holdingMode === 'real' ? 'Initialized from the backend-resolved current USD allocation.' : holdingMode === 'planned' ? 'Initialized from the backend-derived target allocation for this hypothetical plan.' : 'Initialized from the saved legacy allocation.'}</Text>
+                <Text style={styles.state}>{holdingMode === 'real' ? 'Initialized from the current USD allocation.' : holdingMode === 'planned' ? 'Initialized from the target allocation for this hypothetical plan.' : 'Initialized from the saved legacy allocation.'}</Text>
                 <AllocationEditor disabled={running} portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value) => setWeights((current) => ({ ...current, [symbol]: value }))} />
                 {runError ? <FormErrorSummary error={runFailure} message={runError} /> : null}
                 <Button title={running ? 'Running…' : 'Run combined simulation'} onPress={() => void run()} disabled={running || !scenarioId || scenarioStatus !== 'ready'} style={{ marginTop: spacing.xl }} />

@@ -261,7 +261,7 @@ export function PortfolioAnalysisScreen({
         <PageTitle
           eyebrow="PORTFOLIO ANALYSIS"
           title="Analytics"
-          subtitle="Run Aura's backend analytics and save one immutable report."
+          subtitle="Analyze historical risk and save the results."
         />
 
         {listStatus === 'error' ? (
@@ -308,13 +308,13 @@ export function PortfolioAnalysisScreen({
             <Card style={styles.plannedNotice}>
               <Text style={styles.controlLabel}>Hypothetical planned analysis</Text>
               <Text style={styles.stateText}>
-                Aura analyzes backend-derived target weights from proposed amounts. The immutable V3 report uses the plan currency and does not use estimated shares.
+                Aura analyzes target weights calculated from proposed amounts. Estimated shares are for display only.
               </Text>
             </Card>
           ) : <>
           <View style={styles.periodHeader}>
             <Text style={styles.controlLabel}>Report currency</Text>
-            <Text style={styles.helper}>Saved with the immutable snapshot</Text>
+            <Text style={styles.helper}>Saved with this report</Text>
           </View>
           <View style={styles.currencyControl}>
             {(['USD', 'THB'] as PortfolioCurrency[]).map((option) => {
@@ -397,7 +397,7 @@ export function PortfolioAnalysisScreen({
           <Card style={styles.stateCard}>
             <Text style={styles.stateTitle}>Running portfolio analysis</Text>
             <Text style={styles.stateText}>
-              Aura is calculating the requested period and saving the backend report snapshot.
+              Aura is analyzing the requested period and saving the results.
             </Text>
           </Card>
         ) : null}
@@ -410,7 +410,7 @@ export function PortfolioAnalysisScreen({
                 Created {formatReportTimestamp(report.created_at)} for {selectedPortfolio?.name ?? report.analysis.portfolio_name}.
               </Text>
               <Button
-                title="Open Immutable Report"
+                title="Open Saved Report"
                 variant="secondary"
                 onPress={() => navigation.navigate('ReportDetail', {
                   portfolioId: report.portfolio_id,

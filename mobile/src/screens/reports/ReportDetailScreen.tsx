@@ -105,7 +105,7 @@ export function ReportDetailScreen({
   }
 
   if (loadStatus === 'loading' && !report) {
-    return <LoadingState message="Loading immutable report…" />;
+    return <LoadingState message="Loading saved report…" />;
   }
 
   if (!report) {
@@ -122,17 +122,17 @@ export function ReportDetailScreen({
     );
   }
 
-  const reportVersion = isPortfolioReportV3(report)
-    ? 'V3 · PLANNED'
+  const reportType = isPortfolioReportV3(report)
+    ? 'PLANNED PORTFOLIO'
     : isPortfolioReportV2(report)
-      ? 'V2'
-      : 'V1';
+      ? 'CURRENT PORTFOLIO'
+      : 'LEGACY PORTFOLIO';
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <PageTitle
-          eyebrow={`IMMUTABLE SNAPSHOT · ${reportVersion}`}
+          eyebrow={`SAVED ANALYSIS · ${reportType}`}
           title={`${report.analysis.portfolio_name} Analysis`}
           subtitle={`Created ${formatReportTimestamp(report.created_at)}`}
         />
@@ -156,8 +156,8 @@ export function ReportDetailScreen({
             <Text style={styles.identityValue}>{report.portfolio_id}</Text>
           </View>
           <Text style={styles.snapshotNote}>
-            This detail uses the stored backend report and does not rerun analysis
-            or request a fresh portfolio valuation.
+            These are the saved results from when this report was created. Later
+            portfolio or market changes do not alter them.
           </Text>
           {isPortfolioReportV3(report) ? (
             <Text style={styles.hypotheticalNote}>{report.baseline.hypothetical_notice}</Text>
@@ -177,7 +177,7 @@ export function ReportDetailScreen({
           <Text style={styles.assistantTitle}>Need help understanding the results?</Text>
           <Text style={styles.assistantText}>
             Aura can explain this {isPortfolioReportV3(report) ? 'planned allocation' : 'portfolio'} using its newest saved report. If
-            this is an older snapshot, the Assistant may use a newer report.
+            this is an older report, the Assistant may use a newer one.
           </Text>
           <Button
             title="Ask Aura About This Portfolio"

@@ -147,7 +147,7 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
       >
         <PageTitle
           title="Reports"
-          subtitle="Immutable analysis snapshots stored by Aura's backend."
+          subtitle="Saved analysis results, newest first."
           right={(
             <Pressable
               accessibilityLabel="Create report"
@@ -239,7 +239,7 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
               <EmptyState
                 icon="document-text-outline"
                 title="No reports yet"
-                description="Run an analysis to create your first immutable backend report."
+                description="Run an analysis to create your first saved report."
               />
             </Card>
           ) : filtered.length ? filtered.map((report) => {
@@ -305,7 +305,7 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
         </View>
 
         <Text style={styles.note}>
-          Reports are read-only snapshots. Export, sharing, download, and editing are unavailable.
+          Saved reports are read-only. Export, sharing, download, and editing are unavailable.
         </Text>
       </KeyboardAwareScrollView>
     </SafeAreaView>

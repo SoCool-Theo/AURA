@@ -555,9 +555,9 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(editor, /replacePlannedHoldings/);
   assert.match(detail, /getPlannedPreview/);
   assert.match(detail, /Estimated shares are display-only/);
-  assert.match(analysis, /FROZEN PLANNED BASELINE · V3/);
-  assert.match(analysis, /Estimated shares are not part/);
-  assert.match(simulation, /Frozen planned baseline/);
+  assert.match(analysis, /SAVED PLANNED ALLOCATION/);
+  assert.match(analysis, /Estimated shares are for display only/);
+  assert.match(simulation, /Saved planned allocation/);
   assert.match(history, /isSimulationHistoryV3/);
   assert.ok(!/proposedAmount\s*\/|proposed_amount\s*\//.test(`${create}\n${editor}\n${detail}`));
 });
@@ -706,8 +706,8 @@ test('valuation, report V2, and simulation V2 pages preserve backend authority',
   assert.match(detail, /getPortfolioValuation/);
   assert.match(detail, /current_allocation/);
   assert.match(dashboard, /getPortfolioValuation/);
-  assert.match(analysis, /FROZEN VALUATION · V2/);
-  assert.match(reportDetail, /does not rerun analysis[\s\S]*fresh portfolio valuation/);
+  assert.match(analysis, /SAVED PORTFOLIO VALUATION/);
+  assert.match(reportDetail, /Later[\s\S]*portfolio or market changes do not alter them/);
   assert.match(allocation, /allocationInputsFromValuation/);
   assert.match(combined, /allocationInputsFromValuation/);
   assert.match(simulationDetail, /isSimulationHistoryV2/);
@@ -782,7 +782,7 @@ test('AI errors remain truthful and retryable without exposing provider details'
   assert.match(agentErrorMessage(new ApiError({ status: 422 })), /could not process/i);
   assert.match(agentErrorMessage(new ApiError({ status: 502 })), /invalid AI explanation/i);
   assert.match(agentErrorMessage(new ApiError({ status: 503 })), /temporarily unavailable/i);
-  assert.match(agentErrorMessage(new ApiError({ kind: 'network' })), /check the connection/i);
+  assert.match(agentErrorMessage(new ApiError({ kind: 'network' })), /check your connection/i);
   assert.match(agentErrorMessage(new ApiError({ kind: 'configuration' })), /not configured/i);
   assert.match(agentErrorMessage(new ApiError({ kind: 'malformed-response' })), /unexpected AI response/i);
 });

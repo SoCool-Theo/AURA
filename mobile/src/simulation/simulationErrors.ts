@@ -22,7 +22,7 @@ export function simulationErrorMessage(
     return 'This portfolio cannot be simulated until its holdings use one complete supported format.';
   }
   if (error.status === 503) {
-    return 'Required current market data is unavailable or stale. No simulation snapshot was saved.';
+    return 'Required current market data is unavailable or stale. No simulation result was saved.';
   }
   const messages = validationMessages(error);
   return messages.length ? messages.join('. ') : error.message;

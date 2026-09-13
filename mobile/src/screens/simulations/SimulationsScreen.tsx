@@ -17,7 +17,7 @@ import { useSimulations } from '../../simulation/useSimulations';
 import { colors, spacing } from '../../theme/theme';
 
 const modes = [
-  { title: 'Historical Scenario', subtitle: 'Run your saved portfolio through a backend-defined market event.', icon: 'time-outline' as const, bg: colors.purpleBackground, fg: colors.purpleSoft, route: 'HistoricalScenario' },
+  { title: 'Historical Scenario', subtitle: 'See how your saved portfolio would have performed during a market event.', icon: 'time-outline' as const, bg: colors.purpleBackground, fg: colors.purpleSoft, route: 'HistoricalScenario' },
   { title: 'Allocation Change', subtitle: 'Compare original and modified weights over an explicit period.', icon: 'pie-chart-outline' as const, bg: colors.cyanBackground, fg: colors.primary, route: 'AllocationChange' },
   { title: 'Combined Simulation', subtitle: 'Compare both allocations during the same historical event.', icon: 'git-compare-outline' as const, bg: colors.blueBackground, fg: colors.blue, route: 'CombinedSimulation' }
 ] as const;
@@ -33,7 +33,7 @@ export function SimulationsScreen({ navigation }: { navigation: any }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
-        <PageTitle title="Simulations" subtitle="Backend-powered what-if analysis for historical events and portfolio allocations." />
+        <PageTitle title="Simulations" subtitle="Explore historical events and portfolio allocation changes." />
 
         <View style={styles.modeList}>
           {modes.map((mode) => (
@@ -59,7 +59,7 @@ export function SimulationsScreen({ navigation }: { navigation: any }) {
         ) : historyStatus === 'error' ? (
           <InlineErrorCard error={historyError} message={simulationErrorMessage(historyError, 'At least one portfolio history request failed. Retry from Simulation History.')} stale={Boolean(history.length)} />
         ) : historyStatus === 'loading' || historyStatus === 'idle' ? (
-          <Text style={styles.loading}>Loading backend history…</Text>
+          <Text style={styles.loading}>Loading simulation history…</Text>
         ) : history.length ? (
           <View style={styles.recentList}>
             {history.slice(0, 3).map((item) => (
@@ -84,7 +84,7 @@ export function SimulationsScreen({ navigation }: { navigation: any }) {
           <Card style={styles.emptyCard}>
             <Ionicons name="pulse-outline" color={colors.muted} size={28} />
             <Text style={styles.emptyTitle}>No simulation history yet</Text>
-            <Text style={styles.emptyText}>Run one of the three backend simulation modes above.</Text>
+            <Text style={styles.emptyText}>Choose one of the three simulation modes above to get started.</Text>
           </Card>
         )}
       </ScrollView>

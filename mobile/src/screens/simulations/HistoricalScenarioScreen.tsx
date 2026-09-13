@@ -76,7 +76,7 @@ export function HistoricalScenarioScreen({ route }: { route: any }) {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Historical Scenario</Text>
-        <Text style={styles.subtitle}>Run a backend-defined historical event against a saved portfolio.</Text>
+        <Text style={styles.subtitle}>See how a saved portfolio would have performed during a historical event.</Text>
 
         {!portfolioState.portfolios.length ? (
           <Card><EmptyState title="No portfolio available" description="Create a portfolio with holdings before running a simulation." /></Card>
@@ -107,7 +107,7 @@ export function HistoricalScenarioScreen({ route }: { route: any }) {
             ) : null}
 
             <Text style={styles.section}>Scenario</Text>
-            {scenarioStatus === 'loading' && !scenarios.length ? <Text style={styles.state}>Loading backend scenarios…</Text> : null}
+            {scenarioStatus === 'loading' && !scenarios.length ? <Text style={styles.state}>Loading historical scenarios…</Text> : null}
             {scenarioStatus === 'error' ? (
               <InlineErrorCard
                 error={scenarioError}
@@ -119,7 +119,7 @@ export function HistoricalScenarioScreen({ route }: { route: any }) {
             ) : scenarios.length ? (
               <ScenarioSelector disabled={running} scenarios={scenarios} selectedId={scenarioId} onSelect={(id) => { if (runningRef.current) return; setScenarioId(id); setResult(null); }} />
             ) : scenarioStatus === 'ready' ? (
-              <Card><EmptyState title="No scenarios available" description="The backend did not return any historical scenarios." /></Card>
+              <Card><EmptyState title="No scenarios available" description="Aura could not find any historical scenarios." /></Card>
             ) : null}
 
             {runError ? <FormErrorSummary error={runFailure} message={runError} /> : null}

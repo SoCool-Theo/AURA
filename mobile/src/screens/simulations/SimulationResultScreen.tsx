@@ -81,11 +81,11 @@ export function SimulationResultScreen({ route, navigation }: { route: any; navi
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Saved Simulation</Text>
         <Text style={styles.subtitle}>
-          Immutable backend history detail · {detailV3
-            ? 'V3 planned hypothetical baseline'
+          {detailV3
+            ? 'Saved hypothetical simulation · planned allocation'
             : detailV2
-              ? 'V2 real baseline'
-              : 'V1 legacy allocation'}.
+              ? 'Saved simulation · current holdings'
+              : 'Saved simulation · legacy allocation'}.
         </Text>
         <Card style={styles.metadata}>
           <Text style={styles.metaLabel}>SIMULATION ID</Text>

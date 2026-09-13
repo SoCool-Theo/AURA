@@ -66,14 +66,14 @@ export function SettingsScreen() {
   function showHelp() {
     Alert.alert(
       'Help & Support',
-      'Use the mobile README for setup and API connection troubleshooting. In-app support messaging is unavailable.'
+      'In-app support messaging is not available yet. Please try again or contact the Aura team.'
     );
   }
 
   function showAbout() {
     Alert.alert(
       'About Aura',
-      'Aura displays backend portfolio analytics, historical simulations, and grounded AI explanations. Live quotes and Watchlist are unavailable.'
+      'Aura provides portfolio risk analytics, historical simulations, and AI explanations grounded in your saved results. Live quotes and Watchlist are unavailable.'
     );
   }
 
@@ -81,7 +81,7 @@ export function SettingsScreen() {
     if (pendingRef.current) return;
     Alert.alert(
       'Reset local app data?',
-      'This resets device-local Learn progress and preferences, and removes obsolete demo storage. Backend portfolios, reports, simulations, and your session are not deleted.',
+      'This resets Learn progress and preferences on this device, and removes obsolete demo storage. Your portfolios, reports, simulations, and session are not deleted.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -127,7 +127,7 @@ export function SettingsScreen() {
             <Text style={styles.name}>{resolvedName}</Text>
             <Text style={styles.email}>{user?.email}</Text>
             <Text style={styles.helper}>
-              Display name is stored only on this device and is not part of your backend account.
+              Your display name is stored only on this device and is not part of your Aura account.
             </Text>
           </View>
 
@@ -313,7 +313,7 @@ export function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLabel}>About Aura</Text>
               <Text style={styles.rowDescription}>
-                Product purpose and frontend scope.
+                Learn about Aura and its current features.
               </Text>
             </View>
             <Ionicons name="chevron-forward" color={colors.muted} size={18} />

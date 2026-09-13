@@ -13,7 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 
 const items = [
   { label: 'Analytics', description: 'Detailed risk metrics', icon: 'analytics-outline', color: colors.primary, bg: colors.cyanBackground, route: 'Analytics' },
-  { label: 'Reports', description: 'Saved analysis snapshots', icon: 'document-text-outline', color: colors.purpleSoft, bg: colors.purpleBackground, route: 'Reports' },
+  { label: 'Reports', description: 'Saved analysis results', icon: 'document-text-outline', color: colors.purpleSoft, bg: colors.purpleBackground, route: 'Reports' },
   { label: 'Watchlist', description: 'Unavailable · coming later', icon: 'eye-outline', color: colors.warning, bg: colors.warningBackground, route: 'Watchlist' },
   { label: 'Learn', description: 'Portfolio-risk education', icon: 'school-outline', color: colors.blue, bg: colors.blueBackground, route: 'Learn' },
   { label: 'Settings', description: 'Account and preferences', icon: 'settings-outline', color: colors.textSecondary, bg: colors.surfaceAlt, route: 'Settings' }

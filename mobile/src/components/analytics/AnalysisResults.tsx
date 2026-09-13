@@ -44,7 +44,7 @@ export function AnalysisResults({
       <Card style={styles.summaryCard}>
         <View style={styles.summaryHeading}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.overline}>BACKEND ANALYSIS</Text>
+            <Text style={styles.overline}>RISK ANALYSIS</Text>
             <Text style={styles.summaryTitle}>{analysis.portfolio_name}</Text>
           </View>
           <RiskBadge level={risk.risk_level} />
@@ -61,7 +61,7 @@ export function AnalysisResults({
         <Card style={styles.plannedCard}>
           <View style={styles.rowBetween}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.overline}>FROZEN PLANNED BASELINE · V3</Text>
+              <Text style={styles.overline}>SAVED PLANNED ALLOCATION</Text>
               <Text style={styles.snapshotValue}>
                 {formatPortfolioMoney(
                   reportV3.baseline.total_proposed_amount,
@@ -81,14 +81,14 @@ export function AnalysisResults({
             </View>
           ))}
           <Text style={styles.cardText}>
-            Target weights came from proposed amounts. Estimated shares are not part of this immutable analytics baseline.
+            Target weights come from proposed amounts. Estimated shares are for display only and do not affect this analysis.
           </Text>
         </Card>
       ) : reportV2 ? (
         <Card style={styles.snapshotCard}>
           <View style={styles.rowBetween}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.overline}>FROZEN VALUATION · V2</Text>
+              <Text style={styles.overline}>SAVED PORTFOLIO VALUATION</Text>
               <Text style={styles.snapshotValue}>
                 {formatPortfolioMoney(
                   reportV2.valuation.total_current_value,
@@ -109,9 +109,9 @@ export function AnalysisResults({
         </Card>
       ) : (
         <Card style={styles.legacyCard}>
-          <Text style={styles.overline}>LEGACY REPORT · V1</Text>
+          <Text style={styles.overline}>SAVED LEGACY ALLOCATION</Text>
           <Text style={styles.cardText}>
-            This snapshot contains saved allocation analytics without real-holding valuation context.
+            This older report uses the portfolio's saved allocation rather than current holding values.
           </Text>
         </Card>
       )}
@@ -135,7 +135,7 @@ export function AnalysisResults({
           icon="analytics-outline"
           label="Annualized Return"
           value={formatRatioPercent(metrics.annualized_return)}
-          meta="Backend result"
+          meta="Saved analysis"
           tone={metrics.annualized_return < 0 ? 'danger' : 'success'}
         />
         <WebKpiCard
@@ -164,7 +164,7 @@ export function AnalysisResults({
       <SectionHeader title="Portfolio Return Series" />
       <Card style={styles.sectionCard}>
         <Text style={styles.cardText}>
-          Ordered periodic returns supplied by the backend. No benchmark or cumulative series is generated on-device.
+          Historical periodic returns for the selected analysis period.
         </Text>
         <PortfolioReturnsChart points={analysis.portfolio_returns} />
         <Text style={styles.observationCount}>
@@ -217,7 +217,7 @@ export function AnalysisResults({
               {formatPortfolioQuantity(holding.shares)} shares · invested {holding.invested_currency} {formatPortfolioQuantity(holding.invested_amount)} · purchased {holding.purchase_date}
             </Text>
             <View style={styles.dataGrid}>
-              <Metric label="Frozen current value" value={formatPortfolioMoney(holding.current_value, reportV2.valuation.valuation_currency)} />
+              <Metric label="Saved current value" value={formatPortfolioMoney(holding.current_value, reportV2.valuation.valuation_currency)} />
               <Metric label="USD asset price" value={formatPortfolioMoney(holding.asset_price, 'USD')} />
               <Metric label="Price date" value={holding.price_as_of} />
               <Metric label="Cumulative return" value={formatRatioPercent(holding.asset_metrics.cumulative_return)} />
@@ -279,7 +279,7 @@ export function AnalysisResults({
       </Card>
 
       <Text style={styles.education}>
-        Historical analytics are educational, not investment recommendations. Every financial metric above comes from Aura's backend report.
+        Historical analytics are educational, not investment recommendations. These metrics reflect the saved Aura analysis.
       </Text>
     </View>
   );

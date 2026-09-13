@@ -342,7 +342,7 @@ export function PortfolioDetailScreen({
               </View>
             </View>
             {valuationStatus === 'loading' ? (
-              <Card><Text style={styles.stateText}>Loading current backend valuation…</Text></Card>
+              <Card><Text style={styles.stateText}>Loading current portfolio value…</Text></Card>
             ) : valuationStatus === 'error' ? (
               <InlineErrorCard
                 error={valuationError}
@@ -414,8 +414,8 @@ export function PortfolioDetailScreen({
                 ? 'Target allocation unavailable'
                 : 'Current allocation unavailable'}
               description={portfolio.portfolio_type === 'PLANNED'
-                ? 'Retry the backend planned preview. Aura does not calculate official target weights on this device.'
-                : 'Aura displays allocation only when the backend returns a current valuation.'}
+                ? 'Retry to load the target allocation calculated from your proposed amounts.'
+                : 'Aura can display current allocation after market prices are available.'}
             />
           </Card>
         ) : (
@@ -451,7 +451,7 @@ export function PortfolioDetailScreen({
           </Card>
         ) : null}
 
-        <SectionHeader title="Backend Metadata" />
+        <SectionHeader title="Portfolio Details" />
         <Card style={styles.metadataCard}>
           <View style={styles.metadataRow}>
             <Text style={styles.metadataLabel}>Created</Text>

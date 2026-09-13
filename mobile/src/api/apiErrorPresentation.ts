@@ -143,7 +143,7 @@ export function apiErrorPresentation(
     return {
       code: '500',
       title: 'Aura ran into a problem',
-      message: options.message ?? 'The server could not complete the request. Please try again.',
+      message: options.message ?? 'Aura could not complete the request. Please try again.',
       icon: 'server-outline',
       retryable: true
     };

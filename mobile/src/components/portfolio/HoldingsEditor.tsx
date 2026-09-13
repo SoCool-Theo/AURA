@@ -197,7 +197,7 @@ export function HoldingsEditor({
         <Text style={styles.subtitle}>
           {portfolioName}: submit the complete ordered list of {holdingMode === 'planned'
             ? 'proposed investments. Aura calculates target allocation from the saved amounts.'
-            : 'positions. Aura calculates current allocation from backend market prices.'}
+            : 'positions. Aura calculates current allocation from market prices.'}
         </Text>
 
         {holdingMode === 'legacy' ? (
@@ -357,8 +357,8 @@ export function HoldingsEditor({
           <Ionicons name="sparkles-outline" size={19} color={colors.primary} />
           <Text style={styles.infoText}>
             {holdingMode === 'planned'
-              ? 'Target allocation is calculated by the backend from proposed amounts; estimated shares are display-only.'
-              : 'Allocation is automatic after the backend values the saved shares.'}
+              ? 'Target allocation is calculated from proposed amounts; estimated shares are display-only.'
+              : 'Allocation is calculated automatically after Aura values the saved shares.'}
           </Text>
         </Card>
 

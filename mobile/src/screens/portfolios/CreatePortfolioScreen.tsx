@@ -415,7 +415,7 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
             <Text style={styles.allocationNoteBody}>
               {mode === 'PLANNED'
                 ? 'Aura calculates target percentages from proposed amounts. Estimated shares are display-only and the plan still saves when price data is unavailable.'
-                : 'After saving, Aura uses backend market prices to value your shares and return the current percentage for each holding.'}
+                : 'After saving, Aura uses market prices to value your shares and calculate the current percentage for each holding.'}
             </Text>
           </View>
         </Card>

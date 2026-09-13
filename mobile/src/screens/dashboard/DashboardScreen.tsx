@@ -149,7 +149,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
               </View>
             ) : null}
 
-            {dashboard.valuationLoading ? <Text style={styles.notice}>{holdingMode === 'planned' ? 'Loading planned target allocation…' : 'Loading current backend valuation…'}</Text> : null}
+            {dashboard.valuationLoading ? <Text style={styles.notice}>{holdingMode === 'planned' ? 'Loading planned target allocation…' : 'Loading current portfolio value…'}</Text> : null}
             {dashboard.valuationError ? (
               <InlineErrorCard
                 error={dashboard.valuationError}
@@ -174,7 +174,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                 meta={holdingMode === 'planned' && plannedAllocation
                   ? 'Hypothetical plan · target weights from proposed amounts'
                   : valuation
-                  ? `Backend valuation · ${valuation.newest_price_as_of}`
+                  ? `Prices as of ${valuation.newest_price_as_of}`
                   : holdingMode === 'legacy'
                     ? 'Legacy portfolios have saved weights only'
                     : 'Current valuation unavailable'}
@@ -277,7 +277,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                   <Text style={styles.weight}>{dashboardPercent(holding.weight)}</Text>
                 </View>
               )) : portfolio?.holdings.length ? (
-                <Text style={styles.body}>Current allocation requires a successful backend valuation.</Text>
+                <Text style={styles.body}>Current allocation is unavailable until Aura can load market prices.</Text>
               ) : portfolio ? (
                 <Text style={styles.body}>No holdings saved. Add holdings from Portfolio Detail.</Text>
               ) : <Text style={styles.body}>Allocation is unavailable until holdings load successfully.</Text>}

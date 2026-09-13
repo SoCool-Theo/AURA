@@ -68,7 +68,7 @@ function Comparison({ comparison }: { comparison: AllocationSimulationComparison
   ];
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>Backend comparison</Text>
+      <Text style={styles.cardTitle}>Comparison</Text>
       {values.map(([label, value]) => (
         <View key={label} style={styles.comparisonRow}>
           <Text style={styles.comparisonLabel}>{label}</Text>
@@ -149,7 +149,7 @@ function BaselineCard({ baseline }: {
   if ('portfolio_type' in baseline) {
     return (
       <Card style={styles.plannedBaselineCard}>
-        <Text style={styles.cardTitle}>Frozen planned baseline</Text>
+        <Text style={styles.cardTitle}>Saved planned allocation</Text>
         <Text style={styles.baselineValue}>
           {formatPortfolioMoney(baseline.total_proposed_amount, baseline.plan_currency)}
         </Text>
@@ -168,14 +168,14 @@ function BaselineCard({ baseline }: {
           </View>
         ))}
         <Text style={styles.baselineMeta}>
-          This immutable target baseline does not include display-only estimated shares.
+          Estimated shares are for display only and do not affect this simulation.
         </Text>
       </Card>
     );
   }
   return (
     <Card style={styles.baselineCard}>
-      <Text style={styles.cardTitle}>Frozen real-holding baseline</Text>
+      <Text style={styles.cardTitle}>Saved current holdings</Text>
       <Text style={styles.baselineValue}>
         {formatPortfolioMoney(baseline.total_current_value_usd, 'USD')}
       </Text>
@@ -196,7 +196,7 @@ function BaselineCard({ baseline }: {
           </View>
         </View>
       ))}
-      <Text style={styles.baselineMeta}>This saved baseline is immutable and is not revalued on this screen.</Text>
+      <Text style={styles.baselineMeta}>These saved values are not updated with later market prices.</Text>
     </Card>
   );
 }
@@ -214,7 +214,7 @@ function MetadataCard({ requested, metadata }: {
     <Card style={styles.card}>
       <Text style={styles.cardTitle}>Requested period</Text>
       <Text style={styles.body}>{requested}</Text>
-      <Text style={styles.cardTitle}>Effective backend period</Text>
+      <Text style={styles.cardTitle}>Historical data period</Text>
       <Text style={styles.body}>{metadata.effective_start_date} → {metadata.effective_end_date}</Text>
       <Text style={styles.observations}>{metadata.price_observation_count} prices · {metadata.return_observation_count} returns</Text>
     </Card>

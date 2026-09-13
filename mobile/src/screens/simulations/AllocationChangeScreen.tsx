@@ -141,7 +141,7 @@ export function AllocationChangeScreen({ route }: { route: any }) {
             {portfolioState.valuationStatus === 'loading' ? (
               <Text style={styles.state}>{holdingMode === 'planned'
                 ? 'Loading target allocation from proposed amounts…'
-                : 'Loading current USD allocation from backend valuation…'}</Text>
+                : 'Loading current USD allocation…'}</Text>
             ) : null}
             {portfolioState.valuationStatus === 'error' ? (
               <InlineErrorCard error={portfolioState.valuationError} message={holdingMode === 'planned' ? portfolioErrorMessage(portfolioState.valuationError, 'Unable to load the planned target allocation.') : portfolioValuationErrorMessage(portfolioState.valuationError)} onRetry={() => void portfolioState.retryPortfolio()} retryTitle={holdingMode === 'planned' ? 'Retry allocation' : 'Retry valuation'} />
@@ -158,9 +158,9 @@ export function AllocationChangeScreen({ route }: { route: any }) {
                 <Text style={styles.section}>Modified allocation</Text>
                 <Text style={styles.state}>
                   {holdingMode === 'real'
-                    ? 'Initialized from the backend-resolved current USD allocation.'
+                    ? 'Initialized from the current USD allocation.'
                     : holdingMode === 'planned'
-                      ? 'Initialized from the backend-derived target allocation for this hypothetical plan.'
+                      ? 'Initialized from the target allocation for this hypothetical plan.'
                     : 'Initialized from the saved legacy allocation.'}
                 </Text>
                 <AllocationEditor disabled={running} portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value) => setWeights((current) => ({ ...current, [symbol]: value }))} />

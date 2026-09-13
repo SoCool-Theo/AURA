@@ -67,7 +67,7 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
         refreshControl={<RefreshControl refreshing={isRefreshingHistory} onRefresh={retry} tintColor={colors.primary} />}
       >
         <Text style={styles.title}>Simulation History</Text>
-        <Text style={styles.subtitle}>Immutable simulation runs stored by Aura's backend, newest first.</Text>
+        <Text style={styles.subtitle}>Saved simulation results, newest first.</Text>
 
         {listStatus === 'error' && portfolios.length ? (
           <InlineErrorCard error={listError} message={portfolioErrorMessage(listError)} stale onRetry={retry} retryTitle="Retry portfolios" />
@@ -92,7 +92,7 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
 
         <View style={styles.list}>
           {!history.length ? (
-            <Card><EmptyState icon="pulse-outline" title="No simulations yet" description="Run a historical, allocation, or combined simulation to create backend history." /></Card>
+            <Card><EmptyState icon="pulse-outline" title="No simulations yet" description="Run a historical, allocation, or combined simulation to save your first result." /></Card>
           ) : filtered.length ? filtered.map((item) => (
             <Pressable accessibilityLabel={`Open ${item.portfolio_name} ${simulationTypeLabel(item.simulation_type)} simulation`} accessibilityRole="button" key={item.id} onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}>
               <Card style={styles.card}>
