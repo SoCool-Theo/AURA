@@ -1,4 +1,7 @@
-import type { PortfolioResponse } from '../../types/portfolio';
+import {
+  isLegacyPortfolioHolding,
+  type PortfolioResponse,
+} from '../../types/portfolio';
 import { Card } from '../ui/Card';
 import { SymbolBadge } from '../ui/SymbolBadge';
 
@@ -9,7 +12,7 @@ interface HoldingsTableProps {
 
 export function HoldingsTable({ portfolio, onViewAll }: HoldingsTableProps) {
   const totalWeight = portfolio.holdings.reduce(
-    (sum, holding) => sum + Number(holding.weight || 0) * 100,
+    (sum, holding) => sum + (isLegacyPortfolioHolding(holding) ? holding.weight * 100 : 0),
     0,
   );
 
@@ -41,7 +44,7 @@ export function HoldingsTable({ portfolio, onViewAll }: HoldingsTableProps) {
                     <div><strong>{holding.symbol}</strong></div>
                   </div>
                 </td>
-                <td><strong>{Number((holding.weight * 100).toFixed(4))}%</strong></td>
+                <td><strong>{isLegacyPortfolioHolding(holding) ? `${Number((holding.weight * 100).toFixed(4))}%` : '—'}</strong></td>
               </tr>
             ))}
           </tbody>

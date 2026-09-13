@@ -120,7 +120,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   }
 
   const totalPercentage = portfolio.holdings.reduce((sum, holding) => (
-    sum + holding.weight * 100
+    sum + (holding.weight == null ? 0 : holding.weight * 100)
   ), 0);
 
   return (

@@ -3,7 +3,7 @@ import { getPortfolio, listPortfolios } from '../../api/portfoliosApi';
 import { listHistoricalScenarios, runAllocationSimulation, runCombinedSimulation, runHistoricalScenario } from '../../api/simulationsApi';
 import { go } from '../../app/routes';
 import { Card } from '../../components/ui/Card';
-import type { PortfolioResponse, PortfolioSummaryResponse } from '../../types/portfolio';
+import { isLegacyPortfolioHolding, type PortfolioResponse, type PortfolioSummaryResponse } from '../../types/portfolio';
 import type { HistoricalScenarioResponse, SimulationAllocation, SimulationMode, SimulationRunResult } from '../../types/simulation';
 import styles from './SimulationIntegration.module.css';
 import { AllocationEditor } from './components/AllocationEditor';
@@ -17,7 +17,7 @@ interface Props { portfolioId?: string }
 
 function localIsoDate(date: Date): string { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
 function defaultPeriod() { const end = new Date(); const start = new Date(end); start.setFullYear(start.getFullYear() - 1); return { start: localIsoDate(start), end: localIsoDate(end) }; }
-function allocationFromPortfolio(portfolio: PortfolioResponse): SimulationAllocation { return Object.fromEntries(portfolio.holdings.map(item => [item.symbol, String(item.weight * 100)])); }
+function allocationFromPortfolio(portfolio: PortfolioResponse): SimulationAllocation { return Object.fromEntries(portfolio.holdings.filter(isLegacyPortfolioHolding).map(item => [item.symbol, String(item.weight * 100)])); }
 
 export function SimulationsPage({ portfolioId }: Props) {
   const period = useMemo(defaultPeriod, []);

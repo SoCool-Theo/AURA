@@ -45,6 +45,8 @@ function toSummary(portfolio: PortfolioResponse): PortfolioSummaryResponse {
   return {
     id: portfolio.id,
     name: portfolio.name,
+    portfolio_type: portfolio.portfolio_type,
+    plan_currency: portfolio.plan_currency,
     created_at: portfolio.created_at,
     updated_at: portfolio.updated_at,
   };

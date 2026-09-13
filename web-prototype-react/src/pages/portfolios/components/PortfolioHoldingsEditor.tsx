@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { replacePortfolioHoldings } from '../../../api/portfoliosApi';
 import { Card } from '../../../components/ui/Card';
-import type { PortfolioResponse } from '../../../types/portfolio';
+import {
+  isLegacyPortfolioHolding,
+  type PortfolioResponse,
+} from '../../../types/portfolio';
 import styles from '../PortfolioIntegration.module.css';
 import {
   displayPercentage,
@@ -22,7 +25,9 @@ function editableHoldings(portfolio: PortfolioResponse): EditableHolding[] {
   return portfolio.holdings.map((holding, index) => ({
     id: index,
     symbol: holding.symbol,
-    percentage: displayPercentage(holding.weight),
+    percentage: isLegacyPortfolioHolding(holding)
+      ? displayPercentage(holding.weight)
+      : '',
   }));
 }
 

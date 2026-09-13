@@ -1,10 +1,15 @@
-import type { PortfolioHoldingResponse } from '../../types/portfolio';
+import {
+  isLegacyPortfolioHolding,
+  type PortfolioHoldingResponse,
+} from '../../types/portfolio';
 
 interface AllocationLegendProps {
   holdings: PortfolioHoldingResponse[];
 }
 
 export function AllocationLegend({ holdings }: AllocationLegendProps) {
+  const allocatedHoldings = holdings.filter(isLegacyPortfolioHolding);
+
   return (
     <>
       <div className="portfolio-allocation-heading">
@@ -12,7 +17,7 @@ export function AllocationLegend({ holdings }: AllocationLegendProps) {
         <small>{holdings.length} holdings</small>
       </div>
       <div className="portfolio-card-allocation">
-        {holdings.slice(0, 5).map(holding => (
+        {allocatedHoldings.slice(0, 5).map(holding => (
           <span
             key={holding.symbol}
             style={{ width: `${holding.weight * 100}%` }}
@@ -21,14 +26,14 @@ export function AllocationLegend({ holdings }: AllocationLegendProps) {
         ))}
       </div>
       <div className="holding-chips">
-        {holdings.slice(0, 4).map(holding => (
+        {allocatedHoldings.slice(0, 4).map(holding => (
           <span key={holding.symbol}>
             <b>{holding.symbol}</b>
             {Number((holding.weight * 100).toFixed(4))}%
           </span>
         ))}
-        {holdings.length > 4 && (
-          <span className="more-holdings">+{holdings.length - 4} more</span>
+        {allocatedHoldings.length > 4 && (
+          <span className="more-holdings">+{allocatedHoldings.length - 4} more</span>
         )}
       </div>
     </>
