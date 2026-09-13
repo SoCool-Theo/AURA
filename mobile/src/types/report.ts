@@ -7,6 +7,7 @@ import type {
 import type { IsoDate, IsoDateTime, Uuid } from './api';
 import type {
   DecimalString,
+  PlannedPortfolioBaselineContext,
   PortfolioCurrency,
   PortfolioHoldingValuationResponse,
   PortfolioValuationFxResponse
@@ -44,15 +45,29 @@ export type PortfolioReportV2Response = PortfolioReportEnvelope & {
   holdings: PortfolioReportV2Holding[];
 };
 
+export type PortfolioReportV3Response = PortfolioReportEnvelope & {
+  schema_version: 'portfolio-analysis-response-v3';
+  analysis: PortfolioAnalysisResponse;
+  baseline: PlannedPortfolioBaselineContext;
+};
+
 export type PortfolioReportResponse =
   | PortfolioReportV1Response
-  | PortfolioReportV2Response;
+  | PortfolioReportV2Response
+  | PortfolioReportV3Response;
 
 export function isPortfolioReportV2(
   report: PortfolioReportResponse
 ): report is PortfolioReportV2Response {
   return 'schema_version' in report
     && report.schema_version === 'portfolio-analysis-response-v2';
+}
+
+export function isPortfolioReportV3(
+  report: PortfolioReportResponse
+): report is PortfolioReportV3Response {
+  return 'schema_version' in report
+    && report.schema_version === 'portfolio-analysis-response-v3';
 }
 
 export type PortfolioReportSummary = AnalysisPeriod & {

@@ -8,6 +8,7 @@ import {
 } from '../../portfolio/portfolioFormatting';
 import {
   isPortfolioReportV2,
+  isPortfolioReportV3,
   type PortfolioReportResponse
 } from '../../types/report';
 import { colors, spacing } from '../../theme/theme';
@@ -31,6 +32,7 @@ export function AnalysisResults({
 }) {
   const analysis = report.analysis;
   const reportV2 = isPortfolioReportV2(report) ? report : null;
+  const reportV3 = isPortfolioReportV3(report) ? report : null;
   const metrics = analysis.portfolio_metrics;
   const drawdown = analysis.max_drawdown;
   const diversification = analysis.diversification;
@@ -55,7 +57,34 @@ export function AnalysisResults({
         ))}
       </Card>
 
-      {reportV2 ? (
+      {reportV3 ? (
+        <Card style={styles.plannedCard}>
+          <View style={styles.rowBetween}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.overline}>FROZEN PLANNED BASELINE · V3</Text>
+              <Text style={styles.snapshotValue}>
+                {formatPortfolioMoney(
+                  reportV3.baseline.total_proposed_amount,
+                  reportV3.baseline.plan_currency
+                )}
+              </Text>
+            </View>
+            <Tag label={reportV3.baseline.plan_currency} tone="primary" />
+          </View>
+          <Text style={styles.cardText}>{reportV3.baseline.hypothetical_notice}</Text>
+          {reportV3.baseline.holdings.map((holding) => (
+            <View key={holding.id} style={styles.metadataRow}>
+              <Text style={styles.metadataLabel}>{holding.symbol}</Text>
+              <Text style={styles.metadataValue}>
+                {formatPortfolioMoney(holding.proposed_amount, reportV3.baseline.plan_currency)} · {formatRatioPercent(Number(holding.target_allocation))}
+              </Text>
+            </View>
+          ))}
+          <Text style={styles.cardText}>
+            Target weights came from proposed amounts. Estimated shares are not part of this immutable analytics baseline.
+          </Text>
+        </Card>
+      ) : reportV2 ? (
         <Card style={styles.snapshotCard}>
           <View style={styles.rowBetween}>
             <View style={{ flex: 1 }}>
@@ -176,7 +205,7 @@ export function AnalysisResults({
         ))}
       </View>
 
-      <SectionHeader title={reportV2 ? 'Per-Asset Valuation and Risk' : 'Individual Asset Metrics'} />
+      <SectionHeader title={reportV2 ? 'Per-Asset Valuation and Risk' : reportV3 ? 'Planned Asset Risk' : 'Individual Asset Metrics'} />
       <View style={styles.list}>
         {reportV2 ? reportV2.holdings.map((holding) => (
           <Card key={holding.id} style={styles.sectionCard}>
@@ -278,6 +307,7 @@ const styles = StyleSheet.create({
   results: { gap: spacing.md, marginTop: spacing.xl },
   summaryCard: { gap: spacing.sm, backgroundColor: colors.summaryBackground },
   snapshotCard: { gap: spacing.md, backgroundColor: colors.cyanBackground },
+  plannedCard: { gap: spacing.md, backgroundColor: colors.summaryBackground, borderColor: colors.primary },
   legacyCard: { gap: spacing.sm, backgroundColor: colors.warningBackground },
   snapshotValue: { color: colors.text, fontSize: 24, fontWeight: '900', marginTop: spacing.xs },
   summaryHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

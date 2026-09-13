@@ -242,6 +242,8 @@ export function AssistantScreen({
     );
   }
 
+  const selectedPortfolio = portfolios.find((item) => item.id === selectedPortfolioId);
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <KeyboardAwareScrollView
@@ -312,7 +314,9 @@ export function AssistantScreen({
           </View>
 
           <Text style={styles.contextNote}>
-            The backend uses this portfolio and its newest saved report when available. No financial calculations run on this device.
+            The backend uses {selectedPortfolio?.portfolio_type === 'PLANNED'
+              ? 'this hypothetical plan, its proposed-amount target allocation,'
+              : 'this portfolio'} and its newest saved report when available. No financial calculations run on this device.
           </Text>
           <Button
             title={sending ? 'Asking Aura…' : 'Ask Aura'}

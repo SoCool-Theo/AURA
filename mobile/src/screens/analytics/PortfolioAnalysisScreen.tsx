@@ -237,7 +237,7 @@ export function PortfolioAnalysisScreen({
             <EmptyState
               icon="analytics-outline"
               title="No portfolio to analyze"
-              description="Create a real portfolio and complete its holdings before running analysis."
+              description="Create a current or planned portfolio and complete its holdings before running analysis."
             />
           </Card>
         </View>
@@ -304,6 +304,14 @@ export function PortfolioAnalysisScreen({
             })}
           </ScrollView>
 
+          {selectedPortfolio?.portfolio_type === 'PLANNED' ? (
+            <Card style={styles.plannedNotice}>
+              <Text style={styles.controlLabel}>Hypothetical planned analysis</Text>
+              <Text style={styles.stateText}>
+                Aura analyzes backend-derived target weights from proposed amounts. The immutable V3 report uses the plan currency and does not use estimated shares.
+              </Text>
+            </Card>
+          ) : <>
           <View style={styles.periodHeader}>
             <Text style={styles.controlLabel}>Report currency</Text>
             <Text style={styles.helper}>Saved with the immutable snapshot</Text>
@@ -331,6 +339,7 @@ export function PortfolioAnalysisScreen({
               );
             })}
           </View>
+          </>}
 
           <View style={styles.periodHeader}>
             <Text style={styles.controlLabel}>Analysis period</Text>
@@ -421,6 +430,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: 110 },
   controlsCard: { gap: spacing.md, marginTop: spacing.xl },
+  plannedNotice: { gap: spacing.sm, backgroundColor: colors.summaryBackground, borderColor: colors.primary },
   controlLabel: { color: colors.text, fontSize: 12, fontWeight: '900' },
   helper: { color: colors.muted, fontSize: 9 },
   portfolioOptions: { gap: spacing.sm, paddingRight: spacing.md },

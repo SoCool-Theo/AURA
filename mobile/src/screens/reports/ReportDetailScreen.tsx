@@ -15,6 +15,7 @@ import { useReports } from '../../report/useReports';
 import { colors, spacing } from '../../theme/theme';
 import {
   isPortfolioReportV2,
+  isPortfolioReportV3,
   type PortfolioReportResponse
 } from '../../types/report';
 
@@ -121,7 +122,11 @@ export function ReportDetailScreen({
     );
   }
 
-  const reportVersion = isPortfolioReportV2(report) ? 'V2' : 'V1';
+  const reportVersion = isPortfolioReportV3(report)
+    ? 'V3 · PLANNED'
+    : isPortfolioReportV2(report)
+      ? 'V2'
+      : 'V1';
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -154,6 +159,9 @@ export function ReportDetailScreen({
             This detail uses the stored backend report and does not rerun analysis
             or request a fresh portfolio valuation.
           </Text>
+          {isPortfolioReportV3(report) ? (
+            <Text style={styles.hypotheticalNote}>{report.baseline.hypothetical_notice}</Text>
+          ) : null}
         </Card>
 
         {actionError ? (
@@ -168,7 +176,7 @@ export function ReportDetailScreen({
         <Card style={styles.assistantCard}>
           <Text style={styles.assistantTitle}>Need help understanding the results?</Text>
           <Text style={styles.assistantText}>
-            Aura can explain this portfolio using its newest saved report. If
+            Aura can explain this {isPortfolioReportV3(report) ? 'planned allocation' : 'portfolio'} using its newest saved report. If
             this is an older snapshot, the Assistant may use a newer report.
           </Text>
           <Button
@@ -205,6 +213,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: spacing.sm
   },
+  hypotheticalNote: { color: colors.warning, fontSize: 11, lineHeight: 17 },
   assistantCard: {
     gap: spacing.md,
     marginTop: spacing.xl,
