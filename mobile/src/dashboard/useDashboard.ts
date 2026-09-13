@@ -6,6 +6,7 @@ import { useReports } from '../report/useReports';
 import {
   portfolioHoldingMode,
   type PortfolioCurrency,
+  type PortfolioPlannedAllocationResponse,
   type PortfolioResponse,
   type PortfolioValuationResponse
 } from '../types/portfolio';
@@ -22,6 +23,7 @@ export function useDashboard() {
     selectPortfolio,
     getPortfolio,
     getPortfolioValuation,
+    getPlannedAllocation,
     refreshPortfolios
   } = portfoliosState;
   const [history, setHistory] = useState<{ portfolioId: string; reports: ReportHistoryItem[] } | null>(null);
@@ -35,6 +37,7 @@ export function useDashboard() {
   const [portfolioError, setPortfolioError] = useState<unknown>(null);
   const [valuationCurrency, setValuationCurrency] = useState<PortfolioCurrency>('USD');
   const [valuation, setValuation] = useState<PortfolioValuationResponse | null>(null);
+  const [plannedAllocation, setPlannedAllocation] = useState<PortfolioPlannedAllocationResponse | null>(null);
   const [valuationLoading, setValuationLoading] = useState(false);
   const [valuationError, setValuationError] = useState<unknown>(null);
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
@@ -100,19 +103,37 @@ export function useDashboard() {
   useEffect(() => {
     if (!selectedPortfolio) {
       setValuation(null);
+      setPlannedAllocation(null);
       setValuationLoading(false);
       setValuationError(null);
       return;
     }
     if (!focused) return;
+    if (selectedPortfolio.portfolio_type === 'PLANNED' && selectedPortfolio.holdings.length) {
+      let current = true;
+      setValuation(null);
+      setPlannedAllocation(null);
+      setValuationLoading(true);
+      setValuationError(null);
+      void getPlannedAllocation(selectedPortfolio.id).then((value) => {
+        if (current) setPlannedAllocation(value);
+      }).catch((error: unknown) => {
+        if (current) setValuationError(error);
+      }).finally(() => {
+        if (current) setValuationLoading(false);
+      });
+      return () => { current = false; };
+    }
     if (portfolioHoldingMode(selectedPortfolio.holdings) !== 'real') {
       setValuation(null);
+      setPlannedAllocation(null);
       setValuationLoading(false);
       setValuationError(null);
       return;
     }
 
     let current = true;
+    setPlannedAllocation(null);
     setValuationLoading(true);
     setValuationError(null);
     void getPortfolioValuation(
@@ -127,7 +148,7 @@ export function useDashboard() {
       if (current) setValuationLoading(false);
     });
     return () => { current = false; };
-  }, [focused, getPortfolioValuation, revision, selectedPortfolio, valuationCurrency]);
+  }, [focused, getPlannedAllocation, getPortfolioValuation, revision, selectedPortfolio, valuationCurrency]);
 
   // ReportProvider already orders by created_at descending with deterministic ties.
   const newest = history?.portfolioId === selectedId ? history.reports[0] : undefined;
@@ -178,6 +199,9 @@ export function useDashboard() {
     valuation: valuation?.portfolio_id === selectedId
       && valuation.valuation_currency === valuationCurrency
       ? valuation
+      : null,
+    plannedAllocation: plannedAllocation?.portfolio_id === selectedId
+      ? plannedAllocation
       : null,
     valuationLoading,
     valuationError,

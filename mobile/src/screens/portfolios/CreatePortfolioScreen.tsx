@@ -22,18 +22,30 @@ import {
   portfolioErrorMessage
 } from '../../portfolio/portfolioErrors';
 import {
+  createPlannedHoldingDraft,
   createRealHoldingDraft,
+  type PlannedHoldingDraft,
   type RealHoldingDraft,
+  validatePlannedHoldingDrafts,
   validateRealHoldingDrafts
 } from '../../portfolio/portfolioValidation';
 import { usePortfolios } from '../../portfolio/usePortfolios';
 import { colors, spacing } from '../../theme/theme';
-import type { PortfolioCurrency } from '../../types/portfolio';
+import type {
+  PortfolioCurrency,
+  PortfolioPlannedHoldingInput,
+  PortfolioRealHoldingInput
+} from '../../types/portfolio';
+
+type CreateMode = 'CURRENT' | 'PLANNED';
+type HoldingDraft = RealHoldingDraft | PlannedHoldingDraft;
 
 export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
-  const { createPortfolioWithRealHoldings } = usePortfolios();
+  const { createPortfolioWithPlannedHoldings, createPortfolioWithRealHoldings } = usePortfolios();
   const [name, setName] = useState('');
-  const [rows, setRows] = useState<RealHoldingDraft[]>([
+  const [mode, setMode] = useState<CreateMode>('CURRENT');
+  const [planCurrency, setPlanCurrency] = useState<PortfolioCurrency>('USD');
+  const [rows, setRows] = useState<HoldingDraft[]>([
     createRealHoldingDraft()
   ]);
   const [saving, setSaving] = useState(false);
@@ -48,7 +60,7 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
     setPartialPortfolioId(null);
   }
 
-  function patchRow(id: string, patch: Partial<RealHoldingDraft>) {
+  function patchRow(id: string, patch: Partial<HoldingDraft>) {
     clearFormError();
     setRows((current) => current.map((row) => (
       row.id === id ? { ...row, ...patch } : row
@@ -56,7 +68,17 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
   }
 
   function addRow() {
-    setRows((current) => [...current, createRealHoldingDraft()]);
+    setRows((current) => [
+      ...current,
+      mode === 'PLANNED' ? createPlannedHoldingDraft() : createRealHoldingDraft()
+    ]);
+  }
+
+  function selectMode(nextMode: CreateMode) {
+    if (nextMode === mode || saving) return;
+    clearFormError();
+    setMode(nextMode);
+    setRows([nextMode === 'PLANNED' ? createPlannedHoldingDraft() : createRealHoldingDraft()]);
   }
 
   function moveRow(index: number, offset: -1 | 1) {
@@ -78,7 +100,9 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
       return;
     }
 
-    const validation = validateRealHoldingDrafts(rows);
+    const validation = mode === 'PLANNED'
+      ? validatePlannedHoldingDrafts(rows as PlannedHoldingDraft[])
+      : validateRealHoldingDrafts(rows as RealHoldingDraft[]);
     if (!validation.holdings) {
       setSubmitError(null);
       setSubmitMessage(validation.error);
@@ -89,10 +113,16 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
     setSaving(true);
     clearFormError();
     try {
-      const portfolio = await createPortfolioWithRealHoldings(
-        normalizedName,
-        validation.holdings
-      );
+      const portfolio = mode === 'PLANNED'
+        ? await createPortfolioWithPlannedHoldings(
+          normalizedName,
+          planCurrency,
+          validation.holdings as PortfolioPlannedHoldingInput[]
+        )
+        : await createPortfolioWithRealHoldings(
+          normalizedName,
+          validation.holdings as PortfolioRealHoldingInput[]
+        );
       navigation.replace('PortfolioDetail', { portfolioId: portfolio.id });
     } catch (error) {
       if (error instanceof PortfolioCreatedWithoutHoldingsError) {
@@ -123,7 +153,9 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
       >
         <PageTitle
           title="Create New Portfolio"
-          subtitle="Record what you own. Aura values your shares and calculates the current allocation automatically."
+          subtitle={mode === 'PLANNED'
+            ? 'Model a proposed investment. Aura derives target allocation from your amounts.'
+            : 'Record what you own. Aura values your shares and calculates current allocation automatically.'}
         />
 
         <Card style={styles.formCard}>
@@ -138,6 +170,59 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
             editable={!saving}
             error={nameError}
           />
+        </Card>
+
+        <Card style={styles.modeCard}>
+          <Text style={styles.label}>WHAT WOULD YOU LIKE TO ANALYZE?</Text>
+          <View style={styles.modeControl}>
+            {([
+              ['CURRENT', 'My Current Portfolio'],
+              ['PLANNED', 'A Planned Portfolio']
+            ] as const).map(([value, label]) => {
+              const selected = mode === value;
+              return (
+                <Pressable
+                  key={value}
+                  accessibilityLabel={label}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected, disabled: saving }}
+                  disabled={saving}
+                  onPress={() => selectMode(value)}
+                  style={[styles.modeOption, selected && styles.modeOptionSelected]}
+                >
+                  <Text style={[styles.modeTitle, selected && styles.modeTitleSelected]}>{label}</Text>
+                  <Text style={styles.modeDescription}>
+                    {value === 'CURRENT'
+                      ? 'I already own these investments.'
+                      : 'I want to evaluate amounts before investing.'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {mode === 'PLANNED' ? (
+            <View>
+              <Text style={styles.label}>PLAN CURRENCY</Text>
+              <View style={styles.currencyControl}>
+                {(['USD', 'THB'] as PortfolioCurrency[]).map((currency) => {
+                  const selected = planCurrency === currency;
+                  return (
+                    <Pressable
+                      accessibilityLabel={`${currency} plan currency`}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected, disabled: saving }}
+                      disabled={saving}
+                      key={currency}
+                      onPress={() => setPlanCurrency(currency)}
+                      style={[styles.currencyOption, selected && styles.currencyOptionSelected]}
+                    >
+                      <Text style={[styles.currencyText, selected && styles.currencyTextSelected]}>{currency}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
         </Card>
 
         <View style={styles.sectionHeader}>
@@ -227,6 +312,18 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
                 />
               </View>
 
+              {mode === 'PLANNED' && 'proposedAmount' in row ? (
+                <Input
+                  label={`Proposed Amount (${planCurrency})`}
+                  value={row.proposedAmount}
+                  onChangeText={(proposedAmount) => patchRow(row.id, { proposedAmount })}
+                  keyboardType="decimal-pad"
+                  placeholder="4000.00"
+                  editable={!saving}
+                  error={fieldIssue(index, 'proposed_amount')}
+                />
+              ) : 'investedAmount' in row ? (
+                <>
               <View style={styles.inline}>
                 <View style={styles.amountField}>
                   <Input
@@ -293,6 +390,8 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
                 editable={!saving}
                 error={fieldIssue(index, 'purchase_date')}
               />
+                </>
+              ) : null}
             </Card>
           ))}
         </View>
@@ -314,8 +413,9 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
           <View style={styles.allocationNoteText}>
             <Text style={styles.allocationNoteTitle}>Automatic allocation</Text>
             <Text style={styles.allocationNoteBody}>
-              After saving, Aura uses backend market prices to value your shares
-              and return the current percentage for each holding.
+              {mode === 'PLANNED'
+                ? 'Aura calculates target percentages from proposed amounts. Estimated shares are display-only and the plan still saves when price data is unavailable.'
+                : 'After saving, Aura uses backend market prices to value your shares and return the current percentage for each holding.'}
             </Text>
           </View>
         </Card>
@@ -359,6 +459,25 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: 100 },
   formCard: { marginTop: spacing.xl },
+  modeCard: { marginTop: spacing.md, gap: spacing.md },
+  modeControl: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  modeOption: {
+    flexGrow: 1,
+    flexBasis: 150,
+    minHeight: 72,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    padding: spacing.md
+  },
+  modeOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.selectedBackground
+  },
+  modeTitle: { color: colors.textSecondary, fontSize: 12, fontWeight: '900' },
+  modeTitleSelected: { color: colors.primary },
+  modeDescription: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 4 },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

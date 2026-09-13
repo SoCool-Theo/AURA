@@ -29,7 +29,11 @@ export function PortfolioCard({
           <View style={styles.main}>
             <Text style={styles.name}>{portfolio.name}</Text>
             <Text style={styles.meta}>
-              Updated {new Date(portfolio.updated_at).toLocaleDateString()}
+              {portfolio.portfolio_type === 'PLANNED'
+                ? `Planned in ${portfolio.plan_currency}`
+                : portfolio.portfolio_type === 'LEGACY'
+                  ? 'Legacy allocation'
+                  : 'Current holdings'} · Updated {new Date(portfolio.updated_at).toLocaleDateString()}
             </Text>
           </View>
           {active ? <Text style={styles.activeLabel}>ACTIVE</Text> : null}

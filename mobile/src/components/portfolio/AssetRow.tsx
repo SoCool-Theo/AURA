@@ -3,8 +3,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import type {
   PortfolioCurrency,
   PortfolioHoldingResponse,
+  PortfolioPlannedPreviewHoldingResponse,
   PortfolioHoldingValuationResponse
 } from '../../types/portfolio';
+import { isPlannedPortfolioHolding, isRealPortfolioHolding } from '../../types/portfolio';
 import { colors, spacing } from '../../theme/theme';
 import { decimalWeightToPercent } from '../../portfolio/portfolioValidation';
 import {
@@ -16,13 +18,16 @@ import {
 export function AssetRow({
   holding,
   valuation,
+  plannedPreview,
   valuationCurrency = 'USD'
 }: {
   holding: PortfolioHoldingResponse;
   valuation?: PortfolioHoldingValuationResponse;
+  plannedPreview?: PortfolioPlannedPreviewHoldingResponse;
   valuationCurrency?: PortfolioCurrency;
 }) {
-  const isReal = holding.weight === null;
+  const isReal = isRealPortfolioHolding(holding);
+  const isPlanned = isPlannedPortfolioHolding(holding);
   return (
     <View style={styles.row}>
       <View style={styles.symbolBox}>
@@ -33,6 +38,8 @@ export function AssetRow({
         <Text style={styles.meta}>
           {isReal
             ? `${formatPortfolioQuantity(holding.shares)} shares · Purchased ${holding.purchase_date}`
+            : isPlanned
+              ? `Proposed ${formatPortfolioMoney(holding.proposed_amount, valuationCurrency)}`
             : `Position ${holding.position + 1} · Legacy allocation`}
         </Text>
         {isReal ? (
@@ -42,21 +49,31 @@ export function AssetRow({
               holding.invested_currency
             )}
           </Text>
+        ) : isPlanned && plannedPreview ? (
+          <Text style={styles.fact}>
+            {plannedPreview.estimate_status === 'AVAILABLE'
+              ? `Estimated ${formatPortfolioQuantity(plannedPreview.estimated_shares!)} shares · display only`
+              : plannedPreview.estimate_status === 'FX_UNAVAILABLE'
+                ? 'Share estimate unavailable: FX data missing'
+                : 'Share estimate unavailable: price data missing'}
+          </Text>
         ) : null}
       </View>
       <View style={styles.valueColumn}>
         <Text style={styles.weight}>
           {valuation
             ? formatPortfolioMoney(valuation.current_value, valuationCurrency)
-            : holding.weight === null
-              ? 'Unavailable'
-              : `${decimalWeightToPercent(holding.weight).toFixed(2)}%`}
+            : plannedPreview
+              ? `${decimalWeightToPercent(Number(plannedPreview.target_allocation)).toFixed(2)}%`
+              : holding.weight === null
+                ? 'Unavailable'
+                : `${decimalWeightToPercent(holding.weight).toFixed(2)}%`}
         </Text>
         {valuation ? (
           <Text style={styles.allocation}>
             {formatCurrentAllocation(valuation.current_allocation)}
           </Text>
-        ) : null}
+        ) : plannedPreview ? <Text style={styles.allocation}>Target allocation</Text> : null}
       </View>
     </View>
   );

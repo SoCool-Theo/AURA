@@ -37,7 +37,8 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
     portfolio,
     report,
     newest,
-    valuation
+    valuation,
+    plannedAllocation
   } = dashboard;
   const { portfolios, listStatus, listError, selectPortfolio } = portfoliosState;
   const [range, setRange] = useState<DashboardRange>('1M');
@@ -148,11 +149,13 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
               </View>
             ) : null}
 
-            {dashboard.valuationLoading ? <Text style={styles.notice}>Loading current backend valuation…</Text> : null}
+            {dashboard.valuationLoading ? <Text style={styles.notice}>{holdingMode === 'planned' ? 'Loading planned target allocation…' : 'Loading current backend valuation…'}</Text> : null}
             {dashboard.valuationError ? (
               <InlineErrorCard
                 error={dashboard.valuationError}
-                message={portfolioValuationErrorMessage(dashboard.valuationError)}
+                message={holdingMode === 'planned'
+                  ? portfolioErrorMessage(dashboard.valuationError, 'Unable to load the planned target allocation.')
+                  : portfolioValuationErrorMessage(dashboard.valuationError)}
                 stale={Boolean(valuation)}
                 onRetry={dashboard.retryDetails}
                 retryTitle="Retry valuation"
@@ -162,11 +165,15 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
             <View style={styles.kpiGrid}>
               <WebKpiCard
                 icon="wallet-outline"
-                label="Current Value"
-                value={valuation
+                label={holdingMode === 'planned' ? 'Proposed Investment' : 'Current Value'}
+                value={holdingMode === 'planned' && plannedAllocation
+                  ? formatPortfolioMoney(plannedAllocation.total_proposed_amount, plannedAllocation.plan_currency)
+                  : valuation
                   ? formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency)
                   : 'N/A'}
-                meta={valuation
+                meta={holdingMode === 'planned' && plannedAllocation
+                  ? 'Hypothetical plan · target weights from proposed amounts'
+                  : valuation
                   ? `Backend valuation · ${valuation.newest_price_as_of}`
                   : holdingMode === 'legacy'
                     ? 'Legacy portfolios have saved weights only'
@@ -252,9 +259,14 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
               </>
             )}
 
-            <SectionHeader title="Current Portfolio Allocation" />
+            <SectionHeader title={holdingMode === 'planned' ? 'Planned Target Allocation' : 'Current Portfolio Allocation'} />
             <Card>
-              {holdingMode === 'real' && valuation ? valuation.holdings.map((holding) => (
+              {holdingMode === 'planned' && plannedAllocation ? plannedAllocation.holdings.map((holding) => (
+                <View key={holding.symbol} style={styles.row}>
+                  <Text style={styles.symbol}>{holding.symbol}</Text>
+                  <Text style={styles.weight}>{dashboardPercent(Number(holding.target_allocation))}</Text>
+                </View>
+              )) : holdingMode === 'real' && valuation ? valuation.holdings.map((holding) => (
                 <View key={holding.symbol} style={styles.row}>
                   <Text style={styles.symbol}>{holding.symbol}</Text>
                   <Text style={styles.weight}>{dashboardPercent(Number(holding.current_allocation))}</Text>

@@ -1,5 +1,7 @@
 import type {
   PortfolioCurrency,
+  PortfolioPlannedHoldingInput,
+  PortfolioPlannedHoldingResponse,
   PortfolioRealHoldingInput,
   PortfolioRealHoldingResponse
 } from '../types/portfolio';
@@ -15,6 +17,16 @@ export type RealHoldingDraft = {
 
 export type RealHoldingValidationResult =
   | { holdings: PortfolioRealHoldingInput[]; error: null }
+  | { holdings: null; error: string };
+
+export type PlannedHoldingDraft = {
+  id: string;
+  symbol: string;
+  proposedAmount: string;
+};
+
+export type PlannedHoldingValidationResult =
+  | { holdings: PortfolioPlannedHoldingInput[]; error: null }
   | { holdings: null; error: string };
 
 function draftId(): string {
@@ -43,6 +55,25 @@ export function realHoldingToDraft(
     investedCurrency: holding.invested_currency,
     shares: holding.shares,
     purchaseDate: holding.purchase_date
+  });
+}
+
+export function createPlannedHoldingDraft(
+  values: Partial<Omit<PlannedHoldingDraft, 'id'>> = {}
+): PlannedHoldingDraft {
+  return {
+    id: draftId(),
+    symbol: values.symbol ?? '',
+    proposedAmount: values.proposedAmount ?? ''
+  };
+}
+
+export function plannedHoldingToDraft(
+  holding: PortfolioPlannedHoldingResponse
+): PlannedHoldingDraft {
+  return createPlannedHoldingDraft({
+    symbol: holding.symbol,
+    proposedAmount: holding.proposed_amount
   });
 }
 
@@ -142,6 +173,34 @@ export function validateRealHoldingDrafts(
     });
   }
 
+  return { holdings, error: null };
+}
+
+export function validatePlannedHoldingDrafts(
+  drafts: PlannedHoldingDraft[]
+): PlannedHoldingValidationResult {
+  if (!drafts.length) {
+    return { holdings: null, error: 'Add at least one planned holding.' };
+  }
+
+  const holdings: PortfolioPlannedHoldingInput[] = [];
+  const seenSymbols = new Set<string>();
+  for (let index = 0; index < drafts.length; index += 1) {
+    const draft = drafts[index];
+    const symbol = draft.symbol.trim().toUpperCase();
+    if (!symbol) {
+      return { holdings: null, error: `Holding ${index + 1} needs a symbol.` };
+    }
+    if (seenSymbols.has(symbol)) {
+      return { holdings: null, error: `${symbol} appears more than once. Holding symbols must be unique.` };
+    }
+    const proposedAmount = positiveDecimal(draft.proposedAmount);
+    if (!proposedAmount) {
+      return { holdings: null, error: `${symbol} needs a positive proposed amount with up to 12 decimal places.` };
+    }
+    seenSymbols.add(symbol);
+    holdings.push({ symbol, proposed_amount: proposedAmount });
+  }
   return { holdings, error: null };
 }
 

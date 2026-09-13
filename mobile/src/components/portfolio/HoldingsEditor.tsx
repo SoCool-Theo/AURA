@@ -11,18 +11,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { apiValidationIssues } from '../../api/apiErrorPresentation';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import {
+  createPlannedHoldingDraft,
   createRealHoldingDraft,
+  plannedHoldingToDraft,
   realHoldingToDraft,
+  type PlannedHoldingDraft,
   type RealHoldingDraft,
+  validatePlannedHoldingDrafts,
   validateRealHoldingDrafts
 } from '../../portfolio/portfolioValidation';
 import { usePortfolios } from '../../portfolio/usePortfolios';
 import { colors, spacing, typography } from '../../theme/theme';
 import {
   isRealPortfolioHolding,
+  isPlannedPortfolioHolding,
   portfolioHoldingMode,
   type PortfolioCurrency,
-  type PortfolioHoldingMode
+  type PortfolioHoldingMode,
+  type PortfolioPlannedHoldingInput,
+  type PortfolioRealHoldingInput
 } from '../../types/portfolio';
 import { AssetSymbolField } from './AssetSymbolField';
 import { PurchaseDateField } from './PurchaseDateField';
@@ -34,6 +41,7 @@ import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
 import { LoadingState } from '../ui/LoadingState';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
+type HoldingDraft = RealHoldingDraft | PlannedHoldingDraft;
 
 export function HoldingsEditor({
   portfolioId,
@@ -44,10 +52,11 @@ export function HoldingsEditor({
   navigation: any;
   startWithBlankRow?: boolean;
 }) {
-  const { getPortfolio, replaceRealHoldings } = usePortfolios();
+  const { getPortfolio, replacePlannedHoldings, replaceRealHoldings } = usePortfolios();
   const [portfolioName, setPortfolioName] = useState('Portfolio');
+  const [planCurrency, setPlanCurrency] = useState<PortfolioCurrency | null>(null);
   const [holdingMode, setHoldingMode] = useState<PortfolioHoldingMode>('empty');
-  const [rows, setRows] = useState<RealHoldingDraft[]>([]);
+  const [rows, setRows] = useState<HoldingDraft[]>([]);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
   const [loadError, setLoadError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
@@ -65,16 +74,21 @@ export function HoldingsEditor({
     try {
       const portfolio = await getPortfolio(portfolioId);
       if (requestRef.current !== requestId) return;
-      const mode = portfolioHoldingMode(portfolio.holdings);
-      const loadedRows = portfolio.holdings.map((holding) => (
-        isRealPortfolioHolding(holding)
-          ? realHoldingToDraft(holding)
-          : createRealHoldingDraft({ symbol: holding.symbol })
-      ));
+      const mode = portfolio.portfolio_type === 'PLANNED'
+        ? 'planned'
+        : portfolioHoldingMode(portfolio.holdings);
+      const loadedRows: HoldingDraft[] = portfolio.holdings.map((holding) => {
+        if (isPlannedPortfolioHolding(holding)) return plannedHoldingToDraft(holding);
+        if (isRealPortfolioHolding(holding)) return realHoldingToDraft(holding);
+        return createRealHoldingDraft({ symbol: holding.symbol });
+      });
       if (startWithBlankRow || !loadedRows.length) {
-        loadedRows.push(createRealHoldingDraft());
+        loadedRows.push(portfolio.portfolio_type === 'PLANNED'
+          ? createPlannedHoldingDraft()
+          : createRealHoldingDraft());
       }
       setPortfolioName(portfolio.name);
+      setPlanCurrency(portfolio.plan_currency);
       setHoldingMode(mode);
       setRows(loadedRows);
       setLoadStatus('ready');
@@ -92,7 +106,7 @@ export function HoldingsEditor({
     };
   }, [loadPortfolio]);
 
-  function patchRow(id: string, patch: Partial<RealHoldingDraft>) {
+  function patchRow(id: string, patch: Partial<HoldingDraft>) {
     setSubmitError(null);
     setSubmitMessage(null);
     setRows((current) => current.map((row) => (
@@ -112,7 +126,10 @@ export function HoldingsEditor({
 
   async function save() {
     if (submittingRef.current) return;
-    const validation = validateRealHoldingDrafts(rows);
+    const planned = holdingMode === 'planned';
+    const validation = planned
+      ? validatePlannedHoldingDrafts(rows as PlannedHoldingDraft[])
+      : validateRealHoldingDrafts(rows as RealHoldingDraft[]);
     if (!validation.holdings) {
       setSubmitError(null);
       setSubmitMessage(validation.error);
@@ -124,7 +141,17 @@ export function HoldingsEditor({
     setSubmitError(null);
     setSubmitMessage(null);
     try {
-      await replaceRealHoldings(portfolioId, validation.holdings);
+      if (planned) {
+        await replacePlannedHoldings(
+          portfolioId,
+          validation.holdings as PortfolioPlannedHoldingInput[]
+        );
+      } else {
+        await replaceRealHoldings(
+          portfolioId,
+          validation.holdings as PortfolioRealHoldingInput[]
+        );
+      }
       navigation.goBack();
     } catch (error) {
       setSubmitError(error);
@@ -168,8 +195,9 @@ export function HoldingsEditor({
           {startWithBlankRow ? 'Add holding' : 'Edit holdings'}
         </Text>
         <Text style={styles.subtitle}>
-          {portfolioName}: submit the complete ordered list of positions. Aura
-          calculates current allocation from backend market prices.
+          {portfolioName}: submit the complete ordered list of {holdingMode === 'planned'
+            ? 'proposed investments. Aura calculates target allocation from the saved amounts.'
+            : 'positions. Aura calculates current allocation from backend market prices.'}
         </Text>
 
         {holdingMode === 'legacy' ? (
@@ -242,6 +270,17 @@ export function HoldingsEditor({
                 />
               </View>
 
+              {holdingMode === 'planned' && 'proposedAmount' in row ? (
+                <Input
+                  label={`Proposed Amount (${planCurrency ?? 'USD'})`}
+                  value={row.proposedAmount}
+                  onChangeText={(proposedAmount) => patchRow(row.id, { proposedAmount })}
+                  keyboardType="decimal-pad"
+                  placeholder="4000.00"
+                  editable={!saving}
+                  error={fieldIssue(index, 'proposed_amount')}
+                />
+              ) : 'investedAmount' in row ? <>
               <View style={styles.fields}>
                 <View style={styles.flexField}>
                   <Input
@@ -292,6 +331,7 @@ export function HoldingsEditor({
                 editable={!saving}
                 error={fieldIssue(index, 'purchase_date')}
               />
+              </> : null}
             </Card>
           ))}
         </View>
@@ -303,7 +343,9 @@ export function HoldingsEditor({
           style={styles.addRow}
           onPress={() => setRows((current) => [
             ...current,
-            createRealHoldingDraft()
+            holdingMode === 'planned'
+              ? createPlannedHoldingDraft()
+              : createRealHoldingDraft()
           ])}
           disabled={saving}
         >
@@ -314,7 +356,9 @@ export function HoldingsEditor({
         <Card style={styles.infoCard}>
           <Ionicons name="sparkles-outline" size={19} color={colors.primary} />
           <Text style={styles.infoText}>
-            Allocation is automatic after the backend values the saved shares.
+            {holdingMode === 'planned'
+              ? 'Target allocation is calculated by the backend from proposed amounts; estimated shares are display-only.'
+              : 'Allocation is automatic after the backend values the saved shares.'}
           </Text>
         </Card>
 
@@ -325,7 +369,7 @@ export function HoldingsEditor({
         ) : null}
 
         <Button
-          title={saving ? 'Saving…' : 'Save Complete Holdings'}
+          title={saving ? 'Saving…' : holdingMode === 'planned' ? 'Save Planned Holdings' : 'Save Complete Holdings'}
           onPress={save}
           disabled={saving}
           style={{ marginTop: spacing.xl }}

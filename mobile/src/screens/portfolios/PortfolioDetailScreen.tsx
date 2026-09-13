@@ -38,6 +38,7 @@ import { colors, spacing } from '../../theme/theme';
 import {
   portfolioHoldingMode,
   type PortfolioCurrency,
+  type PortfolioPlannedPreviewResponse,
   type PortfolioResponse,
   type PortfolioValuationResponse
 } from '../../types/portfolio';
@@ -56,6 +57,7 @@ export function PortfolioDetailScreen({
   const {
     getPortfolio,
     getPortfolioValuation,
+    getPlannedPreview,
     selectPortfolio,
     renamePortfolio,
     duplicatePortfolio,
@@ -67,6 +69,7 @@ export function PortfolioDetailScreen({
   const [loadError, setLoadError] = useState<unknown>(null);
   const [currency, setCurrency] = useState<PortfolioCurrency>('USD');
   const [valuation, setValuation] = useState<PortfolioValuationResponse | null>(null);
+  const [plannedPreview, setPlannedPreview] = useState<PortfolioPlannedPreviewResponse | null>(null);
   const [valuationStatus, setValuationStatus] = useState<ValuationStatus>('idle');
   const [valuationError, setValuationError] = useState<unknown>(null);
   const [nameAction, setNameAction] = useState<NameAction>(null);
@@ -90,7 +93,23 @@ export function PortfolioDetailScreen({
       selectPortfolio(response.id);
       setLoadStatus('ready');
 
-      if (portfolioHoldingMode(response.holdings) === 'real') {
+      if (response.portfolio_type === 'PLANNED' && response.holdings.length) {
+        setValuation(null);
+        setValuationStatus('loading');
+        setValuationError(null);
+        try {
+          const preview = await getPlannedPreview(response.id);
+          if (loadRequestRef.current !== requestId) return;
+          setPlannedPreview(preview);
+          setValuationStatus('ready');
+        } catch (error) {
+          if (loadRequestRef.current !== requestId) return;
+          setPlannedPreview(null);
+          setValuationError(error);
+          setValuationStatus('error');
+        }
+      } else if (portfolioHoldingMode(response.holdings) === 'real') {
+        setPlannedPreview(null);
         setValuationStatus('loading');
         setValuationError(null);
         try {
@@ -108,6 +127,7 @@ export function PortfolioDetailScreen({
         }
       } else {
         setValuation(null);
+        setPlannedPreview(null);
         setValuationError(null);
         setValuationStatus('idle');
       }
@@ -116,7 +136,7 @@ export function PortfolioDetailScreen({
       setLoadError(error);
       setLoadStatus('error');
     }
-  }, [currency, getPortfolio, getPortfolioValuation, portfolioId, selectPortfolio]);
+  }, [currency, getPlannedPreview, getPortfolio, getPortfolioValuation, portfolioId, selectPortfolio]);
 
   useFocusEffect(useCallback(() => {
     void loadPortfolio();
@@ -228,7 +248,13 @@ export function PortfolioDetailScreen({
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <PageTitle
-          eyebrow={holdingMode === 'real' ? 'REAL HOLDINGS' : holdingMode === 'legacy' ? 'LEGACY ALLOCATION' : undefined}
+          eyebrow={portfolio.portfolio_type === 'PLANNED'
+            ? 'PLANNED · HYPOTHETICAL'
+            : holdingMode === 'real'
+              ? 'REAL HOLDINGS'
+              : holdingMode === 'legacy'
+                ? 'LEGACY ALLOCATION'
+                : undefined}
           title={portfolio.name}
           subtitle={`${portfolio.holdings.length} holdings · Updated ${new Date(portfolio.updated_at).toLocaleDateString()}`}
         />
@@ -262,7 +288,35 @@ export function PortfolioDetailScreen({
           />
         </View>
 
-        {holdingMode === 'real' ? (
+        {portfolio.portfolio_type === 'PLANNED' ? (
+          <>
+            <View style={styles.valuationHeader}>
+              <Text style={styles.valuationHeading}>Proposed Investment</Text>
+            </View>
+            {valuationStatus === 'loading' ? (
+              <Card><Text style={styles.stateText}>Loading planned allocation and optional share estimates…</Text></Card>
+            ) : valuationStatus === 'error' ? (
+              <InlineErrorCard
+                error={valuationError}
+                message={portfolioErrorMessage(valuationError, 'Unable to load the planned portfolio preview.')}
+                onRetry={() => void loadPortfolio()}
+                retryTitle="Retry preview"
+              />
+            ) : plannedPreview ? (
+              <Card style={styles.valueCard}>
+                <Text style={styles.totalValue}>
+                  {formatPortfolioMoney(plannedPreview.total_proposed_amount, plannedPreview.plan_currency)}
+                </Text>
+                <Text style={styles.valueMeta}>
+                  Plan currency {plannedPreview.plan_currency} · preview requested {plannedPreview.requested_date}
+                </Text>
+                <Text style={styles.valueMeta}>
+                  Estimated shares are display-only. Target allocation comes only from proposed amounts.
+                </Text>
+              </Card>
+            ) : null}
+          </>
+        ) : holdingMode === 'real' ? (
           <>
             <View style={styles.valuationHeader}>
               <Text style={styles.valuationHeading}>Current Value</Text>
@@ -321,8 +375,21 @@ export function PortfolioDetailScreen({
           </Card>
         ) : null}
 
-        <SectionHeader title={holdingMode === 'real' ? 'Current Allocation' : 'Allocation'} />
-        {holdingMode === 'legacy' ? (
+        <SectionHeader title={portfolio.portfolio_type === 'PLANNED'
+          ? 'Target Allocation'
+          : holdingMode === 'real'
+            ? 'Current Allocation'
+            : 'Allocation'} />
+        {portfolio.portfolio_type === 'PLANNED' && plannedPreview ? (
+          <Card>
+            <DonutAllocationChart
+              data={plannedPreview.holdings.map((holding) => ({
+                symbol: holding.symbol,
+                weight: Number(holding.target_allocation) * 100
+              }))}
+            />
+          </Card>
+        ) : holdingMode === 'legacy' ? (
           <Card>
             <DonutAllocationChart
               data={portfolio.holdings.map((holding) => ({
@@ -343,15 +410,21 @@ export function PortfolioDetailScreen({
         ) : portfolio.holdings.length ? (
           <Card>
             <EmptyState
-              title="Current allocation unavailable"
-              description="Aura displays allocation only when the backend returns a current valuation."
+              title={portfolio.portfolio_type === 'PLANNED'
+                ? 'Target allocation unavailable'
+                : 'Current allocation unavailable'}
+              description={portfolio.portfolio_type === 'PLANNED'
+                ? 'Retry the backend planned preview. Aura does not calculate official target weights on this device.'
+                : 'Aura displays allocation only when the backend returns a current valuation.'}
             />
           </Card>
         ) : (
           <Card>
             <EmptyState
               title="No holdings yet"
-              description="Add real holding facts to complete this portfolio."
+              description={portfolio.portfolio_type === 'PLANNED'
+                ? 'Add proposed investment amounts to complete this plan.'
+                : 'Add real holding facts to complete this portfolio.'}
             />
           </Card>
         )}
@@ -371,7 +444,8 @@ export function PortfolioDetailScreen({
                 key={holding.symbol}
                 holding={holding}
                 valuation={valuationById.get(holding.id)}
-                valuationCurrency={valuation?.valuation_currency}
+                plannedPreview={plannedPreview?.holdings.find((item) => item.id === holding.id)}
+                valuationCurrency={plannedPreview?.plan_currency ?? portfolio.plan_currency ?? valuation?.valuation_currency}
               />
             ))}
           </Card>

@@ -156,7 +156,7 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
           <Card style={styles.emptyCard}>
             <EmptyState
               title="No portfolios yet"
-              description="Create your first portfolio and record the real holdings you own."
+              description="Create a current portfolio for assets you own or a planned portfolio to evaluate before investing."
             />
           </Card>
         ) : filtered.length ? (
@@ -204,7 +204,7 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
             <View style={{ flex: 1 }}>
               <Text style={styles.ctaEyebrow}>CREATE NEW PORTFOLIO</Text>
               <Text style={styles.ctaTitle}>
-                Record an ordered list of holdings and let Aura calculate allocation.
+                Record current holdings or proposed amounts and let Aura calculate the appropriate allocation.
               </Text>
               <View style={styles.ctaLink}>
                 <Ionicons name="add-circle-outline" size={16} color={colors.primary} />

@@ -5,6 +5,10 @@ import type {
   PortfolioDuplicateRequest,
   PortfolioHoldingsReplaceRequest,
   PortfolioListResponse,
+  PortfolioPlannedAllocationResponse,
+  PortfolioPlannedHoldingInput,
+  PortfolioPlannedHoldingsReplaceRequest,
+  PortfolioPlannedPreviewResponse,
   PortfolioRealHoldingInput,
   PortfolioResponse,
   PortfolioUpdateRequest,
@@ -49,6 +53,26 @@ export const portfoliosApi = {
     );
   },
 
+  getPlannedAllocation(
+    portfolioId: Uuid,
+    options: ApiCallOptions = {}
+  ): Promise<PortfolioPlannedAllocationResponse> {
+    return apiRequest<PortfolioPlannedAllocationResponse>(
+      `${portfolioPath(portfolioId)}/planned-allocation`,
+      options
+    );
+  },
+
+  getPlannedPreview(
+    portfolioId: Uuid,
+    options: ApiCallOptions = {}
+  ): Promise<PortfolioPlannedPreviewResponse> {
+    return apiRequest<PortfolioPlannedPreviewResponse>(
+      `${portfolioPath(portfolioId)}/planned-preview`,
+      options
+    );
+  },
+
   update(
     portfolioId: Uuid,
     request: PortfolioUpdateRequest,
@@ -66,6 +90,17 @@ export const portfoliosApi = {
     options: ApiCallOptions = {}
   ): Promise<PortfolioResponse> {
     return apiRequest<PortfolioResponse, PortfolioHoldingsReplaceRequest>(
+      `${portfolioPath(portfolioId)}/holdings`,
+      { ...options, method: 'PUT', body: { holdings } }
+    );
+  },
+
+  replacePlannedHoldings(
+    portfolioId: Uuid,
+    holdings: PortfolioPlannedHoldingInput[],
+    options: ApiCallOptions = {}
+  ): Promise<PortfolioResponse> {
+    return apiRequest<PortfolioResponse, PortfolioPlannedHoldingsReplaceRequest>(
       `${portfolioPath(portfolioId)}/holdings`,
       { ...options, method: 'PUT', body: { holdings } }
     );
