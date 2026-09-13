@@ -1533,7 +1533,7 @@ incomplete.
 
 ## Planned Portfolio Expansion
 
-**Status:** Step 2 database foundation complete; runtime integration pending
+**Status:** Step 3 type-aware CRUD and planned target allocation complete
 
 ### Approved product target contract
 
@@ -1572,8 +1572,40 @@ incomplete.
 - The preserved local database was restored to `d4a6f8c2e1b7`; repository
   Alembic head is `e5b7c9d2a4f1`.
 
+### Completed Step 3 runtime foundation
+
+- Portfolio create and response contracts are type-aware. New clients can
+  create `CURRENT` or `PLANNED` portfolios; omitted type still defaults to
+  `CURRENT`, and clients cannot create `LEGACY` portfolios.
+- Planned portfolios require one normalized `USD` or `THB` plan currency and
+  accept only ordered, unique symbols with positive proposed amounts.
+- The shared holdings replacement route dispatches complete current facts or
+  planned amounts by request shape and returns a sanitized `409` when the body
+  conflicts with the saved portfolio type. The existing explicit
+  `LEGACY`-to-`CURRENT` compatibility replacement remains supported.
+- Portfolio duplication preserves the source portfolio type and copies the
+  corresponding complete holding shape. Planned copies retain proposed amounts
+  and plan currency without inventing shares.
+- `GET /api/portfolios/{portfolio_id}/planned-allocation` returns the
+  backend-derived total and canonical target allocations at 18-decimal
+  precision. It is read-only and independent of current market prices and FX.
+- Full portfolio responses expose `portfolio_type`, `plan_currency`, and
+  optional `source_plan_id`; list summaries expose the type and plan currency.
+
+### Step 3 verification
+
+- Focused schema, repository, service, allocation, and portfolio API suite:
+  282 passed.
+- Complete backend unit suite: 2,288 passed.
+- Non-PostgreSQL API integration suite: 265 passed. Live PostgreSQL modules were
+  intentionally excluded because this step made no schema change and the
+  preserved database remains at the pre-Step-2 revision by design.
+- Python compile verification completed for `backend/app` and `backend/tests`.
+- Ruff was not available in the existing environment; no dependency was added.
+
 ### Remaining planned-portfolio work
 
-Type-aware schemas, CRUD, planned allocation/estimate preview, shared baseline
-resolution, immutable report/simulation variants, AI grounding, and customer
-web/mobile integration are not implemented yet.
+Optional estimated-share preview, shared baseline resolution and analysis
+composition, immutable report/simulation variants, AI grounding, conversion to
+a new current portfolio, and customer web/mobile integration are not
+implemented yet.

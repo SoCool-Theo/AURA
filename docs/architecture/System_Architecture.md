@@ -247,25 +247,30 @@ AURA/
 
 The currently implemented compatibility architecture below is being extended
 by the approved [planned-portfolio target contract](../api_contracts/planned_portfolios.md).
-That target introduces user-facing `CURRENT` and `PLANNED` portfolio types while
-retaining `LEGACY` as internal compatibility state. Until its sequenced backend
-steps are implemented and verified, the two-mode runtime behavior documented
-below remains authoritative.
+Type-aware CRUD now exposes user-facing `CURRENT` and `PLANNED` portfolio types
+while retaining `LEGACY` as internal compatibility state. Analytics, reports,
+simulations, and AI continue to use the existing current/legacy baseline until
+the shared baseline resolver is extended in the next sequenced step.
 
-Aura supports two complete, mutually exclusive persisted holding modes during
-the compatibility period:
+Aura supports three complete, mutually exclusive persisted holding modes:
 
 | Mode | Persisted holding state | Current valuation |
 | --- | --- | --- |
-| `LEGACY` | `weight` is present; `invested_amount`, `invested_currency`, `shares`, and `purchase_date` are `NULL` | Not available |
-| `REAL` | `weight` is `NULL`; all four real-holding fields are present | Available from persisted current market data |
+| `LEGACY` | `weight` is present; real-holding fields and `proposed_amount` are `NULL` | Not available |
+| `CURRENT` | `weight` and `proposed_amount` are `NULL`; all four real-holding fields are present | Available from persisted current market data |
+| `PLANNED` | `proposed_amount` is present; `weight` and real-holding fields are `NULL` | Target allocation is derived without current prices; current valuation is not ownership-authoritative |
 
-For a real holding, the user controls `symbol`, `invested_amount`,
+For a current holding, the user controls `symbol`, `invested_amount`,
 `invested_currency`, `shares`, and `purchase_date`. The backend controls the
 zero-based `position` used to preserve order. Aura does not persist manual
 weight, current allocation, current price, current value, or FX rate for real
 holdings. `invested_amount` and `invested_currency` are provenance facts, not
 the portfolio's current value.
+
+For a planned holding, the user controls `symbol` and positive
+`proposed_amount` in the portfolio's single `plan_currency`. The backend derives
+the total and exact canonical target allocation without market or FX data;
+estimated shares are not part of this completed step.
 
 Current valuation is calculated once in `PortfolioValuationService`:
 

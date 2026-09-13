@@ -14,6 +14,8 @@ from backend.app.schemas.portfolio import (
     PortfolioHoldingResponse,
     PortfolioHoldingsReplaceRequest,
     PortfolioListResponse,
+    PortfolioPlannedAllocationResponse,
+    PortfolioPlannedHoldingsReplaceRequest,
     PortfolioResponse,
     PortfolioSummaryResponse,
     PortfolioUpdateRequest,
@@ -37,6 +39,9 @@ def _valid_response_data() -> dict[str, object]:
     return {
         "id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
         "name": "Core Portfolio",
+        "portfolio_type": "LEGACY",
+        "plan_currency": None,
+        "source_plan_id": None,
         "created_at": "2026-08-17T09:30:00+07:00",
         "updated_at": "2026-08-17T10:45:00+07:00",
         "holdings": [
@@ -369,6 +374,40 @@ def test_crud_name_request_accepts_valid_name(request_type: type) -> None:
     assert result.name == "Core Portfolio"
 
 
+def test_create_defaults_to_current_and_accepts_explicit_planned_context(
+) -> None:
+    current = PortfolioCreateRequest(name="Current")
+    planned = PortfolioCreateRequest(
+        name="Plan",
+        portfolio_type=" planned ",
+        plan_currency=" thb ",
+    )
+
+    assert current.portfolio_type == "CURRENT"
+    assert current.plan_currency is None
+    assert planned.portfolio_type == "PLANNED"
+    assert planned.plan_currency == "THB"
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"name": "Plan", "portfolio_type": "PLANNED"},
+        {
+            "name": "Current",
+            "portfolio_type": "CURRENT",
+            "plan_currency": "USD",
+        },
+        {"name": "Legacy", "portfolio_type": "LEGACY"},
+    ],
+)
+def test_create_rejects_incomplete_or_non_creatable_type_context(
+    data: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        PortfolioCreateRequest.model_validate(data)
+
+
 @pytest.mark.parametrize(
     "request_type",
     [
@@ -553,6 +592,45 @@ def test_crud_holdings_replace_does_not_mutate_caller_input() -> None:
     assert [holding.symbol for holding in result.holdings] == ["AAPL", "MSFT"]
 
 
+def test_planned_holdings_replace_accepts_amounts_and_preserves_order() -> None:
+    result = PortfolioPlannedHoldingsReplaceRequest.model_validate(
+        {
+            "holdings": [
+                {"symbol": " aapl ", "proposed_amount": "4000.00"},
+                {"symbol": "msft", "proposed_amount": "6000.00"},
+            ]
+        }
+    )
+
+    assert [holding.symbol for holding in result.holdings] == ["AAPL", "MSFT"]
+    assert [holding.proposed_amount for holding in result.holdings] == [
+        Decimal("4000.00"),
+        Decimal("6000.00"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "holdings",
+    [
+        [],
+        [{"symbol": "AAPL", "proposed_amount": "0"}],
+        [
+            {"symbol": "AAPL", "proposed_amount": "1"},
+            {"symbol": " aapl ", "proposed_amount": "2"},
+        ],
+        [{"symbol": "AAPL", "proposed_amount": "1", "shares": "1"}],
+        [{"symbol": "AAPL", "proposed_amount": "1", "weight": 1.0}],
+    ],
+)
+def test_planned_holdings_replace_rejects_invalid_or_mixed_input(
+    holdings: list[dict[str, object]],
+) -> None:
+    with pytest.raises(ValidationError):
+        PortfolioPlannedHoldingsReplaceRequest.model_validate(
+            {"holdings": holdings}
+        )
+
+
 def test_crud_holding_response_accepts_persisted_shape_and_json_number() -> None:
     result = PortfolioHoldingResponse.model_validate(
         {"symbol": "AAPL", "weight": 0.40, "position": 2}
@@ -646,6 +724,25 @@ def _valid_valuation_response_data(
                 "current_allocation": "1",
             }
         ],
+    }
+
+
+def test_crud_holding_response_accepts_planned_shape_only() -> None:
+    result = PortfolioHoldingResponse.model_validate(
+        {
+            "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+            "symbol": "AAPL",
+            "proposed_amount": "4000.000000000000",
+            "position": 0,
+        }
+    )
+
+    assert result.model_dump(mode="json") == {
+        "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+        "symbol": "AAPL",
+        "weight": None,
+        "proposed_amount": "4000.000000000000",
+        "position": 0,
     }
 
 
@@ -760,16 +857,54 @@ def test_crud_summary_response_accepts_lightweight_shape() -> None:
     data = _valid_response_data()
 
     result = PortfolioSummaryResponse.model_validate(
-        {key: data[key] for key in ("id", "name", "created_at", "updated_at")}
+        {
+            key: data[key]
+            for key in (
+                "id",
+                "name",
+                "portfolio_type",
+                "plan_currency",
+                "created_at",
+                "updated_at",
+            )
+        }
     )
 
     assert result.name == "Core Portfolio"
     assert result.model_dump().keys() == {
         "id",
         "name",
+        "portfolio_type",
+        "plan_currency",
         "created_at",
         "updated_at",
     }
+
+
+def test_planned_allocation_response_preserves_decimal_authority() -> None:
+    result = PortfolioPlannedAllocationResponse.model_validate(
+        {
+            "portfolio_id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
+            "portfolio_type": "PLANNED",
+            "plan_currency": "USD",
+            "total_proposed_amount": "10000.000000000000",
+            "holdings": [
+                {
+                    "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+                    "symbol": "AAPL",
+                    "proposed_amount": "4000.000000000000",
+                    "target_allocation": "0.400000000000000000",
+                    "position": 0,
+                }
+            ],
+        }
+    )
+
+    serialized = result.model_dump(mode="json")
+    assert serialized["total_proposed_amount"] == "10000.000000000000"
+    assert serialized["holdings"][0]["target_allocation"] == (
+        "0.400000000000000000"
+    )
 
 
 def test_crud_summary_response_rejects_unknown_field() -> None:

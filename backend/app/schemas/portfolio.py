@@ -46,6 +46,14 @@ _InvestedCurrency = Annotated[
     Literal["USD", "THB"],
     BeforeValidator(_normalize_invested_currency),
 ]
+_PortfolioType = Annotated[
+    Literal["CURRENT", "PLANNED", "LEGACY"],
+    BeforeValidator(_normalize_invested_currency),
+]
+_CreatablePortfolioType = Annotated[
+    Literal["CURRENT", "PLANNED"],
+    BeforeValidator(_normalize_invested_currency),
+]
 _PositiveNumeric28Scale12 = Annotated[
     Decimal,
     Field(
@@ -72,6 +80,13 @@ class PortfolioRealHoldingInput(AuraBaseModel):
         if value > datetime.now(UTC).date():
             raise ValueError("purchase_date must not be in the future")
         return value
+
+
+class PortfolioPlannedHoldingInput(AuraBaseModel):
+    """One proposed investment amount in the portfolio's plan currency."""
+
+    symbol: AssetSymbol
+    proposed_amount: _PositiveNumeric28Scale12
 
 
 def _normalize_portfolio_name(value: object, *, field_name: str) -> object:
@@ -109,7 +124,7 @@ def _validate_portfolio_holdings(
 
 
 def _validate_unique_holding_symbols(
-    holdings: list[PortfolioRealHoldingInput],
+    holdings: list[PortfolioRealHoldingInput | PortfolioPlannedHoldingInput],
 ) -> None:
     symbols = [holding.symbol for holding in holdings]
     if len(symbols) != len(set(symbols)):
@@ -153,7 +168,18 @@ class _PortfolioNameRequest(AuraBaseModel):
 
 
 class PortfolioCreateRequest(_PortfolioNameRequest):
-    """Create an empty named portfolio draft."""
+    """Create an explicitly current or planned empty portfolio draft."""
+
+    portfolio_type: _CreatablePortfolioType = "CURRENT"
+    plan_currency: _InvestedCurrency | None = None
+
+    @model_validator(mode="after")
+    def validate_type_context(self) -> Self:
+        if self.portfolio_type == "PLANNED" and self.plan_currency is None:
+            raise ValueError("planned portfolios require plan_currency")
+        if self.portfolio_type == "CURRENT" and self.plan_currency is not None:
+            raise ValueError("current portfolios must not define plan_currency")
+        return self
 
 
 class PortfolioUpdateRequest(_PortfolioNameRequest):
@@ -169,6 +195,20 @@ class PortfolioHoldingsReplaceRequest(AuraBaseModel):
 
     holdings: Annotated[
         list[PortfolioRealHoldingInput],
+        Field(min_length=1),
+    ]
+
+    @model_validator(mode="after")
+    def validate_holdings(self) -> Self:
+        _validate_unique_holding_symbols(self.holdings)
+        return self
+
+
+class PortfolioPlannedHoldingsReplaceRequest(AuraBaseModel):
+    """Replace a planned portfolio's complete ordered proposed amounts."""
+
+    holdings: Annotated[
+        list[PortfolioPlannedHoldingInput],
         Field(min_length=1),
     ]
 
@@ -195,6 +235,7 @@ class PortfolioHoldingResponse(AuraBaseModel):
         ),
     ] = None
     invested_amount: _PositiveNumeric28Scale12 | None = None
+    proposed_amount: _PositiveNumeric28Scale12 | None = None
     invested_currency: _InvestedCurrency | None = None
     shares: _PositiveNumeric28Scale12 | None = None
     purchase_date: date | None = None
@@ -211,16 +252,27 @@ class PortfolioHoldingResponse(AuraBaseModel):
             self.shares,
             self.purchase_date,
         )
+        if self.proposed_amount is not None:
+            if self.weight is not None or any(
+                value is not None for value in real_values
+            ):
+                raise ValueError(
+                    "holding response must use exactly one legacy, current, "
+                    "or planned mode"
+                )
+            return self
         if self.weight is not None:
             if any(value is not None for value in real_values):
                 raise ValueError(
-                    "holding response must use exactly one legacy or real mode"
+                    "holding response must use exactly one legacy, current, "
+                    "or planned mode"
                 )
             return self
         if all(value is not None for value in real_values):
             return self
         raise ValueError(
-            "holding response must use exactly one legacy or real mode"
+            "holding response must use exactly one legacy, current, or "
+            "planned mode"
         )
 
     @model_serializer(mode="wrap")
@@ -240,10 +292,19 @@ class PortfolioHoldingResponse(AuraBaseModel):
         }
         if (
             self.weight is not None
-            and not (real_field_names & self.model_fields_set)
+            and not (
+                (real_field_names | {"proposed_amount"})
+                & self.model_fields_set
+            )
         ):
             for field_name in real_field_names:
                 serialized.pop(field_name, None)
+            serialized.pop("proposed_amount", None)
+        elif self.proposed_amount is not None:
+            for field_name in real_field_names:
+                serialized.pop(field_name, None)
+        else:
+            serialized.pop("proposed_amount", None)
         return serialized
 
 
@@ -252,9 +313,40 @@ class PortfolioResponse(AuraBaseModel):
 
     id: UUID
     name: Annotated[str, Strict()]
+    portfolio_type: _PortfolioType = "CURRENT"
+    plan_currency: _InvestedCurrency | None = None
+    source_plan_id: UUID | None = None
     created_at: AwareDatetime
     updated_at: AwareDatetime
     holdings: list[PortfolioHoldingResponse]
+
+    @model_validator(mode="after")
+    def validate_portfolio_type_context(self) -> Self:
+        if self.portfolio_type == "PLANNED":
+            if self.plan_currency is None or self.source_plan_id is not None:
+                raise ValueError("planned portfolio context is incomplete")
+            valid_holdings = all(
+                holding.proposed_amount is not None
+                for holding in self.holdings
+            )
+        elif self.portfolio_type == "CURRENT":
+            if self.plan_currency is not None:
+                raise ValueError("current portfolio must not define plan currency")
+            valid_holdings = all(
+                holding.proposed_amount is None
+                and holding.weight is None
+                and holding.invested_amount is not None
+                for holding in self.holdings
+            )
+        else:
+            if self.plan_currency is not None or self.source_plan_id is not None:
+                raise ValueError("legacy portfolio context is invalid")
+            valid_holdings = all(
+                holding.weight is not None for holding in self.holdings
+            )
+        if not valid_holdings:
+            raise ValueError("holdings do not match portfolio_type")
+        return self
 
 
 class PortfolioSummaryResponse(AuraBaseModel):
@@ -262,8 +354,18 @@ class PortfolioSummaryResponse(AuraBaseModel):
 
     id: UUID
     name: Annotated[str, Strict()]
+    portfolio_type: _PortfolioType = "CURRENT"
+    plan_currency: _InvestedCurrency | None = None
     created_at: AwareDatetime
     updated_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_portfolio_type_context(self) -> Self:
+        if (self.portfolio_type == "PLANNED") != (
+            self.plan_currency is not None
+        ):
+            raise ValueError("plan_currency must match portfolio_type")
+        return self
 
 
 class PortfolioListResponse(AuraBaseModel):
@@ -280,6 +382,29 @@ _AllocationDecimal = Annotated[
     Decimal,
     Field(ge=Decimal("0"), le=Decimal("1"), allow_inf_nan=False),
 ]
+
+
+class PortfolioPlannedAllocationHoldingResponse(AuraBaseModel):
+    """One backend-derived target allocation in saved holding order."""
+
+    id: UUID
+    symbol: AssetSymbol
+    proposed_amount: _PositiveNumeric28Scale12
+    target_allocation: _AllocationDecimal
+    position: Annotated[int, Field(strict=True, ge=0)]
+
+
+class PortfolioPlannedAllocationResponse(AuraBaseModel):
+    """Canonical target allocation derived without market prices or FX."""
+
+    portfolio_id: UUID
+    portfolio_type: Literal["PLANNED"]
+    plan_currency: _InvestedCurrency
+    total_proposed_amount: _PositiveValuationDecimal
+    holdings: Annotated[
+        list[PortfolioPlannedAllocationHoldingResponse],
+        Field(min_length=1),
+    ]
 
 
 class PortfolioValuationFxResponse(AuraBaseModel):

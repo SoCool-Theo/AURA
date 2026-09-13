@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy.orm import Session
 
-from backend.app.database.models import Holding, Portfolio
+from backend.app.database.models import Holding, Portfolio, PortfolioType
 import backend.app.services.portfolio_service as service_module
 from backend.app.services.portfolio_service import PortfolioService
 
@@ -34,12 +34,18 @@ def _portfolio(
     *,
     name: str = "Core",
     portfolio_id: UUID | None = None,
+    portfolio_type: str | None = None,
+    plan_currency: str | None = None,
 ) -> Portfolio:
-    return Portfolio(
+    portfolio = Portfolio(
         id=portfolio_id or uuid4(),
         user_id=user_id,
         name=name,
+        plan_currency=plan_currency,
     )
+    if portfolio_type is not None:
+        portfolio.portfolio_type = portfolio_type
+    return portfolio
 
 
 def _service_with_repository() -> tuple[
@@ -102,6 +108,8 @@ def test_phase3_create_delegates_owner_and_name_without_lifecycle_calls() -> Non
     repository.create.assert_called_once_with(
         user_id=user_id,
         name="  Approved upstream  ",
+        portfolio_type="CURRENT",
+        plan_currency=None,
     )
     _assert_session_lifecycle_untouched(session)
 
@@ -322,6 +330,69 @@ def test_phase6_replace_holdings_propagates_repository_value_error() -> None:
     _assert_session_lifecycle_untouched(session)
 
 
+def test_planned_holding_replacement_preserves_amounts_and_order() -> None:
+    service, session, repository, _ = _service_with_repository()
+    user_id = uuid4()
+    portfolio = _portfolio(
+        user_id,
+        portfolio_type=PortfolioType.PLANNED.value,
+        plan_currency="USD",
+    )
+    repository.get_with_holdings.return_value = portfolio
+    replacements = [
+        ("AAPL", Decimal("4000.000000000000")),
+        ("MSFT", Decimal("6000.000000000000")),
+    ]
+
+    result = service.replace_planned_holdings(
+        user_id=user_id,
+        portfolio_id=portfolio.id,
+        holdings=replacements,
+    )
+
+    assert result is portfolio
+    repository.replace_planned_holdings.assert_called_once_with(
+        portfolio.id,
+        tuple(replacements),
+    )
+    repository.replace_real_holdings.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_current_and_planned_replacements_reject_mode_mismatch() -> None:
+    service, session, repository, _ = _service_with_repository()
+    user_id = uuid4()
+    planned = _portfolio(
+        user_id,
+        portfolio_type=PortfolioType.PLANNED.value,
+        plan_currency="USD",
+    )
+    repository.get_with_holdings.return_value = planned
+
+    with pytest.raises(service_module.PortfolioTypeConflictError):
+        service.replace_holdings(
+            user_id=user_id,
+            portfolio_id=planned.id,
+            holdings=[_real_replacement()],
+        )
+
+    current = _portfolio(
+        user_id,
+        portfolio_type=PortfolioType.CURRENT.value,
+    )
+    repository.get_with_holdings.return_value = current
+    with pytest.raises(service_module.PortfolioTypeConflictError):
+        service.replace_planned_holdings(
+            user_id=user_id,
+            portfolio_id=current.id,
+            holdings=[("AAPL", Decimal("1000"))],
+        )
+
+    repository.replace_real_holdings.assert_not_called()
+    repository.replace_planned_holdings.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
 def test_phase3_duplicate_populated_portfolio_preserves_exact_holdings() -> None:
     service, session, repository, _ = _service_with_repository()
     user_id = uuid4()
@@ -399,7 +470,12 @@ def test_phase3_duplicate_populated_portfolio_preserves_exact_holdings() -> None
         (holding.id, holding.symbol, holding.weight, holding.position)
         for holding in source.holdings
     ] == source_snapshot
-    repository.create.assert_called_once_with(user_id=user_id, name="Copy")
+    repository.create.assert_called_once_with(
+        user_id=user_id,
+        name="Copy",
+        portfolio_type="LEGACY",
+        plan_currency=None,
+    )
     repository.replace_real_holdings.assert_not_called()
     _assert_session_lifecycle_untouched(session)
 
@@ -539,6 +615,66 @@ def test_phase6_duplicate_real_portfolio_preserves_mode_facts_and_order() -> Non
     _assert_session_lifecycle_untouched(session)
 
 
+def test_step3_duplicate_planned_portfolio_preserves_amounts_and_currency(
+) -> None:
+    service, session, repository, _ = _service_with_repository()
+    user_id = uuid4()
+    source = _portfolio(
+        user_id,
+        name="Plan Source",
+        portfolio_type=PortfolioType.PLANNED.value,
+        plan_currency="THB",
+    )
+    source.holdings.extend(
+        [
+            Holding(
+                id=uuid4(),
+                symbol="AAPL",
+                proposed_amount=Decimal("4000.000000000000"),
+                position=0,
+            ),
+            Holding(
+                id=uuid4(),
+                symbol="BND",
+                proposed_amount=Decimal("1000.000000000000"),
+                position=1,
+            ),
+        ]
+    )
+    duplicate = _portfolio(
+        user_id,
+        name="Plan Copy",
+        portfolio_type=PortfolioType.PLANNED.value,
+        plan_currency="THB",
+    )
+    repository.get_with_holdings.return_value = source
+    repository.create.return_value = duplicate
+
+    result = service.duplicate(
+        user_id=user_id,
+        portfolio_id=source.id,
+        name="Plan Copy",
+    )
+
+    assert result is duplicate
+    repository.create.assert_called_once_with(
+        user_id=user_id,
+        name="Plan Copy",
+        portfolio_type="PLANNED",
+        plan_currency="THB",
+    )
+    repository.replace_planned_holdings.assert_called_once_with(
+        duplicate.id,
+        (
+            ("AAPL", Decimal("4000.000000000000")),
+            ("BND", Decimal("1000.000000000000")),
+        ),
+    )
+    repository.replace_real_holdings.assert_not_called()
+    repository.replace_holdings.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
 def test_phase3_duplicate_empty_source_skips_holding_replacement() -> None:
     service, _, repository, _ = _service_with_repository()
     user_id = uuid4()
@@ -666,7 +802,12 @@ def test_phase3_duplicate_copy_failure_propagates_without_transaction_calls() ->
         )
 
     assert raised.value is failure
-    repository.create.assert_called_once_with(user_id=user_id, name="Copy")
+    repository.create.assert_called_once_with(
+        user_id=user_id,
+        name="Copy",
+        portfolio_type="LEGACY",
+        plan_currency=None,
+    )
     _assert_session_lifecycle_untouched(session)
 
 

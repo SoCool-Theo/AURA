@@ -250,12 +250,14 @@ it is not a portfolio-wide `503` because estimates are non-authoritative.
 
 ## Delivery sequence
 
-1. Add and verify the database discriminator, planned fields, constraints, and
+1. Freeze the planned-portfolio product, data, API, and provenance contract.
+2. Add and verify the database discriminator, planned fields, constraints, and
    compatibility backfill.
-2. Add type-aware portfolio CRUD and planned allocation/preview contracts.
-3. Extend the shared baseline resolver and analysis composition.
-4. Add immutable planned report and simulation snapshot variants.
-5. Add mode-aware AI grounding.
-6. Integrate customer mobile and web workflows.
-7. Run migration, rollback, privacy, immutability, and full regression
+3. Add type-aware portfolio CRUD and price-independent target allocation.
+4. Add optional estimated-share preview, then extend the shared baseline
+   resolver and analysis composition.
+5. Add immutable planned report and simulation snapshot variants.
+6. Add mode-aware AI grounding.
+7. Integrate customer mobile and web workflows.
+8. Run migration, rollback, privacy, immutability, and full regression
    verification before deployment readiness is claimed.

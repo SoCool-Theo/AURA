@@ -14,9 +14,14 @@ import app.api.dependencies as dependency_module
 import app.api.routes.portfolio as route_module
 from app.core.config import settings
 from app.core.security import create_access_token
-from app.database.models import Holding, Portfolio, User
+from app.database.models import Holding, Portfolio, PortfolioType, User
 from app.main import app
 from app.services.market_data_service import MarketDataUnavailableError
+from app.services.portfolio_planned_allocation_service import (
+    InvalidPlannedPortfolioError,
+    PlannedAllocationHolding,
+    PlannedPortfolioAllocation,
+)
 from app.services.portfolio_valuation_service import (
     HoldingValuationResult,
     InvalidHoldingModeError,
@@ -41,6 +46,7 @@ class ApiHarness:
     session: MagicMock
     service: MagicMock
     valuation_service: MagicMock
+    planned_allocation_service: MagicMock
     session_factory: MagicMock
 
 
@@ -64,14 +70,20 @@ def _portfolio(
     *,
     portfolio_id: UUID = PORTFOLIO_ID,
     name: str = "Core Portfolio",
+    portfolio_type: PortfolioType | None = None,
+    plan_currency: str | None = None,
 ) -> Portfolio:
-    return Portfolio(
+    portfolio = Portfolio(
         id=portfolio_id,
         user_id=OWNER_ID,
         name=name,
+        plan_currency=plan_currency,
         created_at=CREATED_AT,
         updated_at=UPDATED_AT,
     )
+    if portfolio_type is not None:
+        portfolio.portfolio_type = portfolio_type.value
+    return portfolio
 
 
 def _real_holding(
@@ -107,6 +119,21 @@ def _real_request_holding(
     if invested_currency is not None:
         result["invested_currency"] = invested_currency
     return result
+
+
+def _planned_holding(
+    symbol: str = "AAPL",
+    *,
+    position: int = 0,
+    proposed_amount: str = "4000.000000000000",
+) -> Holding:
+    return Holding(
+        id=UUID(f"43000000-0000-0000-0000-{position + 1:012d}"),
+        portfolio_id=PORTFOLIO_ID,
+        symbol=symbol,
+        proposed_amount=Decimal(proposed_amount),
+        position=position,
+    )
 
 
 def _valuation_result(
@@ -162,6 +189,9 @@ def api_harness() -> ApiHarness:
     valuation_service = MagicMock(
         spec=route_module.PortfolioValuationService
     )
+    planned_allocation_service = MagicMock(
+        spec=route_module.PortfolioPlannedAllocationService
+    )
 
     with (
         patch.object(
@@ -179,6 +209,11 @@ def api_harness() -> ApiHarness:
             "PortfolioValuationService",
             return_value=valuation_service,
         ),
+        patch.object(
+            route_module,
+            "PortfolioPlannedAllocationService",
+            return_value=planned_allocation_service,
+        ),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
         yield ApiHarness(
@@ -186,6 +221,7 @@ def api_harness() -> ApiHarness:
             session=session,
             service=service,
             valuation_service=valuation_service,
+            planned_allocation_service=planned_allocation_service,
             session_factory=session_factory,
         )
 
@@ -310,6 +346,9 @@ def test_phase4_create_returns_valid_empty_portfolio_and_commits_once(
     assert response.json() == {
         "id": str(PORTFOLIO_ID),
         "name": "Core Portfolio",
+        "portfolio_type": "CURRENT",
+        "plan_currency": None,
+        "source_plan_id": None,
         "created_at": "2026-08-17T02:30:00Z",
         "updated_at": "2026-08-17T03:45:00Z",
         "holdings": [],
@@ -318,10 +357,79 @@ def test_phase4_create_returns_valid_empty_portfolio_and_commits_once(
     api_harness.service.create.assert_called_once_with(
         user_id=OWNER_ID,
         name="Core Portfolio",
+        portfolio_type="CURRENT",
+        plan_currency=None,
     )
     api_harness.session.commit.assert_called_once_with()
     api_harness.session.rollback.assert_not_called()
     api_harness.session.close.assert_called_once_with()
+
+
+def test_step3_create_planned_portfolio_normalizes_type_and_currency(
+    api_harness: ApiHarness,
+) -> None:
+    created = _portfolio(
+        name="Future Plan",
+        portfolio_type=PortfolioType.PLANNED,
+        plan_currency="THB",
+    )
+    api_harness.service.create.return_value = created
+
+    response = api_harness.client.post(
+        "/api/portfolios",
+        headers=REQUEST_HEADERS,
+        json={
+            "name": "  Future Plan  ",
+            "portfolio_type": "planned",
+            "plan_currency": " thb ",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "id": str(PORTFOLIO_ID),
+        "name": "Future Plan",
+        "portfolio_type": "PLANNED",
+        "plan_currency": "THB",
+        "source_plan_id": None,
+        "created_at": "2026-08-17T02:30:00Z",
+        "updated_at": "2026-08-17T03:45:00Z",
+        "holdings": [],
+    }
+    api_harness.service.create.assert_called_once_with(
+        user_id=OWNER_ID,
+        name="Future Plan",
+        portfolio_type="PLANNED",
+        plan_currency="THB",
+    )
+    api_harness.session.commit.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"name": "Plan", "portfolio_type": "PLANNED"},
+        {
+            "name": "Current",
+            "portfolio_type": "CURRENT",
+            "plan_currency": "USD",
+        },
+        {"name": "Legacy", "portfolio_type": "LEGACY"},
+    ],
+)
+def test_step3_create_rejects_invalid_or_legacy_type_context(
+    api_harness: ApiHarness,
+    payload: dict[str, object],
+) -> None:
+    response = api_harness.client.post(
+        "/api/portfolios",
+        headers=REQUEST_HEADERS,
+        json=payload,
+    )
+
+    assert response.status_code == 422
+    api_harness.service.create.assert_not_called()
+    api_harness.session.commit.assert_not_called()
 
 
 def test_phase4_create_body_validation_prevents_service_write(
@@ -604,6 +712,146 @@ def test_phase4_get_failure_is_not_relabelled_as_missing(
     assert "sensitive retrieval failure" not in response.text
     api_harness.session.commit.assert_not_called()
     api_harness.session.rollback.assert_called_once_with()
+
+
+def test_step3_planned_allocation_returns_backend_derived_weights_read_only(
+    api_harness: ApiHarness,
+) -> None:
+    portfolio = _portfolio(
+        portfolio_type=PortfolioType.PLANNED,
+        plan_currency="USD",
+    )
+    holdings = [
+        _planned_holding("AAPL", position=0, proposed_amount="4000"),
+        _planned_holding("BND", position=1, proposed_amount="1000"),
+    ]
+    portfolio.holdings.extend(holdings)
+    api_harness.service.get.return_value = portfolio
+    api_harness.planned_allocation_service.resolve.return_value = (
+        PlannedPortfolioAllocation(
+            portfolio_id=PORTFOLIO_ID,
+            plan_currency="USD",
+            total_proposed_amount=Decimal("5000"),
+            holdings=(
+                PlannedAllocationHolding(
+                    holding_id=holdings[0].id,
+                    symbol="AAPL",
+                    proposed_amount=Decimal("4000"),
+                    target_allocation=Decimal("0.800000000000000000"),
+                    position=0,
+                ),
+                PlannedAllocationHolding(
+                    holding_id=holdings[1].id,
+                    symbol="BND",
+                    proposed_amount=Decimal("1000"),
+                    target_allocation=Decimal("0.200000000000000000"),
+                    position=1,
+                ),
+            ),
+        )
+    )
+
+    response = api_harness.client.get(
+        f"/api/portfolios/{PORTFOLIO_ID}/planned-allocation",
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "portfolio_id": str(PORTFOLIO_ID),
+        "portfolio_type": "PLANNED",
+        "plan_currency": "USD",
+        "total_proposed_amount": "5000",
+        "holdings": [
+            {
+                "id": str(holdings[0].id),
+                "symbol": "AAPL",
+                "proposed_amount": "4000",
+                "target_allocation": "0.800000000000000000",
+                "position": 0,
+            },
+            {
+                "id": str(holdings[1].id),
+                "symbol": "BND",
+                "proposed_amount": "1000",
+                "target_allocation": "0.200000000000000000",
+                "position": 1,
+            },
+        ],
+    }
+    api_harness.service.get.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+    )
+    api_harness.planned_allocation_service.resolve.assert_called_once_with(
+        portfolio
+    )
+    api_harness.valuation_service.value.assert_not_called()
+    api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("resource_state", ["missing", "wrong-owner"])
+def test_step3_planned_allocation_preserves_owner_scoped_404(
+    api_harness: ApiHarness,
+    resource_state: str,
+) -> None:
+    api_harness.service.get.return_value = None
+
+    response = api_harness.client.get(
+        f"/api/portfolios/{PORTFOLIO_ID}/planned-allocation",
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Portfolio not found"}
+    api_harness.planned_allocation_service.resolve.assert_not_called()
+    api_harness.session.commit.assert_not_called()
+
+
+def test_step3_planned_allocation_invalid_mode_is_sanitized_conflict(
+    api_harness: ApiHarness,
+) -> None:
+    portfolio = _portfolio(portfolio_type=PortfolioType.CURRENT)
+    api_harness.service.get.return_value = portfolio
+    api_harness.planned_allocation_service.resolve.side_effect = (
+        InvalidPlannedPortfolioError("sensitive mixed holding detail")
+    )
+
+    response = api_harness.client.get(
+        f"/api/portfolios/{PORTFOLIO_ID}/planned-allocation",
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Portfolio cannot provide a planned allocation"
+    }
+    assert "sensitive mixed holding detail" not in response.text
+    api_harness.session.commit.assert_not_called()
+
+
+def test_step3_planned_allocation_unexpected_failure_is_sanitized_500(
+    api_harness: ApiHarness,
+) -> None:
+    api_harness.service.get.return_value = _portfolio(
+        portfolio_type=PortfolioType.PLANNED,
+        plan_currency="USD",
+    )
+    api_harness.planned_allocation_service.resolve.side_effect = RuntimeError(
+        "sensitive resolver failure"
+    )
+
+    response = api_harness.client.get(
+        f"/api/portfolios/{PORTFOLIO_ID}/planned-allocation",
+        headers=REQUEST_HEADERS,
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Unable to resolve planned allocation"
+    }
+    assert "sensitive resolver failure" not in response.text
+    api_harness.session.commit.assert_not_called()
 
 
 def test_phase6_valuation_requires_bearer_authentication(
@@ -899,6 +1147,9 @@ def test_phase5_rename_returns_full_response_and_commits_once(
     assert response.json() == {
         "id": str(PORTFOLIO_ID),
         "name": "Renamed Portfolio",
+        "portfolio_type": "CURRENT",
+        "plan_currency": None,
+        "source_plan_id": None,
         "created_at": "2026-08-17T02:30:00Z",
         "updated_at": "2026-08-17T03:45:00Z",
         "holdings": [],
@@ -1040,6 +1291,95 @@ def test_phase6_replace_holdings_uses_real_facts_order_and_commits_once(
     )
     api_harness.session.commit.assert_called_once_with()
     api_harness.session.rollback.assert_not_called()
+
+
+def test_step3_replace_planned_holdings_uses_proposed_amounts_only(
+    api_harness: ApiHarness,
+) -> None:
+    updated = _portfolio(
+        portfolio_type=PortfolioType.PLANNED,
+        plan_currency="USD",
+    )
+    updated.holdings.extend(
+        [
+            _planned_holding("AAPL", position=0, proposed_amount="4000"),
+            _planned_holding("BND", position=1, proposed_amount="1000"),
+        ]
+    )
+    api_harness.service.replace_planned_holdings.return_value = updated
+
+    response = api_harness.client.put(
+        f"/api/portfolios/{PORTFOLIO_ID}/holdings",
+        headers=REQUEST_HEADERS,
+        json={
+            "holdings": [
+                {"symbol": " aapl ", "proposed_amount": "4000"},
+                {"symbol": "bnd", "proposed_amount": "1000"},
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["portfolio_type"] == "PLANNED"
+    assert response.json()["plan_currency"] == "USD"
+    assert response.json()["holdings"] == [
+        {
+            "id": "43000000-0000-0000-0000-000000000001",
+            "symbol": "AAPL",
+            "weight": None,
+            "proposed_amount": "4000",
+            "position": 0,
+        },
+        {
+            "id": "43000000-0000-0000-0000-000000000002",
+            "symbol": "BND",
+            "weight": None,
+            "proposed_amount": "1000",
+            "position": 1,
+        },
+    ]
+    api_harness.service.replace_planned_holdings.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        holdings=[
+            ("AAPL", Decimal("4000")),
+            ("BND", Decimal("1000")),
+        ],
+    )
+    api_harness.service.replace_holdings.assert_not_called()
+    api_harness.session.commit.assert_called_once_with()
+
+
+@pytest.mark.parametrize("request_mode", ["current", "planned"])
+def test_step3_replace_holdings_reports_type_conflict_without_details(
+    api_harness: ApiHarness,
+    request_mode: str,
+) -> None:
+    error = route_module.PortfolioTypeConflictError(
+        "sensitive persisted portfolio mode"
+    )
+    if request_mode == "planned":
+        api_harness.service.replace_planned_holdings.side_effect = error
+        payload = {
+            "holdings": [{"symbol": "AAPL", "proposed_amount": "1000"}]
+        }
+    else:
+        api_harness.service.replace_holdings.side_effect = error
+        payload = {"holdings": [_real_request_holding()]}
+
+    response = api_harness.client.put(
+        f"/api/portfolios/{PORTFOLIO_ID}/holdings",
+        headers=REQUEST_HEADERS,
+        json=payload,
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Holding input does not match portfolio type"
+    }
+    assert "sensitive persisted portfolio mode" not in response.text
+    api_harness.session.commit.assert_not_called()
+    api_harness.session.rollback.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
@@ -1356,6 +1696,7 @@ def test_phase6_openapi_exposes_only_approved_portfolio_contract_changes() -> No
     expected_crud_operations = {
         "/api/portfolios": {"get", "post"},
         "/api/portfolios/{portfolio_id}": {"delete", "get", "patch"},
+        "/api/portfolios/{portfolio_id}/planned-allocation": {"get"},
         "/api/portfolios/{portfolio_id}/valuation": {"get"},
         "/api/portfolios/{portfolio_id}/holdings": {"put"},
         "/api/portfolios/{portfolio_id}/duplicate": {"post"},
@@ -1368,7 +1709,21 @@ def test_phase6_openapi_exposes_only_approved_portfolio_contract_changes() -> No
     assert replace_operation["requestBody"]["content"][
         "application/json"
     ]["schema"] == {
-        "$ref": "#/components/schemas/PortfolioHoldingsReplaceRequest"
+        "anyOf": [
+            {
+                "$ref": (
+                    "#/components/schemas/"
+                    "PortfolioHoldingsReplaceRequest"
+                )
+            },
+            {
+                "$ref": (
+                    "#/components/schemas/"
+                    "PortfolioPlannedHoldingsReplaceRequest"
+                )
+            },
+        ],
+        "title": "Request",
     }
     replacement_schema = schema["components"]["schemas"][
         "PortfolioHoldingsReplaceRequest"
@@ -1385,6 +1740,29 @@ def test_phase6_openapi_exposes_only_approved_portfolio_contract_changes() -> No
         "invested_currency",
         "shares",
         "purchase_date",
+    }
+    planned_replacement_schema = schema["components"]["schemas"][
+        "PortfolioPlannedHoldingsReplaceRequest"
+    ]
+    assert planned_replacement_schema["properties"]["holdings"][
+        "items"
+    ] == {
+        "$ref": "#/components/schemas/PortfolioPlannedHoldingInput"
+    }
+    planned_holding_schema = schema["components"]["schemas"][
+        "PortfolioPlannedHoldingInput"
+    ]
+    assert set(planned_holding_schema["properties"]) == {
+        "symbol",
+        "proposed_amount",
+    }
+    planned_allocation_operation = schema["paths"][
+        "/api/portfolios/{portfolio_id}/planned-allocation"
+    ]["get"]
+    assert planned_allocation_operation["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {
+        "$ref": "#/components/schemas/PortfolioPlannedAllocationResponse"
     }
     valuation_operation = schema["paths"][
         "/api/portfolios/{portfolio_id}/valuation"
