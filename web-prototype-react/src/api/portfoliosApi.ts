@@ -4,7 +4,6 @@ import type {
   PortfolioCurrency,
   PortfolioDuplicateRequest,
   PortfolioHoldingsReplaceRequest,
-  PortfolioLegacyHoldingsReplaceRequest,
   PortfolioListResponse,
   PortfolioPlannedAllocationResponse,
   PortfolioPlannedHoldingInput,
@@ -83,17 +82,6 @@ export function updatePortfolio(
   return apiRequest<PortfolioResponse, PortfolioUpdateRequest>(
     portfolioPath(portfolioId),
     { ...options, method: 'PATCH', body: request },
-  );
-}
-
-export function replacePortfolioHoldings(
-  portfolioId: Uuid,
-  request: PortfolioLegacyHoldingsReplaceRequest,
-  options: ApiCallOptions = {},
-): Promise<PortfolioResponse> {
-  return apiRequest<PortfolioResponse, PortfolioLegacyHoldingsReplaceRequest>(
-    `${portfolioPath(portfolioId)}/holdings`,
-    { ...options, method: 'PUT', body: request },
   );
 }
 

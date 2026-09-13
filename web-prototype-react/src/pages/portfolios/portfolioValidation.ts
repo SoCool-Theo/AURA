@@ -1,6 +1,8 @@
 import type {
   PortfolioCurrency,
+  PortfolioPlannedHoldingResponse,
   PortfolioPlannedHoldingInput,
+  PortfolioRealHoldingResponse,
   PortfolioRealHoldingInput,
 } from '../../types/portfolio';
 
@@ -39,6 +41,31 @@ export function createPlannedHoldingDraft(id: number): PlannedHoldingDraft {
     id,
     symbol: '',
     proposedAmount: '',
+  };
+}
+
+export function realHoldingToDraft(
+  id: number,
+  holding: PortfolioRealHoldingResponse,
+): RealHoldingDraft {
+  return {
+    id,
+    symbol: holding.symbol,
+    investedAmount: holding.invested_amount,
+    investedCurrency: holding.invested_currency,
+    shares: holding.shares,
+    purchaseDate: holding.purchase_date,
+  };
+}
+
+export function plannedHoldingToDraft(
+  id: number,
+  holding: PortfolioPlannedHoldingResponse,
+): PlannedHoldingDraft {
+  return {
+    id,
+    symbol: holding.symbol,
+    proposedAmount: holding.proposed_amount,
   };
 }
 

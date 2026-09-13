@@ -1,51 +1,74 @@
 import { useEffect, useRef, useState } from 'react';
-import { replacePortfolioHoldings } from '../../../api/portfoliosApi';
-import { Card } from '../../../components/ui/Card';
 import {
-  isLegacyPortfolioHolding,
+  replacePlannedPortfolioHoldings,
+  replaceRealPortfolioHoldings,
+} from '../../../api/portfoliosApi';
+import { Card } from '../../../components/ui/Card';
+import { Icon } from '../../../components/ui/Icon';
+import {
+  isPlannedPortfolioHolding,
+  isRealPortfolioHolding,
+  portfolioHoldingMode,
+  type PortfolioCurrency,
+  type PortfolioHoldingMode,
+  type PortfolioPlannedHoldingInput,
+  type PortfolioRealHoldingInput,
   type PortfolioResponse,
 } from '../../../types/portfolio';
 import styles from '../PortfolioIntegration.module.css';
+import { portfolioErrorMessage } from '../portfolioUi';
 import {
-  displayPercentage,
-  portfolioErrorMessage,
-  requestWeight,
-} from '../portfolioUi';
+  createPlannedHoldingDraft,
+  createRealHoldingDraft,
+  plannedHoldingToDraft,
+  realHoldingToDraft,
+  type PlannedHoldingDraft,
+  type RealHoldingDraft,
+  validatePlannedHoldingDrafts,
+  validateRealHoldingDrafts,
+} from '../portfolioValidation';
 
-type EditableHolding = {
-  id: number;
-  symbol: string;
-  percentage: string;
-};
+type EditableHolding = RealHoldingDraft | PlannedHoldingDraft;
 
-function editableHoldings(portfolio: PortfolioResponse): EditableHolding[] {
-  if (!portfolio.holdings.length) {
-    return [{ id: 0, symbol: '', percentage: '100' }];
-  }
-  return portfolio.holdings.map((holding, index) => ({
-    id: index,
-    symbol: holding.symbol,
-    percentage: isLegacyPortfolioHolding(holding)
-      ? displayPercentage(holding.weight)
-      : '',
-  }));
+function editorMode(portfolio: PortfolioResponse): PortfolioHoldingMode {
+  if (portfolio.portfolio_type === 'PLANNED') return 'planned';
+  if (portfolio.portfolio_type === 'LEGACY') return 'legacy';
+  const detected = portfolioHoldingMode(portfolio.holdings);
+  return detected === 'empty' ? 'real' : detected;
 }
 
-function validationError(holdings: EditableHolding[]): string | null {
-  if (!holdings.length) return 'Add at least one holding.';
-  if (holdings.some(holding => !holding.symbol.trim())) {
-    return 'Enter a symbol for every holding.';
-  }
+function editableHoldings(portfolio: PortfolioResponse): EditableHolding[] {
+  const planned = portfolio.portfolio_type === 'PLANNED';
+  const rows = portfolio.holdings.map((holding, index) => {
+    if (planned && isPlannedPortfolioHolding(holding)) {
+      return plannedHoldingToDraft(index, holding);
+    }
+    if (!planned && isRealPortfolioHolding(holding)) {
+      return realHoldingToDraft(index, holding);
+    }
 
-  const percentages = holdings.map(holding => Number(holding.percentage));
-  if (percentages.some(weight => !Number.isFinite(weight) || weight < 0 || weight > 100)) {
-    return 'Each allocation must be a number from 0% to 100%.';
+    const draft = planned
+      ? createPlannedHoldingDraft(index)
+      : createRealHoldingDraft(index);
+    draft.symbol = holding.symbol;
+    return draft;
+  });
+
+  if (!rows.length) {
+    rows.push(planned
+      ? createPlannedHoldingDraft(0)
+      : createRealHoldingDraft(0));
   }
-  const total = percentages.reduce((sum, weight) => sum + weight, 0);
-  if (Math.abs(total - 100) > 1e-7) {
-    return `Displayed allocations total ${Number(total.toFixed(10))}%; they must total 100%.`;
-  }
-  return null;
+  return rows;
+}
+
+function todayInputValue(): string {
+  const today = new Date();
+  return [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 
 type PortfolioHoldingsEditorProps = {
@@ -57,13 +80,13 @@ export function PortfolioHoldingsEditor({
   portfolio,
   onSaved,
 }: PortfolioHoldingsEditorProps) {
+  const mode = editorMode(portfolio);
+  const planned = mode === 'planned';
   const nextId = useRef(portfolio.holdings.length || 1);
   const [holdings, setHoldings] = useState(() => editableHoldings(portfolio));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const totalPercentage = holdings.reduce((sum, holding) => (
-    sum + (Number(holding.percentage) || 0)
-  ), 0);
+  const maximumPurchaseDate = todayInputValue();
 
   useEffect(() => {
     setHoldings(editableHoldings(portfolio));
@@ -87,24 +110,29 @@ export function PortfolioHoldingsEditor({
 
   async function save() {
     if (saving) return;
-    const invalid = validationError(holdings);
-    if (invalid) {
-      setError(invalid);
+    const validation = planned
+      ? validatePlannedHoldingDrafts(holdings as PlannedHoldingDraft[])
+      : validateRealHoldingDrafts(holdings as RealHoldingDraft[]);
+    if (!validation.holdings) {
+      setError(validation.error);
       return;
     }
 
     setSaving(true);
     setError(null);
     try {
-      const updated = await replacePortfolioHoldings(portfolio.id, {
-        holdings: holdings.map(holding => ({
-          symbol: holding.symbol.trim(),
-          weight: requestWeight(holding.percentage),
-        })),
-      });
+      const updated = planned
+        ? await replacePlannedPortfolioHoldings(
+          portfolio.id,
+          validation.holdings as PortfolioPlannedHoldingInput[],
+        )
+        : await replaceRealPortfolioHoldings(
+          portfolio.id,
+          validation.holdings as PortfolioRealHoldingInput[],
+        );
       onSaved(updated);
     } catch (requestError) {
-      setError(portfolioErrorMessage(requestError, 'Unable to replace portfolio holdings.'));
+      setError(portfolioErrorMessage(requestError, 'Unable to save portfolio holdings.'));
     } finally {
       setSaving(false);
     }
@@ -114,22 +142,69 @@ export function PortfolioHoldingsEditor({
     <div className="detail-tab-panel">
       <Card className="detail-section-card">
         <div className="detail-section-header">
-          <div><h2>Complete Holdings Replacement</h2><p>Saving replaces the entire ordered allocation. Symbols are entered manually.</p></div>
-          <div className={`allocation-total-badge ${Math.abs(totalPercentage - 100) <= 1e-7 ? 'valid' : 'invalid'}`}>
-            <small>Total allocation</small><strong>{Number(totalPercentage.toFixed(10))}%</strong>
+          <div>
+            <h2>{planned ? 'Edit Planned Holdings' : 'Edit Current Holdings'}</h2>
+            <p>{planned
+              ? `Update the complete ordered list of proposed investments in ${portfolio.plan_currency ?? 'USD'}.`
+              : 'Update the complete ordered list of investments you own.'}</p>
           </div>
+          <div className={styles.portfolioTypeBadge}>{planned ? 'Planned' : 'Current'}</div>
         </div>
+
+        {mode === 'legacy' && (
+          <div className={styles.conversionNotice} role="note">
+            <strong>Convert legacy allocation</strong>
+            <p>Enter complete ownership details for every saved symbol. Saving replaces the old manual percentages with current holdings.</p>
+          </div>
+        )}
+
+        {mode === 'mixed' && (
+          <div className={styles.conversionNotice} role="alert">
+            <strong>Holding details need correction</strong>
+            <p>Enter complete current holding details for every symbol before saving.</p>
+          </div>
+        )}
 
         {error && <p className={styles.error} role="alert">{error}</p>}
 
         <div className="table-scroll">
           <table className={styles.holdingTable}>
-            <thead><tr><th>Order</th><th>Symbol</th><th>Allocation (%)</th><th>Actions</th></tr></thead>
+            <thead><tr>
+              <th>Order</th>
+              <th>Symbol</th>
+              {planned ? (
+                <th>Proposed Amount ({portfolio.plan_currency ?? 'USD'})</th>
+              ) : <>
+                <th>Invested Amount</th>
+                <th>Currency</th>
+                <th>Shares Owned</th>
+                <th>Purchase Date</th>
+              </>}
+              <th>Actions</th>
+            </tr></thead>
             <tbody>{holdings.map((holding, index) => (
               <tr key={holding.id}>
                 <td>{index + 1}</td>
                 <td><input aria-label={`Holding ${index + 1} symbol`} value={holding.symbol} onChange={event => updateHolding(holding.id, { symbol: event.target.value })} disabled={saving} /></td>
-                <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} allocation percentage`} type="number" min="0" max="100" step="0.01" value={holding.percentage} onChange={event => updateHolding(holding.id, { percentage: event.target.value })} disabled={saving} /></td>
+                {planned && 'proposedAmount' in holding ? (
+                  <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} proposed amount`} inputMode="decimal" value={holding.proposedAmount} onChange={event => updateHolding(holding.id, { proposedAmount: event.target.value })} placeholder="4000.00" disabled={saving} /></td>
+                ) : 'investedAmount' in holding ? <>
+                  <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} invested amount`} inputMode="decimal" value={holding.investedAmount} onChange={event => updateHolding(holding.id, { investedAmount: event.target.value })} placeholder="1000.00" disabled={saving} /></td>
+                  <td>
+                    <select aria-label={`${holding.symbol || `Holding ${index + 1}`} invested currency`} value={holding.investedCurrency} onChange={event => updateHolding(holding.id, { investedCurrency: event.target.value as PortfolioCurrency })} disabled={saving}>
+                      <option value="USD">USD</option>
+                      <option value="THB">THB</option>
+                    </select>
+                  </td>
+                  <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} shares owned`} inputMode="decimal" value={holding.shares} onChange={event => updateHolding(holding.id, { shares: event.target.value })} placeholder="10.5" disabled={saving} /></td>
+                  <td>
+                    <label className={styles.dateField}>
+                      <span className="sr-only">{holding.symbol || `Holding ${index + 1}`} purchase date</span>
+                      <input aria-label={`${holding.symbol || `Holding ${index + 1}`} purchase date`} type="date" max={maximumPurchaseDate} value={holding.purchaseDate} onChange={event => updateHolding(holding.id, { purchaseDate: event.target.value })} disabled={saving} />
+                      <Icon name="calendar" size={17} />
+                    </label>
+                  </td>
+                </> : null}
                 <td><div className={styles.orderActions}>
                   <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={saving || index === 0}>↑</button>
                   <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={saving || index === holdings.length - 1}>↓</button>
@@ -141,15 +216,28 @@ export function PortfolioHoldingsEditor({
         </div>
 
         <div className="detail-section-footer">
-          <p>Displayed percentages are divided by 100 once at the request boundary. Backend normalization and validation remain authoritative.</p>
+          <p>{planned
+            ? 'Target allocation is calculated automatically from the proposed amounts. Estimated shares are display-only.'
+            : 'Current allocation is calculated automatically after Aura values the saved shares.'}</p>
           <div className={styles.editorActions}>
             <button className="secondary-btn" disabled={saving} onClick={() => {
               const id = nextId.current;
               nextId.current += 1;
-              setHoldings(previous => [...previous, { id, symbol: '', percentage: '0' }]);
+              setHoldings(previous => [
+                ...previous,
+                planned
+                  ? createPlannedHoldingDraft(id)
+                  : createRealHoldingDraft(id),
+              ]);
               setError(null);
             }}>＋ Add holding</button>
-            <button className="primary-btn" onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : 'Save complete allocation'}</button>
+            <button className="primary-btn" onClick={() => void save()} disabled={saving}>{saving
+              ? 'Saving…'
+              : planned
+                ? 'Save Planned Holdings'
+                : mode === 'legacy'
+                  ? 'Convert and Save Holdings'
+                  : 'Save Current Holdings'}</button>
           </div>
         </div>
       </Card>

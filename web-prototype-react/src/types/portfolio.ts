@@ -54,11 +54,6 @@ export type PortfolioPlannedHoldingsReplaceRequest = {
   holdings: PortfolioPlannedHoldingInput[];
 };
 
-// Kept only while the existing legacy percentage editor is migrated in place.
-export type PortfolioLegacyHoldingsReplaceRequest = {
-  holdings: PortfolioHoldingInput[];
-};
-
 type PortfolioHoldingResponseBase = {
   id: Uuid;
   symbol: string;
