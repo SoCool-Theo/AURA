@@ -1,26 +1,30 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { PortfolioSummaryResponse } from '../../types/portfolio';
+import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { colors, spacing } from '../../theme/theme';
 
 export function PortfolioCard({
   portfolio,
   active,
-  onPress
+  onPress,
+  onOpenReport
 }: {
   portfolio: PortfolioSummaryResponse;
   active: boolean;
   onPress: () => void;
+  onOpenReport?: () => void;
 }) {
   return (
-    <Pressable
-      accessibilityLabel={`${portfolio.name} portfolio${active ? ', active' : ''}`}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-    >
-      <Card style={[styles.card, active && styles.activeCard]}>
+    <Card style={[styles.card, active && styles.activeCard]}>
+      <Pressable
+        accessibilityLabel={`Open ${portfolio.name} portfolio${active ? ', active' : ''}`}
+        accessibilityRole="button"
+        accessibilityState={{ selected: active }}
+        onPress={onPress}
+        style={styles.details}
+      >
         <View style={styles.top}>
           <View style={styles.main}>
             <Text style={styles.name}>{portfolio.name}</Text>
@@ -33,13 +37,21 @@ export function PortfolioCard({
         <Text style={styles.created}>
           Created {new Date(portfolio.created_at).toLocaleDateString()}
         </Text>
-      </Card>
-    </Pressable>
+      </Pressable>
+      {onOpenReport ? (
+        <Button
+          title="View Latest Report"
+          variant="secondary"
+          onPress={onOpenReport}
+        />
+      ) : null}
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   card: { gap: spacing.md },
+  details: { minHeight: 56, gap: spacing.md, justifyContent: 'center' },
   activeCard: { borderColor: colors.primary },
   top: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
   main: { flex: 1 },

@@ -36,7 +36,13 @@ function sourceLabel(source: AgentSourceReference): string {
   return `${source.type.charAt(0).toUpperCase()}${source.type.slice(1)}`;
 }
 
-export function AssistantScreen({ navigation }: { navigation: any }) {
+export function AssistantScreen({
+  navigation,
+  route
+}: {
+  navigation: any;
+  route: any;
+}) {
   const {
     portfolios,
     activePortfolioId,
@@ -55,6 +61,7 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
   const sendingRef = useRef(false);
   const requestVersionRef = useRef(0);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const requestedPortfolioId = route.params?.portfolioId as string | undefined;
 
   const cancelActiveRequest = useCallback(() => {
     requestVersionRef.current += 1;
@@ -73,6 +80,23 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
 
   useEffect(() => {
     if (listStatus !== 'ready' && !portfolios.length) return;
+    if (
+      requestedPortfolioId
+      && portfolios.some((item) => item.id === requestedPortfolioId)
+    ) {
+      navigation.setParams({ portfolioId: undefined });
+      if (requestedPortfolioId === selectedPortfolioId) return;
+      cancelActiveRequest();
+      setSelectedPortfolioId(requestedPortfolioId);
+      selectPortfolio(requestedPortfolioId);
+      setResponse(null);
+      setError(null);
+      setRequestFailure(null);
+      return;
+    }
+    if (requestedPortfolioId) {
+      navigation.setParams({ portfolioId: undefined });
+    }
     if (portfolios.some((item) => item.id === selectedPortfolioId)) return;
 
     const nextPortfolioId = (
@@ -92,7 +116,9 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
     activePortfolioId,
     cancelActiveRequest,
     listStatus,
+    navigation,
     portfolios,
+    requestedPortfolioId,
     selectPortfolio,
     selectedPortfolioId
   ]);

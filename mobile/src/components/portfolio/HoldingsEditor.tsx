@@ -25,6 +25,7 @@ import {
   type PortfolioHoldingMode
 } from '../../types/portfolio';
 import { AssetSymbolField } from './AssetSymbolField';
+import { PurchaseDateField } from './PurchaseDateField';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { FormErrorSummary, ScreenErrorState } from '../ui/ErrorState';
@@ -285,12 +286,9 @@ export function HoldingsEditor({
                 editable={!saving}
                 error={fieldIssue(index, 'shares')}
               />
-              <Input
-                label="Purchase Date"
+              <PurchaseDateField
                 value={row.purchaseDate}
                 onChangeText={(purchaseDate) => patchRow(row.id, { purchaseDate })}
-                placeholder="YYYY-MM-DD"
-                maxLength={10}
                 editable={!saving}
                 error={fieldIssue(index, 'purchase_date')}
               />

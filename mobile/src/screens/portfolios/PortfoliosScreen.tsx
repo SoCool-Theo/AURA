@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { PortfolioCard } from '../../components/portfolio/PortfolioCard';
 import { Card } from '../../components/ui/Card';
@@ -19,6 +20,8 @@ import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScroll
 import { PageTitle } from '../../components/ui/PageTitle';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import { usePortfolios } from '../../portfolio/usePortfolios';
+import { reportErrorMessage } from '../../report/reportErrors';
+import { useReports } from '../../report/useReports';
 import { colors, spacing } from '../../theme/theme';
 
 export function PortfoliosScreen({ navigation }: { navigation: any }) {
@@ -31,7 +34,19 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
     refreshPortfolios,
     selectPortfolio
   } = usePortfolios();
+  const {
+    reports,
+    historyStatus,
+    historyError,
+    refreshReportHistory
+  } = useReports();
   const [query, setQuery] = useState('');
+
+  useFocusEffect(useCallback(() => {
+    if ((listStatus === 'ready' || portfolios.length) && portfolios.length) {
+      void refreshReportHistory(portfolios);
+    }
+  }, [listStatus, portfolios, refreshReportHistory]));
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -40,6 +55,16 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
       portfolio.name.toLowerCase().includes(normalizedQuery)
     ));
   }, [portfolios, query]);
+
+  const latestReportByPortfolio = useMemo(() => {
+    const latest = new Map<string, (typeof reports)[number]>();
+    for (const report of reports) {
+      if (!latest.has(report.portfolio_id)) {
+        latest.set(report.portfolio_id, report);
+      }
+    }
+    return latest;
+  }, [reports]);
 
   if (
     (listStatus === 'idle' || listStatus === 'loading')
@@ -98,6 +123,21 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
           />
         ) : null}
 
+        {historyStatus === 'error' ? (
+          <InlineErrorCard
+            error={historyError}
+            message={reportErrorMessage(historyError, 'Unable to check portfolio report history.')}
+            stale={Boolean(reports.length)}
+            onRetry={() => void refreshReportHistory(portfolios)}
+            retryTitle="Retry reports"
+          />
+        ) : null}
+
+        {(historyStatus === 'idle' || historyStatus === 'loading')
+          && portfolios.length ? (
+            <Text style={styles.reportStatus}>Checking saved reports…</Text>
+          ) : null}
+
         {portfolios.length ? (
           <View style={styles.searchBar}>
             <Ionicons name="search-outline" size={17} color={colors.muted} />
@@ -132,6 +172,16 @@ export function PortfoliosScreen({ navigation }: { navigation: any }) {
                     portfolioId: portfolio.id
                   });
                 }}
+                onOpenReport={latestReportByPortfolio.has(portfolio.id)
+                  ? () => {
+                    const report = latestReportByPortfolio.get(portfolio.id);
+                    if (!report) return;
+                    navigation.navigate('ReportDetail', {
+                      portfolioId: portfolio.id,
+                      reportId: report.id
+                    });
+                  }
+                  : undefined}
               />
             ))}
           </View>
@@ -195,6 +245,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl
   },
   searchInput: { flex: 1, color: colors.text, fontSize: 12 },
+  reportStatus: { color: colors.textSecondary, fontSize: 11, marginTop: spacing.md },
   list: { gap: spacing.md, marginTop: spacing.xl },
   emptyCard: { marginTop: spacing.xl },
   createCta: {

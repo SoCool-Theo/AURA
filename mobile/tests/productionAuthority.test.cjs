@@ -486,6 +486,71 @@ test('real holding contracts preserve precision, order, modes, and valuation all
   assert.deepEqual(JSON.parse(JSON.stringify(inputs)), { MSFT: '62.5', AAPL: '37.5' });
 });
 
+test('purchase-date picker accepts backend-safe past dates through today', () => {
+  const purchaseDates = load('src/portfolio/purchaseDate.ts');
+  const validation = load('src/portfolio/portfolioValidation.ts');
+  const now = new Date();
+  const maximumDate = purchaseDates.maximumPurchaseDate(now);
+  const today = now.toISOString().slice(0, 10);
+  const yesterday = new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
+  const tomorrow = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
+  const holding = purchaseDate => [{
+    id: purchaseDate,
+    symbol: 'AAPL',
+    investedAmount: '1000',
+    investedCurrency: 'USD',
+    shares: '5',
+    purchaseDate
+  }];
+
+  assert.equal(purchaseDates.formatPurchaseDate(maximumDate), today);
+  assert.equal(
+    purchaseDates.formatPurchaseDate(
+      purchaseDates.purchaseDatePickerValue(yesterday, maximumDate)
+    ),
+    yesterday
+  );
+  assert.equal(validation.validateRealHoldingDrafts(holding(today)).error, null);
+  assert.equal(validation.validateRealHoldingDrafts(holding(yesterday)).error, null);
+  assert.match(validation.validateRealHoldingDrafts(holding(tomorrow)).error, /not in the future/i);
+
+  const picker = fs.readFileSync(path.join(root, 'src/components/portfolio/PurchaseDateField.tsx'), 'utf8');
+  const create = fs.readFileSync(path.join(root, 'src/screens/portfolios/CreatePortfolioScreen.tsx'), 'utf8');
+  const edit = fs.readFileSync(path.join(root, 'src/components/portfolio/HoldingsEditor.tsx'), 'utf8');
+  assert.match(picker, /calendar-outline/);
+  assert.match(picker, /maximumDate=\{maximumDate\}/);
+  assert.match(create, /<PurchaseDateField/);
+  assert.match(edit, /<PurchaseDateField/);
+});
+
+test('portfolio report entry points preserve newest-report AI grounding', () => {
+  const reportDetail = fs.readFileSync(
+    path.join(root, 'src/screens/reports/ReportDetailScreen.tsx'),
+    'utf8'
+  );
+  const portfolios = fs.readFileSync(
+    path.join(root, 'src/screens/portfolios/PortfoliosScreen.tsx'),
+    'utf8'
+  );
+  const portfolioCard = fs.readFileSync(
+    path.join(root, 'src/components/portfolio/PortfolioCard.tsx'),
+    'utf8'
+  );
+  const assistant = fs.readFileSync(
+    path.join(root, 'src/screens/assistant/AssistantScreen.tsx'),
+    'utf8'
+  );
+
+  assert.match(reportDetail, /Ask Aura About This Portfolio/);
+  assert.match(reportDetail, /newest saved report/);
+  assert.match(reportDetail, /navigate\('AI', \{ portfolioId \}\)/);
+  assert.match(portfolios, /refreshReportHistory\(portfolios\)/);
+  assert.match(portfolios, /latestReportByPortfolio/);
+  assert.match(portfolioCard, /View Latest Report/);
+  assert.match(assistant, /requestedPortfolioId/);
+  assert.ok(!/navigate\('AI',\s*\{[^}]*reportId/.test(reportDetail));
+});
+
 test('real holding API clients send explicit currency and real holding payloads', async () => {
   const calls = [];
   const request = async (path, options = {}) => {
@@ -532,7 +597,7 @@ test('Create Portfolio records real holdings and leaves allocation to the backen
   assert.match(source, /validateRealHoldingDrafts/);
   assert.match(source, /Invested Amount/);
   assert.match(source, /Shares Owned/);
-  assert.match(source, /Purchase Date/);
+  assert.match(source, /<PurchaseDateField/);
   assert.match(source, /Automatic allocation/);
   assert.ok(!/Weight %|TOTAL ALLOCATION|totalPercent/.test(source));
   assert.ok(!/current_allocation|asset_price|current_value/.test(source));
@@ -548,7 +613,7 @@ test('all portfolio CRUD screens use real holdings and never submit manual weigh
   assert.match(editor, /Convert legacy allocation/);
   assert.match(editor, /Invested Amount/);
   assert.match(editor, /Shares Owned/);
-  assert.match(editor, /Purchase Date/);
+  assert.match(editor, /<PurchaseDateField/);
   assert.ok(!/Weight %|TOTAL ALLOCATION|weightPercent/.test(`${create}\n${editor}`));
   assert.ok(!/createPortfolioWithHoldings|replaceHoldings\s*[:=(]/.test(`${provider}\n${api}`));
 });

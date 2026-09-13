@@ -1386,10 +1386,23 @@ runtime device verification remains
 - A missing `sessionExpired` auth-context binding in `RootNavigator` was repaired
   after the Priority 2 typecheck exposed it, restoring the intended expired-
   session route and a clean TypeScript build.
+- Create Portfolio and Edit Holdings now share an accessible native purchase-
+  date picker with a calendar affordance. It permits any valid past date through
+  the backend-approved current date, blocks future selection, and preserves the
+  public `YYYY-MM-DD` request format. Expo's compatible
+  `@react-native-community/datetimepicker` module and config plugin were added
+  specifically for this native control.
+- Report Detail now offers a truthful Assistant handoff that preselects the
+  report's portfolio while stating that backend AI grounding uses the newest
+  saved report. My Portfolios loads report history and shows `View Latest
+  Report` only on portfolio cards with a confirmed saved analysis; loading,
+  stale-history failure, and retry states remain explicit.
 - Mobile TypeScript checking passes, and the production-authority suite passes
-  19 tests, including a regression guard for interactive accessibility semantics
-  and compact-layout wrapping. Expo web preview is unavailable because the
-  optional web runtime is not installed, and no Android SDK/emulator is present;
+  21 tests, including regression guards for interactive accessibility semantics,
+  compact-layout wrapping, purchase-date limits, and report/Assistant entry
+  points. Expo web preview is
+  unavailable because the optional web runtime is not installed, and no Android
+  SDK/emulator is present;
   no dependency was added solely for preview. No backend, database, or financial-
   formula change was made by this mobile work.
 

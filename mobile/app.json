@@ -19,7 +19,8 @@
     "plugins": [
       "expo-secure-store",
       "expo-status-bar",
-      "expo-font"
+      "expo-font",
+      "@react-native-community/datetimepicker"
     ]
   }
 }

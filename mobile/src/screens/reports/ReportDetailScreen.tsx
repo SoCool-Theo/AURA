@@ -165,6 +165,18 @@ export function ReportDetailScreen({
 
         <AnalysisResults report={report} />
 
+        <Card style={styles.assistantCard}>
+          <Text style={styles.assistantTitle}>Need help understanding the results?</Text>
+          <Text style={styles.assistantText}>
+            Aura can explain this portfolio using its newest saved report. If
+            this is an older snapshot, the Assistant may use a newer report.
+          </Text>
+          <Button
+            title="Ask Aura About This Portfolio"
+            onPress={() => navigation.getParent()?.navigate('AI', { portfolioId })}
+          />
+        </Card>
+
         <Button
           title={deleting ? 'Deleting…' : 'Delete Report'}
           variant="danger"
@@ -193,6 +205,14 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: spacing.sm
   },
+  assistantCard: {
+    gap: spacing.md,
+    marginTop: spacing.xl,
+    borderColor: colors.primary,
+    backgroundColor: colors.summaryBackground
+  },
+  assistantTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  assistantText: { color: colors.textSecondary, fontSize: 11, lineHeight: 17 },
   errorCard: { gap: spacing.sm, marginTop: spacing.md, borderColor: colors.dangerBorder },
   errorTitle: { color: colors.danger, fontSize: 15, fontWeight: '900' },
   stateCard: { gap: spacing.md },

@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { apiValidationIssues } from '../../api/apiErrorPresentation';
 import { AssetSymbolField } from '../../components/portfolio/AssetSymbolField';
+import { PurchaseDateField } from '../../components/portfolio/PurchaseDateField';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { FormErrorSummary } from '../../components/ui/ErrorState';
@@ -284,16 +285,11 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
                 error={fieldIssue(index, 'shares')}
               />
 
-              <Input
-                label="Purchase Date"
+              <PurchaseDateField
                 value={row.purchaseDate}
                 onChangeText={(purchaseDate) => patchRow(row.id, {
                   purchaseDate
                 })}
-                autoCapitalize="none"
-                keyboardType="numbers-and-punctuation"
-                placeholder="YYYY-MM-DD"
-                maxLength={10}
                 editable={!saving}
                 error={fieldIssue(index, 'purchase_date')}
               />
