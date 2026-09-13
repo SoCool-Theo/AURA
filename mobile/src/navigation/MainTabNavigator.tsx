@@ -36,6 +36,7 @@ import type {
 
 import { darkPalette, lightPalette } from '../theme/colors';
 import { HomeHeaderButton } from '../components/ui/HomeHeaderButton';
+import { BackHeaderButton } from '../components/ui/BackHeaderButton';
 import { usePreferences } from '../preferences/usePreferences';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -114,7 +115,21 @@ function MoreNavigator() {
       <MoreStack.Screen name="More" component={MoreScreen} options={{ headerShown: false }} />
       <MoreStack.Screen name="Analytics" component={PortfolioAnalysisScreen} options={{ title: 'Analytics' }} />
       <MoreStack.Screen name="Reports" component={ReportsScreen} options={{ title: 'Reports' }} />
-      <MoreStack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ title: 'Report Detail' }} />
+      <MoreStack.Screen
+        name="ReportDetail"
+        component={ReportDetailScreen}
+        options={({ navigation }) => ({
+          title: 'Report Detail',
+          headerBackVisible: false,
+          headerLeft: () => (
+            <BackHeaderButton
+              label="Back to Reports"
+              color={palette.text}
+              onPress={() => navigation.goBack()}
+            />
+          )
+        })}
+      />
       <MoreStack.Screen name="Watchlist" component={WatchlistScreen} options={{ title: 'Watchlist' }} />
       <MoreStack.Screen name="Learn" component={LearnScreen} options={{ title: 'Learn' }} />
       <MoreStack.Screen name="LearnDetail" component={LearnDetailScreen} options={{ title: 'Lesson' }} />

@@ -637,6 +637,23 @@ test('portfolio report entry points preserve newest-report AI grounding', () => 
   assert.ok(!/navigate\('AI',\s*\{[^}]*reportId/.test(reportDetail));
 });
 
+test('More report detail exposes an accessible back action to Reports', () => {
+  const navigation = fs.readFileSync(
+    path.join(root, 'src/navigation/MainTabNavigator.tsx'),
+    'utf8'
+  );
+  const backButton = fs.readFileSync(
+    path.join(root, 'src/components/ui/BackHeaderButton.tsx'),
+    'utf8'
+  );
+
+  assert.match(navigation, /MoreStack\.Screen[\s\S]*name="ReportDetail"[\s\S]*BackHeaderButton/);
+  assert.match(navigation, /label="Back to Reports"/);
+  assert.match(navigation, /navigation\.goBack\(\)/);
+  assert.match(backButton, /accessibilityRole="button"/);
+  assert.match(backButton, /name="arrow-back"/);
+});
+
 test('real holding API clients send explicit currency and real holding payloads', async () => {
   const calls = [];
   const request = async (path, options = {}) => {
