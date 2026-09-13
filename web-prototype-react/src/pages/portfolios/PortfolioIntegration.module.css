@@ -87,6 +87,56 @@
   line-height: 1.5;
 }
 
+.valuationToolbar,
+.contextNotice {
+  margin-bottom: 14px;
+  padding: 13px 15px;
+  border: 1px solid var(--border-divider);
+  border-radius: 11px;
+  background: rgba(7, 27, 40, .75);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.valuationToolbar strong,
+.valuationToolbar span {
+  display: block;
+}
+
+.valuationToolbar strong,
+.contextNotice strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.valuationToolbar span,
+.contextNotice {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.valuationToolbar span {
+  margin-top: 4px;
+}
+
+.contextNotice button {
+  flex: 0 0 auto;
+}
+
+.overviewMetrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.hypotheticalNotice,
+.valuationMeta {
+  margin: 12px 2px 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .modeFieldset,
 .currencyFieldset {
   margin: 0;
@@ -284,5 +334,15 @@
 
   .modeSelector {
     grid-template-columns: 1fr;
+  }
+
+  .valuationToolbar,
+  .contextNotice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .contextNotice button {
+    width: 100%;
   }
 }

@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import {
   deletePortfolio,
   duplicatePortfolio,
+  getPlannedPortfolioPreview,
   getPortfolio,
+  getPortfolioValuation,
   updatePortfolio,
 } from '../../api/portfoliosApi';
 import { go } from '../../app/routes';
@@ -11,10 +13,22 @@ import { HoldingsTable } from '../../components/portfolio/HoldingsTable';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
 import { SymbolBadge } from '../../components/ui/SymbolBadge';
-import type { PortfolioResponse } from '../../types/portfolio';
+import type {
+  PortfolioCurrency,
+  PortfolioPlannedPreviewResponse,
+  PortfolioResponse,
+  PortfolioValuationResponse,
+} from '../../types/portfolio';
 import { PortfolioHoldingsEditor } from './components/PortfolioHoldingsEditor';
 import styles from './PortfolioIntegration.module.css';
-import { formatPortfolioDate, portfolioErrorMessage } from './portfolioUi';
+import {
+  formatPortfolioAllocation,
+  formatPortfolioDate,
+  formatPortfolioMoney,
+  portfolioErrorMessage,
+  portfolioTypeLabel,
+  resolvedPortfolioAllocation,
+} from './portfolioUi';
 
 type DetailTab = 'Overview' | 'Holdings' | 'Record';
 
@@ -23,7 +37,13 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [contextError, setContextError] = useState<string | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [valuationCurrency, setValuationCurrency] = useState<PortfolioCurrency>('USD');
+  const [valuation, setValuation] = useState<PortfolioValuationResponse | null>(null);
+  const [plannedPreview, setPlannedPreview] = useState<PortfolioPlannedPreviewResponse | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [contextReloadKey, setContextReloadKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [menu, setMenu] = useState(false);
   const [tab, setTab] = useState<DetailTab>('Overview');
@@ -50,6 +70,40 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
       });
     return () => controller.abort();
   }, [portfolioId, reloadKey]);
+
+  useEffect(() => {
+    setValuation(null);
+    setPlannedPreview(null);
+    setContextError(null);
+    if (!portfolio || !portfolio.holdings.length || portfolio.portfolio_type === 'LEGACY') {
+      setContextLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setContextLoading(true);
+    const request = portfolio.portfolio_type === 'PLANNED'
+      ? getPlannedPortfolioPreview(portfolio.id, { signal: controller.signal })
+        .then(setPlannedPreview)
+      : getPortfolioValuation(portfolio.id, valuationCurrency, { signal: controller.signal })
+        .then(setValuation);
+
+    void request
+      .catch(error => {
+        if (!controller.signal.aborted) {
+          setContextError(portfolioErrorMessage(
+            error,
+            portfolio.portfolio_type === 'PLANNED'
+              ? 'Unable to load the planned portfolio preview.'
+              : 'Unable to load the current portfolio value.',
+          ));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setContextLoading(false);
+      });
+    return () => controller.abort();
+  }, [portfolio, valuationCurrency, contextReloadKey]);
 
   async function rename() {
     if (busy) return;
@@ -119,9 +173,24 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
     );
   }
 
-  const totalPercentage = portfolio.holdings.reduce((sum, holding) => (
-    sum + (holding.weight == null ? 0 : holding.weight * 100)
-  ), 0);
+  const allocation = resolvedPortfolioAllocation(portfolio, valuation, plannedPreview);
+  const typeLabel = portfolioTypeLabel(portfolio.portfolio_type);
+  const totalValueLabel = portfolio.portfolio_type === 'PLANNED'
+    ? 'Proposed Investment'
+    : portfolio.portfolio_type === 'CURRENT'
+      ? 'Current Value'
+      : 'Saved Allocation';
+  const totalValue = portfolio.portfolio_type === 'PLANNED'
+    ? plannedPreview
+      ? formatPortfolioMoney(plannedPreview.total_proposed_amount, plannedPreview.plan_currency)
+      : contextLoading ? 'Loading…' : 'N/A'
+    : portfolio.portfolio_type === 'CURRENT'
+      ? valuation
+        ? formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency)
+        : contextLoading ? 'Loading…' : 'N/A'
+      : formatPortfolioAllocation(
+        portfolio.holdings.reduce((sum, holding) => sum + (holding.weight ?? 0), 0),
+      );
 
   return (
     <div className="page portfolio-detail-page">
@@ -131,12 +200,13 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
         <div className="detail-identity">
           <SymbolBadge symbol={portfolio.name.slice(0, 2).toUpperCase()} />
           <div>
-            <div className="detail-title-row"><h1>{portfolio.name}</h1><button aria-label="Rename portfolio" onClick={() => void rename()} disabled={busy}>✎</button></div>
+            <div className="detail-title-row"><h1>{portfolio.name}</h1><span className={styles.portfolioTypeBadge}>{typeLabel}</span><button aria-label="Rename portfolio" onClick={() => void rename()} disabled={busy}>✎</button></div>
             <p>Created {formatPortfolioDate(portfolio.created_at)} <span>•</span> Updated {formatPortfolioDate(portfolio.updated_at)}</p>
           </div>
         </div>
         <div className="detail-header-actions">
-          <button className="primary-btn" onClick={() => setTab('Holdings')} disabled={busy}>Edit Holdings</button>
+          <button className="primary-btn" onClick={() => go(`analytics/${portfolio.id}`)} disabled={busy}>Analyze Portfolio</button>
+          <button className="secondary-btn" onClick={() => setTab('Holdings')} disabled={busy}>Edit Holdings</button>
           <div className="relative">
             <button className="secondary-btn detail-more-btn" onClick={() => setMenu(!menu)} aria-expanded={menu} disabled={busy}>More <Icon name="chevron-down" size={16} /></button>
             {menu && <div className="menu-pop detail-menu">
@@ -157,20 +227,56 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
       </nav>
 
       {tab === 'Overview' && <div className="detail-tab-panel">
-        <div className={styles.metadataGrid}>
+        {portfolio.portfolio_type === 'CURRENT' && portfolio.holdings.length > 0 && (
+          <div className={styles.valuationToolbar}>
+            <div><strong>Current value currency</strong><span>Choose how current values are displayed.</span></div>
+            <div className={styles.currencySelector} role="group" aria-label="Current value currency">
+              {(['USD', 'THB'] as PortfolioCurrency[]).map(currency => (
+                <button type="button" key={currency} className={valuationCurrency === currency ? styles.currencySelected : ''} aria-pressed={valuationCurrency === currency} onClick={() => setValuationCurrency(currency)}>{currency}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {contextError && (
+          <div className={styles.contextNotice} role="alert">
+            <span><strong>{portfolio.portfolio_type === 'PLANNED' ? 'Plan preview unavailable.' : 'Current valuation unavailable.'}</strong> {contextError}</span>
+            <button className="secondary-btn" onClick={() => setContextReloadKey(value => value + 1)}>Try again</button>
+          </div>
+        )}
+
+        <div className={`${styles.metadataGrid} ${styles.overviewMetrics}`}>
           <div><small>Holdings</small><strong>{portfolio.holdings.length}</strong></div>
-          <div><small>Total Allocation</small><strong>{Number(totalPercentage.toFixed(10))}%</strong></div>
+          <div><small>Type</small><strong>{typeLabel}</strong></div>
+          <div><small>{totalValueLabel}</small><strong>{totalValue}</strong></div>
           <div><small>Portfolio ID</small><strong>{portfolio.id}</strong></div>
         </div>
         {portfolio.holdings.length > 0 ? <>
-          <Card className="detail-section-card"><AllocationLegend holdings={portfolio.holdings} /></Card>
-          <HoldingsTable portfolio={portfolio} onViewAll={() => setTab('Holdings')} />
-        </> : <Card className={styles.stateCard}><h2>No holdings saved</h2><p>This portfolio exists. Add a complete ordered allocation in the Holdings tab.</p><button className="primary-btn" onClick={() => setTab('Holdings')}>Add holdings</button></Card>}
+          {allocation.length > 0 ? (
+            <Card className="detail-section-card"><AllocationLegend holdings={allocation} label={portfolio.portfolio_type === 'PLANNED' ? 'Target Allocation' : portfolio.portfolio_type === 'CURRENT' ? 'Current Allocation' : 'Saved Allocation'} /></Card>
+          ) : (
+            <Card className={styles.stateCard}>
+              <h2>{contextLoading ? 'Loading allocation…' : 'Allocation unavailable'}</h2>
+              <p>{portfolio.portfolio_type === 'PLANNED'
+                ? 'Target allocation will appear when the planned preview is available.'
+                : portfolio.portfolio_type === 'CURRENT'
+                  ? 'Current allocation will appear when market valuation is available.'
+                  : 'No saved allocation is available.'}</p>
+            </Card>
+          )}
+          <HoldingsTable portfolio={portfolio} valuation={valuation} plannedPreview={plannedPreview} onViewAll={() => setTab('Holdings')} />
+          {portfolio.portfolio_type === 'PLANNED' && plannedPreview && (
+            <p className={styles.hypotheticalNotice}>This is a hypothetical plan. Estimated shares are display-only and do not affect allocation or analysis.</p>
+          )}
+          {portfolio.portfolio_type === 'CURRENT' && valuation && (
+            <p className={styles.valuationMeta}>Prices range from {valuation.oldest_price_as_of} to {valuation.newest_price_as_of}. Valuation requested {valuation.requested_date}.</p>
+          )}
+        </> : <Card className={styles.stateCard}><h2>No holdings saved</h2><p>{portfolio.portfolio_type === 'PLANNED' ? 'Add proposed amounts to complete this plan.' : 'Add ownership details to complete this portfolio.'}</p><button className="primary-btn" onClick={() => setTab('Holdings')}>Add holdings</button></Card>}
       </div>}
 
       {tab === 'Holdings' && <PortfolioHoldingsEditor portfolio={portfolio} onSaved={updated => { setPortfolio(updated); setActionError(null); }} />}
 
-      {tab === 'Record' && <div className="detail-tab-panel"><Card className="detail-section-card"><div className="detail-section-header"><div><h2>Backend Portfolio Record</h2><p>Only fields returned by the Portfolio API are shown.</p></div></div><div className={styles.metadataGrid}><div><small>Name</small><strong>{portfolio.name}</strong></div><div><small>Created</small><strong>{formatPortfolioDate(portfolio.created_at)}</strong></div><div><small>Updated</small><strong>{formatPortfolioDate(portfolio.updated_at)}</strong></div></div></Card></div>}
+      {tab === 'Record' && <div className="detail-tab-panel"><Card className="detail-section-card"><div className="detail-section-header"><div><h2>Portfolio Record</h2><p>Saved identity and portfolio mode.</p></div></div><div className={styles.metadataGrid}><div><small>Name</small><strong>{portfolio.name}</strong></div><div><small>Type</small><strong>{typeLabel}</strong></div><div><small>Plan Currency</small><strong>{portfolio.plan_currency ?? 'Not applicable'}</strong></div><div><small>Created</small><strong>{formatPortfolioDate(portfolio.created_at)}</strong></div><div><small>Updated</small><strong>{formatPortfolioDate(portfolio.updated_at)}</strong></div></div></Card></div>}
     </div>
   );
 }
