@@ -1774,3 +1774,33 @@ binary, physical-device or emulator E2E run against a deployed backend, web
 planned-portfolio integration, plan-to-current conversion, and the broader
 database/deployment verification are outside this mobile-only Step 8M. The web
 integration is intentionally skipped by current product direction.
+
+### Completed mobile report monetary metric details
+
+- Current V2 and planned V3 report responses now include deterministic
+  `monetary_metrics` derived only from the saved report snapshot. Cumulative
+  return and annualized return use the saved reference amount; maximum
+  drawdown reconstructs the exact saved peak-to-trough wealth path instead of
+  multiplying the drawdown percentage by the wrong starting value.
+- The monetary context is response-only and does not modify persisted report
+  JSONB, require a migration, fetch fresh prices, or revalue historical reports.
+  V1 legacy reports remain percentage-only because they have no trustworthy
+  currency reference amount.
+- On mobile, cumulative return, annualized return, and maximum drawdown cards
+  show a chevron and tap hint when monetary context is available. Tapping opens
+  an accessible bottom sheet with the percentage, signed USD/THB equivalent,
+  saved reference amount, time basis, and explicit educational/non-forecast
+  wording.
+- The mobile client does not calculate these financial amounts. It formats the
+  decimal strings supplied by the authenticated report response and remains
+  compatible with older responses that omit `monetary_metrics`.
+
+### Monetary metric verification
+
+- Focused report schema, mapper, service, and API suite: 124 passed.
+- Complete backend unit suite: 2,341 passed.
+- Mobile TypeScript compilation completed with no errors.
+- Mobile production-authority suite: 23 passed, including signed currency
+  formatting and guards against client-side reference-amount multiplication.
+- No database, migration, Docker, external LLM, dependency, branch, commit, or
+  push operation was performed.
