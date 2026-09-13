@@ -474,9 +474,11 @@ test('real holding contracts preserve precision, order, modes, and valuation all
 
   const legacy = { symbol: 'AAPL', weight: 1, invested_amount: null, invested_currency: null, shares: null, purchase_date: null, position: 0 };
   const real = { symbol: 'MSFT', weight: null, invested_amount: '1', invested_currency: 'USD', shares: '1', purchase_date: '2026-01-01', position: 0 };
+  const planned = { symbol: 'NVDA', weight: null, invested_amount: null, proposed_amount: '2500', invested_currency: null, shares: null, purchase_date: null, position: 0 };
   assert.equal(portfolioTypes.portfolioHoldingMode([]), 'empty');
   assert.equal(portfolioTypes.portfolioHoldingMode([legacy]), 'legacy');
   assert.equal(portfolioTypes.portfolioHoldingMode([real]), 'real');
+  assert.equal(portfolioTypes.portfolioHoldingMode([planned]), 'planned');
   assert.equal(portfolioTypes.portfolioHoldingMode([legacy, real]), 'mixed');
 
   const inputs = simulation.allocationInputsFromValuation({ holdings: [
@@ -484,6 +486,80 @@ test('real holding contracts preserve precision, order, modes, and valuation all
     { symbol: 'AAPL', current_allocation: '0.375' }
   ] });
   assert.deepEqual(JSON.parse(JSON.stringify(inputs)), { MSFT: '62.5', AAPL: '37.5' });
+});
+
+test('planned mobile contracts preserve amount authority and consume backend target weights', async () => {
+  const validation = load('src/portfolio/portfolioValidation.ts');
+  const simulation = load('src/simulation/simulationValidation.ts');
+  const calls = [];
+  const { portfoliosApi } = load('src/api/portfoliosApi.ts', {
+    './apiClient': { apiRequest: async (path, options = {}) => {
+      calls.push({ path, options });
+      return {};
+    } }
+  });
+  const portfolioId = 'e6518442-58cb-408f-af47-fb00b5550000';
+  const holdings = [
+    { id: 'a', symbol: ' aapl ', proposedAmount: '4000.00' },
+    { id: 'b', symbol: 'NVDA', proposedAmount: '6000' }
+  ];
+  const result = validation.validatePlannedHoldingDrafts(holdings);
+  assert.equal(result.error, null);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.holdings)), [
+    { symbol: 'AAPL', proposed_amount: '4000.00' },
+    { symbol: 'NVDA', proposed_amount: '6000' }
+  ]);
+  assert.match(validation.validatePlannedHoldingDrafts([
+    { id: 'a', symbol: 'AAPL', proposedAmount: '0' }
+  ]).error, /positive proposed amount/i);
+
+  const allocation = {
+    portfolio_id: portfolioId,
+    portfolio_type: 'PLANNED',
+    plan_currency: 'USD',
+    total_proposed_amount: '10000',
+    holdings: [
+      { id: 'a', symbol: 'AAPL', proposed_amount: '4000', target_allocation: '0.4', position: 0 },
+      { id: 'b', symbol: 'NVDA', proposed_amount: '6000', target_allocation: '0.6', position: 1 }
+    ]
+  };
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(simulation.allocationInputsFromPlannedAllocation(allocation))),
+    { AAPL: '40', NVDA: '60' }
+  );
+
+  await portfoliosApi.create({ name: 'Plan', portfolio_type: 'PLANNED', plan_currency: 'USD' });
+  await portfoliosApi.replacePlannedHoldings(portfolioId, result.holdings);
+  await portfoliosApi.getPlannedAllocation(portfolioId);
+  await portfoliosApi.getPlannedPreview(portfolioId);
+  assert.deepEqual(calls[0].options.body, { name: 'Plan', portfolio_type: 'PLANNED', plan_currency: 'USD' });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(calls[1].options.body)),
+    { holdings: JSON.parse(JSON.stringify(result.holdings)) }
+  );
+  assert.equal(calls[2].path, `/api/portfolios/${portfolioId}/planned-allocation`);
+  assert.equal(calls[3].path, `/api/portfolios/${portfolioId}/planned-preview`);
+});
+
+test('planned mobile presentation keeps estimates display-only and supports V3 history', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const create = read('src/screens/portfolios/CreatePortfolioScreen.tsx');
+  const editor = read('src/components/portfolio/HoldingsEditor.tsx');
+  const detail = read('src/screens/portfolios/PortfolioDetailScreen.tsx');
+  const analysis = read('src/components/analytics/AnalysisResults.tsx');
+  const simulation = read('src/components/simulations/SimulationResults.tsx');
+  const history = read('src/screens/simulations/SimulationResultScreen.tsx');
+
+  assert.match(create, /A Planned Portfolio/);
+  assert.match(create, /Proposed Amount/);
+  assert.match(editor, /replacePlannedHoldings/);
+  assert.match(detail, /getPlannedPreview/);
+  assert.match(detail, /Estimated shares are display-only/);
+  assert.match(analysis, /FROZEN PLANNED BASELINE · V3/);
+  assert.match(analysis, /Estimated shares are not part/);
+  assert.match(simulation, /Frozen planned baseline/);
+  assert.match(history, /isSimulationHistoryV3/);
+  assert.ok(!/proposedAmount\s*\/|proposed_amount\s*\//.test(`${create}\n${editor}\n${detail}`));
 });
 
 test('purchase-date picker accepts backend-safe past dates through today', () => {
