@@ -162,6 +162,21 @@ def test_v2_response_accepts_strict_immutable_real_holding_report() -> None:
     json.dumps(result.model_dump(mode="json"), allow_nan=False)
 
 
+def test_report_monetary_metrics_reject_positive_drawdown_amount() -> None:
+    data = _valid_v2_report_data()
+    data["monetary_metrics"] = {
+        "currency": "USD",
+        "basis": "saved-current-valuation",
+        "reference_amount": "3000",
+        "cumulative_return_amount": "120.282",
+        "annualized_return_amount": "600",
+        "maximum_drawdown_amount": "30",
+    }
+
+    with pytest.raises(ValidationError, match="less than or equal to 0"):
+        PortfolioReportV2Response.model_validate(data)
+
+
 def test_v2_response_requires_fx_for_thb_and_rejects_unknown_fields() -> None:
     missing_fx = _valid_v2_report_data()
     valuation = missing_fx["valuation"]

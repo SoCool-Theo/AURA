@@ -30,6 +30,25 @@ _PositiveValuationDecimal = Annotated[
     Decimal,
     Field(gt=Decimal("0"), allow_inf_nan=False),
 ]
+_FiniteMonetaryDecimal = Annotated[
+    Decimal,
+    Field(allow_inf_nan=False),
+]
+_NonPositiveMonetaryDecimal = Annotated[
+    Decimal,
+    Field(le=Decimal("0"), allow_inf_nan=False),
+]
+
+
+class PortfolioReportMonetaryMetrics(AuraBaseModel):
+    """Currency equivalents derived only from one saved report snapshot."""
+
+    currency: Literal["USD", "THB"]
+    basis: Literal["saved-current-valuation", "planned-proposed-amount"]
+    reference_amount: _PositiveValuationDecimal
+    cumulative_return_amount: _FiniteMonetaryDecimal
+    annualized_return_amount: _FiniteMonetaryDecimal
+    maximum_drawdown_amount: _NonPositiveMonetaryDecimal | None
 
 
 class PortfolioReportV2ValuationContext(AuraBaseModel):
@@ -84,6 +103,7 @@ class PortfolioReportV2Response(PortfolioReportV2Snapshot):
     id: UUID
     portfolio_id: UUID
     created_at: AwareDatetime
+    monetary_metrics: PortfolioReportMonetaryMetrics | None = None
 
 
 class PortfolioReportV3Snapshot(AuraBaseModel):
@@ -125,6 +145,7 @@ class PortfolioReportV3Response(PortfolioReportV3Snapshot):
     id: UUID
     portfolio_id: UUID
     created_at: AwareDatetime
+    monetary_metrics: PortfolioReportMonetaryMetrics | None = None
 
 
 PortfolioReportDetailResponse = (
