@@ -6,6 +6,7 @@ import {
   listPortfolios,
   updatePortfolio,
 } from '../../api/portfoliosApi';
+import { listPortfolioReports } from '../../api/reportsApi';
 import { PortfolioCard } from '../../components/portfolio/PortfolioCard';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
@@ -15,6 +16,7 @@ import type {
   PortfolioResponse,
   PortfolioSummaryResponse,
 } from '../../types/portfolio';
+import type { PortfolioReportSummary } from '../../types/report';
 import styles from './PortfolioIntegration.module.css';
 import { portfolioErrorMessage } from './portfolioUi';
 
@@ -62,6 +64,8 @@ export function PortfoliosPage() {
   const [sortBy, setSortBy] = useState('updated');
   const [editing, setEditing] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [latestReports, setLatestReports] = useState<Map<string, PortfolioReportSummary>>(new Map());
+  const [reportLookupError, setReportLookupError] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -81,6 +85,37 @@ export function PortfoliosPage() {
 
     return () => controller.abort();
   }, [reloadKey]);
+
+  const portfolioIds = portfolios.map(portfolio => portfolio.id).join('|');
+
+  useEffect(() => {
+    setLatestReports(new Map());
+    setReportLookupError(false);
+    if (!portfolios.length) return;
+
+    const controller = new AbortController();
+    void Promise.allSettled(portfolios.map(async portfolio => ({
+      portfolioId: portfolio.id,
+      reports: (await listPortfolioReports(portfolio.id, {
+        signal: controller.signal,
+      })).reports,
+    }))).then(results => {
+      if (controller.signal.aborted) return;
+      const next = new Map<string, PortfolioReportSummary>();
+      let failed = false;
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          failed = true;
+          continue;
+        }
+        const latest = result.value.reports[0];
+        if (latest) next.set(result.value.portfolioId, latest);
+      }
+      setLatestReports(next);
+      setReportLookupError(failed);
+    });
+    return () => controller.abort();
+  }, [portfolioIds]);
 
   const visible = useMemo(() => {
     const filtered = portfolios.filter(portfolio => (
@@ -165,12 +200,13 @@ export function PortfoliosPage() {
       </section>
 
       {!loading && !loadError && <div className="portfolio-summary-grid">
-        <PortfolioSummary label="Total Portfolios" value={String(portfolios.length)} detail="Backend portfolio records" icon="portfolios" tone="purple" />
+        <PortfolioSummary label="Total Portfolios" value={String(portfolios.length)} detail="Saved portfolios" icon="portfolios" tone="purple" />
         <PortfolioSummary label="Recently Updated" value={mostRecentlyUpdated} detail="Latest portfolio change" icon="calendar" tone="blue" />
-        <PortfolioSummary label="Persistence" value="Aura API" detail="Authenticated backend storage" icon="shield" tone="green" />
+        <PortfolioSummary label="Access" value="Private" detail="Available only in your account" icon="shield" tone="green" />
       </div>}
 
       {actionError && <p className={styles.error} role="alert">{actionError}</p>}
+      {reportLookupError && <p className={styles.contextNotice} role="alert">Some latest-report shortcuts are temporarily unavailable. Portfolios can still be opened normally.</p>}
 
       {loading && (
         <Card className={styles.stateCard}><p role="status">Loading your portfolios…</p></Card>
@@ -201,13 +237,15 @@ export function PortfoliosPage() {
       {!loading && !loadError && portfolios.length === 0 && (
         <Card className={styles.stateCard}>
           <h2>No portfolios yet</h2>
-          <p>Create your first named portfolio and save an ordered allocation of symbols and weights.</p>
+          <p>Create a Current portfolio for investments you own or a Planned portfolio to evaluate before investing.</p>
           <button className="primary-btn" onClick={() => go('create')}>Create portfolio</button>
         </Card>
       )}
       {!loading && !loadError && visible.length > 0 ? (
         <div className="portfolio-grid">
-          {visible.map(portfolio => (
+          {visible.map(portfolio => {
+            const latestReport = latestReports.get(portfolio.id);
+            return (
             <PortfolioCard
               key={portfolio.id}
               portfolio={portfolio}
@@ -218,8 +256,12 @@ export function PortfoliosPage() {
               onDuplicate={() => { void duplicate(portfolio); setEditing(null); }}
               onDelete={() => { void remove(portfolio); setEditing(null); }}
               onOpenPortfolio={() => go(`portfolio/${portfolio.id}`)}
+              onOpenLatestReport={latestReport
+                ? () => go(`reports/${portfolio.id}/${latestReport.id}`)
+                : undefined}
             />
-          ))}
+            );
+          })}
         </div>
       ) : !loading && !loadError && portfolios.length > 0 ? (
         <Card className="portfolio-empty-state">
