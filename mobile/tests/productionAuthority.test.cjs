@@ -437,6 +437,20 @@ test('interactive controls expose accessibility semantics and compact layouts ca
   assert.match(fs.readFileSync(path.join(root, 'src/components/ui/SegmentedTabs.tsx'), 'utf8'), /minHeight:\s*44/);
 });
 
+test('Welcome uses a minimal preview and unboxed feature icons', () => {
+  const welcome = fs.readFileSync(
+    path.join(root, 'src/screens/welcome/WelcomeScreen.tsx'),
+    'utf8'
+  );
+  const featureIconStyle = welcome.match(/featureIcon:\s*\{([\s\S]*?)\n\s*\},/);
+
+  assert.ok(featureIconStyle, 'Welcome feature icon style should exist');
+  assert.doesNotMatch(featureIconStyle[1], /border(?:Radius|Width|Color)|backgroundColor/);
+  assert.match(welcome, /Clarity at a glance/);
+  assert.match(welcome, /styles\.previewFooter/);
+  assert.doesNotMatch(welcome, /styles\.(?:chartCard|reportCard)/);
+});
+
 test('real holding contracts preserve precision, order, modes, and valuation allocations', () => {
   const validation = load('src/portfolio/portfolioValidation.ts');
   const portfolioTypes = load('src/types/portfolio.ts');
@@ -670,7 +684,7 @@ test('More report detail exposes an accessible back action to Reports', () => {
 
   assert.match(navigation, /MoreStack\.Screen[\s\S]*name="ReportDetail"[\s\S]*BackHeaderButton/);
   assert.match(navigation, /label="Back to Reports"/);
-  assert.match(navigation, /navigation\.goBack\(\)/);
+  assert.match(navigation, /navigation\.navigate\('Reports'\)/);
   assert.match(backButton, /accessibilityRole="button"/);
   assert.match(backButton, /name="arrow-back"/);
 });

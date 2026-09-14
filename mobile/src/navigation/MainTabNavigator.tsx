@@ -125,7 +125,7 @@ function MoreNavigator() {
             <BackHeaderButton
               label="Back to Reports"
               color={palette.text}
-              onPress={() => navigation.goBack()}
+              onPress={() => navigation.navigate('Reports')}
             />
           )
         })}

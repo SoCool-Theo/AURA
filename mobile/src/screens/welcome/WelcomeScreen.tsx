@@ -56,29 +56,50 @@ function WelcomeBackdrop() {
 function ProductPreview() {
   return (
     <View style={styles.preview}>
-      <View style={styles.chartCard}>
-        <Text style={styles.previewEyebrow}>PORTFOLIO ANALYTICS</Text>
-        <Text style={styles.previewTitle}>Understand risk clearly</Text>
-        <Svg height={76} viewBox="0 0 190 76" width="100%">
-          <Path
-            d="M3 65C22 58 28 61 42 47C55 34 68 55 84 39C100 22 112 42 130 27C146 14 157 28 174 10L188 3"
-            fill="none"
-            stroke={colors.primary}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="3"
-          />
-          <Circle cx="188" cy="3" fill={colors.primarySoft} r="4" />
-        </Svg>
+      <View style={styles.previewHeader}>
+        <View>
+          <Text style={styles.previewEyebrow}>PORTFOLIO INTELLIGENCE</Text>
+          <Text style={styles.previewTitle}>Clarity at a glance</Text>
+        </View>
+        <View style={styles.previewStatus}>
+          <View style={styles.statusDot} />
+          <Text style={styles.statusText}>EDUCATIONAL</Text>
+        </View>
       </View>
 
-      <View style={styles.reportCard}>
-        <Text style={styles.reportLabel}>SAVED REPORTS</Text>
-        <View style={styles.ring}>
-          <View style={styles.ringInner} />
+      <Svg height={82} viewBox="0 0 320 82" width="100%">
+        <Path
+          d="M2 70H318"
+          fill="none"
+          stroke={colors.border}
+          strokeOpacity="0.5"
+        />
+        <Path
+          d="M3 65C34 60 49 63 73 48C96 33 113 51 140 38C166 25 184 39 214 24C241 11 265 28 292 13L317 5"
+          fill="none"
+          stroke={colors.primary}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2.5"
+        />
+        <Circle cx="317" cy="5" fill={colors.primarySoft} r="4" />
+      </Svg>
+
+      <View style={styles.previewFooter}>
+        <View style={styles.previewMetric}>
+          <Text style={styles.metricLabel}>RISK</Text>
+          <Text style={styles.metricValue}>Analyze</Text>
         </View>
-        <Text style={styles.reportTitle}>Portfolio analytics</Text>
-        <Text style={styles.reportText}>Risk · Return · Drawdown</Text>
+        <View style={styles.metricDivider} />
+        <View style={styles.previewMetric}>
+          <Text style={styles.metricLabel}>SCENARIOS</Text>
+          <Text style={styles.metricValue}>Explore</Text>
+        </View>
+        <View style={styles.metricDivider} />
+        <View style={styles.previewMetric}>
+          <Text style={styles.metricLabel}>REPORTS</Text>
+          <Text style={styles.metricValue}>Save</Text>
+        </View>
       </View>
     </View>
   );
@@ -194,17 +215,20 @@ const styles = StyleSheet.create({
   },
   preview: {
     minHeight: 190,
-    justifyContent: 'center',
-    marginHorizontal: spacing.sm
-  },
-  chartCard: {
-    minHeight: 158,
-    marginRight: 70,
-    borderRadius: 20,
+    justifyContent: 'space-between',
+    marginHorizontal: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSoft,
     backgroundColor: colors.backgroundSoft,
-    padding: spacing.lg
+    overflow: 'hidden'
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: spacing.md
   },
   previewEyebrow: {
     color: colors.primary,
@@ -214,53 +238,55 @@ const styles = StyleSheet.create({
   },
   previewTitle: {
     color: colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm
-  },
-  reportCard: {
-    position: 'absolute',
-    right: 0,
-    width: 138,
-    minHeight: 176,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
-    padding: spacing.md
-  },
-  reportLabel: {
-    color: colors.textSecondary,
-    fontSize: 9,
+    fontSize: 18,
     fontWeight: '900',
-    letterSpacing: 0.8
-  },
-  ring: {
-    width: 56,
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 28,
-    borderWidth: 9,
-    borderColor: colors.primary,
-    borderLeftColor: colors.surfaceElevated,
-    marginVertical: spacing.md
-  },
-  ringInner: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.surface
-  },
-  reportTitle: { color: colors.text, fontSize: 12, fontWeight: '900' },
-  reportText: {
-    color: colors.textSecondary,
-    fontSize: 9,
-    textAlign: 'center',
     marginTop: spacing.xs
+  },
+  previewStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 3
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary
+  },
+  statusText: {
+    color: colors.muted,
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.7
+  },
+  previewFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSoft,
+    paddingTop: spacing.md
+  },
+  previewMetric: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 3
+  },
+  metricDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: colors.borderSoft
+  },
+  metricLabel: {
+    color: colors.muted,
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.7
+  },
+  metricValue: {
+    color: colors.text,
+    fontSize: 11,
+    fontWeight: '800'
   },
   features: { flexDirection: 'row', justifyContent: 'space-between' },
   feature: { width: '31%', alignItems: 'center' },
@@ -268,11 +294,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt
+    justifyContent: 'center'
   },
   featureText: {
     color: colors.textSecondary,
