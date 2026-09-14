@@ -22,7 +22,7 @@ export function ReportSummary({ reports, portfolioCount }: ReportSummaryProps) {
       </Card>
       <Card className="report-summary-card amber">
         <span><Icon name="wallet" size={19} /></span>
-        <div><small>Portfolios Checked</small><strong>{portfolioCount}</strong><p>Owned portfolios queried</p></div>
+        <div><small>Available Portfolios</small><strong>{portfolioCount}</strong><p>Current, planned, and legacy</p></div>
       </Card>
       <Card className="report-summary-card green">
         <span><Icon name="reports" size={19} /></span>

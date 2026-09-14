@@ -77,7 +77,7 @@ export function apiErrorPresentation(
     return { code: 'NETWORK', title: 'Cannot connect to Aura', message: options.message ?? 'Check your connection and make sure the Aura service is reachable, then try again.', icon: 'offline', retryable: true };
   }
   if (error.kind === 'configuration') {
-    return { code: 'CONFIG', title: 'Aura is not configured', message: options.message ?? 'The application cannot reach its API configuration.', icon: 'server', retryable: false };
+    return { code: 'CONFIG', title: 'Aura is not configured', message: options.message ?? 'The application service connection is not configured.', icon: 'server', retryable: false };
   }
   if (error.status === 401) {
     return { code: '401', title: 'Session expired', message: options.message ?? 'Sign in again to continue securely.', icon: 'lock', retryable: false };

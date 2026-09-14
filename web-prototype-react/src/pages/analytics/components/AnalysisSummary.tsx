@@ -13,7 +13,7 @@ export function AnalysisSummary({ analysis }: AnalysisSummaryProps) {
   return (
     <Card className={styles.hero}>
       <div>
-        <span className={styles.eyebrow}>BACKEND ANALYSIS SNAPSHOT</span>
+        <span className={styles.eyebrow}>SAVED ANALYSIS SNAPSHOT</span>
         <h2>{analysis.portfolio_name}</h2>
         <p>
           Requested period {analysis.start_date} through {analysis.end_date}; available

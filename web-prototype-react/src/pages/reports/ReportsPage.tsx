@@ -102,7 +102,7 @@ export function ReportsPage() {
         <div>
           <span>IMMUTABLE ANALYSIS SNAPSHOTS</span>
           <h1>Reports</h1>
-          <p>Real report history composed from each owned portfolio’s reporting endpoint.</p>
+          <p>Review saved analysis snapshots from your current, planned, and legacy portfolios.</p>
         </div>
         <button className="primary-btn" onClick={() => go('analytics')}>
           <Icon name="analysis" size={17} /> Create New Analysis
@@ -128,7 +128,7 @@ export function ReportsPage() {
           onReset={resetFilters}
         />}
 
-        {loading && <div className="reports-empty-state" role="status"><span><Icon name="reports" size={28} /></span><h3>Loading report history</h3><p>Retrieving owned portfolios and their saved reports.</p></div>}
+        {loading && <div className="reports-empty-state" role="status"><span><Icon name="reports" size={28} /></span><h3>Loading report history</h3><p>Retrieving your portfolios and saved reports.</p></div>}
         {Boolean(error) && <ScreenErrorState error={error} fallbackMessage="Unable to load report history." resourceName="Report history" onRetry={() => setReloadKey(key => key + 1)} />}
         {!loading && !error && <ReportTable
           reports={visible}

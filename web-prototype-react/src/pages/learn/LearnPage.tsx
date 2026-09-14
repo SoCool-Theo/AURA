@@ -87,7 +87,7 @@ export function LearnPage() {
         <span><Icon name="spark" size={22} /></span>
         <div>
           <h2>Future AI explanations</h2>
-          <p>The AI Assistant is a truthful preview until Aura’s backend AI Agent is implemented.</p>
+          <p>The AI Assistant explains your saved Aura results and does not make investment recommendations.</p>
         </div>
         <button className="secondary-btn" onClick={() => go('assistant')}>
           View AI Preview <span>→</span>
