@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { MetricAmountSheet } from '../../components/analytics/MetricAmountSheet';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { SectionHeader } from '../../components/ui/SectionHeader';
@@ -19,6 +20,11 @@ import {
 import { formatPortfolioMoney } from '../../portfolio/portfolioFormatting';
 import { reportErrorMessage } from '../../report/reportErrors';
 import { formatReportTimestamp, riskTone } from '../../report/reportFormatting';
+import {
+  reportMetricAmountContent,
+  reportMonetaryMetrics,
+  type ReportMonetaryMetricKey
+} from '../../report/reportMetricDetails';
 import { colors, spacing } from '../../theme/theme';
 import {
   portfolioHoldingMode,
@@ -42,7 +48,9 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
   } = dashboard;
   const { portfolios, listStatus, listError, selectPortfolio } = portfoliosState;
   const [range, setRange] = useState<DashboardRange>('1M');
+  const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
   const analysis = report?.analysis;
+  const monetary = reportMonetaryMetrics(report);
   const points = useMemo(() => filterDashboardReturns(analysis?.portfolio_returns ?? [], range), [analysis, range]);
   const selected = portfolios.find((item) => item.id === selectedId);
   const firstName = (displayName || 'Investor').split(' ')[0];
@@ -181,8 +189,24 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                 tone="blue"
               />
               <WebKpiCard icon="speedometer-outline" label="Risk Score" value={analysis?.risk_classification.risk_score == null ? 'N/A' : `${analysis.risk_classification.risk_score.toFixed(1)}/100`} meta={analysis?.risk_classification.risk_level ?? 'No verified report loaded'} tone={analysis ? riskTone(analysis.risk_classification.risk_level) : 'primary'} />
-              <WebKpiCard icon="trending-up-outline" label="Annualized Return" value={dashboardPercent(analysis?.portfolio_metrics.annualized_return)} meta="Saved report period" />
-              <WebKpiCard icon="trending-down-outline" label="Maximum Drawdown" value={dashboardPercent(analysis?.max_drawdown.max_drawdown)} meta="Saved report peak-to-trough" tone="danger" />
+              <WebKpiCard
+                icon="trending-up-outline"
+                label="Annualized Return"
+                value={dashboardPercent(analysis?.portfolio_metrics.annualized_return)}
+                meta={monetary ? 'Historical equivalent · Tap for amount' : 'Saved report period'}
+                tone={analysis?.portfolio_metrics.annualized_return != null && analysis.portfolio_metrics.annualized_return < 0 ? 'danger' : 'success'}
+                onPress={monetary ? () => setSelectedMetric('annualized') : undefined}
+                accessibilityHint={monetary ? 'Shows the percentage and estimated annual money amount' : undefined}
+              />
+              <WebKpiCard
+                icon="trending-down-outline"
+                label="Maximum Drawdown"
+                value={dashboardPercent(analysis?.max_drawdown.max_drawdown)}
+                meta={monetary?.maximum_drawdown_amount != null ? 'Saved peak-to-trough · Tap for amount' : 'Saved report peak-to-trough'}
+                tone="danger"
+                onPress={monetary?.maximum_drawdown_amount != null ? () => setSelectedMetric('drawdown') : undefined}
+                accessibilityHint={monetary?.maximum_drawdown_amount != null ? 'Shows the percentage and estimated peak-to-trough money amount' : undefined}
+              />
             </View>
 
             <SectionHeader title="Latest saved analysis" action="Analyze" onPress={analyze} />
@@ -290,6 +314,10 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
           </>
         )}
       </ScrollView>
+      <MetricAmountSheet
+        content={reportMetricAmountContent(selectedMetric, report)}
+        onClose={() => setSelectedMetric(null)}
+      />
     </SafeAreaView>
   );
 }

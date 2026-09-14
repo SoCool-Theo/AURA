@@ -551,6 +551,7 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   const editor = read('src/components/portfolio/HoldingsEditor.tsx');
   const detail = read('src/screens/portfolios/PortfolioDetailScreen.tsx');
   const analysis = read('src/components/analytics/AnalysisResults.tsx');
+  const metricDetails = read('src/report/reportMetricDetails.ts');
   const simulation = read('src/components/simulations/SimulationResults.tsx');
   const history = read('src/screens/simulations/SimulationResultScreen.tsx');
 
@@ -563,13 +564,33 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(analysis, /Estimated shares are for display only/);
   assert.match(analysis, /MetricAmountSheet/);
   assert.match(analysis, /Tap for amount/);
-  assert.match(analysis, /cumulative_return_amount/);
-  assert.match(analysis, /annualized_return_amount/);
-  assert.match(analysis, /maximum_drawdown_amount/);
-  assert.ok(!/reference_amount\s*\*/.test(analysis));
+  assert.match(metricDetails, /cumulative_return_amount/);
+  assert.match(metricDetails, /annualized_return_amount/);
+  assert.match(metricDetails, /maximum_drawdown_amount/);
+  assert.ok(!/reference_amount\s*\*/.test(`${analysis}\n${metricDetails}`));
   assert.match(simulation, /Saved planned allocation/);
   assert.match(history, /isSimulationHistoryV3/);
   assert.ok(!/proposedAmount\s*\/|proposed_amount\s*\//.test(`${create}\n${editor}\n${detail}`));
+});
+
+test('Home report-backed return cards reuse saved monetary metric details', () => {
+  const dashboard = fs.readFileSync(
+    path.join(root, 'src/screens/dashboard/DashboardScreen.tsx'),
+    'utf8'
+  );
+  const details = fs.readFileSync(
+    path.join(root, 'src/report/reportMetricDetails.ts'),
+    'utf8'
+  );
+
+  assert.match(dashboard, /reportMonetaryMetrics\(report\)/);
+  assert.match(dashboard, /setSelectedMetric\('annualized'\)/);
+  assert.match(dashboard, /setSelectedMetric\('drawdown'\)/);
+  assert.match(dashboard, /<MetricAmountSheet/);
+  assert.match(dashboard, /Tap for amount/);
+  assert.match(details, /annualized_return_amount/);
+  assert.match(details, /maximum_drawdown_amount/);
+  assert.ok(!/reference_amount\s*\*/.test(`${dashboard}\n${details}`));
 });
 
 test('purchase-date picker accepts backend-safe past dates through today', () => {
