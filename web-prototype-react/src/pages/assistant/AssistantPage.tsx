@@ -51,6 +51,12 @@ export function AssistantPage({
         const requestedExists = requestedPortfolioId
           ? result.portfolios.some(item => item.id === requestedPortfolioId)
           : false;
+        if (requestedPortfolioId && !requestedExists) {
+          setPortfolioId('');
+          setSavedContext(null);
+          setLoadError('Portfolio not found.');
+          return;
+        }
         setPortfolioId(current => requestedExists
           ? requestedPortfolioId ?? ''
           : current && result.portfolios.some(item => item.id === current)
@@ -134,7 +140,7 @@ export function AssistantPage({
         ? 'Aura will explain the portfolio’s saved compatibility allocation.'
         : 'Aura will explain the current allocation derived from your saved holdings.';
 
-  if (!loadingPortfolios && loadError && !portfolios.length) {
+  if (!loadingPortfolios && loadError) {
     return <div className={`page ${styles.page}`}><ScreenErrorState
       error={loadError}
       resourceName="Portfolio list"
