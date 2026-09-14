@@ -256,10 +256,11 @@ it is not a portfolio-wide `503` because estimates are non-authoritative.
 
 ## Delivery sequence
 
-Steps 1 through 6, the mobile portion of Step 7, and the mobile-only Step 8M
-readiness verification are implemented. Web integration is intentionally
-skipped by current product direction. Conversion and full-system deployment
-verification remain pending.
+Steps 1 through 7 and the client readiness portions of Step 8 are implemented.
+The mobile Step 8M and web Step 8W checks cover their respective compilers,
+authority tests, dependency resolution, production bundles, source security,
+and guarded UI smoke checks. Conversion and full-system deployment verification
+remain pending.
 
 1. Freeze the planned-portfolio product, data, API, and provenance contract.
 2. Add and verify the database discriminator, planned fields, constraints, and
@@ -273,12 +274,14 @@ verification remain pending.
 6. Add mode-aware AI grounding. Implemented for live planned portfolios and
    frozen Report/Simulation V3 context with planned-language instructions,
    explicit hypothetical limitations, and ownership-claim output rejection.
-7. Integrate customer mobile and web workflows. Mobile now supports typed
+7. Integrate customer mobile and web workflows. Both clients now support typed
    create/edit/detail/dashboard, Report V3, Simulation V3, planned simulation
-   baselines, and mode-aware Assistant context. Web integration is skipped; the
-   conversion workflow remains pending.
+   baselines, and mode-aware Assistant context. The conversion workflow remains
+   pending.
 8. Run migration, rollback, privacy, immutability, and full regression
    verification before deployment readiness is claimed. The mobile-only Step
    8M compiler, production-authority tests, dependency resolution, source
-   security audit, and Android Hermes export pass; this does not replace the
-   remaining full-system verification.
+   security audit, and Android Hermes export pass. The web Step 8W compiler,
+   production-authority suite, dependency resolution, Vite production build,
+   source audit, and unauthenticated browser smoke checks also pass. These do
+   not replace the remaining environment-specific full-system verification.

@@ -1738,10 +1738,10 @@ incomplete.
 
 ### Remaining planned-portfolio work
 
-Customer web integration, the atomic plan-to-new-current conversion capability
-and its client flow, and final guarded regression/deployment verification remain
-pending. Conversion was not exposed in mobile because the required backend
-operation does not exist yet.
+The atomic plan-to-new-current conversion capability and its client flow, plus
+final guarded deployment verification, remain pending. Conversion is not
+exposed in either client because the required backend operation does not exist
+yet.
 
 ### Completed Step 8M mobile readiness verification
 
@@ -1770,10 +1770,9 @@ operation does not exist yet.
 
 The checked mobile source is ready for device/API acceptance testing, but this
 is not a claim that the entire product is deployment-ready. A signed native
-binary, physical-device or emulator E2E run against a deployed backend, web
-planned-portfolio integration, plan-to-current conversion, and the broader
-database/deployment verification are outside this mobile-only Step 8M. The web
-integration is intentionally skipped by current product direction.
+binary, physical-device or emulator E2E run against a deployed backend,
+plan-to-current conversion, and the broader database/deployment verification
+are outside this mobile-only Step 8M.
 
 ### Completed mobile report monetary metric details
 
@@ -1806,3 +1805,39 @@ integration is intentionally skipped by current product direction.
   formatting and guards against client-side reference-amount multiplication.
 - No database, migration, Docker, external LLM, dependency, branch, commit, or
   push operation was performed.
+
+### Completed Step 8W web readiness verification
+
+- The React web client now supports `CURRENT`, `PLANNED`, and `LEGACY`
+  portfolio presentation and workflows without replacing the established web
+  design system.
+- Current CRUD records real ownership facts; planned CRUD records proposed
+  amounts and one plan currency. Neither workflow accepts manual saved weights.
+- Current valuation uses backend-returned market values and allocation. Planned
+  detail uses backend target allocation and optional display-only estimated
+  shares; missing estimates do not become analytics authority.
+- Dashboard, Analytics, Reports, all simulation modes and V1/V2/V3 history,
+  monetary metric details, portfolio report shortcuts, and mode-aware Ask Aura
+  context are integrated. Saved report and simulation assistant links preserve
+  their exact immutable context identifiers.
+- Shared web error presentation distinguishes authentication, not-found,
+  validation, server, temporary-data, configuration, and network failures.
+  Blocking failures use page-level states and recoverable actions remain inline;
+  unexpected server details are not shown to users.
+- A final routing correction prevents an invalid Ask Aura portfolio deep link
+  from silently falling back to another owned portfolio.
+- Web TypeScript compilation, the 7-test production-authority suite, dependency
+  resolution, production Vite build, source secret/authority audit, and Git
+  whitespace checks pass.
+- Local browser smoke verification passed login rendering, sign-up navigation,
+  protected-route redirection, and console-error inspection. Authenticated live
+  browser E2E was not run because no test-user credentials were supplied.
+- No backend, database, migration, Docker, external LLM, dependency install,
+  branch, commit, push, merge, or PR operation was performed during Step 8W.
+
+### Web readiness boundary
+
+The checked React source is ready for authenticated API acceptance testing.
+This is not a production-deployment claim: fresh Supabase deployment,
+environment-specific authenticated browser E2E, and plan-to-current conversion
+remain separate follow-on work.

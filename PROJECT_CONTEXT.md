@@ -98,17 +98,17 @@ immutable V3 snapshots containing the authoritative proposed-amount baseline;
 opening V3 history never queries current prices or recalculates results.
 Mode-aware AI grounding now supports live planned allocations and frozen V3
 report/simulation context with explicit hypothetical language and ownership-
-claim rejection. The mobile client now supports current/planned/legacy CRUD and
-presentation, planned allocation/preview, Report and Simulation V3, and
-mode-aware Assistant context. Its compiler, authority regressions, dependency
-resolution, source security audit, and Android Hermes export pass. Web planned
-integration is intentionally skipped; atomic plan-to-current conversion and
-full-system deployment verification remain follow-on work.
+claim rejection. The mobile and React web clients now support
+current/planned/legacy CRUD and presentation, planned allocation/preview,
+Report and Simulation V3, and mode-aware Assistant context. Their compilers,
+authority regressions, dependency checks, production builds, and source
+security audits pass; the mobile Android Hermes export also passes. Atomic
+plan-to-current conversion and full-system deployment verification remain
+follow-on work.
 
 Weight-only legacy portfolios remain temporarily readable and operable. A
-normal holdings replacement converts a legacy portfolio to the real model.
-The web client has not received the planned-portfolio integration. A fresh
-Supabase deployment is also pending; Phase 13 does not deploy or access
+normal holdings replacement converts a legacy portfolio to the real model. A
+fresh Supabase deployment is pending; Phase 13 does not deploy or access
 Supabase.
 
 ## Data Principle
