@@ -32,11 +32,11 @@ import {
   type PortfolioRealHoldingInput
 } from '../../types/portfolio';
 import { AssetSymbolField } from './AssetSymbolField';
+import { HoldingDecimalInput } from './HoldingDecimalInput';
 import { PurchaseDateField } from './PurchaseDateField';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { FormErrorSummary, ScreenErrorState } from '../ui/ErrorState';
-import { Input } from '../ui/Input';
 import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
 import { LoadingState } from '../ui/LoadingState';
 
@@ -271,11 +271,10 @@ export function HoldingsEditor({
               </View>
 
               {holdingMode === 'planned' && 'proposedAmount' in row ? (
-                <Input
+                <HoldingDecimalInput
                   label={`Proposed Amount (${planCurrency ?? 'USD'})`}
                   value={row.proposedAmount}
-                  onChangeText={(proposedAmount) => patchRow(row.id, { proposedAmount })}
-                  keyboardType="decimal-pad"
+                  onValueChange={(proposedAmount) => patchRow(row.id, { proposedAmount })}
                   placeholder="4000.00"
                   editable={!saving}
                   error={fieldIssue(index, 'proposed_amount')}
@@ -283,11 +282,10 @@ export function HoldingsEditor({
               ) : 'investedAmount' in row ? <>
               <View style={styles.fields}>
                 <View style={styles.flexField}>
-                  <Input
+                  <HoldingDecimalInput
                     label="Invested Amount"
                     value={row.investedAmount}
-                    onChangeText={(investedAmount) => patchRow(row.id, { investedAmount })}
-                    keyboardType="decimal-pad"
+                    onValueChange={(investedAmount) => patchRow(row.id, { investedAmount })}
                     placeholder="1000.00"
                     editable={!saving}
                     error={fieldIssue(index, 'invested_amount')}
@@ -316,12 +314,11 @@ export function HoldingsEditor({
                 </View>
               </View>
 
-              <Input
+              <HoldingDecimalInput
                 label="Shares Owned"
                 value={row.shares}
-                onChangeText={(shares) => patchRow(row.id, { shares })}
-                keyboardType="decimal-pad"
-                placeholder="10.5"
+                onValueChange={(shares) => patchRow(row.id, { shares })}
+                placeholder="10.00"
                 editable={!saving}
                 error={fieldIssue(index, 'shares')}
               />

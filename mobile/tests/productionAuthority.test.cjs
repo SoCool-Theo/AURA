@@ -301,6 +301,9 @@ test('financial presentation preserves signs/nulls and allocation preserves save
   assert.equal(portfolioFormatting.formatSignedPortfolioMoney('820', 'USD'), '+$820.00');
   assert.equal(portfolioFormatting.formatSignedPortfolioMoney('-2380', 'USD'), '−$2,380.00');
   assert.equal(portfolioFormatting.formatSignedPortfolioMoney('0', 'THB'), '฿0.00');
+  assert.equal(portfolioFormatting.formatPortfolioQuantity('10.125'), '10.13');
+  assert.equal(portfolioFormatting.formatPortfolioQuantity('10'), '10.00');
+  assert.equal(portfolioFormatting.formatHoldingDecimalInput('1000.000000000000'), '1000.00');
   const points = [{ date: '2026-02-01', return: -0.2 }, { date: '2026-04-01', return: 0.1 }];
   const filtered = dashboard.filterDashboardReturns(points, '1M');
   assert.equal(filtered.length, 1);
@@ -576,7 +579,9 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   const history = read('src/screens/simulations/SimulationResultScreen.tsx');
 
   assert.match(create, /A Planned Portfolio/);
+  assert.match(create, /<HoldingDecimalInput/);
   assert.match(create, /Proposed Amount/);
+  assert.match(editor, /<HoldingDecimalInput/);
   assert.match(editor, /replacePlannedHoldings/);
   assert.match(detail, /getPlannedPreview/);
   assert.match(detail, /Estimated shares are display-only/);
@@ -595,6 +600,24 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(simulation, /Saved planned allocation/);
   assert.match(history, /isSimulationHistoryV3/);
   assert.ok(!/proposedAmount\s*\/|proposed_amount\s*\//.test(`${create}\n${editor}\n${detail}`));
+});
+
+test('mobile asset picker shows full names while preserving symbol values', () => {
+  const catalog = load('src/portfolio/supportedAssetSymbols.ts');
+  const field = fs.readFileSync(
+    path.join(root, 'src/components/portfolio/AssetSymbolField.tsx'),
+    'utf8'
+  );
+
+  assert.equal(catalog.supportedAssets.length, 17);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(catalog.supportedAssetSymbols)),
+    JSON.parse(JSON.stringify(catalog.supportedAssets.map(asset => asset.symbol)))
+  );
+  assert.ok(catalog.supportedAssets.every(asset => asset.symbol && asset.name));
+  assert.match(field, /supportedAssets\.map/);
+  assert.match(field, /asset\.name/);
+  assert.match(field, /chooseSymbol\(asset\.symbol\)/);
 });
 
 test('Home report-backed return cards reuse saved monetary metric details', () => {

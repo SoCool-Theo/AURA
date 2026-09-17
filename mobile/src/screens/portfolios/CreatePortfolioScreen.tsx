@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { apiValidationIssues } from '../../api/apiErrorPresentation';
 import { AssetSymbolField } from '../../components/portfolio/AssetSymbolField';
+import { HoldingDecimalInput } from '../../components/portfolio/HoldingDecimalInput';
 import { PurchaseDateField } from '../../components/portfolio/PurchaseDateField';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -313,11 +314,10 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
               </View>
 
               {mode === 'PLANNED' && 'proposedAmount' in row ? (
-                <Input
+                <HoldingDecimalInput
                   label={`Proposed Amount (${planCurrency})`}
                   value={row.proposedAmount}
-                  onChangeText={(proposedAmount) => patchRow(row.id, { proposedAmount })}
-                  keyboardType="decimal-pad"
+                  onValueChange={(proposedAmount) => patchRow(row.id, { proposedAmount })}
                   placeholder="4000.00"
                   editable={!saving}
                   error={fieldIssue(index, 'proposed_amount')}
@@ -326,13 +326,12 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
                 <>
               <View style={styles.inline}>
                 <View style={styles.amountField}>
-                  <Input
+                  <HoldingDecimalInput
                     label="Invested Amount"
                     value={row.investedAmount}
-                    onChangeText={(investedAmount) => patchRow(row.id, {
+                    onValueChange={(investedAmount) => patchRow(row.id, {
                       investedAmount
                     })}
-                    keyboardType="decimal-pad"
                     placeholder="1000.00"
                     editable={!saving}
                     style={styles.compactInput}
@@ -372,12 +371,11 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
                 </View>
               </View>
 
-              <Input
+              <HoldingDecimalInput
                 label="Shares Owned"
                 value={row.shares}
-                onChangeText={(shares) => patchRow(row.id, { shares })}
-                keyboardType="decimal-pad"
-                placeholder="10.5"
+                onValueChange={(shares) => patchRow(row.id, { shares })}
+                placeholder="10.00"
                 editable={!saving}
                 error={fieldIssue(index, 'shares')}
               />

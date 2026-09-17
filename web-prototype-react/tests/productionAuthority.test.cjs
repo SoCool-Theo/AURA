@@ -93,6 +93,9 @@ test('current, planned, and legacy allocation displays consume their authoritati
     holdings: [{ symbol: 'NVDA', target_allocation: '0.4' }],
   })), [{ symbol: 'NVDA', weight: 0.4 }]);
   assert.deepEqual(plain(portfolioUi.resolvedPortfolioAllocation(legacy, null, null)), [{ symbol: 'BND', weight: 1 }]);
+  assert.equal(portfolioUi.formatPortfolioQuantity('10.125'), '10.13');
+  assert.equal(portfolioUi.formatPortfolioQuantity('10'), '10.00');
+  assert.equal(portfolioUi.formatHoldingDecimalInput('1000.000000000000'), '1000.00');
 });
 
 test('simulation editors initialize from backend current and planned weights in saved order', () => {
@@ -354,6 +357,35 @@ test('web dashboard exposes mobile-style visible portfolio choices', () => {
   assert.match(styles, /\.dashboard-portfolio-option\.active\{/);
 });
 
+test('web portfolio cards and dashboard visuals use balanced formatted layouts', () => {
+  class ApiError extends Error {}
+  const dashboardUi = load('src/pages/dashboard/dashboardUi.ts', {
+    '../../api/apiClient': { ApiError },
+  });
+  const styles = fs.readFileSync(path.join(root, 'src/styles.css'), 'utf8');
+  const dashboardStyles = fs.readFileSync(
+    path.join(root, 'src/pages/dashboard/DashboardIntegration.module.css'),
+    'utf8',
+  );
+  const riskDrivers = fs.readFileSync(
+    path.join(root, 'src/pages/dashboard/components/RiskDrivers.tsx'),
+    'utf8',
+  );
+
+  const ticks = dashboardUi.portfolioReturnAxisTicks(-0.026, 0.023);
+  const labels = ticks.map(tick => dashboardUi.formatPortfolioReturnTick(tick, 0.049));
+  assert.equal(ticks.length, 5);
+  assert.ok(ticks.includes(0));
+  assert.equal(new Set(labels).size, labels.length);
+  assert.equal(dashboardUi.formatPortfolioReturnTick(-0.0004, 0.05), '0.0%');
+  assert.match(styles, /\.portfolios-page \.portfolio-card\{[^}]*display:flex[^}]*justify-content:center/);
+  assert.match(styles, /\.portfolios-page \.portfolio-card-actions\{[^}]*margin-top:0/);
+  assert.match(riskDrivers, /styles\.driverTrack/);
+  assert.match(riskDrivers, /Math\.min\(100, Math\.abs/);
+  assert.match(dashboardStyles, /dashboard-risk-list[\s\S]*justify-content: center/);
+  assert.match(dashboardStyles, /\.driverTrack/);
+});
+
 test('web holding forms expose the complete mobile-supported asset catalog', () => {
   const read = file => fs.readFileSync(path.join(root, file), 'utf8');
   const catalog = load('src/pages/portfolios/supportedAssetSymbols.ts');
@@ -361,13 +393,20 @@ test('web holding forms expose the complete mobile-supported asset catalog', () 
   const field = read('src/pages/portfolios/components/AssetSymbolField.tsx');
   const create = read('src/pages/portfolios/PortfolioCreateFlow.tsx');
   const editor = read('src/pages/portfolios/components/PortfolioHoldingsEditor.tsx');
+  const decimalInput = read('src/pages/portfolios/components/HoldingDecimalInput.tsx');
+  const detail = read('src/pages/portfolios/PortfolioDetailView.tsx');
+  const allocation = read('src/components/portfolio/AllocationLegend.tsx');
 
+  assert.deepEqual(plain(catalog.supportedAssets), plain(mobileCatalog.supportedAssets));
   assert.deepEqual(plain(catalog.supportedAssetSymbols), plain(mobileCatalog.supportedAssetSymbols));
   assert.equal(catalog.supportedAssetSymbols.length, 17);
+  assert.ok(catalog.supportedAssets.every(asset => asset.symbol && asset.name));
   assert.ok(!catalog.supportedAssetSymbols.includes('THB=X'));
   assert.match(field, /role="dialog"/);
   assert.match(field, /createPortal/);
-  assert.match(field, /supportedAssetSymbols\.map/);
+  assert.match(field, /supportedAssets\.map/);
+  assert.match(field, /asset\.name/);
+  assert.match(field, /chooseSymbol\(asset\.symbol\)/);
   assert.match(field, /role="radiogroup"/);
   assert.match(field, /role="radio"/);
   assert.match(field, /event\.target\.value\.toUpperCase\(\)/);
@@ -376,6 +415,34 @@ test('web holding forms expose the complete mobile-supported asset catalog', () 
   assert.match(styles, /\.assetPickerOptions[\s\S]*?overflow-y: auto/);
   assert.match(create, /<AssetSymbolField/);
   assert.match(editor, /<AssetSymbolField/);
+  assert.match(create, /<HoldingDecimalInput/);
+  assert.match(editor, /<HoldingDecimalInput/);
+  assert.match(decimalInput, /TWO_DECIMAL_INPUT/);
+  assert.match(detail, /styles\.allocationCard/);
+  assert.match(detail, /styles\.recordGrid/);
+  assert.match(allocation, /toFixed\(2\)/);
+  assert.match(styles, /\.allocationCard/);
+  assert.match(styles, /\.recordGrid > div:nth-child\(n \+ 4\)/);
+});
+
+test('web portfolio actions use accessible Aura dialogs and one purchase-date icon', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const detail = read('src/pages/portfolios/PortfolioDetailView.tsx');
+  const dialog = read('src/pages/portfolios/components/PortfolioActionDialog.tsx');
+  const styles = read('src/pages/portfolios/PortfolioIntegration.module.css');
+
+  assert.doesNotMatch(detail, /\bprompt\s*\(/);
+  assert.doesNotMatch(detail, /\bconfirm\s*\(/);
+  assert.match(detail, /openActionDialog\('rename'\)/);
+  assert.match(detail, /openActionDialog\('duplicate'\)/);
+  assert.match(detail, /openActionDialog\('delete'\)/);
+  assert.match(dialog, /createPortal/);
+  assert.match(dialog, /role="dialog"/);
+  assert.match(dialog, /aria-modal="true"/);
+  assert.match(dialog, /event\.key === 'Escape'/);
+  assert.match(dialog, /event\.key !== 'Tab'/);
+  assert.match(styles, /\.dateField input::\-webkit-calendar-picker-indicator[\s\S]*?opacity: 0/);
+  assert.match(styles, /\.dateField svg[\s\S]*?color: var\(--purple-light\)/);
 });
 
 test('production web source has no direct market, database, or LLM provider authority', () => {

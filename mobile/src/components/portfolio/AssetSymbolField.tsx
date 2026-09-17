@@ -12,7 +12,7 @@ import {
   View
 } from 'react-native';
 
-import { supportedAssetSymbols } from '../../portfolio/supportedAssetSymbols';
+import { supportedAssets } from '../../portfolio/supportedAssetSymbols';
 import { colors, spacing } from '../../theme/theme';
 
 type AssetSymbolFieldProps = Omit<
@@ -132,27 +132,30 @@ export function AssetSymbolField({
               showsVerticalScrollIndicator
               style={styles.options}
             >
-              {supportedAssetSymbols.map((symbol) => {
-                const selected = symbol === normalizedValue;
+              {supportedAssets.map((asset) => {
+                const selected = asset.symbol === normalizedValue;
                 return (
                   <Pressable
-                    accessibilityLabel={`${symbol} asset symbol`}
+                    accessibilityLabel={`${asset.symbol}, ${asset.name}`}
                     accessibilityRole="radio"
                     accessibilityState={{ selected }}
-                    key={symbol}
-                    onPress={() => chooseSymbol(symbol)}
+                    key={asset.symbol}
+                    onPress={() => chooseSymbol(asset.symbol)}
                     style={({ pressed }) => [
                       styles.option,
                       selected && styles.optionSelected,
                       pressed && styles.optionPressed
                     ]}
                   >
-                    <Text style={[
-                      styles.optionText,
-                      selected && styles.optionTextSelected
-                    ]}>
-                      {symbol}
-                    </Text>
+                    <View style={styles.optionCopy}>
+                      <Text style={[
+                        styles.optionText,
+                        selected && styles.optionTextSelected
+                      ]}>
+                        {asset.symbol}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.optionName}>— {asset.name}</Text>
+                    </View>
                     {selected ? (
                       <Ionicons color={colors.primary} name="checkmark" size={19} />
                     ) : null}
@@ -257,8 +260,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.selectedBackground
   },
   optionPressed: { backgroundColor: colors.surfaceElevated },
+  optionCopy: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   optionText: { color: colors.textSecondary, fontSize: 14, fontWeight: '800' },
   optionTextSelected: { color: colors.primary },
+  optionName: { flex: 1, color: colors.muted, fontSize: 11 },
   menuNote: {
     color: colors.muted,
     fontSize: 10,

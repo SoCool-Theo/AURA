@@ -21,6 +21,10 @@ import type {
   PortfolioValuationResponse,
 } from '../../types/portfolio';
 import { PortfolioHoldingsEditor } from './components/PortfolioHoldingsEditor';
+import {
+  PortfolioActionDialog,
+  type PortfolioAction,
+} from './components/PortfolioActionDialog';
 import styles from './PortfolioIntegration.module.css';
 import {
   formatPortfolioAllocation,
@@ -49,6 +53,8 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   const [contextReloadKey, setContextReloadKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [dialogAction, setDialogAction] = useState<PortfolioAction | null>(null);
+  const [dialogName, setDialogName] = useState('');
   const [tab, setTab] = useState<DetailTab>('Overview');
 
   useEffect(() => {
@@ -103,53 +109,47 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
     return () => controller.abort();
   }, [portfolio, valuationCurrency, contextReloadKey]);
 
-  async function rename() {
+  function openActionDialog(action: PortfolioAction) {
+    if (busy || !portfolio) return;
+    setMenu(false);
+    setActionError(null);
+    setDialogName(action === 'duplicate' ? `${portfolio.name} Copy` : portfolio.name);
+    setDialogAction(action);
+  }
+
+  function closeActionDialog() {
     if (busy) return;
-    if (!portfolio) return;
-    const name = prompt('New portfolio name', portfolio.name);
-    if (!name?.trim() || name.trim() === portfolio.name) return;
+    setDialogAction(null);
+    setActionError(null);
+  }
+
+  async function submitActionDialog() {
+    if (busy || !portfolio || !dialogAction) return;
+    const name = dialogName.trim();
+    if (dialogAction !== 'delete' && !name) return;
+    if (dialogAction === 'rename' && name === portfolio.name) {
+      setDialogAction(null);
+      return;
+    }
 
     setBusy(true);
     setActionError(null);
     try {
-      setPortfolio(await updatePortfolio(portfolio.id, { name: name.trim() }));
+      if (dialogAction === 'rename') {
+        setPortfolio(await updatePortfolio(portfolio.id, { name }));
+        setDialogAction(null);
+      } else if (dialogAction === 'duplicate') {
+        const duplicated = await duplicatePortfolio(portfolio.id, { name });
+        setDialogAction(null);
+        go(`portfolio/${duplicated.id}`);
+      } else {
+        await deletePortfolio(portfolio.id);
+        setDialogAction(null);
+        go('portfolios');
+      }
     } catch (error) {
       setActionError(error);
     } finally {
-      setBusy(false);
-    }
-  }
-
-  async function duplicate() {
-    if (busy) return;
-    if (!portfolio) return;
-    const name = prompt('Name for duplicated portfolio', `${portfolio.name} Copy`);
-    if (!name?.trim()) return;
-
-    setBusy(true);
-    setActionError(null);
-    try {
-      const duplicated = await duplicatePortfolio(portfolio.id, { name: name.trim() });
-      go(`portfolio/${duplicated.id}`);
-    } catch (error) {
-      setActionError(error);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function remove() {
-    if (busy) return;
-    if (!portfolio || !confirm(`Delete ${portfolio.name}? This cannot be undone.`)) return;
-
-    setBusy(true);
-    setActionError(null);
-    try {
-      await deletePortfolio(portfolio.id);
-      setPortfolio(null);
-      go('portfolios');
-    } catch (error) {
-      setActionError(error);
       setBusy(false);
     }
   }
@@ -183,12 +183,11 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   return (
     <div className="page portfolio-detail-page">
       <button className="detail-back-link" onClick={() => go('portfolios')}>← Back to Portfolios</button>
-      {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to update this portfolio." />}
       <section className="portfolio-detail-header">
         <div className="detail-identity">
           <SymbolBadge symbol={portfolio.name.slice(0, 2).toUpperCase()} />
           <div>
-            <div className="detail-title-row"><h1>{portfolio.name}</h1><span className={styles.portfolioTypeBadge}>{typeLabel}</span><button aria-label="Rename portfolio" onClick={() => void rename()} disabled={busy}>✎</button></div>
+            <div className="detail-title-row"><h1>{portfolio.name}</h1><span className={styles.portfolioTypeBadge}>{typeLabel}</span><button aria-label="Rename portfolio" onClick={() => openActionDialog('rename')} disabled={busy}>✎</button></div>
             <p>Created {formatPortfolioDate(portfolio.created_at)} <span>•</span> Updated {formatPortfolioDate(portfolio.updated_at)}</p>
           </div>
         </div>
@@ -198,9 +197,9 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
           <div className="relative">
             <button className="secondary-btn detail-more-btn" onClick={() => setMenu(!menu)} aria-expanded={menu} disabled={busy}>More <Icon name="chevron-down" size={16} /></button>
             {menu && <div className="menu-pop detail-menu">
-              <button onClick={() => { setMenu(false); void rename(); }} disabled={busy}>Rename portfolio</button>
-              <button onClick={() => { setMenu(false); void duplicate(); }} disabled={busy}>Duplicate portfolio</button>
-              <button className="danger" onClick={() => { setMenu(false); void remove(); }} disabled={busy}>Delete portfolio</button>
+              <button onClick={() => openActionDialog('rename')} disabled={busy}>Rename portfolio</button>
+              <button onClick={() => openActionDialog('duplicate')} disabled={busy}>Duplicate portfolio</button>
+              <button className="danger" onClick={() => openActionDialog('delete')} disabled={busy}>Delete portfolio</button>
             </div>}
           </div>
         </div>
@@ -249,7 +248,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
         </div>
         {portfolio.holdings.length > 0 ? <>
           {allocation.length > 0 ? (
-            <Card className="detail-section-card"><AllocationLegend holdings={allocation} label={portfolio.portfolio_type === 'PLANNED' ? 'Target Allocation' : portfolio.portfolio_type === 'CURRENT' ? 'Current Allocation' : 'Saved Allocation'} /></Card>
+            <Card className={`detail-section-card ${styles.allocationCard}`}><AllocationLegend holdings={allocation} label={portfolio.portfolio_type === 'PLANNED' ? 'Target Allocation' : portfolio.portfolio_type === 'CURRENT' ? 'Current Allocation' : 'Saved Allocation'} /></Card>
           ) : (
             <Card className={styles.stateCard}>
               <h2>{contextLoading ? 'Loading allocation…' : 'Allocation unavailable'}</h2>
@@ -272,7 +271,21 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
 
       {tab === 'Holdings' && <PortfolioHoldingsEditor portfolio={portfolio} onSaved={updated => { setPortfolio(updated); setActionError(null); }} />}
 
-      {tab === 'Record' && <div className="detail-tab-panel"><Card className="detail-section-card"><div className="detail-section-header"><div><h2>Portfolio Record</h2><p>Saved identity and portfolio mode.</p></div></div><div className={styles.metadataGrid}><div><small>Name</small><strong>{portfolio.name}</strong></div><div><small>Type</small><strong>{typeLabel}</strong></div><div><small>Plan Currency</small><strong>{portfolio.plan_currency ?? 'Not applicable'}</strong></div><div><small>Created</small><strong>{formatPortfolioDate(portfolio.created_at)}</strong></div><div><small>Updated</small><strong>{formatPortfolioDate(portfolio.updated_at)}</strong></div></div></Card></div>}
+      {tab === 'Record' && <div className="detail-tab-panel"><Card className={`detail-section-card ${styles.recordCard}`}><div className="detail-section-header"><div><h2>Portfolio Record</h2><p>Saved identity and portfolio mode.</p></div></div><div className={`${styles.metadataGrid} ${styles.recordGrid}`}><div><small>Name</small><strong>{portfolio.name}</strong></div><div><small>Type</small><strong>{typeLabel}</strong></div><div><small>Plan Currency</small><strong>{portfolio.plan_currency ?? 'Not applicable'}</strong></div><div><small>Created</small><strong>{formatPortfolioDate(portfolio.created_at)}</strong></div><div><small>Updated</small><strong>{formatPortfolioDate(portfolio.updated_at)}</strong></div></div></Card></div>}
+
+      {dialogAction && <PortfolioActionDialog
+        action={dialogAction}
+        portfolioName={portfolio.name}
+        value={dialogName}
+        busy={busy}
+        error={actionError}
+        onValueChange={value => {
+          setDialogName(value);
+          setActionError(null);
+        }}
+        onCancel={closeActionDialog}
+        onSubmit={() => void submitActionDialog()}
+      />}
     </div>
   );
 }
