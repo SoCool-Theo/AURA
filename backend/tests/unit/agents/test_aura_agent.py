@@ -11,6 +11,7 @@ from backend.app.agents.agent import (
 from backend.app.agents.guardrails import (
     HISTORICAL_LIMITATION,
     INVESTMENT_ADVICE_REFUSAL,
+    PLANNED_PORTFOLIO_LIMITATION,
     UNAVAILABLE_DATA_RESPONSE,
 )
 from backend.app.agents.prompts import build_system_instructions
@@ -243,3 +244,44 @@ def test_agent_preserves_financial_context_without_mutation_or_recalculation() -
     assert context["simulation"]["result"]["comparison"]["return_delta"] == -0.15
     assert (tools.portfolio, tools.latest_report, tools.simulation) == before
     assert provider.requests[0].system_instructions == build_system_instructions()
+
+
+def test_planned_context_adds_limitation_and_preserves_proposed_semantics() -> None:
+    tools = FakeTools()
+    tools.portfolio = {
+        "id": str(_PORTFOLIO_ID),
+        "name": "Proposed Mix",
+        "portfolio_type": "PLANNED",
+        "baseline_source": "proposed-amount-target-allocation",
+        "plan_currency": "USD",
+        "total_proposed_amount": "1000",
+        "holdings": [
+            {
+                "symbol": "AAPL",
+                "proposed_amount": "600",
+                "target_allocation": "0.6",
+                "position": 0,
+            }
+        ],
+    }
+    tools.latest_report = {"available": False}
+    provider = FakeProvider("Your planned allocation is hypothetical.")
+
+    response = AuraAgent(tools=tools, provider=provider).explain(_request())
+
+    context = provider.requests[0].grounded_context["portfolio"]
+    assert context["portfolio_type"] == "PLANNED"
+    assert context["holdings"][0]["proposed_amount"] == "600"
+    assert response.limitations == [
+        PLANNED_PORTFOLIO_LIMITATION,
+        UNAVAILABLE_DATA_RESPONSE,
+    ]
+
+
+def test_planned_context_rejects_provider_claim_that_assets_are_owned() -> None:
+    tools = FakeTools()
+    tools.portfolio["portfolio_type"] = "PLANNED"
+    provider = FakeProvider("You currently own NVDA in your current portfolio.")
+
+    with pytest.raises(AuraAgentOutputError):
+        AuraAgent(tools=tools, provider=provider).explain(_request())

@@ -22,6 +22,9 @@ export function formatReportTimestamp(value: string): string {
 
 export function analysisErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) return fallback;
+  if (error.status === 503) {
+    return 'Required current market or currency data is unavailable or stale. Analysis will be available after the market data refresh completes; no report was saved.';
+  }
   if (typeof error.detail === 'string' && error.detail) return error.detail;
 
   if (Array.isArray(error.detail)) {

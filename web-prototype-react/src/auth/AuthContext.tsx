@@ -48,7 +48,7 @@ function sessionRestoreMessage(error: unknown): string {
   if (error instanceof ApiError && error.kind === 'configuration') {
     return error.message;
   }
-  return 'Aura could not verify your session. Check the API connection and try again.';
+  return 'Aura could not verify your session. Check the service connection and try again.';
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

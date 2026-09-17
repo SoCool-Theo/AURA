@@ -14,6 +14,10 @@ from .portfolio_analysis_preparation_service import (
     PortfolioAnalysisBaselineKind,
     PortfolioAnalysisPreparationResult,
 )
+from .portfolio_planned_allocation_service import (
+    PlannedAllocationHolding,
+    PlannedPortfolioAllocation,
+)
 from .portfolio_valuation_service import (
     HoldingValuationResult,
     PortfolioDisplayCurrency,
@@ -27,6 +31,7 @@ _SymbolItem = TypeVar(
     AssetMetrics,
     RiskDriverEntry,
     HoldingValuationResult,
+    PlannedAllocationHolding,
 )
 
 
@@ -44,6 +49,7 @@ class PortfolioEnrichedHoldingAnalysis:
     risk_driver_entry: RiskDriverEntry
     holding_id: UUID | None
     invested_amount: Decimal | None
+    proposed_amount: Decimal | None
     invested_currency: str | None
     shares: Decimal | None
     purchase_date: date | None
@@ -63,6 +69,7 @@ class PortfolioEnrichedAnalysisResult:
     baseline_kind: PortfolioAnalysisBaselineKind
     analysis: PortfolioAnalysisResponse
     valuation: PortfolioValuationResult | None
+    planned_allocation: PlannedPortfolioAllocation | None
     holdings: tuple[PortfolioEnrichedHoldingAnalysis, ...]
 
 
@@ -191,17 +198,57 @@ def _validate_analytics_weights(
             )
 
 
-def _validate_valuation_context(
+def _validate_source_context(
     preparation: PortfolioAnalysisPreparationResult,
     baseline_symbols: tuple[str, ...],
-) -> dict[str, HoldingValuationResult] | None:
+) -> tuple[
+    dict[str, HoldingValuationResult] | None,
+    dict[str, PlannedAllocationHolding] | None,
+]:
     valuation = preparation.valuation
+    planned_allocation = preparation.planned_allocation
     if preparation.baseline_kind is PortfolioAnalysisBaselineKind.LEGACY:
         if valuation is not None or preparation.valuation_as_of is not None:
             raise PortfolioAnalysisCompositionError(
                 "legacy preparation must not contain valuation context"
             )
-        return None
+        if planned_allocation is not None:
+            raise PortfolioAnalysisCompositionError(
+                "legacy preparation must not contain planned allocation context"
+            )
+        return None, None
+
+    if preparation.baseline_kind is PortfolioAnalysisBaselineKind.PLANNED:
+        if valuation is not None or preparation.valuation_as_of is not None:
+            raise PortfolioAnalysisCompositionError(
+                "planned preparation must not contain valuation context"
+            )
+        if planned_allocation is None:
+            raise PortfolioAnalysisCompositionError(
+                "planned preparation requires allocation context"
+            )
+        planned_holdings = tuple(planned_allocation.holdings)
+        planned_by_symbol = _index_unique_by_symbol(
+            planned_holdings,
+            label="planned allocation",
+        )
+        _validate_symbol_coverage(
+            expected_symbols=baseline_symbols,
+            actual_symbols=tuple(
+                holding.symbol for holding in planned_holdings
+            ),
+            label="planned allocation",
+        )
+        for resolved in preparation.resolved_weights:
+            if (
+                planned_by_symbol[resolved.symbol].target_allocation
+                != resolved.weight
+            ):
+                raise PortfolioAnalysisCompositionError(
+                    "planned allocation does not match prepared baseline: "
+                    f"{resolved.symbol}"
+                )
+        return None, planned_by_symbol
 
     if preparation.baseline_kind is not PortfolioAnalysisBaselineKind.REAL:
         raise PortfolioAnalysisCompositionError(
@@ -210,6 +257,10 @@ def _validate_valuation_context(
     if valuation is None or preparation.valuation_as_of is None:
         raise PortfolioAnalysisCompositionError(
             "real preparation requires valuation context"
+        )
+    if planned_allocation is not None:
+        raise PortfolioAnalysisCompositionError(
+            "real preparation must not contain planned allocation context"
         )
     if (
         valuation.display_currency is PortfolioDisplayCurrency.USD
@@ -252,7 +303,7 @@ def _validate_valuation_context(
                 "valuation allocation does not match prepared baseline: "
                 f"{resolved.symbol}"
             )
-    return valuation_by_symbol
+    return valuation_by_symbol, None
 
 
 def compose_portfolio_analysis(
@@ -289,7 +340,7 @@ def compose_portfolio_analysis(
         asset_metrics_by_symbol=asset_metrics_by_symbol,
         risk_drivers_by_symbol=risk_drivers_by_symbol,
     )
-    valuation_by_symbol = _validate_valuation_context(
+    valuation_by_symbol, planned_by_symbol = _validate_source_context(
         preparation,
         baseline_symbols,
     )
@@ -301,6 +352,11 @@ def compose_portfolio_analysis(
             if valuation_by_symbol is None
             else valuation_by_symbol[resolved.symbol]
         )
+        planned_holding = (
+            None
+            if planned_by_symbol is None
+            else planned_by_symbol[resolved.symbol]
+        )
         enriched_holdings.append(
             PortfolioEnrichedHoldingAnalysis(
                 symbol=resolved.symbol,
@@ -308,14 +364,23 @@ def compose_portfolio_analysis(
                 asset_metrics=asset_metrics_by_symbol[resolved.symbol],
                 risk_driver_entry=risk_drivers_by_symbol[resolved.symbol],
                 holding_id=(
-                    None
-                    if valuation_holding is None
-                    else valuation_holding.holding_id
+                    valuation_holding.holding_id
+                    if valuation_holding is not None
+                    else (
+                        None
+                        if planned_holding is None
+                        else planned_holding.holding_id
+                    )
                 ),
                 invested_amount=(
                     None
                     if valuation_holding is None
                     else valuation_holding.invested_amount
+                ),
+                proposed_amount=(
+                    None
+                    if planned_holding is None
+                    else planned_holding.proposed_amount
                 ),
                 invested_currency=(
                     None
@@ -333,9 +398,13 @@ def compose_portfolio_analysis(
                     else valuation_holding.purchase_date
                 ),
                 position=(
-                    None
-                    if valuation_holding is None
-                    else valuation_holding.position
+                    valuation_holding.position
+                    if valuation_holding is not None
+                    else (
+                        None
+                        if planned_holding is None
+                        else planned_holding.position
+                    )
                 ),
                 asset_price=(
                     None
@@ -374,6 +443,7 @@ def compose_portfolio_analysis(
         baseline_kind=preparation.baseline_kind,
         analysis=analysis,
         valuation=preparation.valuation,
+        planned_allocation=preparation.planned_allocation,
         holdings=tuple(enriched_holdings),
     )
 

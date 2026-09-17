@@ -11,7 +11,14 @@ export function DateRangeSelector({ value, onChange }: { value: DateRange | null
       {ranges.map((range) => {
         const active = range === value;
         return (
-          <Pressable key={range} onPress={() => onChange(range)} style={[styles.item, active && styles.active]}>
+          <Pressable
+            accessibilityLabel={`${range} date range`}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: active }}
+            key={range}
+            onPress={() => onChange(range)}
+            style={[styles.item, active && styles.active]}
+          >
             <Text style={[styles.text, active && styles.activeText]}>{range}</Text>
           </Pressable>
         );
@@ -30,7 +37,7 @@ const styles = StyleSheet.create({
   },
   item: {
     flex: 1,
-    minHeight: 32,
+    minHeight: 44,
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center'

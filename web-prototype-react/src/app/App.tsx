@@ -44,7 +44,12 @@ function App() {
     case 'simulations': content = route.id && route.reportId
       ? <SimulationHistoryDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} simulationId={route.reportId} />
       : <SimulationsPage key={route.id} portfolioId={route.id} />; break;
-    case 'assistant': content = <AssistantPage />; break;
+    case 'assistant': content = <AssistantPage
+      key={[route.id, route.reportId, route.contextId].filter(Boolean).join('/')}
+      portfolioId={route.id}
+      reportId={route.reportId === 'report' ? route.contextId : route.contextId ? undefined : route.reportId}
+      simulationId={route.reportId === 'simulation' ? route.contextId : undefined}
+    />; break;
     case 'reports': content = route.id && route.reportId
       ? <ReportDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} reportId={route.reportId} />
       : <ReportsPage />; break;

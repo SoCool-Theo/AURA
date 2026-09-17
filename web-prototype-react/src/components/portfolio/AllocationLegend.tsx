@@ -1,14 +1,15 @@
-import type { PortfolioHoldingResponse } from '../../types/portfolio';
+import type { PortfolioAllocationDisplayHolding } from '../../pages/portfolios/portfolioUi';
 
 interface AllocationLegendProps {
-  holdings: PortfolioHoldingResponse[];
+  holdings: PortfolioAllocationDisplayHolding[];
+  label?: string;
 }
 
-export function AllocationLegend({ holdings }: AllocationLegendProps) {
+export function AllocationLegend({ holdings, label = 'Allocation' }: AllocationLegendProps) {
   return (
     <>
       <div className="portfolio-allocation-heading">
-        <span>Allocation</span>
+        <span>{label}</span>
         <small>{holdings.length} holdings</small>
       </div>
       <div className="portfolio-card-allocation">

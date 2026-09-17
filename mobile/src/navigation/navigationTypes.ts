@@ -39,7 +39,7 @@ export type MainTabParamList = {
   Home: undefined;
   Portfolio: NavigatorScreenParams<PortfolioStackParamList>;
   Simulate: NavigatorScreenParams<SimulationStackParamList>;
-  AI: undefined;
+  AI: { portfolioId?: string } | undefined;
   MoreTab: NavigatorScreenParams<MoreStackParamList>;
 };
 

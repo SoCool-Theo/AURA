@@ -9,7 +9,7 @@ export const learnLessons: LearnLesson[] = [
     summary: 'Understand why Aura combines multiple risk signals instead of relying on one number.',
     body: [
       'A portfolio risk score is a compact way to summarize several dimensions of risk.',
-      'Aura’s production backend combines factors such as volatility, drawdown, concentration and diversification. The mobile frontend should display that result rather than recreate the official calculation.',
+      'Aura combines factors such as volatility, drawdown, concentration and diversification into one educational score.',
       'Use the score as an educational summary, then open the detailed metrics to understand why the score is high or low.'
     ]
   },
@@ -46,7 +46,7 @@ export const learnLessons: LearnLesson[] = [
     body: [
       'The Sharpe ratio is a risk-adjusted return metric.',
       'In simple terms, it asks how much return a portfolio produced relative to the amount of volatility it experienced.',
-      'Aura should present the backend result and explain it in context rather than encouraging users to treat one ratio as a complete investment decision.'
+      'Aura explains this result in context so users do not treat one ratio as a complete investment decision.'
     ]
   },
   {
@@ -81,7 +81,7 @@ export const learnLessons: LearnLesson[] = [
     summary: 'Compare the saved weights with another set of percentages.',
     body: [
       'Allocation Change asks how historical risk and performance would differ if the same assets had different weights.',
-      'The production backend compares the original and modified allocations using the same historical period and aligned market data.',
+      'Aura compares the original and modified allocations using the same historical period and aligned market data.',
       'This helps users understand sensitivity to concentration and diversification without presenting a buy or sell recommendation.'
     ]
   },
@@ -105,8 +105,8 @@ export const learnLessons: LearnLesson[] = [
     summary: 'Learn the role and boundaries of grounded AI explanations.',
     body: [
       'Aura’s AI Agent explains saved portfolio analysis and supported simulation context in simple language.',
-      'The mobile Assistant sends a selected portfolio ID and question to Aura’s authenticated backend. The backend owns the grounded context, provider access, guardrails, sources and limitations.',
-      'The assistant explains backend results rather than replacing the deterministic analytics engine. It does not predict prices or provide personalized buy, sell or hold recommendations.'
+      'The Assistant uses the selected portfolio and its saved analysis to keep explanations relevant to the user’s results.',
+      'The Assistant explains Aura’s results. It does not predict prices or provide personalized buy, sell or hold recommendations.'
     ]
   }
 ];

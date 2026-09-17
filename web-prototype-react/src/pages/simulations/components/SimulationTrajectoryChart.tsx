@@ -21,7 +21,7 @@ export function SimulationTrajectoryChart({ series }: { series: Series[] }) {
 
   return <>
     <div className={styles.legend}>{series.map(item => <span key={item.label}><i style={{ background: item.color }} />{item.label}</span>)}</div>
-    <svg className={styles.chart} viewBox="0 0 600 260" role="img" aria-label="Backend-returned normalized portfolio trajectory">
+    <svg className={styles.chart} viewBox="0 0 600 260" role="img" aria-label="Normalized historical portfolio trajectory">
       <line x1="18" y1="28" x2="582" y2="28" /><line x1="18" y1="130" x2="582" y2="130" /><line x1="18" y1="232" x2="582" y2="232" />
       {polylines}
     </svg>

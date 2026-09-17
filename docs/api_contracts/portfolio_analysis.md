@@ -39,3 +39,31 @@ Real portfolio CRUD uses `PortfolioRealHoldingInput` through
 derives a real portfolio's current USD allocation and adapts it into this
 weight-based engine contract. Legacy portfolios continue to supply their saved
 weights during the temporary compatibility period.
+
+## Saved-report monetary context
+
+Current V2 and planned V3 report detail responses include an optional
+`monetary_metrics` object. It is derived only from the stored report snapshot;
+it does not fetch current prices, revalue a portfolio, or modify the persisted
+JSONB payload. This keeps previously saved reports readable without a database
+migration.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `currency` | `USD` or `THB` | Currency of every amount in this object. |
+| `basis` | `saved-current-valuation` or `planned-proposed-amount` | Identifies the saved reference amount. |
+| `reference_amount` | Positive decimal string | Saved current valuation for V2 or total proposed amount for V3. |
+| `cumulative_return_amount` | Signed decimal string | Historical cumulative return applied to the reference amount. |
+| `annualized_return_amount` | Signed decimal string | Historical annualized rate expressed as a one-year equivalent on the reference amount. |
+| `maximum_drawdown_amount` | Non-positive decimal string or `null` | Currency decline for the exact saved peak-to-trough drawdown episode. |
+
+`maximum_drawdown_amount` is `null` when an older or malformed snapshot does
+not contain enough internally consistent dated return information to reproduce
+the saved drawdown episode. Clients must not substitute
+`reference_amount × max_drawdown`, because the drawdown percentage is measured
+from its historical peak rather than necessarily from the reference amount.
+
+These amounts are historical educational equivalents, not actual realized
+profit/loss, guarantees, or forecasts. V1 legacy reports remain
+percentage-only because they do not contain a trustworthy currency reference
+amount.

@@ -17,6 +17,9 @@ export function SegmentedTabs<T extends string>({
         const active = item === value;
         return (
           <Pressable
+            accessibilityLabel={item}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
             key={item}
             onPress={() => onChange(item)}
             style={[styles.tab, active && styles.activeTab]}
@@ -32,7 +35,7 @@ export function SegmentedTabs<T extends string>({
 const styles = StyleSheet.create({
   row: { gap: spacing.sm },
   tab: {
-    minHeight: 38,
+    minHeight: 44,
     paddingHorizontal: 14,
     borderRadius: 12,
     alignItems: 'center',

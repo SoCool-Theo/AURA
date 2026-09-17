@@ -63,8 +63,8 @@ export function LearnDetailScreen({ route }: { route: any }) {
             <Text style={styles.noteTitle}>Aura learning boundary</Text>
           </View>
           <Text style={styles.noteText}>
-            Learn explains the concepts shown in Aura. Production portfolio metrics and
-            simulation results still come from the backend.
+            Learn explains the concepts shown in Aura. Your portfolio metrics and
+            simulation results use your saved portfolio data.
           </Text>
         </Card>
 

@@ -36,6 +36,7 @@ import type {
 
 import { darkPalette, lightPalette } from '../theme/colors';
 import { HomeHeaderButton } from '../components/ui/HomeHeaderButton';
+import { BackHeaderButton } from '../components/ui/BackHeaderButton';
 import { usePreferences } from '../preferences/usePreferences';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -67,7 +68,21 @@ function PortfolioNavigator() {
       <PortfolioStack.Screen name="CreatePortfolio" component={CreatePortfolioScreen} options={{ title: 'Create Portfolio' }} />
       <PortfolioStack.Screen name="AddAsset" component={AddAssetScreen} options={{ title: 'Add Asset' }} />
       <PortfolioStack.Screen name="EditHoldings" component={EditHoldingsScreen} options={{ title: 'Edit Holdings' }} />
-      <PortfolioStack.Screen name="PortfolioAnalysis" component={PortfolioAnalysisScreen} options={{ title: 'Analytics' }} />
+      <PortfolioStack.Screen
+        name="PortfolioAnalysis"
+        component={PortfolioAnalysisScreen}
+        options={({ navigation }) => ({
+          title: 'Analytics',
+          headerBackVisible: false,
+          headerLeft: () => (
+            <BackHeaderButton
+              label="Back from Analytics"
+              color={palette.text}
+              onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Portfolios')}
+            />
+          )
+        })}
+      />
       <PortfolioStack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ title: 'Report Detail' }} />
     </PortfolioStack.Navigator>
   );
@@ -112,9 +127,37 @@ function MoreNavigator() {
       })}
     >
       <MoreStack.Screen name="More" component={MoreScreen} options={{ headerShown: false }} />
-      <MoreStack.Screen name="Analytics" component={PortfolioAnalysisScreen} options={{ title: 'Analytics' }} />
+      <MoreStack.Screen
+        name="Analytics"
+        component={PortfolioAnalysisScreen}
+        options={({ navigation }) => ({
+          title: 'Analytics',
+          headerBackVisible: false,
+          headerLeft: () => (
+            <BackHeaderButton
+              label="Back to More"
+              color={palette.text}
+              onPress={() => navigation.navigate('More')}
+            />
+          )
+        })}
+      />
       <MoreStack.Screen name="Reports" component={ReportsScreen} options={{ title: 'Reports' }} />
-      <MoreStack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ title: 'Report Detail' }} />
+      <MoreStack.Screen
+        name="ReportDetail"
+        component={ReportDetailScreen}
+        options={({ navigation }) => ({
+          title: 'Report Detail',
+          headerBackVisible: false,
+          headerLeft: () => (
+            <BackHeaderButton
+              label="Back to Reports"
+              color={palette.text}
+              onPress={() => navigation.navigate('Reports')}
+            />
+          )
+        })}
+      />
       <MoreStack.Screen name="Watchlist" component={WatchlistScreen} options={{ title: 'Watchlist' }} />
       <MoreStack.Screen name="Learn" component={LearnScreen} options={{ title: 'Learn' }} />
       <MoreStack.Screen name="LearnDetail" component={LearnDetailScreen} options={{ title: 'Lesson' }} />

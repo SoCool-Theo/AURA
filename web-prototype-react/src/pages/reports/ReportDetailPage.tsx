@@ -4,9 +4,14 @@ import {
   getPortfolioReport,
 } from '../../api/reportsApi';
 import { go } from '../../app/routes';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Icon } from '../../components/ui/Icon';
-import type { PortfolioReportResponse } from '../../types/report';
-import { analysisErrorMessage, formatReportTimestamp } from '../analytics/analyticsUi';
+import {
+  isPortfolioReportV2,
+  isPortfolioReportV3,
+  type PortfolioReportResponse,
+} from '../../types/report';
+import { formatReportTimestamp } from '../analytics/analyticsUi';
 import { AnalysisResults } from '../analytics/components/AnalysisResults';
 import styles from './ReportDetailPage.module.css';
 
@@ -18,8 +23,8 @@ interface ReportDetailPageProps {
 export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProps) {
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const [deleting, setDeleting] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const deletingRef = useRef(false);
@@ -34,7 +39,7 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
     void getPortfolioReport(portfolioId, reportId, { signal: controller.signal })
       .then(setReport)
       .catch(requestError => {
-        if (!controller.signal.aborted) setError(analysisErrorMessage(requestError, 'Unable to retrieve report.'));
+        if (!controller.signal.aborted) setError(requestError);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -56,10 +61,7 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
       await deletePortfolioReport(portfolioId, reportId);
       go('reports');
     } catch (requestError) {
-      setActionError(analysisErrorMessage(
-        requestError,
-        'Unable to delete report.',
-      ));
+      setActionError(requestError);
       deletingRef.current = false;
       setDeleting(false);
     }
@@ -69,26 +71,21 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
     return <div className={styles.state} role="status"><span className={styles.spinner} /><h2>Loading report</h2><p>Retrieving the immutable saved analysis snapshot.</p></div>;
   }
 
-  if (error || !report) {
-    return (
-      <div className={styles.state} role="alert">
-        <span className={styles.stateIcon}><Icon name="reports" size={29} /></span>
-        <h2>Report unavailable</h2>
-        <p>{error || 'Report not found'}</p>
-        <div><button className="primary-btn" onClick={() => setReloadKey(key => key + 1)}>Try Again</button><button className="secondary-btn" onClick={() => go('reports')}>Back to Reports</button></div>
-      </div>
-    );
-  }
+  if (error || !report) return <ScreenErrorState error={error ?? 'Report not found.'} fallbackMessage="Unable to retrieve this report." resourceName="Report" onRetry={() => setReloadKey(key => key + 1)} onBack={() => go('reports')} backTitle="Back to Reports" />;
+
+  const reportType = isPortfolioReportV3(report)
+    ? 'Planned Portfolio'
+    : isPortfolioReportV2(report)
+      ? 'Current Portfolio'
+      : 'Legacy Portfolio';
 
   return (
     <div className={`page ${styles.page}`}>
       <button className={styles.backLink} onClick={() => go('reports')}>← Reports <span>/</span> Saved Analysis</button>
-      {actionError && (
-        <p className={styles.actionError} role="alert">{actionError}</p>
-      )}
+      {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to delete report." />}
       <header className={styles.header}>
         <div>
-          <div className={styles.titleRow}><h1>{report.analysis.portfolio_name} Analysis</h1><span>Immutable Snapshot</span></div>
+          <div className={styles.titleRow}><h1>{report.analysis.portfolio_name} Analysis</h1><span>{reportType}</span><span>Immutable Snapshot</span></div>
           <p>Created {formatReportTimestamp(report.created_at)}<i>•</i>Report {report.id}</p>
         </div>
         <div className={styles.headerActions} aria-label="Report actions">
@@ -99,11 +96,20 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
           >
             {deleting ? 'Deleting…' : 'Delete Report'}
           </button>
-          <button className="secondary-btn" onClick={() => go(`analytics/${report.portfolio_id}`)}>Analyze Current Portfolio</button>
+          <button className="primary-btn" onClick={() => go(`analytics/${report.portfolio_id}`)}>Run New Analysis</button>
         </div>
       </header>
 
-      <AnalysisResults analysis={report.analysis} />
+      <AnalysisResults report={report} />
+
+      <section className={`card ${styles.assistantCard}`}>
+        <div>
+          <small>NEED HELP UNDERSTANDING THE RESULTS?</small>
+          <h2>Ask Aura about this saved report</h2>
+          <p>Aura can explain this {isPortfolioReportV3(report) ? 'planned allocation' : 'portfolio'} using the exact snapshot shown above.</p>
+        </div>
+        <button className="primary-btn" onClick={() => go(`assistant/${report.portfolio_id}/report/${report.id}`)}><Icon name="assistant" size={17} /> Ask Aura</button>
+      </section>
     </div>
   );
 }

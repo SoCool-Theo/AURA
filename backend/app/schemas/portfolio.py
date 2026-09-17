@@ -1,7 +1,7 @@
 """Pydantic contracts for portfolio analysis, CRUD, and holding facts."""
 
 from datetime import UTC, date, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN, localcontext
 import math
 from typing import Annotated, Literal, Self
 from uuid import UUID
@@ -46,6 +46,14 @@ _InvestedCurrency = Annotated[
     Literal["USD", "THB"],
     BeforeValidator(_normalize_invested_currency),
 ]
+_PortfolioType = Annotated[
+    Literal["CURRENT", "PLANNED", "LEGACY"],
+    BeforeValidator(_normalize_invested_currency),
+]
+_CreatablePortfolioType = Annotated[
+    Literal["CURRENT", "PLANNED"],
+    BeforeValidator(_normalize_invested_currency),
+]
 _PositiveNumeric28Scale12 = Annotated[
     Decimal,
     Field(
@@ -72,6 +80,13 @@ class PortfolioRealHoldingInput(AuraBaseModel):
         if value > datetime.now(UTC).date():
             raise ValueError("purchase_date must not be in the future")
         return value
+
+
+class PortfolioPlannedHoldingInput(AuraBaseModel):
+    """One proposed investment amount in the portfolio's plan currency."""
+
+    symbol: AssetSymbol
+    proposed_amount: _PositiveNumeric28Scale12
 
 
 def _normalize_portfolio_name(value: object, *, field_name: str) -> object:
@@ -109,7 +124,7 @@ def _validate_portfolio_holdings(
 
 
 def _validate_unique_holding_symbols(
-    holdings: list[PortfolioRealHoldingInput],
+    holdings: list[PortfolioRealHoldingInput | PortfolioPlannedHoldingInput],
 ) -> None:
     symbols = [holding.symbol for holding in holdings]
     if len(symbols) != len(set(symbols)):
@@ -153,7 +168,18 @@ class _PortfolioNameRequest(AuraBaseModel):
 
 
 class PortfolioCreateRequest(_PortfolioNameRequest):
-    """Create an empty named portfolio draft."""
+    """Create an explicitly current or planned empty portfolio draft."""
+
+    portfolio_type: _CreatablePortfolioType = "CURRENT"
+    plan_currency: _InvestedCurrency | None = None
+
+    @model_validator(mode="after")
+    def validate_type_context(self) -> Self:
+        if self.portfolio_type == "PLANNED" and self.plan_currency is None:
+            raise ValueError("planned portfolios require plan_currency")
+        if self.portfolio_type == "CURRENT" and self.plan_currency is not None:
+            raise ValueError("current portfolios must not define plan_currency")
+        return self
 
 
 class PortfolioUpdateRequest(_PortfolioNameRequest):
@@ -169,6 +195,20 @@ class PortfolioHoldingsReplaceRequest(AuraBaseModel):
 
     holdings: Annotated[
         list[PortfolioRealHoldingInput],
+        Field(min_length=1),
+    ]
+
+    @model_validator(mode="after")
+    def validate_holdings(self) -> Self:
+        _validate_unique_holding_symbols(self.holdings)
+        return self
+
+
+class PortfolioPlannedHoldingsReplaceRequest(AuraBaseModel):
+    """Replace a planned portfolio's complete ordered proposed amounts."""
+
+    holdings: Annotated[
+        list[PortfolioPlannedHoldingInput],
         Field(min_length=1),
     ]
 
@@ -195,6 +235,7 @@ class PortfolioHoldingResponse(AuraBaseModel):
         ),
     ] = None
     invested_amount: _PositiveNumeric28Scale12 | None = None
+    proposed_amount: _PositiveNumeric28Scale12 | None = None
     invested_currency: _InvestedCurrency | None = None
     shares: _PositiveNumeric28Scale12 | None = None
     purchase_date: date | None = None
@@ -211,16 +252,27 @@ class PortfolioHoldingResponse(AuraBaseModel):
             self.shares,
             self.purchase_date,
         )
+        if self.proposed_amount is not None:
+            if self.weight is not None or any(
+                value is not None for value in real_values
+            ):
+                raise ValueError(
+                    "holding response must use exactly one legacy, current, "
+                    "or planned mode"
+                )
+            return self
         if self.weight is not None:
             if any(value is not None for value in real_values):
                 raise ValueError(
-                    "holding response must use exactly one legacy or real mode"
+                    "holding response must use exactly one legacy, current, "
+                    "or planned mode"
                 )
             return self
         if all(value is not None for value in real_values):
             return self
         raise ValueError(
-            "holding response must use exactly one legacy or real mode"
+            "holding response must use exactly one legacy, current, or "
+            "planned mode"
         )
 
     @model_serializer(mode="wrap")
@@ -240,10 +292,19 @@ class PortfolioHoldingResponse(AuraBaseModel):
         }
         if (
             self.weight is not None
-            and not (real_field_names & self.model_fields_set)
+            and not (
+                (real_field_names | {"proposed_amount"})
+                & self.model_fields_set
+            )
         ):
             for field_name in real_field_names:
                 serialized.pop(field_name, None)
+            serialized.pop("proposed_amount", None)
+        elif self.proposed_amount is not None:
+            for field_name in real_field_names:
+                serialized.pop(field_name, None)
+        else:
+            serialized.pop("proposed_amount", None)
         return serialized
 
 
@@ -252,9 +313,40 @@ class PortfolioResponse(AuraBaseModel):
 
     id: UUID
     name: Annotated[str, Strict()]
+    portfolio_type: _PortfolioType = "CURRENT"
+    plan_currency: _InvestedCurrency | None = None
+    source_plan_id: UUID | None = None
     created_at: AwareDatetime
     updated_at: AwareDatetime
     holdings: list[PortfolioHoldingResponse]
+
+    @model_validator(mode="after")
+    def validate_portfolio_type_context(self) -> Self:
+        if self.portfolio_type == "PLANNED":
+            if self.plan_currency is None or self.source_plan_id is not None:
+                raise ValueError("planned portfolio context is incomplete")
+            valid_holdings = all(
+                holding.proposed_amount is not None
+                for holding in self.holdings
+            )
+        elif self.portfolio_type == "CURRENT":
+            if self.plan_currency is not None:
+                raise ValueError("current portfolio must not define plan currency")
+            valid_holdings = all(
+                holding.proposed_amount is None
+                and holding.weight is None
+                and holding.invested_amount is not None
+                for holding in self.holdings
+            )
+        else:
+            if self.plan_currency is not None or self.source_plan_id is not None:
+                raise ValueError("legacy portfolio context is invalid")
+            valid_holdings = all(
+                holding.weight is not None for holding in self.holdings
+            )
+        if not valid_holdings:
+            raise ValueError("holdings do not match portfolio_type")
+        return self
 
 
 class PortfolioSummaryResponse(AuraBaseModel):
@@ -262,8 +354,18 @@ class PortfolioSummaryResponse(AuraBaseModel):
 
     id: UUID
     name: Annotated[str, Strict()]
+    portfolio_type: _PortfolioType = "CURRENT"
+    plan_currency: _InvestedCurrency | None = None
     created_at: AwareDatetime
     updated_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_portfolio_type_context(self) -> Self:
+        if (self.portfolio_type == "PLANNED") != (
+            self.plan_currency is not None
+        ):
+            raise ValueError("plan_currency must match portfolio_type")
+        return self
 
 
 class PortfolioListResponse(AuraBaseModel):
@@ -282,6 +384,110 @@ _AllocationDecimal = Annotated[
 ]
 
 
+class PortfolioPlannedAllocationHoldingResponse(AuraBaseModel):
+    """One backend-derived target allocation in saved holding order."""
+
+    id: UUID
+    symbol: AssetSymbol
+    proposed_amount: _PositiveNumeric28Scale12
+    target_allocation: _AllocationDecimal
+    position: Annotated[int, Field(strict=True, ge=0)]
+
+
+class PortfolioPlannedAllocationResponse(AuraBaseModel):
+    """Canonical target allocation derived without market prices or FX."""
+
+    portfolio_id: UUID
+    portfolio_type: Literal["PLANNED"]
+    plan_currency: _InvestedCurrency
+    total_proposed_amount: _PositiveValuationDecimal
+    holdings: Annotated[
+        list[PortfolioPlannedAllocationHoldingResponse],
+        Field(min_length=1),
+    ]
+
+
+PLANNED_PORTFOLIO_HYPOTHETICAL_NOTICE = (
+    "Hypothetical historical analysis only; not a forecast, recommendation, "
+    "or executable order."
+)
+
+
+class PlannedPortfolioSnapshotHolding(AuraBaseModel):
+    """One immutable proposed amount and backend-derived target weight."""
+
+    id: UUID
+    symbol: AssetSymbol
+    proposed_amount: _PositiveNumeric28Scale12
+    target_allocation: _AllocationDecimal
+    position: Annotated[int, Field(strict=True, ge=0)]
+
+
+class PlannedPortfolioBaselineContext(AuraBaseModel):
+    """Immutable authoritative input baseline for a hypothetical plan."""
+
+    portfolio_type: Literal["PLANNED"]
+    baseline_source: Literal["proposed-amount-target-allocation"]
+    plan_currency: _InvestedCurrency
+    total_proposed_amount: _PositiveValuationDecimal
+    hypothetical_notice: Literal[
+        "Hypothetical historical analysis only; not a forecast, "
+        "recommendation, or executable order."
+    ]
+    holdings: Annotated[
+        list[PlannedPortfolioSnapshotHolding],
+        Field(min_length=1),
+    ]
+
+    @model_validator(mode="after")
+    def validate_baseline(self) -> Self:
+        symbols = [holding.symbol for holding in self.holdings]
+        ids = [holding.id for holding in self.holdings]
+        positions = [holding.position for holding in self.holdings]
+        if len(symbols) != len(set(symbols)):
+            raise ValueError("planned snapshot symbols must be unique")
+        if len(ids) != len(set(ids)):
+            raise ValueError("planned snapshot holding IDs must be unique")
+        if positions != list(range(len(self.holdings))):
+            raise ValueError("planned snapshot positions must be contiguous")
+        if sum(
+            (holding.proposed_amount for holding in self.holdings),
+            start=Decimal("0"),
+        ) != self.total_proposed_amount:
+            raise ValueError("planned snapshot proposed total is inconsistent")
+        if sum(
+            (holding.target_allocation for holding in self.holdings),
+            start=Decimal("0"),
+        ) != Decimal("1"):
+            raise ValueError("planned snapshot target allocations must total 1")
+        with localcontext() as context:
+            context.prec = 80
+            expected_weights = [
+                (holding.proposed_amount / self.total_proposed_amount).quantize(
+                    Decimal("0.000000000000000001"),
+                    rounding=ROUND_DOWN,
+                )
+                for holding in self.holdings[:-1]
+            ]
+            expected_weights.append(
+                Decimal("1")
+                - sum(expected_weights, start=Decimal("0"))
+            )
+        if any(
+            holding.target_allocation != expected_weight
+            for holding, expected_weight in zip(
+                self.holdings,
+                expected_weights,
+                strict=True,
+            )
+        ):
+            raise ValueError(
+                "planned snapshot target allocation is inconsistent with "
+                "proposed amounts"
+            )
+        return self
+
+
 class PortfolioValuationFxResponse(AuraBaseModel):
     """Fresh USD/THB context used by one THB portfolio valuation."""
 
@@ -289,6 +495,90 @@ class PortfolioValuationFxResponse(AuraBaseModel):
     provider_symbol: Literal["THB=X"]
     rate: _PositiveValuationDecimal
     as_of: date
+
+
+class PortfolioPlannedPreviewHoldingResponse(AuraBaseModel):
+    """One planned holding with optional non-authoritative share estimate."""
+
+    id: UUID
+    symbol: AssetSymbol
+    proposed_amount: _PositiveNumeric28Scale12
+    target_allocation: _AllocationDecimal
+    position: Annotated[int, Field(strict=True, ge=0)]
+    estimate_status: Literal[
+        "AVAILABLE",
+        "PRICE_UNAVAILABLE",
+        "FX_UNAVAILABLE",
+    ]
+    estimated_shares: _PositiveValuationDecimal | None
+    asset_price: _PositiveValuationDecimal | None
+    asset_quote_currency: Literal["USD"] | None
+    price_as_of: date | None
+
+    @model_validator(mode="after")
+    def validate_estimate_context(self) -> Self:
+        price_context = (
+            self.asset_price,
+            self.asset_quote_currency,
+            self.price_as_of,
+        )
+        if self.estimate_status == "AVAILABLE":
+            if self.estimated_shares is None or not all(
+                value is not None for value in price_context
+            ):
+                raise ValueError("available estimate requires price context")
+        elif self.estimate_status == "PRICE_UNAVAILABLE":
+            if self.estimated_shares is not None or any(
+                value is not None for value in price_context
+            ):
+                raise ValueError("unavailable price must not expose price context")
+        elif self.estimated_shares is not None or not all(
+            value is not None for value in price_context
+        ):
+            raise ValueError("unavailable FX requires asset price context")
+        return self
+
+
+class PortfolioPlannedPreviewResponse(AuraBaseModel):
+    """Planned allocation with best-effort current estimate context."""
+
+    portfolio_id: UUID
+    portfolio_type: Literal["PLANNED"]
+    plan_currency: _InvestedCurrency
+    requested_date: date
+    total_proposed_amount: _PositiveValuationDecimal
+    fx: PortfolioValuationFxResponse | None
+    holdings: Annotated[
+        list[PortfolioPlannedPreviewHoldingResponse],
+        Field(min_length=1),
+    ]
+
+    @model_validator(mode="after")
+    def validate_currency_context(self) -> Self:
+        if self.plan_currency == "USD" and self.fx is not None:
+            raise ValueError("USD planned preview must not include FX")
+        if self.fx is not None and self.fx.as_of > self.requested_date:
+            raise ValueError("FX observation date must not be after requested_date")
+        if any(
+            holding.price_as_of is not None
+            and holding.price_as_of > self.requested_date
+            for holding in self.holdings
+        ):
+            raise ValueError(
+                "price observation dates must not be after requested_date"
+            )
+
+        statuses = {holding.estimate_status for holding in self.holdings}
+        if self.plan_currency == "USD" and "FX_UNAVAILABLE" in statuses:
+            raise ValueError("USD planned preview cannot require FX")
+        if self.plan_currency == "THB":
+            if self.fx is None and "AVAILABLE" in statuses:
+                raise ValueError("available THB estimates require FX context")
+            if self.fx is not None and "FX_UNAVAILABLE" in statuses:
+                raise ValueError(
+                    "THB estimates cannot report unavailable FX with FX context"
+                )
+        return self
 
 
 class PortfolioHoldingValuationResponse(AuraBaseModel):

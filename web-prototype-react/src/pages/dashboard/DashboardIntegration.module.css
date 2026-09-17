@@ -5,6 +5,11 @@
 .reportNotice { margin-bottom: 14px; padding: 12px 14px; border: 1px solid var(--border-divider); border-radius: 11px; background: rgba(7, 27, 40, .75); display: flex; align-items: center; justify-content: space-between; gap: 14px; color: var(--text-secondary); font-size: 13px; }
 .reportNotice strong { color: var(--text-primary); }
 .reportNotice button { white-space: nowrap; }
+.portfolioContextBar { margin-bottom: 14px; padding: 13px 15px; border: 1px solid var(--border-divider); border-radius: 11px; background: rgba(7, 27, 40, .75); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.portfolioContextBar :global(.dashboard-portfolio-picker) { flex: 1 1 auto; width: auto; max-width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.currencyControl { flex: 0 0 auto; display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--border-control); border-radius: 9px; background: var(--control-bg); }
+.currencyControl button { min-width: 60px; min-height: 34px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); font-size: 11px; font-weight: 800; }
+.currencyControl button.activeCurrency { background: rgba(53, 215, 192, .16); color: var(--purple-light); }
 .kpiPlaceholder { color: var(--text-muted); font-size: 24px; }
 .rangeTabs { display: flex; align-items: center; gap: 4px; }
 .rangeTabs button { min-width: 35px; padding: 6px 7px; border: 1px solid var(--border-control); border-radius: 7px; background: var(--control-bg); color: var(--text-secondary); font-size: 10px; font-weight: 700; cursor: pointer; }
@@ -40,4 +45,4 @@
 .analysisMeta { flex: 1; margin: 2px 24px 14px; color: var(--text-secondary); font-size: 13px; line-height: 1.65; }
 .analysisMeta strong { color: var(--text-primary); }
 @media (max-width: 900px) { .rangeTabs { grid-column: 1/-1; order: 3; width: 100%; justify-content: space-between; } .rangeTabs button { flex: 1; } }
-@media (max-width: 640px) { .reportNotice { align-items: flex-start; flex-direction: column; } .reportNotice button { width: 100%; } .actions { grid-template-columns: 1fr; } .chartFrame { padding-left: 9px; padding-right: 12px; grid-template-columns: 18px 45px minmax(0, 1fr); } .yTicks span { right: 5px; font-size: 9px; } .chartLabels { font-size: 9px; } .rangeSummary { padding-left: 72px; padding-right: 12px; } }
+@media (max-width: 640px) { .reportNotice, .portfolioContextBar { align-items: flex-start; flex-direction: column; } .portfolioContextBar :global(.dashboard-portfolio-picker) { width: 100%; } .reportNotice button { width: 100%; } .currencyControl { width: 100%; } .currencyControl button { flex: 1; } .actions { grid-template-columns: 1fr; } .chartFrame { padding-left: 9px; padding-right: 12px; grid-template-columns: 18px 45px minmax(0, 1fr); } .yTicks span { right: 5px; font-size: 9px; } .chartLabels { font-size: 9px; } .rangeSummary { padding-left: 72px; padding-right: 12px; } }

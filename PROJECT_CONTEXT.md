@@ -88,13 +88,27 @@ The backend on `feat/backend-real-holdings-dynamic-allocation` supports real
 holding facts (`symbol`, `invested_amount`, `invested_currency`, `shares`, and
 `purchase_date`), backend-owned holding order, dynamic USD valuation, optional THB
 display, V2 immutable reports, V2 immutable simulation history, and compatible
-AI grounding. The migration head is `d4a6f8c2e1b7`.
+AI grounding. The last fully integrated runtime migration is `d4a6f8c2e1b7`.
+The additive planned-portfolio database foundation is implemented at migration
+`e5b7c9d2a4f1`. Type-aware `CURRENT`/`PLANNED` CRUD, backend-derived
+price-independent target allocation, optional estimated-share previews, and
+shared `CURRENT`/`PLANNED`/`LEGACY` analysis baseline resolution are
+implemented. Planned analysis and all three simulation modes now persist new
+immutable V3 snapshots containing the authoritative proposed-amount baseline;
+opening V3 history never queries current prices or recalculates results.
+Mode-aware AI grounding now supports live planned allocations and frozen V3
+report/simulation context with explicit hypothetical language and ownership-
+claim rejection. The mobile and React web clients now support
+current/planned/legacy CRUD and presentation, planned allocation/preview,
+Report and Simulation V3, and mode-aware Assistant context. Their compilers,
+authority regressions, dependency checks, production builds, and source
+security audits pass; the mobile Android Hermes export also passes. Atomic
+plan-to-current conversion and full-system deployment verification remain
+follow-on work.
 
 Weight-only legacy portfolios remain temporarily readable and operable. A
-normal holdings replacement converts a legacy portfolio to the real model.
-Customer web and mobile clients still require a later integration branch for
-real holding entry, valuation display, and V2 history rendering. A fresh
-Supabase deployment is also pending; Phase 13 does not deploy or access
+normal holdings replacement converts a legacy portfolio to the real model. A
+fresh Supabase deployment is pending; Phase 13 does not deploy or access
 Supabase.
 
 ## Data Principle

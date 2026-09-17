@@ -10,8 +10,15 @@ import {
 import type {
   AllocationSimulationComparison,
   AllocationSimulationResult,
-  HistoricalScenarioMetrics
+  HistoricalScenarioMetrics,
+  SimulationBaselineValuationContext
 } from '../../types/simulation';
+import type { PlannedPortfolioBaselineContext } from '../../types/portfolio';
+import {
+  formatCurrentAllocation,
+  formatPortfolioMoney,
+  formatPortfolioQuantity
+} from '../../portfolio/portfolioFormatting';
 import { colors, spacing } from '../../theme/theme';
 import { SimulationTrajectoryChart } from '../charts/SimulationTrajectoryChart';
 import { Card } from '../ui/Card';
@@ -61,7 +68,7 @@ function Comparison({ comparison }: { comparison: AllocationSimulationComparison
   ];
   return (
     <Card style={styles.card}>
-      <Text style={styles.cardTitle}>Backend comparison</Text>
+      <Text style={styles.cardTitle}>Comparison</Text>
       {values.map(([label, value]) => (
         <View key={label} style={styles.comparisonRow}>
           <Text style={styles.comparisonLabel}>{label}</Text>
@@ -72,7 +79,14 @@ function Comparison({ comparison }: { comparison: AllocationSimulationComparison
   );
 }
 
-export function SimulationResults({ result }: { result: SimulationRunResult }) {
+export function SimulationResults({
+  result,
+  baseline
+}: {
+  result: SimulationRunResult;
+  baseline?: SimulationBaselineValuationContext | PlannedPortfolioBaselineContext;
+}) {
+  const baselineCard = baseline ? <BaselineCard baseline={baseline} /> : null;
   if (result.type === 'historical-scenario') {
     const response = result.response;
     return (
@@ -80,6 +94,7 @@ export function SimulationResults({ result }: { result: SimulationRunResult }) {
         <Text style={styles.eyebrow}>RESULT · HISTORICAL SCENARIO</Text>
         <Text style={styles.title}>{response.portfolio_name}</Text>
         <Text style={styles.subtitle}>{response.scenario.display_name} · {response.scenario.description}</Text>
+        {baselineCard}
         <MetadataCard requested={`${response.scenario.requested_start_date} → ${response.scenario.requested_end_date}`} metadata={response.metadata} />
         <Card style={styles.card}>
           <Text style={styles.cardTitle}>Portfolio metrics</Text>
@@ -104,6 +119,7 @@ export function SimulationResults({ result }: { result: SimulationRunResult }) {
       <Text style={styles.eyebrow}>RESULT · {simulationTypeLabel(result.type).toUpperCase()}</Text>
       <Text style={styles.title}>{response.portfolio_name}</Text>
       {scenario ? <Text style={styles.subtitle}>{scenario.display_name} · {scenario.description}</Text> : null}
+      {baselineCard}
       <MetadataCard requested={requested} metadata={response.metadata} />
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>Original allocation and metrics</Text>
@@ -127,6 +143,64 @@ export function SimulationResults({ result }: { result: SimulationRunResult }) {
   );
 }
 
+function BaselineCard({ baseline }: {
+  baseline: SimulationBaselineValuationContext | PlannedPortfolioBaselineContext;
+}) {
+  if ('portfolio_type' in baseline) {
+    return (
+      <Card style={styles.plannedBaselineCard}>
+        <Text style={styles.cardTitle}>Saved planned allocation</Text>
+        <Text style={styles.baselineValue}>
+          {formatPortfolioMoney(baseline.total_proposed_amount, baseline.plan_currency)}
+        </Text>
+        <Text style={styles.baselineMeta}>{baseline.hypothetical_notice}</Text>
+        {baseline.holdings.map((holding) => (
+          <View key={holding.id} style={styles.baselineRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.allocationSymbol}>{holding.symbol}</Text>
+              <Text style={styles.baselineMeta}>
+                Proposed {formatPortfolioMoney(holding.proposed_amount, baseline.plan_currency)}
+              </Text>
+            </View>
+            <Text style={styles.allocationWeight}>
+              {formatSimulationPercent(Number(holding.target_allocation))}
+            </Text>
+          </View>
+        ))}
+        <Text style={styles.baselineMeta}>
+          Estimated shares are for display only and do not affect this simulation.
+        </Text>
+      </Card>
+    );
+  }
+  return (
+    <Card style={styles.baselineCard}>
+      <Text style={styles.cardTitle}>Saved current holdings</Text>
+      <Text style={styles.baselineValue}>
+        {formatPortfolioMoney(baseline.total_current_value_usd, 'USD')}
+      </Text>
+      <Text style={styles.baselineMeta}>
+        Valued {baseline.valuation_date} · prices {baseline.oldest_price_as_of} to {baseline.newest_price_as_of}
+      </Text>
+      {baseline.holdings.map((holding) => (
+        <View key={`${holding.position}-${holding.symbol}`} style={styles.baselineRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.allocationSymbol}>{holding.symbol}</Text>
+            <Text style={styles.baselineMeta}>
+              {formatPortfolioQuantity(holding.shares)} shares · price {formatPortfolioMoney(holding.asset_price, 'USD')}
+            </Text>
+          </View>
+          <View style={styles.baselineRight}>
+            <Text style={styles.allocationWeight}>{formatPortfolioMoney(holding.current_value_usd, 'USD')}</Text>
+            <Text style={styles.baselineMeta}>{formatCurrentAllocation(holding.current_allocation)}</Text>
+          </View>
+        </View>
+      ))}
+      <Text style={styles.baselineMeta}>These saved values are not updated with later market prices.</Text>
+    </Card>
+  );
+}
+
 function MetadataCard({ requested, metadata }: {
   requested: string;
   metadata: {
@@ -140,7 +214,7 @@ function MetadataCard({ requested, metadata }: {
     <Card style={styles.card}>
       <Text style={styles.cardTitle}>Requested period</Text>
       <Text style={styles.body}>{requested}</Text>
-      <Text style={styles.cardTitle}>Effective backend period</Text>
+      <Text style={styles.cardTitle}>Historical data period</Text>
       <Text style={styles.body}>{metadata.effective_start_date} → {metadata.effective_end_date}</Text>
       <Text style={styles.observations}>{metadata.price_observation_count} prices · {metadata.return_observation_count} returns</Text>
     </Card>
@@ -157,14 +231,20 @@ const styles = StyleSheet.create({
   body: { color: colors.textSecondary, fontSize: 12 },
   observations: { color: colors.muted, fontSize: 10 },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  metric: { width: '48%', backgroundColor: colors.surfaceAlt, borderRadius: 12, padding: spacing.md },
+  metric: { flexGrow: 1, flexBasis: 132, backgroundColor: colors.surfaceAlt, borderRadius: 12, padding: spacing.md },
   metricLabel: { color: colors.muted, fontSize: 9, fontWeight: '800' },
   metricValue: { color: colors.text, fontSize: 12, fontWeight: '900', marginTop: spacing.xs },
   allocationList: { gap: spacing.sm },
   allocationRow: { flexDirection: 'row', justifyContent: 'space-between' },
   allocationSymbol: { color: colors.textSecondary, fontWeight: '800' },
   allocationWeight: { color: colors.text, fontWeight: '900' },
-  comparisonRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
-  comparisonLabel: { color: colors.textSecondary, fontSize: 12 },
-  comparisonValue: { color: colors.text, fontSize: 12, fontWeight: '900' }
+  comparisonRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.md },
+  comparisonLabel: { color: colors.textSecondary, fontSize: 12, flexGrow: 1, flexBasis: 120 },
+  comparisonValue: { color: colors.text, fontSize: 12, fontWeight: '900', flexShrink: 1, textAlign: 'right' },
+  baselineCard: { gap: spacing.md, backgroundColor: colors.cyanBackground },
+  plannedBaselineCard: { gap: spacing.md, backgroundColor: colors.summaryBackground, borderColor: colors.primary },
+  baselineValue: { color: colors.text, fontSize: 23, fontWeight: '900' },
+  baselineMeta: { color: colors.textSecondary, fontSize: 10, lineHeight: 15 },
+  baselineRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, alignItems: 'center' },
+  baselineRight: { alignItems: 'flex-end' }
 });

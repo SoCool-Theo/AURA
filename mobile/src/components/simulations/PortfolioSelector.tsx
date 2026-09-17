@@ -25,6 +25,9 @@ export function PortfolioSelector({
         const selected = portfolio.id === selectedId;
         return (
           <Pressable
+            accessibilityLabel={`${portfolio.name} portfolio`}
+            accessibilityRole="radio"
+            accessibilityState={{ selected, disabled }}
             disabled={disabled}
             key={portfolio.id}
             onPress={() => onSelect(portfolio.id)}
@@ -32,6 +35,9 @@ export function PortfolioSelector({
           >
             <Text style={[styles.text, selected && styles.selectedText]}>
               {portfolio.name}
+            </Text>
+            <Text style={styles.mode}>
+              {portfolio.portfolio_type === 'PLANNED' ? 'Planned' : portfolio.portfolio_type === 'LEGACY' ? 'Legacy' : 'Current'}
             </Text>
           </Pressable>
         );
@@ -43,6 +49,7 @@ export function PortfolioSelector({
 const styles = StyleSheet.create({
   row: { gap: spacing.sm, paddingBottom: spacing.lg },
   chip: {
+    minHeight: 44,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
@@ -52,5 +59,6 @@ const styles = StyleSheet.create({
   },
   selected: { borderColor: colors.primary, backgroundColor: colors.selectedBackground },
   text: { color: colors.textSecondary, fontSize: 12, fontWeight: '800' },
-  selectedText: { color: colors.primary }
+  selectedText: { color: colors.primary },
+  mode: { color: colors.muted, fontSize: 9, marginTop: 2 }
 });

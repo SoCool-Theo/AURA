@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { colors, spacing } from '../../theme/theme';
@@ -9,13 +9,17 @@ export function WebKpiCard({
   label,
   value,
   meta,
-  tone = 'primary'
+  tone = 'primary',
+  onPress,
+  accessibilityHint
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
   meta?: string;
   tone?: 'primary' | 'success' | 'warning' | 'danger' | 'blue';
+  onPress?: () => void;
+  accessibilityHint?: string;
 }) {
   const toneMap = {
     primary: { fg: colors.primary, bg: colors.cyanBackground },
@@ -26,23 +30,55 @@ export function WebKpiCard({
   } as const;
   const selected = toneMap[tone];
 
-  return (
-    <Card style={styles.card}>
-      <View style={[styles.iconBox, { backgroundColor: selected.bg }]}>
-        <Ionicons name={icon} size={19} color={selected.fg} />
+  const contents = (
+    <>
+      <View style={styles.topRow}>
+        <View style={[styles.iconBox, { backgroundColor: selected.bg }]}>
+          <Ionicons name={icon} size={19} color={selected.fg} />
+        </View>
+        {onPress ? <Ionicons name="chevron-forward" size={17} color={colors.muted} /> : null}
       </View>
       <Text style={styles.label}>{label}</Text>
       <Text style={styles.value}>{value}</Text>
       {meta ? <Text style={[styles.meta, { color: selected.fg }]}>{meta}</Text> : null}
-    </Card>
+    </>
+  );
+
+  if (!onPress) return <Card style={styles.card}>{contents}</Card>;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}`}
+      accessibilityHint={accessibilityHint}
+      onPress={onPress}
+      style={({ pressed }) => [styles.pressable, pressed && styles.pressed]}
+    >
+      <Card style={styles.interactiveCard}>{contents}</Card>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    width: '48%',
+    flexGrow: 1,
+    flexBasis: 140,
     minHeight: 128,
     gap: spacing.sm
+  },
+  pressable: {
+    flexGrow: 1,
+    flexBasis: 140
+  },
+  pressed: { opacity: 0.76 },
+  interactiveCard: {
+    minHeight: 128,
+    gap: spacing.sm
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
   },
   iconBox: {
     width: 36,

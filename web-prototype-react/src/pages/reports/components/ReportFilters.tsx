@@ -21,7 +21,7 @@ export function ReportFilters({
   onReset,
 }: ReportFiltersProps) {
   const portfolioOptions: AuraSelectOption<string>[] = [
-    { value: '', label: 'All Portfolios', description: 'Saved analyses from every owned portfolio', icon: 'wallet', tone: 'teal' },
+    { value: '', label: 'All Portfolios', description: 'Saved analyses from every portfolio', icon: 'wallet', tone: 'teal' },
     ...portfolios.map(portfolio => ({ value: portfolio.id, label: portfolio.name, description: 'Only this portfolio’s saved reports', icon: 'wallet', tone: 'blue' as const })),
   ];
 

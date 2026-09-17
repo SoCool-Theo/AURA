@@ -39,7 +39,7 @@ function parseResponse(value: unknown): AgentExplainResponse {
   ) {
     throw new ApiError({
       kind: 'malformed-response',
-      message: 'Aura API returned a malformed or unexpected AI response.'
+      message: 'Aura returned an unexpected AI response.'
     });
   }
 

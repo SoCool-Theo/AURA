@@ -6,13 +6,18 @@ import { useFocusEffect } from '@react-navigation/native';
 import { AnalysisResults } from '../../components/analytics/AnalysisResults';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { reportErrorMessage } from '../../report/reportErrors';
 import { formatReportTimestamp } from '../../report/reportFormatting';
 import { useReports } from '../../report/useReports';
 import { colors, spacing } from '../../theme/theme';
-import type { PortfolioReportResponse } from '../../types/report';
+import {
+  isPortfolioReportV2,
+  isPortfolioReportV3,
+  type PortfolioReportResponse
+} from '../../types/report';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
@@ -30,7 +35,7 @@ export function ReportDetailScreen({
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
   const [loadError, setLoadError] = useState<unknown>(null);
   const [deleting, setDeleting] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const requestRef = useRef(0);
   const deletingRef = useRef(false);
 
@@ -39,7 +44,6 @@ export function ReportDetailScreen({
     requestRef.current = requestId;
     setLoadStatus('loading');
     setLoadError(null);
-    setReport(null);
 
     try {
       const response = await getReport(portfolioId, reportId);
@@ -90,10 +94,7 @@ export function ReportDetailScreen({
                 navigation.goBack();
               }
             } catch (error) {
-              setActionError(reportErrorMessage(
-                error,
-                'Unable to delete report.'
-              ));
+              setActionError(error);
               deletingRef.current = false;
               setDeleting(false);
             }
@@ -103,39 +104,47 @@ export function ReportDetailScreen({
     );
   }
 
-  if (loadStatus === 'loading') {
-    return <LoadingState message="Loading immutable report…" />;
+  if (loadStatus === 'loading' && !report) {
+    return <LoadingState message="Loading saved report…" />;
   }
 
-  if (loadStatus === 'error' || !report) {
+  if (!report) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <View style={styles.centerState}>
-          <Card style={styles.stateCard}>
-            <Text style={styles.errorTitle}>Report unavailable</Text>
-            <Text style={styles.stateText}>
-              {reportErrorMessage(loadError, 'Report not found.')}
-            </Text>
-            <Button title="Retry" onPress={() => void loadReport()} />
-            <Button
-              title="Back"
-              variant="secondary"
-              onPress={() => navigation.goBack()}
-            />
-          </Card>
-        </View>
+        <ScreenErrorState
+          error={loadError}
+          resourceName="Report"
+          fallbackMessage="Unable to load this report."
+          onRetry={() => void loadReport()}
+          onBack={() => navigation.goBack()}
+        />
       </SafeAreaView>
     );
   }
+
+  const reportType = isPortfolioReportV3(report)
+    ? 'PLANNED PORTFOLIO'
+    : isPortfolioReportV2(report)
+      ? 'CURRENT PORTFOLIO'
+      : 'LEGACY PORTFOLIO';
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <PageTitle
-          eyebrow="IMMUTABLE SNAPSHOT"
+          eyebrow={`SAVED ANALYSIS · ${reportType}`}
           title={`${report.analysis.portfolio_name} Analysis`}
           subtitle={`Created ${formatReportTimestamp(report.created_at)}`}
         />
+
+        {loadStatus === 'error' ? (
+          <InlineErrorCard
+            error={loadError}
+            message={reportErrorMessage(loadError, 'Unable to refresh this report.')}
+            stale
+            onRetry={() => void loadReport()}
+          />
+        ) : null}
 
         <Card style={styles.identityCard}>
           <View style={styles.identityRow}>
@@ -147,18 +156,34 @@ export function ReportDetailScreen({
             <Text style={styles.identityValue}>{report.portfolio_id}</Text>
           </View>
           <Text style={styles.snapshotNote}>
-            This detail uses the stored backend report and does not rerun analysis.
+            These are the saved results from when this report was created. Later
+            portfolio or market changes do not alter them.
           </Text>
+          {isPortfolioReportV3(report) ? (
+            <Text style={styles.hypotheticalNote}>{report.baseline.hypothetical_notice}</Text>
+          ) : null}
         </Card>
 
         {actionError ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Unable to delete report</Text>
-            <Text style={styles.stateText}>{actionError}</Text>
-          </Card>
+          <InlineErrorCard
+            error={actionError}
+            message={reportErrorMessage(actionError, 'Unable to delete report.')}
+          />
         ) : null}
 
-        <AnalysisResults analysis={report.analysis} />
+        <AnalysisResults report={report} />
+
+        <Card style={styles.assistantCard}>
+          <Text style={styles.assistantTitle}>Need help understanding the results?</Text>
+          <Text style={styles.assistantText}>
+            Aura can explain this {isPortfolioReportV3(report) ? 'planned allocation' : 'portfolio'} using its newest saved report. If
+            this is an older report, the Assistant may use a newer one.
+          </Text>
+          <Button
+            title="Ask Aura About This Portfolio"
+            onPress={() => navigation.getParent()?.navigate('AI', { portfolioId })}
+          />
+        </Card>
 
         <Button
           title={deleting ? 'Deleting…' : 'Delete Report'}
@@ -179,7 +204,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: 110 },
   identityCard: { gap: spacing.sm, marginTop: spacing.xl },
-  identityRow: { flexDirection: 'row', gap: spacing.md },
+  identityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   identityLabel: { color: colors.muted, fontSize: 9, width: 70 },
   identityValue: { color: colors.text, fontSize: 9, flex: 1 },
   snapshotNote: {
@@ -188,6 +213,15 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: spacing.sm
   },
+  hypotheticalNote: { color: colors.warning, fontSize: 11, lineHeight: 17 },
+  assistantCard: {
+    gap: spacing.md,
+    marginTop: spacing.xl,
+    borderColor: colors.primary,
+    backgroundColor: colors.summaryBackground
+  },
+  assistantTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  assistantText: { color: colors.textSecondary, fontSize: 11, lineHeight: 17 },
   errorCard: { gap: spacing.sm, marginTop: spacing.md, borderColor: colors.dangerBorder },
   errorTitle: { color: colors.danger, fontSize: 15, fontWeight: '900' },
   stateCard: { gap: spacing.md },

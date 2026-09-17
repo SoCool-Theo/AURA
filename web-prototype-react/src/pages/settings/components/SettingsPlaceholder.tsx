@@ -16,12 +16,12 @@ export function SettingsPlaceholder({ section }: SettingsPlaceholderProps) {
       <span>ACCOUNT SETTINGS</span>
       <h2>{name}</h2>
       <p>
-        This prototype includes the section navigation and visual state. Connect {name.toLowerCase()} to authentication and account services when those backend capabilities are introduced.
+        {name} options are not available yet. This page will be updated when those account features are ready.
       </p>
       <div className="empty-settings-preview">
         <div>
           <span><Icon name={icon} size={16} /></span>
-          <div><strong>{section?.description}</strong><small>Backend integration required</small></div>
+          <div><strong>{section?.description}</strong><small>Coming later</small></div>
         </div>
         <b>Coming later</b>
       </div>

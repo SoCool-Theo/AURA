@@ -1,19 +1,26 @@
 """Pure conversion helpers for persisted portfolio-analysis reports."""
 
-from typing import Any
+from datetime import date
+from decimal import Decimal
+import math
+from typing import Any, Literal
 
 from ..database.models import Analysis
 from ..schemas.analytics import PortfolioAnalysisResponse
 from ..schemas.portfolio import PortfolioValuationFxResponse
 from ..schemas.reporting import (
     PortfolioReportDetailResponse,
+    PortfolioReportMonetaryMetrics,
     PortfolioReportResponse,
     PortfolioReportSummary,
     PortfolioReportV2Holding,
     PortfolioReportV2Response,
     PortfolioReportV2Snapshot,
     PortfolioReportV2ValuationContext,
+    PortfolioReportV3Response,
+    PortfolioReportV3Snapshot,
 )
+from .planned_snapshot_mapper import planned_allocation_to_snapshot_baseline
 from .portfolio_analysis_composition import PortfolioEnrichedAnalysisResult
 from .portfolio_analysis_preparation_service import (
     PortfolioAnalysisBaselineKind,
@@ -26,6 +33,76 @@ PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION = (
 PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION = (
     "portfolio-analysis-response-v2"
 )
+PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION = (
+    "portfolio-analysis-response-v3"
+)
+
+
+def analysis_to_report_monetary_metrics(
+    analysis: PortfolioAnalysisResponse,
+    *,
+    currency: Literal["USD", "THB"],
+    basis: Literal["saved-current-valuation", "planned-proposed-amount"],
+    reference_amount: Decimal,
+) -> PortfolioReportMonetaryMetrics:
+    """Derive stable currency equivalents from one frozen analysis path."""
+    return PortfolioReportMonetaryMetrics(
+        currency=currency,
+        basis=basis,
+        reference_amount=reference_amount,
+        cumulative_return_amount=(
+            reference_amount
+            * Decimal(str(analysis.portfolio_metrics.cumulative_return))
+        ),
+        annualized_return_amount=(
+            reference_amount
+            * Decimal(str(analysis.portfolio_metrics.annualized_return))
+        ),
+        maximum_drawdown_amount=_maximum_drawdown_amount(
+            analysis,
+            reference_amount,
+        ),
+    )
+
+
+def _maximum_drawdown_amount(
+    analysis: PortfolioAnalysisResponse,
+    reference_amount: Decimal,
+) -> Decimal | None:
+    """Return the currency decline for the report's exact drawdown episode."""
+    drawdown = analysis.max_drawdown
+    if drawdown.max_drawdown == 0.0:
+        return Decimal("0")
+    if drawdown.trough_date is None:
+        return None
+
+    wealth = Decimal("1")
+    wealth_by_date: dict[date, Decimal] = {}
+    for point in analysis.portfolio_returns:
+        wealth *= Decimal("1") + Decimal(str(point.portfolio_return))
+        wealth_by_date[point.date] = wealth
+
+    trough_wealth = wealth_by_date.get(drawdown.trough_date)
+    if trough_wealth is None:
+        return None
+    if drawdown.peak_date is None:
+        peak_wealth = Decimal("1")
+    else:
+        peak_wealth = wealth_by_date.get(drawdown.peak_date)
+        if peak_wealth is None:
+            return None
+
+    calculated_drawdown = trough_wealth / peak_wealth - Decimal("1")
+    if not math.isclose(
+        float(calculated_drawdown),
+        drawdown.max_drawdown,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        return None
+
+    amount = reference_amount * (trough_wealth - peak_wealth)
+    return min(amount, Decimal("0"))
 
 
 def analysis_response_to_snapshot(
@@ -92,6 +169,27 @@ def enriched_analysis_to_v2_snapshot(
     return snapshot.model_dump(mode="json")
 
 
+def enriched_analysis_to_v3_snapshot(
+    enriched: PortfolioEnrichedAnalysisResult,
+) -> dict[str, Any]:
+    """Map a planned analysis and its immutable target-allocation baseline."""
+    if (
+        enriched.baseline_kind is not PortfolioAnalysisBaselineKind.PLANNED
+        or enriched.valuation is not None
+        or enriched.planned_allocation is None
+    ):
+        raise ValueError("V3 snapshots require a planned allocation result")
+
+    snapshot = PortfolioReportV3Snapshot(
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+        analysis=enriched.analysis,
+        baseline=planned_allocation_to_snapshot_baseline(
+            enriched.planned_allocation
+        ),
+    )
+    return snapshot.model_dump(mode="json")
+
+
 def analysis_record_to_report_summary(
     analysis: Analysis,
 ) -> PortfolioReportSummary:
@@ -130,6 +228,34 @@ def analysis_record_to_report_response(
             id=analysis.id,
             portfolio_id=analysis.portfolio_id,
             created_at=analysis.created_at,
+            monetary_metrics=analysis_to_report_monetary_metrics(
+                validated_snapshot.analysis,
+                currency=validated_snapshot.valuation.valuation_currency,
+                basis="saved-current-valuation",
+                reference_amount=(
+                    validated_snapshot.valuation.total_current_value
+                ),
+            ),
+            **validated_snapshot.model_dump(),
+        )
+
+    if analysis.schema_version == PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION:
+        validated_snapshot = PortfolioReportV3Snapshot.model_validate(
+            analysis.result_snapshot
+        )
+        _validate_relational_period(analysis, validated_snapshot.analysis)
+        return PortfolioReportV3Response(
+            id=analysis.id,
+            portfolio_id=analysis.portfolio_id,
+            created_at=analysis.created_at,
+            monetary_metrics=analysis_to_report_monetary_metrics(
+                validated_snapshot.analysis,
+                currency=validated_snapshot.baseline.plan_currency,
+                basis="planned-proposed-amount",
+                reference_amount=(
+                    validated_snapshot.baseline.total_proposed_amount
+                ),
+            ),
             **validated_snapshot.model_dump(),
         )
 

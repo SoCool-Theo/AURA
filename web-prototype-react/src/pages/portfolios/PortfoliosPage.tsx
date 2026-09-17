@@ -6,7 +6,9 @@ import {
   listPortfolios,
   updatePortfolio,
 } from '../../api/portfoliosApi';
+import { listPortfolioReports } from '../../api/reportsApi';
 import { PortfolioCard } from '../../components/portfolio/PortfolioCard';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
 import { AuraSelect } from '../../components/ui/AuraSelect';
@@ -15,8 +17,8 @@ import type {
   PortfolioResponse,
   PortfolioSummaryResponse,
 } from '../../types/portfolio';
+import type { PortfolioReportSummary } from '../../types/report';
 import styles from './PortfolioIntegration.module.css';
-import { portfolioErrorMessage } from './portfolioUi';
 
 interface PortfolioSummaryProps {
   label: string;
@@ -45,6 +47,8 @@ function toSummary(portfolio: PortfolioResponse): PortfolioSummaryResponse {
   return {
     id: portfolio.id,
     name: portfolio.name,
+    portfolio_type: portfolio.portfolio_type,
+    plan_currency: portfolio.plan_currency,
     created_at: portfolio.created_at,
     updated_at: portfolio.updated_at,
   };
@@ -53,13 +57,15 @@ function toSummary(portfolio: PortfolioResponse): PortfolioSummaryResponse {
 export function PortfoliosPage() {
   const [portfolios, setPortfolios] = useState<PortfolioSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState('updated');
   const [editing, setEditing] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [latestReports, setLatestReports] = useState<Map<string, PortfolioReportSummary>>(new Map());
+  const [reportLookupError, setReportLookupError] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,7 +76,7 @@ export function PortfoliosPage() {
       .then(response => setPortfolios(response.portfolios))
       .catch(error => {
         if (!controller.signal.aborted) {
-          setLoadError(portfolioErrorMessage(error, 'Unable to load portfolios.'));
+          setLoadError(error);
         }
       })
       .finally(() => {
@@ -79,6 +85,37 @@ export function PortfoliosPage() {
 
     return () => controller.abort();
   }, [reloadKey]);
+
+  const portfolioIds = portfolios.map(portfolio => portfolio.id).join('|');
+
+  useEffect(() => {
+    setLatestReports(new Map());
+    setReportLookupError(false);
+    if (!portfolios.length) return;
+
+    const controller = new AbortController();
+    void Promise.allSettled(portfolios.map(async portfolio => ({
+      portfolioId: portfolio.id,
+      reports: (await listPortfolioReports(portfolio.id, {
+        signal: controller.signal,
+      })).reports,
+    }))).then(results => {
+      if (controller.signal.aborted) return;
+      const next = new Map<string, PortfolioReportSummary>();
+      let failed = false;
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          failed = true;
+          continue;
+        }
+        const latest = result.value.reports[0];
+        if (latest) next.set(result.value.portfolioId, latest);
+      }
+      setLatestReports(next);
+      setReportLookupError(failed);
+    });
+    return () => controller.abort();
+  }, [portfolioIds]);
 
   const visible = useMemo(() => {
     const filtered = portfolios.filter(portfolio => (
@@ -111,7 +148,7 @@ export function PortfoliosPage() {
         item.id === portfolio.id ? toSummary(updated) : item
       )));
     } catch (error) {
-      setActionError(portfolioErrorMessage(error, 'Unable to rename portfolio.'));
+      setActionError(error);
     } finally {
       setBusyId(null);
     }
@@ -128,7 +165,7 @@ export function PortfoliosPage() {
       const duplicated = await duplicatePortfolio(portfolio.id, { name: name.trim() });
       setPortfolios(previous => [...previous, toSummary(duplicated)]);
     } catch (error) {
-      setActionError(portfolioErrorMessage(error, 'Unable to duplicate portfolio.'));
+      setActionError(error);
     } finally {
       setBusyId(null);
     }
@@ -144,7 +181,7 @@ export function PortfoliosPage() {
       await deletePortfolio(portfolio.id);
       setPortfolios(previous => previous.filter(item => item.id !== portfolio.id));
     } catch (error) {
-      setActionError(portfolioErrorMessage(error, 'Unable to delete portfolio.'));
+      setActionError(error);
     } finally {
       setBusyId(null);
     }
@@ -163,24 +200,19 @@ export function PortfoliosPage() {
       </section>
 
       {!loading && !loadError && <div className="portfolio-summary-grid">
-        <PortfolioSummary label="Total Portfolios" value={String(portfolios.length)} detail="Backend portfolio records" icon="portfolios" tone="purple" />
+        <PortfolioSummary label="Total Portfolios" value={String(portfolios.length)} detail="Saved portfolios" icon="portfolios" tone="purple" />
         <PortfolioSummary label="Recently Updated" value={mostRecentlyUpdated} detail="Latest portfolio change" icon="calendar" tone="blue" />
-        <PortfolioSummary label="Persistence" value="Aura API" detail="Authenticated backend storage" icon="shield" tone="green" />
+        <PortfolioSummary label="Access" value="Private" detail="Available only in your account" icon="shield" tone="green" />
       </div>}
 
-      {actionError && <p className={styles.error} role="alert">{actionError}</p>}
+      {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to update this portfolio." />}
+      {reportLookupError && <p className={styles.contextNotice} role="alert">Some latest-report shortcuts are temporarily unavailable. Portfolios can still be opened normally.</p>}
 
       {loading && (
         <Card className={styles.stateCard}><p role="status">Loading your portfolios…</p></Card>
       )}
 
-      {!loading && loadError && (
-        <Card className={styles.stateCard}>
-          <h2>Unable to load portfolios</h2>
-          <p role="alert">{loadError}</p>
-          <button className="primary-btn" onClick={() => setReloadKey(key => key + 1)}>Try again</button>
-        </Card>
-      )}
+      {!loading && Boolean(loadError) && <ScreenErrorState error={loadError} fallbackMessage="Unable to load your portfolios." resourceName="Portfolio list" onRetry={() => setReloadKey(key => key + 1)} />}
 
       {!loading && !loadError && portfolios.length > 0 && <Card className="portfolio-toolbar">
         <label className="portfolio-search">
@@ -199,13 +231,15 @@ export function PortfoliosPage() {
       {!loading && !loadError && portfolios.length === 0 && (
         <Card className={styles.stateCard}>
           <h2>No portfolios yet</h2>
-          <p>Create your first named portfolio and save an ordered allocation of symbols and weights.</p>
+          <p>Create a Current portfolio for investments you own or a Planned portfolio to evaluate before investing.</p>
           <button className="primary-btn" onClick={() => go('create')}>Create portfolio</button>
         </Card>
       )}
       {!loading && !loadError && visible.length > 0 ? (
         <div className="portfolio-grid">
-          {visible.map(portfolio => (
+          {visible.map(portfolio => {
+            const latestReport = latestReports.get(portfolio.id);
+            return (
             <PortfolioCard
               key={portfolio.id}
               portfolio={portfolio}
@@ -216,8 +250,12 @@ export function PortfoliosPage() {
               onDuplicate={() => { void duplicate(portfolio); setEditing(null); }}
               onDelete={() => { void remove(portfolio); setEditing(null); }}
               onOpenPortfolio={() => go(`portfolio/${portfolio.id}`)}
+              onOpenLatestReport={latestReport
+                ? () => go(`reports/${portfolio.id}/${latestReport.id}`)
+                : undefined}
             />
-          ))}
+            );
+          })}
         </div>
       ) : !loading && !loadError && portfolios.length > 0 ? (
         <Card className="portfolio-empty-state">

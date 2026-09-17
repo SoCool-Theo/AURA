@@ -28,6 +28,12 @@ from backend.app.services.allocation_simulation_service import (
     EmptyPortfolioError,
     _map_allocation_simulation_response,
 )
+from backend.app.services.portfolio_baseline_resolver import (
+    PortfolioBaselineKind,
+    PortfolioBaselineResolution,
+    PortfolioBaselineResolutionService,
+    ResolvedPortfolioWeight,
+)
 
 
 _PORTFOLIO_ID = UUID("12345678-1234-5678-1234-567812345678")
@@ -160,6 +166,64 @@ def _original_weights() -> dict[str, float]:
 
 def _modified_weights() -> dict[str, float]:
     return {"BETA": 0.5, "ZERO": 0.0, "ALPHA": 0.5}
+
+
+def test_planned_simulation_uses_target_weights_as_original_allocation() -> None:
+    service, session, portfolio_service, market_data, _, _ = (
+        _service_with_dependencies()
+    )
+    portfolio_service.get.return_value = _portfolio()
+    baseline_resolver = MagicMock(spec=PortfolioBaselineResolutionService)
+    baseline = PortfolioBaselineResolution(
+        baseline_kind=PortfolioBaselineKind.PLANNED,
+        resolved_weights=(
+            ResolvedPortfolioWeight("BETA", Decimal("0.25")),
+            ResolvedPortfolioWeight("ZERO", Decimal("0.25")),
+            ResolvedPortfolioWeight("ALPHA", Decimal("0.50")),
+        ),
+        valuation=None,
+        valuation_as_of=None,
+    )
+    baseline_resolver.resolve.return_value = baseline
+    service._baseline_resolver = baseline_resolver
+    market_data.get_range.return_value = [MagicMock(name="historical-row")]
+    prices = pd.DataFrame(
+        {
+            "BETA": [100.0, 101.0, 102.0],
+            "ZERO": [50.0, 50.0, 50.0],
+            "ALPHA": [200.0, 201.0, 202.0],
+        },
+        index=pd.date_range("2020-02-03", periods=3),
+    )
+
+    with (
+        patch.object(service_module, "_build_price_frame", return_value=prices),
+        patch.object(
+            service_module,
+            "simulate_allocation_change",
+            return_value=_comparison_result(),
+        ) as simulate,
+    ):
+        execution = service.run_with_context(
+            user_id=_USER_ID,
+            portfolio_id=_PORTFOLIO_ID,
+            request=_request(),
+            valuation_date=date(2026, 9, 12),
+        )
+
+    assert execution is not None
+    assert execution.baseline is baseline
+    assert simulate.call_args.args[1] == {
+        "BETA": 0.25,
+        "ZERO": 0.25,
+        "ALPHA": 0.5,
+    }
+    assert simulate.call_args.args[2] == {
+        "BETA": 0.5,
+        "ZERO": 0.0,
+        "ALPHA": 0.5,
+    }
+    _assert_session_lifecycle_untouched(session)
 
 
 def _map_response(

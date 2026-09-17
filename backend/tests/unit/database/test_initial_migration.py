@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from io import StringIO
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from alembic import command
 from alembic.config import Config
@@ -31,6 +31,7 @@ INITIAL_REVISION = "9f4c2a7b1d3e"
 AUTHENTICATION_REVISION = "2b6e5d4a9c81"
 SIMULATION_REVISION = "7c1e2f4a6b90"
 REAL_HOLDING_REVISION = "d4a6f8c2e1b7"
+PLANNED_PORTFOLIO_REVISION = "e5b7c9d2a4f1"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -58,6 +59,12 @@ def _simulation_revision() -> Script:
 
 def _real_holding_revision() -> Script:
     revision = _script_directory().get_revision(REAL_HOLDING_REVISION)
+    assert revision is not None
+    return revision
+
+
+def _planned_portfolio_revision() -> Script:
+    revision = _script_directory().get_revision(PLANNED_PORTFOLIO_REVISION)
     assert revision is not None
     return revision
 
@@ -168,6 +175,60 @@ def _captured_upgrade() -> tuple[
                 name=create_call.args[0],
             )
         )
+
+    planned_revision = _planned_portfolio_revision().module
+    connection = MagicMock()
+    connection.scalar.return_value = False
+    with (
+        patch.object(
+            planned_revision.context,
+            "is_offline_mode",
+            return_value=False,
+        ),
+        patch.object(planned_revision.op, "get_bind", return_value=connection),
+        patch.object(planned_revision.op, "add_column") as add_column,
+        patch.object(
+            planned_revision.op,
+            "create_foreign_key",
+        ) as create_foreign_key,
+        patch.object(planned_revision.op, "execute"),
+        patch.object(planned_revision.op, "drop_constraint") as drop_constraint,
+        patch.object(
+            planned_revision.op,
+            "create_check_constraint",
+        ) as create_check_constraint,
+    ):
+        planned_revision.upgrade()
+
+    for add_call in add_column.call_args_list:
+        metadata.tables[add_call.args[0]].append_column(add_call.args[1])
+    for drop_call in drop_constraint.call_args_list:
+        table = metadata.tables[drop_call.args[1]]
+        existing = next(
+            constraint
+            for constraint in table.constraints
+            if constraint.name == drop_call.args[0]
+        )
+        table.constraints.remove(existing)
+    for create_call in create_foreign_key.call_args_list:
+        metadata.tables[create_call.args[1]].append_constraint(
+            sa.ForeignKeyConstraint(
+                create_call.args[3],
+                [
+                    f"{create_call.args[2]}.{column_name}"
+                    for column_name in create_call.args[4]
+                ],
+                name=create_call.args[0],
+                ondelete=create_call.kwargs.get("ondelete"),
+            )
+        )
+    for create_call in create_check_constraint.call_args_list:
+        metadata.tables[create_call.args[1]].append_constraint(
+            sa.CheckConstraint(
+                create_call.args[2],
+                name=create_call.args[0],
+            )
+        )
     return metadata, indexes
 
 
@@ -222,25 +283,28 @@ def _model_indexes() -> set[tuple[str, str, tuple[str, ...], bool]]:
     }
 
 
-def test_revisions_form_a_single_real_holding_head() -> None:
+def test_revisions_form_a_single_planned_portfolio_head() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
+        PLANNED_PORTFOLIO_REVISION,
         REAL_HOLDING_REVISION,
         SIMULATION_REVISION,
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert script.get_current_head() == REAL_HOLDING_REVISION
-    assert revisions[0].down_revision == SIMULATION_REVISION
-    assert revisions[0].module.down_revision == SIMULATION_REVISION
-    assert revisions[1].down_revision == AUTHENTICATION_REVISION
-    assert revisions[1].module.down_revision == AUTHENTICATION_REVISION
-    assert revisions[2].down_revision == INITIAL_REVISION
-    assert revisions[2].module.down_revision == INITIAL_REVISION
-    assert revisions[3].down_revision is None
-    assert revisions[3].module.down_revision is None
+    assert script.get_current_head() == PLANNED_PORTFOLIO_REVISION
+    assert revisions[0].down_revision == REAL_HOLDING_REVISION
+    assert revisions[0].module.down_revision == REAL_HOLDING_REVISION
+    assert revisions[1].down_revision == SIMULATION_REVISION
+    assert revisions[1].module.down_revision == SIMULATION_REVISION
+    assert revisions[2].down_revision == AUTHENTICATION_REVISION
+    assert revisions[2].module.down_revision == AUTHENTICATION_REVISION
+    assert revisions[3].down_revision == INITIAL_REVISION
+    assert revisions[3].module.down_revision == INITIAL_REVISION
+    assert revisions[4].down_revision is None
+    assert revisions[4].module.down_revision is None
     assert all(callable(revision.module.upgrade) for revision in revisions)
     assert all(callable(revision.module.downgrade) for revision in revisions)
 
@@ -289,7 +353,7 @@ def test_migration_table_metadata_matches_existing_base_metadata() -> None:
         model_table = Base.metadata.tables[table_name]
 
         assert set(migration_table.c.keys()) == set(model_table.c.keys())
-        if table_name != "holdings":
+        if table_name not in {"holdings", "portfolios"}:
             assert tuple(migration_table.c.keys()) == tuple(
                 model_table.c.keys()
             )

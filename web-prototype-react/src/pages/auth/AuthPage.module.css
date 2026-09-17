@@ -164,6 +164,23 @@
   color: var(--text-muted);
 }
 
+.authForm input:-webkit-autofill,
+.authForm input:-webkit-autofill:hover,
+.authForm input:-webkit-autofill:focus,
+.authForm input:-webkit-autofill:active {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: var(--text-primary);
+  caret-color: var(--text-primary);
+  box-shadow: 0 0 0 1000px transparent inset;
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+
+.authForm input:autofill {
+  background: transparent;
+  color: var(--text-primary);
+}
+
 .authForm :global(.auth-password-toggle) {
   width: 24px;
   height: 24px;
@@ -209,7 +226,7 @@
   border: 0;
   border-radius: 8px;
   background: linear-gradient(105deg, var(--purple-bright), var(--purple-primary) 50%, #24bca8);
-  color: #021713;
+  color: var(--on-primary);
   font-size: 16px;
   font-weight: 800;
   cursor: pointer;

@@ -12,7 +12,10 @@ import { analyticsApi } from '../api/analyticsApi';
 import { reportsApi } from '../api/reportsApi';
 import { useAuth } from '../auth/useAuth';
 import type { AnalysisPeriod } from '../types/analytics';
-import type { PortfolioSummaryResponse } from '../types/portfolio';
+import type {
+  PortfolioCurrency,
+  PortfolioSummaryResponse
+} from '../types/portfolio';
 import type {
   PortfolioReportResponse,
   PortfolioReportSummary
@@ -35,7 +38,8 @@ type ReportContextValue = {
   ) => Promise<void>;
   createReport: (
     portfolioId: string,
-    period: AnalysisPeriod
+    period: AnalysisPeriod,
+    currency?: PortfolioCurrency
   ) => Promise<PortfolioReportResponse>;
   getReport: (
     portfolioId: string,
@@ -135,9 +139,10 @@ export function ReportProvider({ children }: PropsWithChildren) {
 
   const createReport = useCallback(async (
     portfolioId: string,
-    period: AnalysisPeriod
+    period: AnalysisPeriod,
+    currency: PortfolioCurrency = 'USD'
   ) => {
-    const report = await analyticsApi.analyze(portfolioId, period);
+    const report = await analyticsApi.analyze(portfolioId, period, currency);
     const summary = reportSummary(report);
     setReports((current) => orderGlobalHistory([
       summary,

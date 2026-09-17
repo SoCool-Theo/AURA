@@ -17,12 +17,12 @@ export function ReportSummary({ reports, portfolioCount }: ReportSummaryProps) {
         <div><small>Total Reports</small><strong>{reports.length}</strong><p>Saved in your library</p></div>
       </Card>
       <Card className="report-summary-card blue">
-        <span><Icon name="analysis" size={19} /></span>
-        <div><small>Analysis Snapshots</small><strong>{reports.length}</strong><p>Immutable backend reports</p></div>
+        <span><Icon name="analytics" size={19} /></span>
+        <div><small>Analysis Snapshots</small><strong>{reports.length}</strong><p>Immutable saved reports</p></div>
       </Card>
       <Card className="report-summary-card amber">
         <span><Icon name="wallet" size={19} /></span>
-        <div><small>Portfolios Checked</small><strong>{portfolioCount}</strong><p>Owned portfolios queried</p></div>
+        <div><small>Available Portfolios</small><strong>{portfolioCount}</strong><p>Current, planned, and legacy</p></div>
       </Card>
       <Card className="report-summary-card green">
         <span><Icon name="reports" size={19} /></span>
