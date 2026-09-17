@@ -185,6 +185,7 @@ test('saved report and simulation links preserve exact Ask Aura context', () => 
   assert.match(assistant, /setLoadError\('Portfolio not found\.'\)/);
   assert.match(app, /route\.reportId === 'report'/);
   assert.match(app, /route\.reportId === 'simulation'/);
+  assert.match(report, /className="primary-btn".*Run New Analysis<\/button>/);
 });
 
 test('web theme uses the mobile palette while preserving gradients and dark action text', () => {
@@ -253,15 +254,128 @@ test('web feature icons follow the mobile semantic icon mappings', () => {
   assert.match(simulationResults, /MetricLabel icon="drawdown" label="Maximum Drawdown" tone="danger"/);
 });
 
-test('web current-value failures offer compact portfolio reanalysis recovery', () => {
+test('web return metrics expose saved money equivalents with side chevrons', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const dashboard = read('src/pages/dashboard/components/DashboardKpiGrid.tsx');
+  const analysis = read('src/pages/analytics/components/AnalysisResults.tsx');
+  const reportDetails = read('src/pages/analytics/reportMetricDetails.ts');
+  const reportPage = read('src/pages/reports/ReportDetailPage.tsx');
+  const icons = read('src/components/ui/Icon.tsx');
+
+  assert.match(dashboard, /setSelectedMetric\('annualized'\)/);
+  assert.match(dashboard, /setSelectedMetric\('drawdown'\)/);
+  assert.match(dashboard, /<MetricAmountDialog/);
+  assert.match(dashboard, /name="chevron-right"/);
+  assert.match(analysis, /setSelectedMetric\('annualized'\)/);
+  assert.match(analysis, /setSelectedMetric\('drawdown'\)/);
+  assert.match(analysis, /name="chevron-right"/);
+  assert.match(reportPage, /<AnalysisResults report=\{report\} \/>/);
+  assert.match(icons, /case 'chevron-right'/);
+  assert.match(reportDetails, /monetary\.annualized_return_amount/);
+  assert.match(reportDetails, /monetary\.maximum_drawdown_amount/);
+  assert.match(reportDetails, /monetary\.reference_amount/);
+  assert.doesNotMatch(reportDetails, /reference_amount\s*\*/);
+});
+
+test('web risk levels use their semantic colors and report returns stay compact', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const summary = read('src/pages/analytics/components/AnalysisSummary.tsx');
+  const results = read('src/pages/analytics/components/AnalysisResults.tsx');
+  const dashboard = read('src/pages/dashboard/components/DashboardKpiGrid.tsx');
+  const analyticsStyles = read('src/pages/analytics/AnalyticsIntegration.module.css');
+  const returnRanges = load('src/pages/analytics/returnSeriesRange.ts');
+
+  assert.match(summary, /risk_level === 'Low'[\s\S]*successScore[\s\S]*risk_level === 'Moderate'[\s\S]*warningScore[\s\S]*dangerScore/);
+  assert.match(analyticsStyles, /\.score\.successScore>svg,\.score\.successScore span\{color:var\(--green-primary\)\}/);
+  assert.match(analyticsStyles, /\.score\.warningScore>svg,\.score\.warningScore span\{color:var\(--amber-primary\)\}/);
+  assert.match(analyticsStyles, /\.score\.dangerScore>svg,\.score\.dangerScore span\{color:var\(--red-bright\)\}/);
+  assert.match(dashboard, /riskLabelTone = !risk \? 'purple-text' : risk\.risk_level === 'Low' \? 'positive' : risk\.risk_level === 'Moderate' \? 'warning' : 'negative'/);
+
+  const chartIndex = results.indexOf('<PortfolioReturnChart');
+  const tableIndex = results.indexOf('<table className={styles.dataTable}>');
+  assert.ok(chartIndex >= 0 && chartIndex < tableIndex, 'Return graph must appear before the return table');
+  assert.match(results, /returnSeriesScroll/);
+  assert.match(results, /Scrollable portfolio return observations/);
+  assert.match(results, /RETURN_VIEW_RANGES\.map/);
+  assert.match(results, /setReturnViewRange\(range\)/);
+  assert.match(results, /Portfolio return graph range/);
+  assert.match(analyticsStyles, /\.returnSeriesScroll\{max-height:360px/);
+  assert.match(analyticsStyles, /\.returnSeriesScroll thead\{position:sticky/);
+  assert.deepEqual(plain(returnRanges.RETURN_VIEW_RANGES), ['1M', '3M', '6M', '1Y', 'ALL']);
+  const points = [
+    { date: '2025-09-30', portfolio_return: 0.01 },
+    { date: '2026-08-29', portfolio_return: 0.02 },
+    { date: '2026-08-30', portfolio_return: 0.03 },
+    { date: '2026-09-30', portfolio_return: 0.04 },
+  ];
+  assert.deepEqual(
+    plain(returnRanges.visibleReturnPoints(points, '1M').map(point => point.date)),
+    ['2026-08-30', '2026-09-30'],
+  );
+  assert.equal(returnRanges.visibleReturnPoints(points, '1Y').length, 4);
+  assert.equal(returnRanges.visibleReturnPoints(points, 'ALL').length, 4);
+});
+
+test('web current-value failures explain the data refresh and retry valuation', () => {
   const dashboard = fs.readFileSync(path.join(root, 'src/pages/dashboard/DashboardPage.tsx'), 'utf8');
+  const detail = fs.readFileSync(path.join(root, 'src/pages/portfolios/PortfolioDetailView.tsx'), 'utf8');
+  const portfolioUi = fs.readFileSync(path.join(root, 'src/pages/portfolios/portfolioUi.ts'), 'utf8');
+  const analytics = fs.readFileSync(path.join(root, 'src/pages/analytics/AnalyticsPage.tsx'), 'utf8');
+  const analyticsUi = fs.readFileSync(path.join(root, 'src/pages/analytics/analyticsUi.ts'), 'utf8');
   const errorStyles = fs.readFileSync(path.join(root, 'src/components/ui/ApiErrorState.module.css'), 'utf8');
 
-  assert.match(dashboard, /retryTitle=\{portfolio\.portfolio_type === 'CURRENT' \? 'Analyze Portfolio Again' : 'Retry allocation'\}/);
-  assert.match(dashboard, /\? \(\) => go\(`analytics\/\$\{portfolio\.id\}`\)/);
-  assert.match(dashboard, /Any existing analysis may be out of date/);
+  assert.match(dashboard, /retryTitle=\{portfolio\.portfolio_type === 'CURRENT' \? 'Retry Current Value' : 'Retry allocation'\}/);
+  assert.match(dashboard, /onRetry=\{\(\) => setContextReloadKey/);
+  assert.doesNotMatch(dashboard, /Analyze Portfolio Again/);
   assert.match(dashboard, /compactAction=\{portfolio\.portfolio_type === 'CURRENT'\}/);
+  assert.match(detail, /retryTitle=\{portfolio\.portfolio_type === 'CURRENT' \? 'Retry Current Value' : 'Retry preview'\}/);
+  assert.match(detail, /PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE/);
+  assert.match(portfolioUi, /New analysis is unavailable until market data is refreshed/);
+  assert.match(analytics, /analysisErrorMessage\(actionError/);
+  assert.match(analyticsUi, /Analysis will be available after the market data refresh completes/);
   assert.match(errorStyles, /\.actions \.compactAction\{min-width:0;width:auto\}/);
+});
+
+test('web dashboard exposes mobile-style visible portfolio choices', () => {
+  const dashboard = fs.readFileSync(path.join(root, 'src/pages/dashboard/DashboardPage.tsx'), 'utf8');
+  const header = fs.readFileSync(path.join(root, 'src/pages/dashboard/components/DashboardHeader.tsx'), 'utf8');
+  const selector = fs.readFileSync(path.join(root, 'src/pages/dashboard/components/PortfolioSelector.tsx'), 'utf8');
+  const dashboardStyles = fs.readFileSync(path.join(root, 'src/pages/dashboard/DashboardIntegration.module.css'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'src/styles.css'), 'utf8');
+
+  assert.match(selector, /role="radiogroup"/);
+  assert.match(selector, /role="radio"/);
+  assert.match(selector, /aria-checked=\{selected\}/);
+  assert.match(selector, /onClick=\{\(\) => onSelect\(portfolio\.id\)\}/);
+  assert.match(dashboard, /portfolioContextBar[\s\S]*<PortfolioSelector[\s\S]*currencyControl/);
+  assert.doesNotMatch(header, /PortfolioSelector/);
+  assert.match(dashboardStyles, /portfolioContextBar :global\(\.dashboard-portfolio-picker\)/);
+  assert.match(styles, /\.dashboard-portfolio-options\{[^}]*overflow-x:auto/);
+  assert.match(styles, /\.dashboard-portfolio-option\.active\{/);
+});
+
+test('web holding forms expose the complete mobile-supported asset catalog', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const catalog = load('src/pages/portfolios/supportedAssetSymbols.ts');
+  const mobileCatalog = load('../mobile/src/portfolio/supportedAssetSymbols.ts');
+  const field = read('src/pages/portfolios/components/AssetSymbolField.tsx');
+  const create = read('src/pages/portfolios/PortfolioCreateFlow.tsx');
+  const editor = read('src/pages/portfolios/components/PortfolioHoldingsEditor.tsx');
+
+  assert.deepEqual(plain(catalog.supportedAssetSymbols), plain(mobileCatalog.supportedAssetSymbols));
+  assert.equal(catalog.supportedAssetSymbols.length, 17);
+  assert.ok(!catalog.supportedAssetSymbols.includes('THB=X'));
+  assert.match(field, /role="dialog"/);
+  assert.match(field, /createPortal/);
+  assert.match(field, /supportedAssetSymbols\.map/);
+  assert.match(field, /role="radiogroup"/);
+  assert.match(field, /role="radio"/);
+  assert.match(field, /event\.target\.value\.toUpperCase\(\)/);
+  const styles = read('src/pages/portfolios/PortfolioIntegration.module.css');
+  assert.match(styles, /\.assetPickerOptions[\s\S]*?max-height: 310px/);
+  assert.match(styles, /\.assetPickerOptions[\s\S]*?overflow-y: auto/);
+  assert.match(create, /<AssetSymbolField/);
+  assert.match(editor, /<AssetSymbolField/);
 });
 
 test('production web source has no direct market, database, or LLM provider authority', () => {

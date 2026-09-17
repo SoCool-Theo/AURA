@@ -23,6 +23,7 @@ import {
   validatePlannedHoldingDrafts,
   validateRealHoldingDrafts,
 } from './portfolioValidation';
+import { AssetSymbolField } from './components/AssetSymbolField';
 
 type CreateMode = 'CURRENT' | 'PLANNED';
 type DraftHolding = RealHoldingDraft | PlannedHoldingDraft;
@@ -253,7 +254,7 @@ export function PortfolioCreateFlow() {
                 <tbody>{holdings.map((holding, index) => (
                   <tr key={holding.id}>
                     <td>{index + 1}</td>
-                    <td><input aria-label={`Holding ${index + 1} symbol`} value={holding.symbol} onChange={event => updateHolding(holding.id, { symbol: event.target.value })} placeholder="e.g. AAPL" disabled={saving} /></td>
+                    <td><AssetSymbolField ariaLabel={`Holding ${index + 1} symbol`} id={`create-holding-${holding.id}`} value={holding.symbol} onChange={symbol => updateHolding(holding.id, { symbol })} disabled={saving} /></td>
                     {mode === 'PLANNED' && 'proposedAmount' in holding ? (
                       <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} proposed amount`} inputMode="decimal" value={holding.proposedAmount} onChange={event => updateHolding(holding.id, { proposedAmount: event.target.value })} placeholder="4000.00" disabled={saving} /></td>
                     ) : 'investedAmount' in holding ? <>

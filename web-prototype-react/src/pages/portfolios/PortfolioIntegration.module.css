@@ -245,6 +245,181 @@
   color: var(--text-primary);
 }
 
+.assetSymbolField {
+  position: relative;
+  min-width: 150px;
+}
+
+.assetSymbolField input {
+  padding-right: 40px;
+}
+
+.assetSymbolPickerButton {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  bottom: 3px;
+  width: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--control-hover);
+  color: var(--purple-light);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.assetSymbolPickerButton:hover:not(:disabled) {
+  background: rgba(53, 215, 192, .14);
+}
+
+.assetSymbolPickerButton:focus-visible {
+  outline: 2px solid var(--purple-primary);
+  outline-offset: 1px;
+}
+
+.assetSymbolPickerButton:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.assetPickerOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.assetPickerBackdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(0, 0, 0, .68);
+  cursor: pointer;
+}
+
+.assetPickerDialog {
+  position: relative;
+  width: min(460px, 100%);
+  box-sizing: border-box;
+  padding: 20px;
+  border: 1px solid var(--border-control);
+  border-radius: 18px;
+  background: var(--bg-card);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .48);
+}
+
+.assetPickerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.assetPickerHeader h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 18px;
+}
+
+.assetPickerHeader p {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.assetPickerClose {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 1px solid var(--border-divider);
+  border-radius: 10px;
+  background: var(--control-bg);
+  color: var(--text-primary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.assetPickerClose:hover {
+  border-color: var(--border-hover);
+  background: var(--control-hover);
+}
+
+.assetPickerClose:focus-visible,
+.assetPickerOption:focus-visible {
+  outline: 2px solid var(--purple-primary);
+  outline-offset: 2px;
+}
+
+.assetPickerOptions {
+  max-height: 310px;
+  padding: 8px;
+  border: 1px solid var(--border-divider);
+  border-radius: 13px;
+  background: rgba(3, 13, 29, .28);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--border-hover) var(--control-bg);
+}
+
+.assetPickerOption {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.assetPickerOption:hover {
+  background: var(--control-hover);
+  color: var(--text-primary);
+}
+
+.assetPickerOptionSelected {
+  border-color: var(--purple-primary);
+  background: rgba(53, 215, 192, .12);
+  color: var(--purple-light);
+}
+
+.assetPickerNote {
+  margin: 13px 1px 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 560px) {
+  .assetPickerOverlay {
+    align-items: end;
+    padding: 0;
+  }
+
+  .assetPickerDialog {
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .assetPickerOptions {
+    max-height: 52vh;
+  }
+}
+
 .holdingTable select {
   width: 100%;
   min-width: 82px;

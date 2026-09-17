@@ -27,6 +27,7 @@ import {
   validatePlannedHoldingDrafts,
   validateRealHoldingDrafts,
 } from '../portfolioValidation';
+import { AssetSymbolField } from './AssetSymbolField';
 
 type EditableHolding = RealHoldingDraft | PlannedHoldingDraft;
 
@@ -185,7 +186,7 @@ export function PortfolioHoldingsEditor({
             <tbody>{holdings.map((holding, index) => (
               <tr key={holding.id}>
                 <td>{index + 1}</td>
-                <td><input aria-label={`Holding ${index + 1} symbol`} value={holding.symbol} onChange={event => updateHolding(holding.id, { symbol: event.target.value })} disabled={saving} /></td>
+                <td><AssetSymbolField ariaLabel={`Holding ${index + 1} symbol`} id={`edit-holding-${holding.id}`} value={holding.symbol} onChange={symbol => updateHolding(holding.id, { symbol })} disabled={saving} /></td>
                 {planned && 'proposedAmount' in holding ? (
                   <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} proposed amount`} inputMode="decimal" value={holding.proposedAmount} onChange={event => updateHolding(holding.id, { proposedAmount: event.target.value })} placeholder="4000.00" disabled={saving} /></td>
                 ) : 'investedAmount' in holding ? <>

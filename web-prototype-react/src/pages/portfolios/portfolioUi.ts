@@ -9,6 +9,9 @@ import type {
   PortfolioValuationResponse,
 } from '../../types/portfolio';
 
+export const PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE =
+  'New analysis is unavailable until market data is refreshed. Retry the current value after the refresh completes.';
+
 export type PortfolioAllocationDisplayHolding = {
   symbol: string;
   weight: number;
@@ -19,6 +22,20 @@ export function portfolioErrorMessage(
   fallback: string,
 ): string {
   return error instanceof ApiError ? error.message : fallback;
+}
+
+export function isPortfolioMarketDataUnavailable(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 503;
+}
+
+export function portfolioValuationErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.status === 409) {
+    return 'This portfolio cannot be valued until all holdings use one complete supported format.';
+  }
+  if (isPortfolioMarketDataUnavailable(error)) {
+    return 'Current valuation is temporarily unavailable because required market or currency data is missing or stale.';
+  }
+  return portfolioErrorMessage(error, 'Current valuation is unavailable.');
 }
 
 export function formatPortfolioDate(value: string): string {

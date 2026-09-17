@@ -96,7 +96,7 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
           >
             {deleting ? 'Deleting…' : 'Delete Report'}
           </button>
-          <button className="secondary-btn" onClick={() => go(`analytics/${report.portfolio_id}`)}>Run New Analysis</button>
+          <button className="primary-btn" onClick={() => go(`analytics/${report.portfolio_id}`)}>Run New Analysis</button>
         </div>
       </header>
 

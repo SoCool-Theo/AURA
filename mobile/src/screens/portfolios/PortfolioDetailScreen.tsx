@@ -25,6 +25,8 @@ import { LoadingState } from '../../components/ui/LoadingState';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 import {
+  isPortfolioMarketDataUnavailable,
+  PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE,
   portfolioErrorMessage,
   portfolioValuationErrorMessage
 } from '../../portfolio/portfolioErrors';
@@ -240,6 +242,7 @@ export function PortfolioDetailScreen({
   }
 
   const holdingMode = portfolioHoldingMode(portfolio.holdings);
+  const marketDataUnavailable = isPortfolioMarketDataUnavailable(valuationError);
   const valuationById = new Map(
     valuation?.holdings.map((holding) => [holding.id, holding]) ?? []
   );
@@ -347,9 +350,13 @@ export function PortfolioDetailScreen({
               <InlineErrorCard
                 error={valuationError}
                 message={portfolioValuationErrorMessage(valuationError)}
-                stale={Boolean(valuation)}
+                stale={marketDataUnavailable || Boolean(valuation)}
+                staleMessage={marketDataUnavailable
+                  ? PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE
+                  : undefined}
                 onRetry={() => void loadPortfolio()}
-                retryTitle="Retry valuation"
+                retryTitle="Retry Current Value"
+                compactAction
               />
             ) : valuation ? (
               <Card style={styles.valueCard}>

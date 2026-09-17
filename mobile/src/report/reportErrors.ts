@@ -26,7 +26,7 @@ export function reportErrorMessage(
     return 'This portfolio cannot be analyzed until its holdings use one complete supported format.';
   }
   if (error.status === 503) {
-    return 'Required current market or currency data is unavailable or stale. No report was saved.';
+    return 'Required current market or currency data is unavailable or stale. Analysis will be available after the market data refresh completes; no report was saved.';
   }
   const messages = validationMessages(error);
   return messages.length ? messages.join('. ') : error.message;

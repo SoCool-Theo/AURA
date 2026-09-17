@@ -1,6 +1,9 @@
 import { ApiError } from '../api/apiClient';
 import type { PortfolioResponse } from '../types/portfolio';
 
+export const PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE =
+  'New analysis is unavailable until market data is refreshed. Retry the current value after the refresh completes.';
+
 function validationMessage(error: ApiError): string | null {
   if (!Array.isArray(error.detail)) return null;
 
@@ -34,6 +37,10 @@ export function portfolioValuationErrorMessage(error: unknown): string {
     return 'Current valuation is temporarily unavailable because required market or currency data is missing or stale.';
   }
   return portfolioErrorMessage(error, 'Current valuation is unavailable.');
+}
+
+export function isPortfolioMarketDataUnavailable(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 503;
 }
 
 export class PortfolioCreatedWithoutHoldingsError extends Error {

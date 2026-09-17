@@ -26,6 +26,9 @@ import {
   formatPortfolioAllocation,
   formatPortfolioDate,
   formatPortfolioMoney,
+  isPortfolioMarketDataUnavailable,
+  PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE,
+  portfolioValuationErrorMessage,
   portfolioTypeLabel,
   resolvedPortfolioAllocation,
 } from './portfolioUi';
@@ -175,6 +178,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
       : formatPortfolioAllocation(
         portfolio.holdings.reduce((sum, holding) => sum + (holding.weight ?? 0), 0),
       );
+  const marketDataUnavailable = isPortfolioMarketDataUnavailable(contextError);
 
   return (
     <div className="page portfolio-detail-page">
@@ -222,7 +226,20 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
           </div>
         )}
 
-        {Boolean(contextError) && <InlineErrorCard error={contextError} fallbackMessage={portfolio.portfolio_type === 'PLANNED' ? 'Unable to load the planned portfolio preview.' : 'Unable to load the current portfolio value.'} stale onRetry={() => setContextReloadKey(value => value + 1)} />}
+        {Boolean(contextError) && <InlineErrorCard
+          error={contextError}
+          fallbackMessage={portfolio.portfolio_type === 'PLANNED' ? 'Unable to load the planned portfolio preview.' : 'Unable to load the current portfolio value.'}
+          message={portfolio.portfolio_type === 'CURRENT'
+            ? portfolioValuationErrorMessage(contextError)
+            : undefined}
+          stale={marketDataUnavailable || Boolean(valuation) || portfolio.portfolio_type === 'PLANNED'}
+          staleMessage={marketDataUnavailable
+            ? PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE
+            : undefined}
+          onRetry={() => setContextReloadKey(value => value + 1)}
+          retryTitle={portfolio.portfolio_type === 'CURRENT' ? 'Retry Current Value' : 'Retry preview'}
+          compactAction={portfolio.portfolio_type === 'CURRENT'}
+        />}
 
         <div className={`${styles.metadataGrid} ${styles.overviewMetrics}`}>
           <div><small>Holdings</small><strong>{portfolio.holdings.length}</strong></div>

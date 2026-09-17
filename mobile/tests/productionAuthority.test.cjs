@@ -306,6 +306,11 @@ test('financial presentation preserves signs/nulls and allocation preserves save
   assert.equal(filtered.length, 1);
   assert.equal(filtered[0], points[1]);
   assert.equal(points.length, 2);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(dashboard.RETURN_VIEW_RANGES)),
+    ['1M', '3M', '6M', '1Y', 'ALL']
+  );
+  assert.equal(dashboard.filterReturnPoints(points, 'ALL').length, 2);
   const validation = load('src/simulation/simulationValidation.ts');
   const result = validation.validateModifiedAllocation({ holdings: [{ symbol: 'B', weight: 0 }, { symbol: 'A', weight: 1 }] }, { A: '100', B: '0' });
   assert.equal(result.error, null);
@@ -579,6 +584,10 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(analysis, /Estimated shares are for display only/);
   assert.match(analysis, /MetricAmountSheet/);
   assert.match(analysis, /Tap for amount/);
+  assert.match(analysis, /RETURN_VIEW_RANGES\.map/);
+  assert.match(analysis, /setReturnViewRange\(range\)/);
+  assert.match(analysis, /accessibilityRole="tab"/);
+  assert.match(analysis, /PortfolioReturnsChart points=\{visibleReturns\}/);
   assert.match(metricDetails, /cumulative_return_amount/);
   assert.match(metricDetails, /annualized_return_amount/);
   assert.match(metricDetails, /maximum_drawdown_amount/);
@@ -688,6 +697,19 @@ test('More report detail exposes an accessible back action to Reports', () => {
   assert.match(navigation, /navigation\.navigate\('Reports'\)/);
   assert.match(backButton, /accessibilityRole="button"/);
   assert.match(backButton, /name="arrow-back"/);
+});
+
+test('mobile Analytics exposes an explicit back action in both navigation stacks', () => {
+  const navigation = fs.readFileSync(
+    path.join(root, 'src/navigation/MainTabNavigator.tsx'),
+    'utf8'
+  );
+
+  assert.match(navigation, /PortfolioStack\.Screen[\s\S]*name="PortfolioAnalysis"[\s\S]*label="Back from Analytics"/);
+  assert.match(navigation, /navigation\.navigate\('Portfolios'\)/);
+  assert.match(navigation, /MoreStack\.Screen[\s\S]*name="Analytics"[\s\S]*label="Back to More"/);
+  assert.match(navigation, /onPress=\{\(\) => navigation\.navigate\('More'\)\}/);
+  assert.match(navigation, /navigation\.canGoBack\(\) \? navigation\.goBack\(\)/);
 });
 
 test('real holding API clients send explicit currency and real holding payloads', async () => {
@@ -863,13 +885,20 @@ test('mobile Assistant has no direct provider access or synthetic conversation a
   assert.ok(!/AsyncStorage|SecureStore|conversationHistory|chatHistory/.test(screen));
 });
 
-test('mobile current-value failures offer compact portfolio reanalysis recovery', () => {
+test('mobile current-value failures explain the data refresh and retry valuation', () => {
   const dashboard = fs.readFileSync(path.join(root, 'src/screens/dashboard/DashboardScreen.tsx'), 'utf8');
+  const detail = fs.readFileSync(path.join(root, 'src/screens/portfolios/PortfolioDetailScreen.tsx'), 'utf8');
+  const errors = fs.readFileSync(path.join(root, 'src/portfolio/portfolioErrors.ts'), 'utf8');
+  const reportErrors = fs.readFileSync(path.join(root, 'src/report/reportErrors.ts'), 'utf8');
   const errorState = fs.readFileSync(path.join(root, 'src/components/ui/ErrorState.tsx'), 'utf8');
 
-  assert.match(dashboard, /retryTitle=\{holdingMode === 'real' \? 'Analyze Portfolio Again' : 'Retry allocation'\}/);
-  assert.match(dashboard, /onRetry=\{holdingMode === 'real' \? analyze : dashboard\.retryDetails\}/);
-  assert.match(dashboard, /Any existing analysis may be out of date/);
+  assert.match(dashboard, /retryTitle=\{holdingMode === 'real' \? 'Retry Current Value' : 'Retry allocation'\}/);
+  assert.match(dashboard, /onRetry=\{dashboard\.retryDetails\}/);
+  assert.doesNotMatch(dashboard, /Analyze Portfolio Again/);
   assert.match(dashboard, /compactAction=\{holdingMode === 'real'\}/);
+  assert.match(detail, /retryTitle="Retry Current Value"/);
+  assert.match(detail, /PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE/);
+  assert.match(errors, /New analysis is unavailable until market data is refreshed/);
+  assert.match(reportErrors, /Analysis will be available after the market data refresh completes/);
   assert.match(errorState, /compactAction: \{ flexGrow: 0, flexBasis: 'auto', alignSelf: 'flex-start' \}/);
 });

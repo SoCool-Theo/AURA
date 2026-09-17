@@ -350,13 +350,24 @@ th{color:var(--text-muted);border-color:var(--border-divider)}td{color:var(--tex
 .dashboard-greeting h1{margin:0;color:var(--text-primary);font-size:31px;line-height:1.2;letter-spacing:-.025em}
 .dashboard-greeting p{margin:8px 0 0;color:var(--text-secondary);font-size:15px}
 .dashboard-selectors{position:relative;z-index:2;display:flex;gap:14px}
+.dashboard-portfolio-picker{width:min(460px,42vw);padding:8px 10px;border:1px solid var(--border-control);border-radius:16px;background:rgba(7,22,43,.92);overflow:hidden}
+.dashboard-portfolio-picker-label{display:block;margin:0 3px 6px;color:var(--text-muted);font-size:9px;font-weight:850;letter-spacing:.1em}
+.dashboard-portfolio-options{display:flex;gap:7px;overflow-x:auto;padding-bottom:1px;scrollbar-width:thin;scrollbar-color:var(--border-hover) transparent}
+.dashboard-portfolio-option{min-height:31px;padding:6px 11px;border:1px solid var(--border-control);border-radius:999px;background:var(--control-bg);color:var(--text-secondary);font-size:12px;font-weight:750;white-space:nowrap;cursor:pointer;transition:border-color .18s ease,background .18s ease,color .18s ease,box-shadow .18s ease}
+.dashboard-portfolio-option:hover{border-color:var(--border-hover);color:var(--text-primary)}
+.dashboard-portfolio-option.active{border-color:var(--purple-primary);background:rgba(49,214,207,.14);color:var(--purple-light);box-shadow:0 0 0 1px rgba(49,214,207,.08)}
+.dashboard-portfolio-option:focus-visible{outline:2px solid var(--purple-primary);outline-offset:2px}
 .dashboard-selector{height:52px;min-width:210px;padding:0 14px;border:1px solid var(--border-control);border-radius:16px;background:rgba(7,22,43,.92);color:var(--text-primary);display:flex;align-items:center;gap:12px;transition:.18s ease}
 .dashboard-selector:hover{border-color:var(--border-hover);background:var(--control-hover)}
 .dashboard-selector select{flex:1;min-width:0;border:0;outline:0;appearance:none;-webkit-appearance:none;background:transparent;color:var(--text-primary);font-size:14px;cursor:pointer}
 .date-selector{min-width:190px;font-size:14px}.selector-chevron{flex:0 0 20px;width:20px;height:20px;margin-left:auto;display:grid;place-items:center;color:var(--text-secondary);pointer-events:none}
 .dashboard-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:14px}
 .dashboard-kpi{min-height:180px;padding:20px 22px;overflow:hidden}
+.dashboard-kpi-button{width:100%;font:inherit;text-align:left;cursor:pointer;transition:border-color .18s ease,transform .18s ease,box-shadow .18s ease}
+.dashboard-kpi-button:hover{border-color:rgba(53,215,192,.42);transform:translateY(-1px);box-shadow:0 15px 38px rgba(0,0,0,.25)}
+.dashboard-kpi-button:focus-visible{outline:2px solid var(--purple-primary);outline-offset:2px}
 .metric-heading{display:flex;align-items:center;gap:13px;color:var(--text-secondary);font-size:15px;font-weight:650}
+.dashboard-kpi-chevron{width:30px;height:30px;margin-left:auto;border:1px solid var(--border-divider);border-radius:999px;display:grid;place-items:center;color:var(--purple-light);background:var(--control-bg)}
 .metric-icon,.title-icon{display:grid;place-items:center;color:var(--purple-light)}
 .metric-icon{width:42px;height:42px;border-radius:12px;background:var(--cyan-background);border:1px solid rgba(49,214,207,.12);color:var(--purple-primary)}
 .dashboard-kpi.blue .metric-icon{color:var(--blue-primary);background:var(--blue-background);border-color:rgba(76,141,255,.14)}
@@ -400,11 +411,11 @@ th{color:var(--text-muted);border-color:var(--border-divider)}td{color:var(--tex
 }
 @media (max-width:720px){
   .top-nav-inner{gap:10px}.top-nav .brand span:last-child{display:inline}.top-nav .nav-item span:last-child{display:inline}.top-nav .nav-item{min-width:116px}.top-nav-actions{gap:4px}.profile-trigger .chevron{display:none}
-  body .main-area{padding:20px 12px 34px}.dashboard-hero{min-height:0;display:block}.dashboard-wave{left:0;top:0;width:100%}.dashboard-greeting h1{font-size:26px}.dashboard-greeting p{font-size:14px}.dashboard-selectors{margin-top:22px;display:grid;grid-template-columns:1fr 1fr}.dashboard-selector{min-width:0;width:100%}
+  body .main-area{padding:20px 12px 34px}.dashboard-hero{min-height:0;display:block}.dashboard-wave{left:0;top:0;width:100%}.dashboard-greeting h1{font-size:26px}.dashboard-greeting p{font-size:14px}.dashboard-selectors{margin-top:22px;display:flex}.dashboard-selector{min-width:190px}
   .dashboard-kpis{grid-template-columns:1fr}.dashboard-kpi{min-height:165px}.dashboard-bottom-grid{grid-template-columns:1fr}.dashboard-analysis-card{grid-column:auto}.performance-header{grid-template-columns:1fr auto}.performance-return{grid-column:1/-1;text-align:left}.dashboard-performance-card .chart-wrap{padding-left:56px;padding-right:12px}.dashboard-chart-axis{left:17px}.dashboard-card-header{padding-left:18px;padding-right:18px}.dashboard-risk-list{padding-left:18px;padding-right:18px}.dashboard-risk-list>div{grid-template-columns:40px minmax(0,1fr) auto}.dashboard-risk-list .mini-risk{grid-column:2/4;justify-self:start}.dashboard-allocation-body{padding-left:20px;padding-right:20px;gap:20px}
 }
 @media (max-width:480px){
-  .top-nav-inner{padding-left:12px;padding-right:12px}.top-nav .brand{font-size:15px}.top-nav .brand-mark{width:29px;height:32px}.nav-action{width:34px}.profile-trigger .avatar{width:36px;height:36px}.dashboard-selectors{grid-template-columns:1fr}.metric-copy>strong{font-size:29px}.metric-visual .mini-line{width:105px}.performance-header{display:flex;align-items:flex-start;flex-wrap:wrap}.performance-header .range-tabs{order:3;width:100%;justify-content:space-between}.dashboard-allocation-body{align-items:flex-start;flex-direction:column}.dashboard-allocation-body .donut{align-self:center}.analysis-card-actions{grid-template-columns:1fr}.insight-action{width:calc(100% - 48px)}
+  .top-nav-inner{padding-left:12px;padding-right:12px}.top-nav .brand{font-size:15px}.top-nav .brand-mark{width:29px;height:32px}.nav-action{width:34px}.profile-trigger .avatar{width:36px;height:36px}.dashboard-selectors{grid-template-columns:1fr}.dashboard-portfolio-picker{width:100%}.metric-copy>strong{font-size:29px}.metric-visual .mini-line{width:105px}.performance-header{display:flex;align-items:flex-start;flex-wrap:wrap}.performance-header .range-tabs{order:3;width:100%;justify-content:space-between}.dashboard-allocation-body{align-items:flex-start;flex-direction:column}.dashboard-allocation-body .donut{align-self:center}.analysis-card-actions{grid-template-columns:1fr}.insight-action{width:calc(100% - 48px)}
 }
 
 /* Phase 7: portfolio simulations */
