@@ -68,7 +68,21 @@ function PortfolioNavigator() {
       <PortfolioStack.Screen name="CreatePortfolio" component={CreatePortfolioScreen} options={{ title: 'Create Portfolio' }} />
       <PortfolioStack.Screen name="AddAsset" component={AddAssetScreen} options={{ title: 'Add Asset' }} />
       <PortfolioStack.Screen name="EditHoldings" component={EditHoldingsScreen} options={{ title: 'Edit Holdings' }} />
-      <PortfolioStack.Screen name="PortfolioAnalysis" component={PortfolioAnalysisScreen} options={{ title: 'Analytics' }} />
+      <PortfolioStack.Screen
+        name="PortfolioAnalysis"
+        component={PortfolioAnalysisScreen}
+        options={({ navigation }) => ({
+          title: 'Analytics',
+          headerBackVisible: false,
+          headerLeft: () => (
+            <BackHeaderButton
+              label="Back from Analytics"
+              color={palette.text}
+              onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Portfolios')}
+            />
+          )
+        })}
+      />
       <PortfolioStack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ title: 'Report Detail' }} />
     </PortfolioStack.Navigator>
   );
@@ -113,7 +127,21 @@ function MoreNavigator() {
       })}
     >
       <MoreStack.Screen name="More" component={MoreScreen} options={{ headerShown: false }} />
-      <MoreStack.Screen name="Analytics" component={PortfolioAnalysisScreen} options={{ title: 'Analytics' }} />
+      <MoreStack.Screen
+        name="Analytics"
+        component={PortfolioAnalysisScreen}
+        options={({ navigation }) => ({
+          title: 'Analytics',
+          headerBackVisible: false,
+          headerLeft: () => (
+            <BackHeaderButton
+              label="Back to More"
+              color={palette.text}
+              onPress={() => navigation.navigate('More')}
+            />
+          )
+        })}
+      />
       <MoreStack.Screen name="Reports" component={ReportsScreen} options={{ title: 'Reports' }} />
       <MoreStack.Screen
         name="ReportDetail"
