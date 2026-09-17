@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Card } from '../../../components/ui/Card';
+import { Icon } from '../../../components/ui/Icon';
 import {
   isPortfolioReportV2,
   isPortfolioReportV3,
@@ -24,6 +25,20 @@ import {
 import { RiskDriverTable } from './RiskDriverTable';
 
 type MonetaryMetricKey = 'cumulative' | 'annualized' | 'drawdown';
+
+type MetricTone = 'primary' | 'success' | 'warning' | 'danger' | 'blue' | 'purple';
+
+function MetricLabel({ icon, label, tone }: { icon: string; label: string; tone: MetricTone }) {
+  const toneClass = {
+    primary: styles.primaryIcon,
+    success: styles.successIcon,
+    warning: styles.warningIcon,
+    danger: styles.dangerIcon,
+    blue: styles.blueIcon,
+    purple: styles.purpleIcon,
+  }[tone];
+  return <small className={styles.metricLabel}><i className={`${styles.metricIcon} ${toneClass}`}><Icon name={icon} size={17} /></i>{label}</small>;
+}
 
 function metricDialogContent(
   key: MonetaryMetricKey | null,
@@ -138,14 +153,14 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
       )}
 
       <div className={styles.metricGrid}>
-        {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('cumulative')}><small>Cumulative Return</small><strong>{formatPercent(metrics.cumulative_return)}</strong><span>Saved period · Click for amount</span></button> : <Card className={styles.metric}><small>Cumulative Return</small><strong>{formatPercent(metrics.cumulative_return)}</strong><span>Compounded return for the saved period</span></Card>}
-        {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('annualized')}><small>Annualized Return</small><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical equivalent · Click for amount</span></button> : <Card className={styles.metric}><small>Annualized Return</small><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical annualized portfolio return</span></Card>}
-        <Card className={styles.metric}><small>Annualized Volatility</small><strong>{formatPercent(metrics.annualized_volatility)}</strong><span>Annualized variation over the saved period</span></Card>
-        <Card className={styles.metric}><small>Sharpe Ratio</small><strong>{formatNumber(metrics.sharpe_ratio)}</strong><span>Historical risk-adjusted return metric</span></Card>
-        {monetary?.maximum_drawdown_amount != null ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('drawdown')}><small>Maximum Drawdown</small><strong>{formatPercent(drawdown.max_drawdown)}</strong><span>{drawdown.peak_date ?? 'N/A'} to {drawdown.trough_date ?? 'N/A'} · Click for amount</span></button> : <Card className={styles.metric}><small>Maximum Drawdown</small><strong>{formatPercent(drawdown.max_drawdown)}</strong><span>{drawdown.peak_date ?? 'N/A'} to {drawdown.trough_date ?? 'N/A'}</span></Card>}
-        <Card className={styles.metric}><small>Diversification</small><strong>{formatNumber(diversification.overall_score, 1)}</strong><span>{diversification.level}; {diversification.defined_pair_count}/{diversification.total_pair_count} pairs defined</span></Card>
-        <Card className={styles.metric}><small>Largest Weight</small><strong>{formatPercent(concentration.largest_weight)}</strong><span>Top {concentration.top_n} total: {formatPercent(concentration.top_n_weight)}</span></Card>
-        <Card className={styles.metric}><small>Effective Assets</small><strong>{formatNumber(concentration.effective_number_of_assets)}</strong><span>HHI {formatNumber(concentration.hhi, 4)}</span></Card>
+        {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('cumulative')}><MetricLabel icon="trend" label="Cumulative Return" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.cumulative_return)}</strong><span>Saved period · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="trend" label="Cumulative Return" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.cumulative_return)}</strong><span>Compounded return for the saved period</span></Card>}
+        {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('annualized')}><MetricLabel icon="analytics" label="Annualized Return" tone={metrics.annualized_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical equivalent · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="analytics" label="Annualized Return" tone={metrics.annualized_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical annualized portfolio return</span></Card>}
+        <Card className={styles.metric}><MetricLabel icon="pulse" label="Annualized Volatility" tone="warning" /><strong>{formatPercent(metrics.annualized_volatility)}</strong><span>Annualized variation over the saved period</span></Card>
+        <Card className={styles.metric}><MetricLabel icon="stats-chart" label="Sharpe Ratio" tone="blue" /><strong>{formatNumber(metrics.sharpe_ratio)}</strong><span>Historical risk-adjusted return metric</span></Card>
+        {monetary?.maximum_drawdown_amount != null ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('drawdown')}><MetricLabel icon="drawdown" label="Maximum Drawdown" tone="danger" /><strong>{formatPercent(drawdown.max_drawdown)}</strong><span>{drawdown.peak_date ?? 'N/A'} to {drawdown.trough_date ?? 'N/A'} · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="drawdown" label="Maximum Drawdown" tone="danger" /><strong>{formatPercent(drawdown.max_drawdown)}</strong><span>{drawdown.peak_date ?? 'N/A'} to {drawdown.trough_date ?? 'N/A'}</span></Card>}
+        <Card className={styles.metric}><MetricLabel icon="diversification" label="Diversification" tone="primary" /><strong>{formatNumber(diversification.overall_score, 1)}</strong><span>{diversification.level}; {diversification.defined_pair_count}/{diversification.total_pair_count} pairs defined</span></Card>
+        <Card className={styles.metric}><MetricLabel icon="pie-chart" label="Largest Weight" tone="purple" /><strong>{formatPercent(concentration.largest_weight)}</strong><span>Top {concentration.top_n} total: {formatPercent(concentration.top_n_weight)}</span></Card>
+        <Card className={styles.metric}><MetricLabel icon="assets" label="Effective Assets" tone="blue" /><strong>{formatNumber(concentration.effective_number_of_assets)}</strong><span>HHI {formatNumber(concentration.hhi, 4)}</span></Card>
       </div>
 
       <RiskDriverTable riskDrivers={analysis.risk_drivers} />

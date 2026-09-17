@@ -136,7 +136,19 @@ export function DashboardPage() {
           </div>
         )}
       </div>
-      {Boolean(contextError) && <InlineErrorCard error={contextError} fallbackMessage={portfolio.portfolio_type === 'PLANNED' ? 'Unable to load the planned target allocation.' : 'Unable to load the current portfolio value.'} stale onRetry={() => setContextReloadKey(value => value + 1)} />}
+      {Boolean(contextError) && <InlineErrorCard
+        error={contextError}
+        fallbackMessage={portfolio.portfolio_type === 'PLANNED' ? 'Unable to load the planned target allocation.' : 'Unable to load the current portfolio value.'}
+        stale
+        staleMessage={portfolio.portfolio_type === 'CURRENT'
+          ? 'Current value could not be refreshed. Any existing analysis may be out of date; analyze the portfolio again to create a fresh report.'
+          : undefined}
+        onRetry={portfolio.portfolio_type === 'CURRENT'
+          ? () => go(`analytics/${portfolio.id}`)
+          : () => setContextReloadKey(value => value + 1)}
+        retryTitle={portfolio.portfolio_type === 'CURRENT' ? 'Analyze Portfolio Again' : 'Retry allocation'}
+        compactAction={portfolio.portfolio_type === 'CURRENT'}
+      />}
       {Boolean(reportError) && <InlineErrorCard error={reportError} fallbackMessage="Unable to load the latest report." resourceName="Latest report" stale onRetry={() => setReportReloadKey(value => value + 1)} retryTitle="Retry report" />}
       {!reportLoading && !reportError && !report && <div className={styles.reportNotice}><span><strong>This portfolio has not been analyzed.</strong> Risk and performance metrics will appear after you create an analysis.</span><button className="primary-btn" onClick={() => go(`analytics/${portfolio.id}`)}>Analyze Portfolio</button></div>}
       <DashboardKpiGrid portfolio={portfolio} valuation={valuation} plannedAllocation={plannedAllocation} contextLoading={contextLoading} contextFailed={Boolean(contextError)} report={report} reportLoading={reportLoading} reportFailed={Boolean(reportError)} />

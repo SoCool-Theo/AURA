@@ -8,6 +8,7 @@ type ErrorActions = {
   onBack?: () => void;
   retryTitle?: string;
   backTitle?: string;
+  compactAction?: boolean;
 };
 
 type ErrorStateProps = ErrorActions & {
@@ -16,6 +17,7 @@ type ErrorStateProps = ErrorActions & {
   resourceName?: string;
   message?: string;
   stale?: boolean;
+  staleMessage?: string;
 };
 
 function ErrorContent({
@@ -28,6 +30,8 @@ function ErrorContent({
   onBack,
   retryTitle = 'Try again',
   backTitle = 'Go back',
+  compactAction = false,
+  staleMessage = 'Previously loaded information remains visible and may be out of date.',
   compact = false,
 }: ErrorStateProps & { compact?: boolean }) {
   const presentation = apiErrorPresentation(error, { fallbackMessage, resourceName, message });
@@ -37,9 +41,9 @@ function ErrorContent({
       <div><small className={styles.code}>{presentation.code}</small><h2 className={styles.title}>{presentation.title}</h2></div>
     </div>
     <p className={styles.message}>{presentation.message}</p>
-    {stale && <small className={styles.stale}>Previously loaded information remains visible and may be out of date.</small>}
+    {stale && <small className={styles.stale}>{staleMessage}</small>}
     {(onBack || (onRetry && presentation.retryable)) && <div className={styles.actions}>
-      {onRetry && presentation.retryable && <button type="button" className="primary-btn" onClick={onRetry}>{retryTitle}</button>}
+      {onRetry && presentation.retryable && <button type="button" className={`primary-btn ${compactAction ? styles.compactAction : ''}`} onClick={onRetry}>{retryTitle}</button>}
       {onBack && <button type="button" className="secondary-btn" onClick={onBack}>{backTitle}</button>}
     </div>}
   </div>;

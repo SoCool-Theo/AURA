@@ -15,11 +15,13 @@ type ErrorActions = {
   onBack?: () => void;
   retryTitle?: string;
   backTitle?: string;
+  compactAction?: boolean;
 };
 
 type ErrorContentProps = ErrorActions & {
   presentation: ApiErrorPresentation;
   compact?: boolean;
+  warningMessage?: string;
 };
 
 function ErrorContent({
@@ -28,7 +30,9 @@ function ErrorContent({
   onRetry,
   onBack,
   retryTitle = 'Try again',
-  backTitle = 'Go back'
+  backTitle = 'Go back',
+  compactAction = false,
+  warningMessage
 }: ErrorContentProps) {
   return (
     <>
@@ -42,10 +46,15 @@ function ErrorContent({
         </View>
       </View>
       <Text style={styles.message}>{presentation.message}</Text>
+      {warningMessage ? <Text style={styles.stale}>{warningMessage}</Text> : null}
       {onRetry || onBack ? (
         <View style={[styles.actions, compact && styles.compactActions]}>
           {onRetry && presentation.retryable ? (
-            <Button title={retryTitle} onPress={onRetry} style={styles.action} />
+            <Button
+              title={retryTitle}
+              onPress={onRetry}
+              style={[styles.action, compactAction && styles.compactAction]}
+            />
           ) : null}
           {onBack ? (
             <Button title={backTitle} variant="secondary" onPress={onBack} style={styles.action} />
@@ -88,6 +97,7 @@ export function InlineErrorCard({
   resourceName,
   message,
   stale = false,
+  staleMessage = 'Previously loaded information remains visible and may be out of date.',
   style,
   ...actions
 }: ErrorActions & {
@@ -96,6 +106,7 @@ export function InlineErrorCard({
   resourceName?: string;
   message?: string;
   stale?: boolean;
+  staleMessage?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const presentation = apiErrorPresentation(error, {
@@ -105,10 +116,12 @@ export function InlineErrorCard({
   });
   return (
     <Card style={[styles.inlineCard, style]}>
-      <ErrorContent presentation={presentation} compact {...actions} />
-      {stale ? (
-        <Text style={styles.stale}>Previously loaded information remains visible and may be out of date.</Text>
-      ) : null}
+      <ErrorContent
+        presentation={presentation}
+        compact
+        warningMessage={stale ? staleMessage : undefined}
+        {...actions}
+      />
     </Card>
   );
 }
@@ -164,5 +177,6 @@ const styles = StyleSheet.create({
   stale: { color: colors.warning, fontSize: 10, lineHeight: 16 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   compactActions: { marginTop: spacing.xs },
-  action: { flexGrow: 1, flexBasis: 132 }
+  action: { flexGrow: 1, flexBasis: 132 },
+  compactAction: { flexGrow: 0, flexBasis: 'auto', alignSelf: 'flex-start' }
 });

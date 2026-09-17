@@ -105,7 +105,7 @@ export function ReportsPage() {
           <p>Review saved analysis snapshots from your current, planned, and legacy portfolios.</p>
         </div>
         <button className="primary-btn" onClick={() => go('analytics')}>
-          <Icon name="analysis" size={17} /> Create New Analysis
+          <Icon name="analytics" size={17} /> Create New Analysis
         </button>
       </header>
 

@@ -187,6 +187,83 @@ test('saved report and simulation links preserve exact Ask Aura context', () => 
   assert.match(app, /route\.reportId === 'simulation'/);
 });
 
+test('web theme uses the mobile palette while preserving gradients and dark action text', () => {
+  const styles = fs.readFileSync(path.join(root, 'src/styles.css'), 'utf8');
+  const authStyles = fs.readFileSync(path.join(root, 'src/pages/auth/AuthPage.module.css'), 'utf8');
+  const simulationResults = fs.readFileSync(path.join(root, 'src/pages/simulations/components/SimulationResults.tsx'), 'utf8');
+
+  for (const token of [
+    '--bg-app:#07111F',
+    '--bg-card:#101A2C',
+    '--purple-primary:#31D6CF',
+    '--purple-hover:#2EC5E6',
+    '--text-primary:#F7FAFF',
+    '--text-secondary:#A7B2C7',
+    '--border-card:#233149',
+    '--green-primary:#33D18F',
+    '--on-primary:#031614',
+    '--positive-background:#0D2C27',
+    '--negative-background:#2C171E',
+    '--purple-background:#21163D',
+    '--cyan-background:#0C2B35',
+    '--blue-background:#12264A',
+    '--warning-background:#312611',
+  ]) assert.ok(styles.includes(token), `Missing mobile theme token: ${token}`);
+
+  assert.match(styles, /\.card\{background:linear-gradient\(145deg,rgba\(16,26,44,\.96\),rgba\(10,21,38,\.96\)\)/);
+  assert.match(styles, /\.primary-btn\{[^}]*background:linear-gradient\(135deg,var\(--purple-primary\),var\(--purple-hover\)\);color:var\(--on-primary\)/);
+  assert.match(styles, /\.composer-send\{[^}]*color:var\(--on-primary\)!important/);
+  assert.match(authStyles, /\.submitButton[\s\S]*?color: var\(--on-primary\);/);
+  assert.match(simulationResults, /color: '#31D6CF'/);
+  assert.match(simulationResults, /color: '#8B5CF6'/);
+});
+
+test('auth inputs keep the Aura field surface when the browser autofills saved credentials', () => {
+  const authStyles = fs.readFileSync(path.join(root, 'src/pages/auth/AuthPage.module.css'), 'utf8');
+
+  assert.match(authStyles, /input:-webkit-autofill/);
+  assert.match(authStyles, /-webkit-background-clip: text/);
+  assert.match(authStyles, /-webkit-text-fill-color: var\(--text-primary\)/);
+  assert.match(authStyles, /box-shadow: 0 0 0 1000px transparent inset/);
+  assert.match(authStyles, /input:autofill/);
+});
+
+test('web feature icons follow the mobile semantic icon mappings', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const icons = read('src/components/ui/Icon.tsx');
+  const dashboard = read('src/pages/dashboard/components/DashboardKpiGrid.tsx');
+  const analytics = read('src/pages/analytics/components/AnalysisResults.tsx');
+  const simulationModes = read('src/pages/simulations/components/SimulationModeSelector.tsx');
+  const simulationResults = read('src/pages/simulations/components/SimulationResults.tsx');
+
+  for (const icon of ['speedometer', 'pulse', 'stats-chart', 'pie-chart', 'compare', 'diversification', 'assets', 'eye', 'school', 'settings']) {
+    assert.ok(icons.includes(`case '${icon}'`), `Missing web icon: ${icon}`);
+  }
+  assert.match(dashboard, /title="Risk Score" icon="speedometer"/);
+  assert.match(dashboard, /title=\{valueTitle\} icon="wallet" tone="blue"/);
+  assert.match(dashboard, /tone=\{riskKpiTone\}/);
+  assert.match(dashboard, /tone=\{returnKpiTone\}/);
+  assert.match(dashboard, /title="Annualized Return" icon="trend"/);
+  assert.match(dashboard, /title="Maximum Drawdown" icon="drawdown"/);
+  assert.match(analytics, /MetricLabel icon="analytics" label="Annualized Return" tone=/);
+  assert.match(analytics, /MetricLabel icon="pulse" label="Annualized Volatility" tone="warning"/);
+  assert.match(simulationModes, /'historical-scenario', 'Historical Scenario', 'time', 'purple'/);
+  assert.match(simulationModes, /'allocation', 'Allocation Change', 'pie-chart', 'cyan'/);
+  assert.match(simulationModes, /'combined', 'Combined Simulation', 'compare', 'blue'/);
+  assert.match(simulationResults, /MetricLabel icon="drawdown" label="Maximum Drawdown" tone="danger"/);
+});
+
+test('web current-value failures offer compact portfolio reanalysis recovery', () => {
+  const dashboard = fs.readFileSync(path.join(root, 'src/pages/dashboard/DashboardPage.tsx'), 'utf8');
+  const errorStyles = fs.readFileSync(path.join(root, 'src/components/ui/ApiErrorState.module.css'), 'utf8');
+
+  assert.match(dashboard, /retryTitle=\{portfolio\.portfolio_type === 'CURRENT' \? 'Analyze Portfolio Again' : 'Retry allocation'\}/);
+  assert.match(dashboard, /\? \(\) => go\(`analytics\/\$\{portfolio\.id\}`\)/);
+  assert.match(dashboard, /Any existing analysis may be out of date/);
+  assert.match(dashboard, /compactAction=\{portfolio\.portfolio_type === 'CURRENT'\}/);
+  assert.match(errorStyles, /\.actions \.compactAction\{min-width:0;width:auto\}/);
+});
+
 test('production web source has no direct market, database, or LLM provider authority', () => {
   const sourceRoot = path.join(root, 'src');
   const files = [];

@@ -164,9 +164,13 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                 message={holdingMode === 'planned'
                   ? portfolioErrorMessage(dashboard.valuationError, 'Unable to load the planned target allocation.')
                   : portfolioValuationErrorMessage(dashboard.valuationError)}
-                stale={Boolean(valuation)}
-                onRetry={dashboard.retryDetails}
-                retryTitle="Retry valuation"
+                stale={holdingMode === 'real' || Boolean(valuation)}
+                staleMessage={holdingMode === 'real'
+                  ? 'Current value could not be refreshed. Any existing analysis may be out of date; analyze the portfolio again to create a fresh report.'
+                  : undefined}
+                onRetry={holdingMode === 'real' ? analyze : dashboard.retryDetails}
+                retryTitle={holdingMode === 'real' ? 'Analyze Portfolio Again' : 'Retry allocation'}
+                compactAction={holdingMode === 'real'}
               />
             ) : null}
 

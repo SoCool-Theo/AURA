@@ -7,6 +7,7 @@ import type {
   SimulationRunResult,
 } from '../../../types/simulation';
 import { Card } from '../../../components/ui/Card';
+import { Icon } from '../../../components/ui/Icon';
 import {
   formatPortfolioAllocation,
   formatPortfolioMoney,
@@ -17,14 +18,26 @@ import styles from '../SimulationIntegration.module.css';
 import { SimulationComparison } from './SimulationComparison';
 import { SimulationTrajectoryChart } from './SimulationTrajectoryChart';
 
+type MetricTone = 'success' | 'warning' | 'danger' | 'blue';
+
+function MetricLabel({ icon, label, tone }: { icon: string; label: string; tone: MetricTone }) {
+  const toneClass = {
+    success: styles.successIcon,
+    warning: styles.warningIcon,
+    danger: styles.dangerIcon,
+    blue: styles.blueIcon,
+  }[tone];
+  return <small className={styles.metricLabel}><i className={`${styles.metricIcon} ${toneClass}`}><Icon name={icon} size={17} /></i>{label}</small>;
+}
+
 function Metrics({ metrics }: { metrics: HistoricalScenarioMetrics }) {
   const drawdown = metrics.maximum_drawdown;
   return <div className={styles.metrics}>
-    <Card className={styles.metric}><small>Cumulative Return</small><strong className={metrics.cumulative_return < 0 ? styles.negative : ''}>{formatPercent(metrics.cumulative_return)}</strong><span>Historical result</span></Card>
-    <Card className={styles.metric}><small>Ending Normalized Value</small><strong>{formatNumber(metrics.normalized_ending_value)}</strong><span>Started at {formatNumber(metrics.normalized_starting_value)}</span></Card>
-    <Card className={styles.metric}><small>Annualized Volatility</small><strong>{formatPercent(metrics.annualized_volatility)}</strong><span>Historical result</span></Card>
-    <Card className={styles.metric}><small>Sharpe Ratio</small><strong>{formatNumber(metrics.sharpe_ratio)}</strong><span>Risk-adjusted return metric</span></Card>
-    <Card className={styles.metric}><small>Maximum Drawdown</small><strong className={drawdown.max_drawdown < 0 ? styles.negative : ''}>{formatPercent(drawdown.max_drawdown)}</strong><span>{drawdown.peak_date ?? 'N/A'} to {drawdown.trough_date ?? 'N/A'}</span></Card>
+    <Card className={styles.metric}><MetricLabel icon="trend" label="Cumulative Return" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><strong className={metrics.cumulative_return < 0 ? styles.negative : ''}>{formatPercent(metrics.cumulative_return)}</strong><span>Historical result</span></Card>
+    <Card className={styles.metric}><MetricLabel icon="wallet" label="Ending Normalized Value" tone="blue" /><strong>{formatNumber(metrics.normalized_ending_value)}</strong><span>Started at {formatNumber(metrics.normalized_starting_value)}</span></Card>
+    <Card className={styles.metric}><MetricLabel icon="pulse" label="Annualized Volatility" tone="warning" /><strong>{formatPercent(metrics.annualized_volatility)}</strong><span>Historical result</span></Card>
+    <Card className={styles.metric}><MetricLabel icon="stats-chart" label="Sharpe Ratio" tone="blue" /><strong>{formatNumber(metrics.sharpe_ratio)}</strong><span>Risk-adjusted return metric</span></Card>
+    <Card className={styles.metric}><MetricLabel icon="drawdown" label="Maximum Drawdown" tone="danger" /><strong className={drawdown.max_drawdown < 0 ? styles.negative : ''}>{formatPercent(drawdown.max_drawdown)}</strong><span>{drawdown.peak_date ?? 'N/A'} to {drawdown.trough_date ?? 'N/A'}</span></Card>
   </div>;
 }
 
@@ -33,8 +46,8 @@ function Allocation({ title, result }: { title: string; result: AllocationSimula
 }
 
 function Trajectories({ original, modified }: { original: HistoricalScenarioTrajectoryPoint[]; modified?: HistoricalScenarioTrajectoryPoint[] }) {
-  const series = [{ label: modified ? 'Original' : 'Portfolio', color: '#35d7c0', points: original }];
-  if (modified) series.push({ label: 'Modified', color: '#8c78ff', points: modified });
+  const series = [{ label: modified ? 'Original' : 'Portfolio', color: '#31D6CF', points: original }];
+  if (modified) series.push({ label: 'Modified', color: '#8B5CF6', points: modified });
   return <Card className={styles.panel}><h3>Normalized Trajectory</h3><p>Historical value path normalized to a starting value of 1.00.</p><SimulationTrajectoryChart series={series} /></Card>;
 }
 

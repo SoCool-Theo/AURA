@@ -37,6 +37,8 @@ export function DashboardKpiGrid({
   reportFailed: boolean;
 }) {
   const analysis = report?.analysis; const risk = analysis?.risk_classification;
+  const riskKpiTone = !risk ? 'purple' : risk.risk_level === 'Low' ? 'green' : risk.risk_level === 'Moderate' ? 'amber' : 'red';
+  const returnKpiTone = analysis && analysis.portfolio_metrics.annualized_return < 0 ? 'red' : 'green';
   const displayedRiskScore = risk ? Number(risk.risk_score.toFixed(1)) : null;
   const unavailable = reportLoading ? 'Loading…' : 'N/A';
   const status = reportLoading ? 'Loading' : reportFailed ? 'Unavailable' : 'Not analyzed';
@@ -70,9 +72,9 @@ export function DashboardKpiGrid({
             ? `Prices through ${valuation.newest_price_as_of}`
             : 'No valuation';
   return <div className="dashboard-kpis">
-    <DashboardKpi title={valueTitle} icon="wallet" tone="purple" visual={<span className={styles.kpiPlaceholder}>{portfolio.portfolio_type === 'PLANNED' ? '◎' : '◈'}</span>}><strong>{value}</strong><span className="metric-change purple-text">{valueStatus}</span></DashboardKpi>
-    <DashboardKpi title="Risk Score" icon="shield" tone="amber" visual={displayedRiskScore !== null ? <GaugeChart score={displayedRiskScore} label="" /> : <span className={styles.kpiPlaceholder}>—</span>}><strong>{risk ? risk.risk_score.toFixed(1) : unavailable}</strong><span className="metric-change warning">{risk?.risk_level ?? status}</span></DashboardKpi>
-    <DashboardKpi title="Annualized Return" icon="trend" tone="purple" visual={<span className={styles.kpiPlaceholder}>↗</span>}><strong>{analysis ? formatPercent(analysis.portfolio_metrics.annualized_return) : unavailable}</strong><span className="metric-change purple-text">{analysis ? 'Latest saved report' : status}</span></DashboardKpi>
+    <DashboardKpi title={valueTitle} icon="wallet" tone="blue" visual={<span className={styles.kpiPlaceholder}>{portfolio.portfolio_type === 'PLANNED' ? '◎' : '◈'}</span>}><strong>{value}</strong><span className="metric-change purple-text">{valueStatus}</span></DashboardKpi>
+    <DashboardKpi title="Risk Score" icon="speedometer" tone={riskKpiTone} visual={displayedRiskScore !== null ? <GaugeChart score={displayedRiskScore} label="" /> : <span className={styles.kpiPlaceholder}>—</span>}><strong>{risk ? risk.risk_score.toFixed(1) : unavailable}</strong><span className="metric-change warning">{risk?.risk_level ?? status}</span></DashboardKpi>
+    <DashboardKpi title="Annualized Return" icon="trend" tone={returnKpiTone} visual={<span className={styles.kpiPlaceholder}>↗</span>}><strong>{analysis ? formatPercent(analysis.portfolio_metrics.annualized_return) : unavailable}</strong><span className="metric-change purple-text">{analysis ? 'Latest saved report' : status}</span></DashboardKpi>
     <DashboardKpi title="Maximum Drawdown" icon="drawdown" tone="red" visual={<span className={styles.kpiPlaceholder}>↘</span>}><strong>{analysis ? formatPercent(analysis.max_drawdown.max_drawdown) : unavailable}</strong><span className="metric-change negative">{analysis ? `${analysis.max_drawdown.peak_date ?? 'N/A'} to ${analysis.max_drawdown.trough_date ?? 'N/A'}` : status}</span></DashboardKpi>
   </div>;
 }

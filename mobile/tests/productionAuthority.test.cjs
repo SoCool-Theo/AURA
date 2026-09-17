@@ -437,7 +437,7 @@ test('interactive controls expose accessibility semantics and compact layouts ca
   assert.match(fs.readFileSync(path.join(root, 'src/components/ui/SegmentedTabs.tsx'), 'utf8'), /minHeight:\s*44/);
 });
 
-test('Welcome uses a minimal preview and unboxed feature icons', () => {
+test('Welcome uses the two-card preview and unboxed feature icons', () => {
   const welcome = fs.readFileSync(
     path.join(root, 'src/screens/welcome/WelcomeScreen.tsx'),
     'utf8'
@@ -446,9 +446,10 @@ test('Welcome uses a minimal preview and unboxed feature icons', () => {
 
   assert.ok(featureIconStyle, 'Welcome feature icon style should exist');
   assert.doesNotMatch(featureIconStyle[1], /border(?:Radius|Width|Color)|backgroundColor/);
-  assert.match(welcome, /Clarity at a glance/);
-  assert.match(welcome, /styles\.previewFooter/);
-  assert.doesNotMatch(welcome, /styles\.(?:chartCard|reportCard)/);
+  assert.match(welcome, /Understand risk clearly/);
+  assert.match(welcome, /styles\.chartCard/);
+  assert.match(welcome, /styles\.reportCard/);
+  assert.doesNotMatch(welcome, /styles\.previewFooter/);
 });
 
 test('real holding contracts preserve precision, order, modes, and valuation allocations', () => {
@@ -860,4 +861,15 @@ test('mobile Assistant has no direct provider access or synthetic conversation a
   assert.match(screen, /newest saved report/);
   assert.ok(!/OPENAI_API_KEY|GROQ_API_KEY|api\.openai|api\.groq/i.test(`${api}\n${screen}`));
   assert.ok(!/AsyncStorage|SecureStore|conversationHistory|chatHistory/.test(screen));
+});
+
+test('mobile current-value failures offer compact portfolio reanalysis recovery', () => {
+  const dashboard = fs.readFileSync(path.join(root, 'src/screens/dashboard/DashboardScreen.tsx'), 'utf8');
+  const errorState = fs.readFileSync(path.join(root, 'src/components/ui/ErrorState.tsx'), 'utf8');
+
+  assert.match(dashboard, /retryTitle=\{holdingMode === 'real' \? 'Analyze Portfolio Again' : 'Retry allocation'\}/);
+  assert.match(dashboard, /onRetry=\{holdingMode === 'real' \? analyze : dashboard\.retryDetails\}/);
+  assert.match(dashboard, /Any existing analysis may be out of date/);
+  assert.match(dashboard, /compactAction=\{holdingMode === 'real'\}/);
+  assert.match(errorState, /compactAction: \{ flexGrow: 0, flexBasis: 'auto', alignSelf: 'flex-start' \}/);
 });
