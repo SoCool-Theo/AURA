@@ -1,4 +1,4 @@
-"""Read-only current valuation for complete real portfolio holdings."""
+"""Read-only current valuation for quantity-based current portfolio holdings."""
 
 from __future__ import annotations
 
@@ -83,10 +83,10 @@ class HoldingValuationResult:
 
     holding_id: UUID | None
     symbol: str
-    invested_amount: Decimal
-    invested_currency: str
+    invested_amount: Decimal | None
+    invested_currency: str | None
     shares: Decimal
-    purchase_date: date
+    purchase_date: date | None
     position: int
     asset_price: Decimal
     asset_quote_currency: str
@@ -114,10 +114,10 @@ class PortfolioValuationResult:
 class _RealHoldingFacts:
     holding_id: UUID | None
     symbol: str
-    invested_amount: Decimal
-    invested_currency: str
+    invested_amount: Decimal | None
+    invested_currency: str | None
     shares: Decimal
-    purchase_date: date
+    purchase_date: date | None
     position: int
     instrument: InstrumentMetadata
 
@@ -168,40 +168,55 @@ def _snapshot_real_holdings(
 
     snapshots: list[_RealHoldingFacts] = []
     for holding in selected_holdings:
-        required_values = {
-            "invested_amount": holding.invested_amount,
-            "invested_currency": holding.invested_currency,
-            "shares": holding.shares,
-            "purchase_date": holding.purchase_date,
-            "position": holding.position,
-        }
-        missing_fields = [
-            name for name, value in required_values.items() if value is None
-        ]
-        if missing_fields:
+        if holding.shares is None:
             raise InvalidHoldingModeError(
-                "incomplete real holding "
-                f"{holding.symbol}: missing {', '.join(missing_fields)}"
-            )
-        if not _is_positive_finite_decimal(holding.invested_amount):
-            raise InvalidHoldingModeError(
-                f"real holding invested_amount is invalid: {holding.symbol}"
-            )
-        if holding.invested_currency not in _SUPPORTED_INVESTED_CURRENCIES:
-            raise InvalidHoldingModeError(
-                f"real holding invested_currency is invalid: {holding.symbol}"
+                f"current holding shares are required: {holding.symbol}"
             )
         if not _is_positive_finite_decimal(holding.shares):
             raise InvalidHoldingModeError(
-                f"real holding shares must be positive and finite: {holding.symbol}"
-            )
-        if type(holding.purchase_date) is not date:
-            raise InvalidHoldingModeError(
-                f"real holding purchase_date is invalid: {holding.symbol}"
+                f"current holding shares must be positive and finite: {holding.symbol}"
             )
         if type(holding.position) is not int or holding.position < 0:
             raise InvalidHoldingModeError(
-                f"real holding position is invalid: {holding.symbol}"
+                f"current holding position is invalid: {holding.symbol}"
+            )
+
+        provenance = {
+            "invested_amount": holding.invested_amount,
+            "invested_currency": holding.invested_currency,
+            "purchase_date": holding.purchase_date,
+        }
+        provenance_values = tuple(provenance.values())
+        if not (
+            all(value is None for value in provenance_values)
+            or all(value is not None for value in provenance_values)
+        ):
+            missing_fields = [
+                name for name, value in provenance.items() if value is None
+            ]
+            raise InvalidHoldingModeError(
+                "current holding investment provenance is incomplete "
+                f"for {holding.symbol}: missing {', '.join(missing_fields)}"
+            )
+        if holding.invested_amount is not None and not _is_positive_finite_decimal(
+            holding.invested_amount
+        ):
+            raise InvalidHoldingModeError(
+                f"current holding invested_amount is invalid: {holding.symbol}"
+            )
+        if (
+            holding.invested_currency is not None
+            and holding.invested_currency not in _SUPPORTED_INVESTED_CURRENCIES
+        ):
+            raise InvalidHoldingModeError(
+                f"current holding invested_currency is invalid: {holding.symbol}"
+            )
+        if (
+            holding.purchase_date is not None
+            and type(holding.purchase_date) is not date
+        ):
+            raise InvalidHoldingModeError(
+                f"current holding purchase_date is invalid: {holding.symbol}"
             )
 
         try:
@@ -274,7 +289,7 @@ class PortfolioValuationService:
             PortfolioDisplayCurrency.USD
         ),
     ) -> PortfolioValuationResult:
-        """Value complete real holdings using fresh persisted market data."""
+        """Value quantity-based current holdings using fresh persisted market data."""
         valuation_date = requested_date or datetime.now(UTC).date()
         if type(valuation_date) is not date:
             raise TypeError("requested_date must be a date")

@@ -313,16 +313,15 @@ def test_holding_check_constraints_cover_approved_row_contract() -> None:
         ),
         "ck_holdings_complete_mode": (
             "(weight IS NOT NULL AND proposed_amount IS NULL AND "
-            "invested_amount IS NULL AND "
-            "invested_currency IS NULL AND shares IS NULL AND "
-            "purchase_date IS NULL) OR "
-            "(weight IS NULL AND proposed_amount IS NULL AND "
-            "invested_amount IS NOT NULL AND "
-            "invested_currency IS NOT NULL AND shares IS NOT NULL AND "
-            "purchase_date IS NOT NULL) OR "
-            "(weight IS NULL AND proposed_amount IS NOT NULL AND "
             "invested_amount IS NULL AND invested_currency IS NULL AND "
-            "shares IS NULL AND purchase_date IS NULL)"
+            "shares IS NULL AND purchase_date IS NULL) OR "
+            "(weight IS NULL AND proposed_amount IS NULL AND shares IS NOT "
+            "NULL AND ((invested_amount IS NULL AND invested_currency IS "
+            "NULL AND purchase_date IS NULL) OR (invested_amount IS NOT "
+            "NULL AND invested_currency IS NOT NULL AND purchase_date IS "
+            "NOT NULL))) OR (weight IS NULL AND proposed_amount IS NOT "
+            "NULL AND invested_amount IS NULL AND invested_currency IS NULL "
+            "AND shares IS NULL AND purchase_date IS NULL)"
         ),
         "ck_holdings_position_non_negative": "position >= 0",
     }

@@ -5,12 +5,10 @@ import {
 } from '../../../api/portfoliosApi';
 import { FormErrorSummary } from '../../../components/ui/ApiErrorState';
 import { Card } from '../../../components/ui/Card';
-import { Icon } from '../../../components/ui/Icon';
 import {
   isPlannedPortfolioHolding,
   isRealPortfolioHolding,
   portfolioHoldingMode,
-  type PortfolioCurrency,
   type PortfolioHoldingMode,
   type PortfolioPlannedHoldingInput,
   type PortfolioRealHoldingInput,
@@ -63,15 +61,6 @@ function editableHoldings(portfolio: PortfolioResponse): EditableHolding[] {
   return rows;
 }
 
-function todayInputValue(): string {
-  const today = new Date();
-  return [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, '0'),
-    String(today.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
 type PortfolioHoldingsEditorProps = {
   portfolio: PortfolioResponse;
   onSaved: (portfolio: PortfolioResponse) => void;
@@ -87,7 +76,6 @@ export function PortfolioHoldingsEditor({
   const [holdings, setHoldings] = useState(() => editableHoldings(portfolio));
   const [error, setError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
-  const maximumPurchaseDate = todayInputValue();
 
   useEffect(() => {
     setHoldings(editableHoldings(portfolio));
@@ -147,7 +135,7 @@ export function PortfolioHoldingsEditor({
             <h2>{planned ? 'Edit Planned Holdings' : 'Edit Current Holdings'}</h2>
             <p>{planned
               ? `Update the complete ordered list of proposed investments in ${portfolio.plan_currency ?? 'USD'}.`
-              : 'Update the complete ordered list of investments you own.'}</p>
+              : 'Update the complete ordered list of assets and quantities you own.'}</p>
           </div>
           <div className={styles.portfolioTypeBadge}>{planned ? 'Planned' : 'Current'}</div>
         </div>
@@ -155,14 +143,14 @@ export function PortfolioHoldingsEditor({
         {mode === 'legacy' && (
           <div className={styles.conversionNotice} role="note">
             <strong>Convert legacy allocation</strong>
-            <p>Enter complete ownership details for every saved symbol. Saving replaces the old manual percentages with current holdings.</p>
+            <p>Enter the quantity owned for every saved symbol. Saving replaces the old manual percentages with quantity-based current holdings.</p>
           </div>
         )}
 
         {mode === 'mixed' && (
           <div className={styles.conversionNotice} role="alert">
             <strong>Holding details need correction</strong>
-            <p>Enter complete current holding details for every symbol before saving.</p>
+            <p>Enter a valid quantity owned for every symbol before saving.</p>
           </div>
         )}
 
@@ -175,12 +163,7 @@ export function PortfolioHoldingsEditor({
               <th>Symbol</th>
               {planned ? (
                 <th>Proposed Amount ({portfolio.plan_currency ?? 'USD'})</th>
-              ) : <>
-                <th>Invested Amount</th>
-                <th>Currency</th>
-                <th>Shares Owned</th>
-                <th>Purchase Date</th>
-              </>}
+              ) : <th>Quantity Owned</th>}
               <th>Actions</th>
             </tr></thead>
             <tbody>{holdings.map((holding, index) => (
@@ -189,23 +172,9 @@ export function PortfolioHoldingsEditor({
                 <td><AssetSymbolField ariaLabel={`Holding ${index + 1} symbol`} id={`edit-holding-${holding.id}`} value={holding.symbol} onChange={symbol => updateHolding(holding.id, { symbol })} disabled={saving} /></td>
                 {planned && 'proposedAmount' in holding ? (
                   <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} proposed amount`} inputMode="decimal" value={holding.proposedAmount} onChange={event => updateHolding(holding.id, { proposedAmount: event.target.value })} placeholder="4000.00" disabled={saving} /></td>
-                ) : 'investedAmount' in holding ? <>
-                  <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} invested amount`} inputMode="decimal" value={holding.investedAmount} onChange={event => updateHolding(holding.id, { investedAmount: event.target.value })} placeholder="1000.00" disabled={saving} /></td>
-                  <td>
-                    <select aria-label={`${holding.symbol || `Holding ${index + 1}`} invested currency`} value={holding.investedCurrency} onChange={event => updateHolding(holding.id, { investedCurrency: event.target.value as PortfolioCurrency })} disabled={saving}>
-                      <option value="USD">USD</option>
-                      <option value="THB">THB</option>
-                    </select>
-                  </td>
-                  <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} shares owned`} inputMode="decimal" value={holding.shares} onChange={event => updateHolding(holding.id, { shares: event.target.value })} placeholder="10.5" disabled={saving} /></td>
-                  <td>
-                    <label className={styles.dateField}>
-                      <span className="sr-only">{holding.symbol || `Holding ${index + 1}`} purchase date</span>
-                      <input aria-label={`${holding.symbol || `Holding ${index + 1}`} purchase date`} type="date" max={maximumPurchaseDate} value={holding.purchaseDate} onChange={event => updateHolding(holding.id, { purchaseDate: event.target.value })} disabled={saving} />
-                      <Icon name="calendar" size={17} />
-                    </label>
-                  </td>
-                </> : null}
+                ) : 'shares' in holding ? (
+                  <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} quantity owned`} inputMode="decimal" value={holding.shares} onChange={event => updateHolding(holding.id, { shares: event.target.value })} placeholder="10.5" disabled={saving} /></td>
+                ) : null}
                 <td><div className={styles.orderActions}>
                   <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={saving || index === 0}>↑</button>
                   <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={saving || index === holdings.length - 1}>↓</button>
@@ -219,7 +188,7 @@ export function PortfolioHoldingsEditor({
         <div className="detail-section-footer">
           <p>{planned
             ? 'Target allocation is calculated automatically from the proposed amounts. Estimated shares are display-only.'
-            : 'Current allocation is calculated automatically after Aura values the saved shares.'}</p>
+            : 'Current value and allocation are calculated automatically from the saved quantity and backend market prices.'}</p>
           <div className={styles.editorActions}>
             <button className="secondary-btn" disabled={saving} onClick={() => {
               const id = nextId.current;

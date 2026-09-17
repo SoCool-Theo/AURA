@@ -9,10 +9,7 @@ import type {
 export type RealHoldingDraft = {
   id: number;
   symbol: string;
-  investedAmount: string;
-  investedCurrency: PortfolioCurrency;
   shares: string;
-  purchaseDate: string;
 };
 
 export type PlannedHoldingDraft = {
@@ -29,10 +26,7 @@ export function createRealHoldingDraft(id: number): RealHoldingDraft {
   return {
     id,
     symbol: '',
-    investedAmount: '',
-    investedCurrency: 'USD',
     shares: '',
-    purchaseDate: '',
   };
 }
 
@@ -51,10 +45,7 @@ export function realHoldingToDraft(
   return {
     id,
     symbol: holding.symbol,
-    investedAmount: holding.invested_amount,
-    investedCurrency: holding.invested_currency,
     shares: holding.shares,
-    purchaseDate: holding.purchase_date,
   };
 }
 
@@ -78,23 +69,6 @@ function positiveDecimal(value: string): string | null {
   const decimalDigits = match[2]?.length ?? 0;
   if (integerDigits > 16 || decimalDigits > 12) return null;
   return normalized;
-}
-
-function isValidPurchaseDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split('-').map(Number);
-  const parsed = new Date(year, month - 1, day);
-  if (
-    parsed.getFullYear() !== year
-    || parsed.getMonth() !== month - 1
-    || parsed.getDate() !== day
-  ) {
-    return false;
-  }
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return parsed.getTime() <= today.getTime();
 }
 
 function normalizedUniqueSymbol(
@@ -133,36 +107,17 @@ export function validateRealHoldingDrafts(
       };
     }
 
-    const investedAmount = positiveDecimal(draft.investedAmount);
-    if (!investedAmount) {
-      return {
-        holdings: null,
-        error: `${normalizedSymbol.symbol} needs a positive invested amount with up to 12 decimal places.`,
-      };
-    }
-
     const shares = positiveDecimal(draft.shares);
     if (!shares) {
       return {
         holdings: null,
-        error: `${normalizedSymbol.symbol} needs positive shares with up to 12 decimal places.`,
-      };
-    }
-
-    const purchaseDate = draft.purchaseDate.trim();
-    if (!isValidPurchaseDate(purchaseDate)) {
-      return {
-        holdings: null,
-        error: `${normalizedSymbol.symbol} needs a valid purchase date that is not in the future.`,
+        error: `${normalizedSymbol.symbol} needs a positive quantity owned with up to 12 decimal places.`,
       };
     }
 
     holdings.push({
       symbol: normalizedSymbol.symbol,
-      invested_amount: investedAmount,
-      invested_currency: draft.investedCurrency,
       shares,
-      purchase_date: purchaseDate,
     });
   }
 

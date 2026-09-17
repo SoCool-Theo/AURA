@@ -37,12 +37,14 @@ export function AssetRow({
         <Text style={styles.name}>{holding.symbol}</Text>
         <Text style={styles.meta}>
           {isReal
-            ? `${formatPortfolioQuantity(holding.shares)} shares · Purchased ${holding.purchase_date}`
+            ? holding.purchase_date
+              ? `${formatPortfolioQuantity(holding.shares)} owned · Purchased ${holding.purchase_date}`
+              : `${formatPortfolioQuantity(holding.shares)} owned`
             : isPlanned
               ? `Proposed ${formatPortfolioMoney(holding.proposed_amount, valuationCurrency)}`
             : `Position ${holding.position + 1} · Legacy allocation`}
         </Text>
-        {isReal ? (
+        {isReal && holding.invested_amount && holding.invested_currency ? (
           <Text style={styles.fact}>
             Invested {formatPortfolioMoney(
               holding.invested_amount,

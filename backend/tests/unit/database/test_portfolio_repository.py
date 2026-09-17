@@ -446,6 +446,42 @@ def test_replace_real_holdings_preserves_facts_order_and_decimal_values(
     assert not hasattr(loaded.holdings[0], "current_allocation")
 
 
+def test_replace_real_holdings_accepts_quantity_only_rows(
+    database_session: Session,
+) -> None:
+    user = _persist_user(database_session)
+    portfolio = _persist_portfolio(database_session, user)
+    portfolio.holdings.append(
+        Holding(symbol="BND", weight=Decimal("1"), position=0)
+    )
+    database_session.flush()
+
+    result = PortfolioRepository(database_session).replace_real_holdings(
+        portfolio.id,
+        [
+            ("AAPL", None, None, Decimal("5.250000000000"), None),
+            ("BTC-USD", None, None, Decimal("0.125000000000"), None),
+        ],
+    )
+
+    assert result is not None
+    assert [
+        (
+            holding.symbol,
+            holding.weight,
+            holding.invested_amount,
+            holding.invested_currency,
+            holding.shares,
+            holding.purchase_date,
+            holding.position,
+        )
+        for holding in result
+    ] == [
+        ("AAPL", None, None, None, Decimal("5.250000000000"), None, 0),
+        ("BTC-USD", None, None, None, Decimal("0.125000000000"), None, 1),
+    ]
+
+
 def test_replace_real_holdings_flushes_delete_before_insert_without_commit() -> None:
     session = MagicMock(spec=Session)
     portfolio = Portfolio(

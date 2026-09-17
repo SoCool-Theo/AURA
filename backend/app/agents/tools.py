@@ -347,10 +347,18 @@ class AuraAgentTools:
                 {
                     "symbol": holding.symbol,
                     "weight": float(resolved.weight),
-                    "invested_amount": str(holding.invested_amount),
+                    "invested_amount": (
+                        None
+                        if holding.invested_amount is None
+                        else str(holding.invested_amount)
+                    ),
                     "invested_currency": holding.invested_currency,
                     "shares": str(holding.shares),
-                    "purchase_date": holding.purchase_date.isoformat(),
+                    "purchase_date": (
+                        None
+                        if holding.purchase_date is None
+                        else holding.purchase_date.isoformat()
+                    ),
                     "position": holding.position,
                     "asset_price": str(holding.asset_price),
                     "asset_quote_currency": holding.asset_quote_currency,

@@ -1,5 +1,4 @@
 import type {
-  PortfolioCurrency,
   PortfolioPlannedHoldingInput,
   PortfolioPlannedHoldingResponse,
   PortfolioRealHoldingInput,
@@ -9,10 +8,7 @@ import type {
 export type RealHoldingDraft = {
   id: string;
   symbol: string;
-  investedAmount: string;
-  investedCurrency: PortfolioCurrency;
   shares: string;
-  purchaseDate: string;
 };
 
 export type RealHoldingValidationResult =
@@ -39,10 +35,7 @@ export function createRealHoldingDraft(
   return {
     id: draftId(),
     symbol: values.symbol ?? '',
-    investedAmount: values.investedAmount ?? '',
-    investedCurrency: values.investedCurrency ?? 'USD',
-    shares: values.shares ?? '',
-    purchaseDate: values.purchaseDate ?? ''
+    shares: values.shares ?? ''
   };
 }
 
@@ -51,10 +44,7 @@ export function realHoldingToDraft(
 ): RealHoldingDraft {
   return createRealHoldingDraft({
     symbol: holding.symbol,
-    investedAmount: holding.invested_amount,
-    investedCurrency: holding.invested_currency,
-    shares: holding.shares,
-    purchaseDate: holding.purchase_date
+    shares: holding.shares
   });
 }
 
@@ -88,27 +78,6 @@ function positiveDecimal(value: string): string | null {
   return normalized;
 }
 
-function isValidPurchaseDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split('-').map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-  if (
-    parsed.getUTCFullYear() !== year
-    || parsed.getUTCMonth() !== month - 1
-    || parsed.getUTCDate() !== day
-  ) {
-    return false;
-  }
-
-  const now = new Date();
-  const today = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate()
-  );
-  return parsed.getTime() <= today;
-}
-
 export function validateRealHoldingDrafts(
   drafts: RealHoldingDraft[]
 ): RealHoldingValidationResult {
@@ -132,45 +101,16 @@ export function validateRealHoldingDrafts(
       };
     }
 
-    const investedAmount = positiveDecimal(draft.investedAmount);
-    if (!investedAmount) {
-      return {
-        holdings: null,
-        error: `${symbol} needs a positive invested amount with up to 12 decimal places.`
-      };
-    }
-
-    if (draft.investedCurrency !== 'USD' && draft.investedCurrency !== 'THB') {
-      return {
-        holdings: null,
-        error: `${symbol} needs an invested currency of USD or THB.`
-      };
-    }
-
     const shares = positiveDecimal(draft.shares);
     if (!shares) {
       return {
         holdings: null,
-        error: `${symbol} needs positive shares with up to 12 decimal places.`
-      };
-    }
-
-    const purchaseDate = draft.purchaseDate.trim();
-    if (!isValidPurchaseDate(purchaseDate)) {
-      return {
-        holdings: null,
-        error: `${symbol} needs a valid purchase date that is not in the future.`
+        error: `${symbol} needs a positive quantity owned with up to 12 decimal places.`
       };
     }
 
     seenSymbols.add(symbol);
-    holdings.push({
-      symbol,
-      invested_amount: investedAmount,
-      invested_currency: draft.investedCurrency,
-      shares,
-      purchase_date: purchaseDate
-    });
+    holdings.push({ symbol, shares });
   }
 
   return { holdings, error: null };

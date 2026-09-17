@@ -14,7 +14,7 @@ from ..database.repositories import (
 )
 
 
-RealHoldingReplacement = tuple[str, Decimal, str, Decimal, date]
+RealHoldingReplacement = tuple[str, Decimal | None, str | None, Decimal, date | None]
 PlannedHoldingReplacement = tuple[str, Decimal]
 
 
@@ -143,10 +143,19 @@ class PortfolioService:
             elif portfolio_type == PortfolioType.CURRENT.value and all(
                 holding.weight is None
                 and holding.proposed_amount is None
-                and holding.invested_amount is not None
-                and holding.invested_currency is not None
                 and holding.shares is not None
-                and holding.purchase_date is not None
+                and (
+                    (
+                        holding.invested_amount is None
+                        and holding.invested_currency is None
+                        and holding.purchase_date is None
+                    )
+                    or (
+                        holding.invested_amount is not None
+                        and holding.invested_currency is not None
+                        and holding.purchase_date is not None
+                    )
+                )
                 for holding in source.holdings
             ):
                 real_replacements = tuple(

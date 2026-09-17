@@ -39,28 +39,15 @@ function plain(value) {
 
 test('current and planned holding validation preserves facts and never creates weights', () => {
   const validation = load('src/pages/portfolios/portfolioValidation.ts');
-  const today = new Date();
-  const date = [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, '0'),
-    String(today.getDate()).padStart(2, '0'),
-  ].join('-');
-
   const current = validation.validateRealHoldingDrafts([{
     id: 1,
     symbol: ' aapl ',
-    investedAmount: '1000.25',
-    investedCurrency: 'USD',
     shares: '5.5',
-    purchaseDate: date,
   }]);
   assert.equal(current.error, null);
   assert.deepEqual(plain(current.holdings), [{
     symbol: 'AAPL',
-    invested_amount: '1000.25',
-    invested_currency: 'USD',
     shares: '5.5',
-    purchase_date: date,
   }]);
   assert.ok(!('weight' in current.holdings[0]));
 

@@ -32,7 +32,6 @@ import {
   type PortfolioRealHoldingInput
 } from '../../types/portfolio';
 import { AssetSymbolField } from './AssetSymbolField';
-import { PurchaseDateField } from './PurchaseDateField';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { FormErrorSummary, ScreenErrorState } from '../ui/ErrorState';
@@ -204,8 +203,8 @@ export function HoldingsEditor({
           <Card style={styles.warningCard}>
             <Text style={styles.warningTitle}>Convert legacy allocation</Text>
             <Text style={styles.warningText}>
-              Enter complete facts for every saved symbol. Saving replaces the
-              old manual weights with real holdings; this cannot create a mixed
+              Enter a quantity owned for every saved symbol. Saving replaces the
+              old manual weights with current holdings; this cannot create a mixed
               portfolio.
             </Text>
           </Card>
@@ -213,8 +212,8 @@ export function HoldingsEditor({
           <Card style={styles.errorCard}>
             <Text style={styles.errorTitle}>Holding state needs correction</Text>
             <Text style={styles.errorText}>
-              This portfolio contains mixed legacy and real holdings. Enter
-              complete real facts for every symbol before saving.
+              This portfolio contains mixed holding modes. Enter a quantity owned
+              for every current symbol before saving.
             </Text>
           </Card>
         ) : null}
@@ -280,58 +279,17 @@ export function HoldingsEditor({
                   editable={!saving}
                   error={fieldIssue(index, 'proposed_amount')}
                 />
-              ) : 'investedAmount' in row ? <>
-              <View style={styles.fields}>
-                <View style={styles.flexField}>
-                  <Input
-                    label="Invested Amount"
-                    value={row.investedAmount}
-                    onChangeText={(investedAmount) => patchRow(row.id, { investedAmount })}
-                    keyboardType="decimal-pad"
-                    placeholder="1000.00"
-                    editable={!saving}
-                    error={fieldIssue(index, 'invested_amount')}
-                  />
-                </View>
-                <View style={styles.currencyField}>
-                  <Text style={styles.fieldLabel}>Currency</Text>
-                  <View style={styles.currencyControl}>
-                    {(['USD', 'THB'] as PortfolioCurrency[]).map((currency) => {
-                      const selected = row.investedCurrency === currency;
-                      return (
-                        <Pressable
-                          accessibilityLabel={`${currency} invested currency`}
-                          accessibilityRole="radio"
-                          accessibilityState={{ selected, disabled: saving }}
-                          disabled={saving}
-                          key={currency}
-                          onPress={() => patchRow(row.id, { investedCurrency: currency })}
-                          style={[styles.currencyOption, selected && styles.currencyOptionSelected]}
-                        >
-                          <Text style={[styles.currencyText, selected && styles.currencyTextSelected]}>{currency}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              </View>
-
-              <Input
-                label="Shares Owned"
-                value={row.shares}
-                onChangeText={(shares) => patchRow(row.id, { shares })}
-                keyboardType="decimal-pad"
-                placeholder="10.5"
-                editable={!saving}
-                error={fieldIssue(index, 'shares')}
-              />
-              <PurchaseDateField
-                value={row.purchaseDate}
-                onChangeText={(purchaseDate) => patchRow(row.id, { purchaseDate })}
-                editable={!saving}
-                error={fieldIssue(index, 'purchase_date')}
-              />
-              </> : null}
+              ) : 'shares' in row ? (
+                <Input
+                  label="Quantity Owned"
+                  value={row.shares}
+                  onChangeText={(shares) => patchRow(row.id, { shares })}
+                  keyboardType="decimal-pad"
+                  placeholder="10.5"
+                  editable={!saving}
+                  error={fieldIssue(index, 'shares')}
+                />
+              ) : null}
             </Card>
           ))}
         </View>
@@ -369,7 +327,7 @@ export function HoldingsEditor({
         ) : null}
 
         <Button
-          title={saving ? 'Saving…' : holdingMode === 'planned' ? 'Save Planned Holdings' : 'Save Complete Holdings'}
+          title={saving ? 'Saving…' : holdingMode === 'planned' ? 'Save Planned Holdings' : 'Save Holdings'}
           onPress={save}
           disabled={saving}
           style={{ marginTop: spacing.xl }}

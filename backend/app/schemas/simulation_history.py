@@ -56,20 +56,35 @@ AllocationDecimal = Annotated[
 
 
 class SimulationBaselineHolding(AuraBaseModel):
-    """One immutable USD-valued real holding used for a simulation baseline."""
+    """One immutable USD-valued current holding used for a simulation baseline."""
 
     id: UUID | None
     symbol: AssetSymbol
-    invested_amount: PositiveDecimal
-    invested_currency: Literal["USD", "THB"]
+    invested_amount: PositiveDecimal | None = None
+    invested_currency: Literal["USD", "THB"] | None = None
     shares: PositiveDecimal
-    purchase_date: date
+    purchase_date: date | None = None
     position: Annotated[int, Field(strict=True, ge=0)]
     asset_price: PositiveDecimal
     asset_quote_currency: Literal["USD"]
     price_as_of: date
     current_value_usd: PositiveDecimal
     current_allocation: AllocationDecimal
+
+    @model_validator(mode="after")
+    def validate_optional_investment_provenance(self) -> Self:
+        provenance = (
+            self.invested_amount,
+            self.invested_currency,
+            self.purchase_date,
+        )
+        if all(value is None for value in provenance) or all(
+            value is not None for value in provenance
+        ):
+            return self
+        raise ValueError(
+            "simulation investment provenance must be either complete or absent"
+        )
 
 
 class SimulationBaselineValuationContext(AuraBaseModel):

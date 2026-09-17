@@ -37,17 +37,20 @@ owner-scoped unless noted as public.
 
 ## Holding write and compatibility contract
 
-`PUT /api/portfolios/{portfolio_id}/holdings` changed from an authoritative
-weight replacement to a complete ordered real-holding replacement. Each input
-contains:
+`PUT /api/portfolios/{portfolio_id}/holdings` accepts a complete ordered
+current-holding replacement. New current holdings require only the owned
+quantity:
 
 | Field | Meaning |
 | --- | --- |
-| `symbol` | One of Aura's 17 user-selectable USD-quoted assets |
-| `invested_amount` | Positive amount originally invested; provenance, not current value |
-| `invested_currency` | `USD` or `THB`; defaults to `USD` |
-| `shares` | Positive aggregate share/coin quantity |
-| `purchase_date` | Non-future purchase date |
+| `symbol` | One of Aura's user-selectable USD-quoted assets |
+| `shares` | Positive aggregate quantity owned; shares or coin units |
+| `invested_amount` | Optional historical provenance for existing/full records |
+| `invested_currency` | Optional `USD` or `THB` provenance; complete provenance defaults to `USD` when omitted |
+| `purchase_date` | Optional non-future provenance date |
+
+The three provenance fields are either all absent or all complete. Aura never
+fabricates them for a quantity-only holding.
 
 The request order becomes the backend-controlled `position`. Symbols must be
 unique. Real holdings persist `weight = NULL`; they do not persist current
@@ -57,8 +60,8 @@ During the temporary compatibility period, a returned holding is exactly one
 of:
 
 - `LEGACY`: `weight` present and all real fields `null`/absent;
-- `CURRENT`: `weight` and `proposed_amount` are `null` and every real field is
-  present;
+- `CURRENT`: `weight` and `proposed_amount` are `null`, `shares` is present,
+  and investment provenance is either fully present or fully absent;
 - `PLANNED`: positive `proposed_amount` is present and legacy/current fields
   are `null`.
 

@@ -15,10 +15,10 @@ export type PortfolioHoldingInput = {
 
 export type PortfolioRealHoldingInput = {
   symbol: string;
-  invested_amount: DecimalString;
-  invested_currency: PortfolioCurrency;
   shares: DecimalString;
-  purchase_date: IsoDate;
+  invested_amount?: DecimalString | null;
+  invested_currency?: PortfolioCurrency | null;
+  purchase_date?: IsoDate | null;
 };
 
 export type PortfolioPlannedHoldingInput = {
@@ -71,11 +71,11 @@ export type PortfolioLegacyHoldingResponse = PortfolioHoldingResponseBase & {
 
 export type PortfolioRealHoldingResponse = PortfolioHoldingResponseBase & {
   weight: null;
-  invested_amount: DecimalString;
+  invested_amount: DecimalString | null;
   proposed_amount: null;
-  invested_currency: PortfolioCurrency;
+  invested_currency: PortfolioCurrency | null;
   shares: DecimalString;
-  purchase_date: IsoDate;
+  purchase_date: IsoDate | null;
 };
 
 export type PortfolioPlannedHoldingResponse = PortfolioHoldingResponseBase & {
@@ -108,7 +108,7 @@ export function isLegacyPortfolioHolding(
 export function isRealPortfolioHolding(
   holding: PortfolioHoldingResponse,
 ): holding is PortfolioRealHoldingResponse {
-  return holding.invested_amount != null;
+  return holding.weight == null && holding.proposed_amount == null && holding.shares != null;
 }
 
 export function isPlannedPortfolioHolding(
@@ -170,10 +170,10 @@ export type PortfolioValuationFxResponse = {
 export type PortfolioHoldingValuationResponse = {
   id: Uuid;
   symbol: string;
-  invested_amount: DecimalString;
-  invested_currency: PortfolioCurrency;
+  invested_amount: DecimalString | null;
+  invested_currency: PortfolioCurrency | null;
   shares: DecimalString;
-  purchase_date: IsoDate;
+  purchase_date: IsoDate | null;
   position: number;
   asset_price: DecimalString;
   asset_quote_currency: 'USD';

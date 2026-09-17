@@ -1461,6 +1461,52 @@ def test_phase6_replace_holdings_uses_real_facts_order_and_commits_once(
     api_harness.session.rollback.assert_not_called()
 
 
+def test_replace_holdings_accepts_quantity_only_contract(
+    api_harness: ApiHarness,
+) -> None:
+    updated = _portfolio(portfolio_type=PortfolioType.CURRENT)
+    updated.holdings.append(
+        Holding(
+            id=UUID("42000000-0000-0000-0000-000000000001"),
+            portfolio_id=PORTFOLIO_ID,
+            symbol="AAPL",
+            weight=None,
+            invested_amount=None,
+            invested_currency=None,
+            shares=Decimal("5.250000000000"),
+            purchase_date=None,
+            position=0,
+        )
+    )
+    api_harness.service.replace_holdings.return_value = updated
+
+    response = api_harness.client.put(
+        f"/api/portfolios/{PORTFOLIO_ID}/holdings",
+        headers=REQUEST_HEADERS,
+        json={"holdings": [{"symbol": " aapl ", "shares": "5.25"}]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["holdings"] == [
+        {
+            "id": "42000000-0000-0000-0000-000000000001",
+            "symbol": "AAPL",
+            "weight": None,
+            "invested_amount": None,
+            "invested_currency": None,
+            "shares": "5.250000000000",
+            "purchase_date": None,
+            "position": 0,
+        }
+    ]
+    api_harness.service.replace_holdings.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        holdings=[("AAPL", None, None, Decimal("5.25"), None)],
+    )
+    api_harness.session.commit.assert_called_once_with()
+
+
 def test_step3_replace_planned_holdings_uses_proposed_amounts_only(
     api_harness: ApiHarness,
 ) -> None:

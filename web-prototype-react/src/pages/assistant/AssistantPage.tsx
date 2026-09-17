@@ -10,6 +10,7 @@ import { Icon } from '../../components/ui/Icon';
 import type { AgentExplainResponse, AgentSourceReference } from '../../types/agent';
 import type { PortfolioSummaryResponse } from '../../types/portfolio';
 import styles from './AssistantPage.module.css';
+import { AnswerContent } from './components/AnswerContent';
 
 function sourceLabel(source: AgentSourceReference): string {
   return source.type.charAt(0).toUpperCase() + source.type.slice(1);
@@ -167,7 +168,7 @@ export function AssistantPage({
     {!loadingPortfolios && !loadError && !portfolios.length && <Card className={styles.stateCard}><h2>No portfolios available</h2><p>Create a saved portfolio before asking Aura to explain its risk results.</p></Card>}
     {sending && <Card className={styles.stateCard}><h2>Aura is preparing an explanation</h2><p role="status">Aura is using your selected saved context.</p></Card>}
     {response && !sending && <section className={styles.responseSection} aria-live="polite">
-      <Card className={styles.answerCard}><div className={styles.answerHeading}><span><Icon name="spark" size={19} /></span><div><small>AURA’S EXPLANATION</small><h2>Grounded response</h2></div></div><p className={styles.answer}>{response.answer}</p></Card>
+      <Card className={styles.answerCard}><div className={styles.answerHeading}><span><Icon name="spark" size={19} /></span><div><small>AURA’S EXPLANATION</small><h2>Grounded response</h2></div></div><AnswerContent answer={response.answer} /></Card>
       <div className={styles.detailsGrid}>
         <Card className={styles.detailCard}><h2>Sources</h2>{response.sources.length ? <ul>{response.sources.map(source => <li key={`${source.type}-${source.id}`}><strong>{sourceLabel(source)}</strong><span>{source.id}</span></li>)}</ul> : <p>No source references were returned.</p>}</Card>
         <Card className={styles.detailCard}><h2>Limitations</h2>{response.limitations.length ? <ul>{response.limitations.map(limitation => <li key={limitation}>{limitation}</li>)}</ul> : <p>No additional limitations were returned.</p>}</Card>

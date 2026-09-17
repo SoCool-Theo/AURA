@@ -67,9 +67,7 @@ export function HoldingsTable({
               <th>Position</th>
               <th>Symbol</th>
               {current ? <>
-                <th>Invested</th>
-                <th>Shares</th>
-                <th>Purchase Date</th>
+                <th>Quantity Owned</th>
                 <th>Current Value</th>
                 <th>Current Allocation</th>
               </> : planned ? <>
@@ -92,9 +90,7 @@ export function HoldingsTable({
                   </div>
                 </td>
                 {current && isRealPortfolioHolding(holding) ? <>
-                  <td>{formatPortfolioMoney(holding.invested_amount, holding.invested_currency)}</td>
                   <td>{formatPortfolioQuantity(holding.shares)}</td>
-                  <td>{holding.purchase_date}</td>
                   <td><strong>{valued ? formatPortfolioMoney(valued.current_value, valuation?.valuation_currency ?? 'USD') : '—'}</strong></td>
                   <td><strong>{valued ? formatPortfolioAllocation(valued.current_allocation) : '—'}</strong></td>
                 </> : planned && isPlannedPortfolioHolding(holding) ? <>
@@ -112,8 +108,6 @@ export function HoldingsTable({
               <td />
               <td>Total</td>
               {current ? <>
-                <td />
-                <td />
                 <td />
                 <td>{valuation ? formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency) : '—'}</td>
                 <td>{valuation ? '100.00%' : '—'}</td>

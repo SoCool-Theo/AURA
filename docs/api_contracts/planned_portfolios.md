@@ -23,7 +23,7 @@ order.
 
 | Type | User-created | Authoritative input | Canonical baseline |
 | --- | --- | --- | --- |
-| `CURRENT` | Yes | Shares, invested amount/currency, and purchase date | Current USD values derived from shares and fresh persisted prices |
+| `CURRENT` | Yes | Quantity owned (`shares`); investment provenance is optional compatibility data | Current USD values derived from quantity and fresh persisted prices |
 | `PLANNED` | Yes | Proposed investment amount per asset and one plan currency | Proposed amounts normalized into target weights |
 | `LEGACY` | No | Previously persisted weights | Saved weights |
 
@@ -66,9 +66,11 @@ Every holding uses exactly one complete shape:
 
 ```text
 CURRENT
-symbol + invested_amount + invested_currency + shares + purchase_date
+symbol + shares
 weight = NULL
 proposed_amount = NULL
+invested_amount + invested_currency + purchase_date are either all NULL
+or all present as optional historical provenance
 
 PLANNED
 symbol + proposed_amount
@@ -230,14 +232,15 @@ Conversion creates a separate `CURRENT` portfolio and leaves the original
 PLANNED portfolio
        |
        v
-user supplies actual shares, invested amount/currency, and purchase date
+user supplies the actual quantity owned; optional complete investment provenance may also be supplied
        |
        v
 new CURRENT portfolio with optional source_plan_id
 ```
 
-The operation does not infer execution facts from estimated shares. It creates
-the new portfolio and all current holdings atomically, or creates nothing.
+The operation does not infer actual quantity from estimated shares and does not
+fabricate investment provenance. It creates the new portfolio and all current
+holdings atomically, or creates nothing.
 
 ## Error and privacy requirements
 

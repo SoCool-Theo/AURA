@@ -142,10 +142,10 @@ export type SimulationHistoryV1DetailResponse =
 export type SimulationBaselineHolding = {
   id: Uuid | null;
   symbol: string;
-  invested_amount: DecimalString;
-  invested_currency: PortfolioCurrency;
+  invested_amount: DecimalString | null;
+  invested_currency: PortfolioCurrency | null;
   shares: DecimalString;
-  purchase_date: IsoDate;
+  purchase_date: IsoDate | null;
   position: number;
   asset_price: DecimalString;
   asset_quote_currency: 'USD';

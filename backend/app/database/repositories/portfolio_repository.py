@@ -15,10 +15,10 @@ from ..models import Holding, Portfolio, PortfolioType
 HoldingReplacement: TypeAlias = tuple[str, Decimal]
 RealHoldingReplacement: TypeAlias = tuple[
     str,
+    Decimal | None,
+    str | None,
     Decimal,
-    str,
-    Decimal,
-    date,
+    date | None,
 ]
 PlannedHoldingReplacement: TypeAlias = tuple[str, Decimal]
 
@@ -133,7 +133,7 @@ class PortfolioRepository:
         portfolio_id: UUID,
         holdings: Sequence[RealHoldingReplacement],
     ) -> list[Holding] | None:
-        """Replace holdings with complete real rows in caller input order."""
+        """Replace holdings with quantity-based current rows in caller input order."""
         replacements = tuple(
             (
                 symbol,

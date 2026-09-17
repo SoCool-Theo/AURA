@@ -28,15 +28,6 @@ import { AssetSymbolField } from './components/AssetSymbolField';
 type CreateMode = 'CURRENT' | 'PLANNED';
 type DraftHolding = RealHoldingDraft | PlannedHoldingDraft;
 
-function todayInputValue(): string {
-  const today = new Date();
-  return [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, '0'),
-    String(today.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
 export function PortfolioCreateFlow() {
   const nextHoldingId = useRef(1);
   const [name, setName] = useState('');
@@ -49,7 +40,6 @@ export function PortfolioCreateFlow() {
   const [partialError, setPartialError] = useState<unknown>(null);
   const [createdPortfolio, setCreatedPortfolio] = useState<PortfolioResponse | null>(null);
   const [saving, setSaving] = useState(false);
-  const maximumPurchaseDate = todayInputValue();
 
   function addHolding() {
     const id = nextHoldingId.current;
@@ -243,12 +233,7 @@ export function PortfolioCreateFlow() {
                   <th>Symbol</th>
                   {mode === 'PLANNED' ? (
                     <th>Proposed Amount ({planCurrency})</th>
-                  ) : <>
-                    <th>Invested Amount</th>
-                    <th>Currency</th>
-                    <th>Shares Owned</th>
-                    <th>Purchase Date</th>
-                  </>}
+                  ) : <th>Quantity Owned</th>}
                   <th>Actions</th>
                 </tr></thead>
                 <tbody>{holdings.map((holding, index) => (
@@ -257,23 +242,9 @@ export function PortfolioCreateFlow() {
                     <td><AssetSymbolField ariaLabel={`Holding ${index + 1} symbol`} id={`create-holding-${holding.id}`} value={holding.symbol} onChange={symbol => updateHolding(holding.id, { symbol })} disabled={saving} /></td>
                     {mode === 'PLANNED' && 'proposedAmount' in holding ? (
                       <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} proposed amount`} inputMode="decimal" value={holding.proposedAmount} onChange={event => updateHolding(holding.id, { proposedAmount: event.target.value })} placeholder="4000.00" disabled={saving} /></td>
-                    ) : 'investedAmount' in holding ? <>
-                      <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} invested amount`} inputMode="decimal" value={holding.investedAmount} onChange={event => updateHolding(holding.id, { investedAmount: event.target.value })} placeholder="1000.00" disabled={saving} /></td>
-                      <td>
-                        <select aria-label={`${holding.symbol || `Holding ${index + 1}`} invested currency`} value={holding.investedCurrency} onChange={event => updateHolding(holding.id, { investedCurrency: event.target.value as PortfolioCurrency })} disabled={saving}>
-                          <option value="USD">USD</option>
-                          <option value="THB">THB</option>
-                        </select>
-                      </td>
-                      <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} shares owned`} inputMode="decimal" value={holding.shares} onChange={event => updateHolding(holding.id, { shares: event.target.value })} placeholder="10.5" disabled={saving} /></td>
-                      <td>
-                        <label className={styles.dateField}>
-                          <span className="sr-only">{holding.symbol || `Holding ${index + 1}`} purchase date</span>
-                          <input aria-label={`${holding.symbol || `Holding ${index + 1}`} purchase date`} type="date" max={maximumPurchaseDate} value={holding.purchaseDate} onChange={event => updateHolding(holding.id, { purchaseDate: event.target.value })} disabled={saving} />
-                          <Icon name="calendar" size={17} />
-                        </label>
-                      </td>
-                    </> : null}
+                    ) : 'shares' in holding ? (
+                      <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} quantity owned`} inputMode="decimal" value={holding.shares} onChange={event => updateHolding(holding.id, { shares: event.target.value })} placeholder="10.5" disabled={saving} /></td>
+                    ) : null}
                     <td><div className={styles.orderActions}>
                       <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={saving || index === 0}>↑</button>
                       <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={saving || index === holdings.length - 1}>↓</button>
@@ -297,7 +268,7 @@ export function PortfolioCreateFlow() {
 
           <div className="educational-notice"><Icon name="spark" size={19} /><p>{mode === 'PLANNED'
             ? 'Aura calculates target percentages from your proposed amounts. Estimated shares are for display only and do not control the analysis.'
-            : 'Aura uses market prices to value your shares and calculate the current percentage of each holding.'}</p></div>
+            : 'Aura stores the quantity you own, then uses backend market prices to calculate current value and allocation automatically.'}</p></div>
 
           <div className="wizard-footer">
             <button className="secondary-btn" onClick={() => go('portfolios')} disabled={saving}>Cancel</button>
@@ -314,7 +285,7 @@ export function PortfolioCreateFlow() {
               <div><span>1</span><p><strong>Enter proposed amounts</strong><small>Use one currency for the complete plan.</small></p></div>
               <div><span>2</span><p><strong>Review historical risk</strong><small>The plan remains hypothetical and is not an order.</small></p></div>
             </> : <>
-              <div><span>1</span><p><strong>Record what you own</strong><small>Add actual shares and transaction details.</small></p></div>
+              <div><span>1</span><p><strong>Record what you own</strong><small>Add the asset and quantity you currently own.</small></p></div>
               <div><span>2</span><p><strong>See current allocation</strong><small>Aura values the holdings using available market data.</small></p></div>
             </>}
           </Card>

@@ -55,13 +55,12 @@ class Holding(Base):
         ),
         CheckConstraint(
             "(weight IS NOT NULL AND proposed_amount IS NULL AND "
-            "invested_amount IS NULL AND "
-            "invested_currency IS NULL AND shares IS NULL AND "
-            "purchase_date IS NULL) OR "
-            "(weight IS NULL AND proposed_amount IS NULL AND "
-            "invested_amount IS NOT NULL AND "
-            "invested_currency IS NOT NULL AND shares IS NOT NULL AND "
-            "purchase_date IS NOT NULL) OR "
+            "invested_amount IS NULL AND invested_currency IS NULL AND "
+            "shares IS NULL AND purchase_date IS NULL) OR "
+            "(weight IS NULL AND proposed_amount IS NULL AND shares IS NOT NULL "
+            "AND ((invested_amount IS NULL AND invested_currency IS NULL AND "
+            "purchase_date IS NULL) OR (invested_amount IS NOT NULL AND "
+            "invested_currency IS NOT NULL AND purchase_date IS NOT NULL))) OR "
             "(weight IS NULL AND proposed_amount IS NOT NULL AND "
             "invested_amount IS NULL AND invested_currency IS NULL AND "
             "shares IS NULL AND purchase_date IS NULL)",
