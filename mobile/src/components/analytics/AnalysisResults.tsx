@@ -281,7 +281,9 @@ export function AnalysisResults({
               </View>
             ) : null}
             <Text style={styles.cardText}>
-              {formatPortfolioQuantity(holding.shares)} shares · invested {holding.invested_currency} {formatPortfolioQuantity(holding.invested_amount)} · purchased {holding.purchase_date}
+              {formatPortfolioQuantity(holding.shares)} owned{holding.invested_amount && holding.invested_currency
+                ? ` · invested ${holding.invested_currency} ${formatPortfolioQuantity(holding.invested_amount)}`
+                : ''}{holding.purchase_date ? ` · purchased ${holding.purchase_date}` : ''}
             </Text>
             <View style={styles.dataGrid}>
               <Metric label="Saved current value" value={formatPortfolioMoney(holding.current_value, reportV2.valuation.valuation_currency)} />

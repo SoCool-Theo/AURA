@@ -95,6 +95,35 @@ def _service_with_market_data() -> tuple[
     return service, session, market_data, market_data_type
 
 
+def test_quantity_only_holding_uses_shares_and_preserves_absent_provenance() -> None:
+    service, _, market_data, _ = _service_with_market_data()
+    holding = Holding(
+        id=UUID("42000000-0000-0000-0000-000000000099"),
+        portfolio_id=PORTFOLIO_ID,
+        symbol="AAPL",
+        weight=None,
+        invested_amount=None,
+        invested_currency=None,
+        shares=Decimal("4.000000000000"),
+        purchase_date=None,
+        position=0,
+    )
+    market_data.get_latest_usd_asset_observations.return_value = [
+        _observation("AAPL", Decimal("12.500000000000"))
+    ]
+
+    result = service.value([holding], requested_date=REQUESTED_DATE)
+
+    valued = result.holdings[0]
+    assert result.total_current_value_usd == Decimal("50.000000000000000000000000")
+    assert valued.current_value_usd == result.total_current_value_usd
+    assert valued.current_allocation == Decimal("1")
+    assert valued.shares == Decimal("4.000000000000")
+    assert valued.invested_amount is None
+    assert valued.invested_currency is None
+    assert valued.purchase_date is None
+
+
 def test_one_holding_usd_valuation_uses_exact_decimal_math() -> None:
     service, _, market_data, _ = _service_with_market_data()
     holding = _holding(shares=Decimal("2.500000000000"))

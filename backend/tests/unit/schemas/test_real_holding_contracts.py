@@ -53,6 +53,29 @@ def test_real_input_accepts_normal_usd_holding_as_decimals() -> None:
     assert type(result.shares) is Decimal
 
 
+def test_real_input_accepts_quantity_only_holding() -> None:
+    result = PortfolioRealHoldingInput.model_validate(
+        {"symbol": " aapl ", "shares": "0.250000000000"}
+    )
+
+    assert result.symbol == "AAPL"
+    assert result.shares == Decimal("0.250000000000")
+    assert result.invested_amount is None
+    assert result.invested_currency is None
+    assert result.purchase_date is None
+
+
+def test_real_input_rejects_partial_optional_provenance() -> None:
+    with pytest.raises(ValidationError, match="supplied together"):
+        PortfolioRealHoldingInput.model_validate(
+            {
+                "symbol": "AAPL",
+                "shares": "2",
+                "invested_amount": "1000",
+            }
+        )
+
+
 def test_real_input_defaults_invested_currency_to_usd() -> None:
     data = _valid_real_input()
     data.pop("invested_currency")
@@ -226,6 +249,27 @@ def test_legacy_response_preserves_weight_and_explicit_null_facts() -> None:
         "purchase_date": None,
         "position": 0,
     }
+
+
+def test_quantity_only_real_response_is_valid_and_preserves_null_provenance() -> None:
+    result = PortfolioHoldingResponse.model_validate(
+        {
+            "id": HOLDING_ID,
+            "symbol": "AAPL",
+            "weight": None,
+            "invested_amount": None,
+            "invested_currency": None,
+            "shares": Decimal("5.000000000000"),
+            "purchase_date": None,
+            "position": 0,
+        }
+    )
+
+    assert result.weight is None
+    assert result.shares == Decimal("5.000000000000")
+    assert result.invested_amount is None
+    assert result.invested_currency is None
+    assert result.purchase_date is None
 
 
 def test_real_response_serializes_decimals_as_strings_and_weight_as_null() -> None:

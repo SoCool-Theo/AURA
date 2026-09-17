@@ -466,41 +466,23 @@ test('real holding contracts preserve precision, order, modes, and valuation all
   const simulation = load('src/simulation/simulationValidation.ts');
 
   const result = validation.validateRealHoldingDrafts([
-    {
-      id: 'first', symbol: ' msft ', investedAmount: '1500.250000000000',
-      investedCurrency: 'THB', shares: '10.125', purchaseDate: '2026-01-10'
-    },
-    {
-      id: 'second', symbol: 'AAPL', investedAmount: '900',
-      investedCurrency: 'USD', shares: '4.5', purchaseDate: '2025-12-01'
-    }
+    { id: 'first', symbol: ' msft ', shares: '10.125' },
+    { id: 'second', symbol: 'AAPL', shares: '4.5' }
   ]);
   assert.equal(result.error, null);
   assert.deepEqual(JSON.parse(JSON.stringify(result.holdings)), [
-    {
-      symbol: 'MSFT', invested_amount: '1500.250000000000',
-      invested_currency: 'THB', shares: '10.125', purchase_date: '2026-01-10'
-    },
-    {
-      symbol: 'AAPL', invested_amount: '900', invested_currency: 'USD',
-      shares: '4.5', purchase_date: '2025-12-01'
-    }
+    { symbol: 'MSFT', shares: '10.125' },
+    { symbol: 'AAPL', shares: '4.5' }
   ]);
   assert.match(
     validation.validateRealHoldingDrafts([
-      { id: 'a', symbol: 'AAPL', investedAmount: '0', investedCurrency: 'USD', shares: '1', purchaseDate: '2026-01-01' }
+      { id: 'a', symbol: 'AAPL', shares: '0' }
     ]).error,
-    /positive invested amount/i
-  );
-  assert.match(
-    validation.validateRealHoldingDrafts([
-      { id: 'a', symbol: 'AAPL', investedAmount: '1', investedCurrency: 'USD', shares: '1', purchaseDate: '9999-01-01' }
-    ]).error,
-    /not in the future/i
+    /positive quantity owned/i
   );
 
   const legacy = { symbol: 'AAPL', weight: 1, invested_amount: null, invested_currency: null, shares: null, purchase_date: null, position: 0 };
-  const real = { symbol: 'MSFT', weight: null, invested_amount: '1', invested_currency: 'USD', shares: '1', purchase_date: '2026-01-01', position: 0 };
+  const real = { symbol: 'MSFT', weight: null, invested_amount: null, invested_currency: null, shares: '1', purchase_date: null, position: 0 };
   const planned = { symbol: 'NVDA', weight: null, invested_amount: null, proposed_amount: '2500', invested_currency: null, shares: null, purchase_date: null, position: 0 };
   assert.equal(portfolioTypes.portfolioHoldingMode([]), 'empty');
   assert.equal(portfolioTypes.portfolioHoldingMode([legacy]), 'legacy');
@@ -640,22 +622,12 @@ test('Home report-backed return cards reuse saved monetary metric details', () =
   assert.ok(!/reference_amount\s*\*/.test(`${dashboard}\n${details}`));
 });
 
-test('purchase-date picker accepts backend-safe past dates through today', () => {
+test('purchase-date helper remains reusable while current forms require only quantity', () => {
   const purchaseDates = load('src/portfolio/purchaseDate.ts');
-  const validation = load('src/portfolio/portfolioValidation.ts');
   const now = new Date();
   const maximumDate = purchaseDates.maximumPurchaseDate(now);
   const today = now.toISOString().slice(0, 10);
   const yesterday = new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
-  const tomorrow = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
-  const holding = purchaseDate => [{
-    id: purchaseDate,
-    symbol: 'AAPL',
-    investedAmount: '1000',
-    investedCurrency: 'USD',
-    shares: '5',
-    purchaseDate
-  }];
 
   assert.equal(purchaseDates.formatPurchaseDate(maximumDate), today);
   assert.equal(
@@ -664,17 +636,13 @@ test('purchase-date picker accepts backend-safe past dates through today', () =>
     ),
     yesterday
   );
-  assert.equal(validation.validateRealHoldingDrafts(holding(today)).error, null);
-  assert.equal(validation.validateRealHoldingDrafts(holding(yesterday)).error, null);
-  assert.match(validation.validateRealHoldingDrafts(holding(tomorrow)).error, /not in the future/i);
 
-  const picker = fs.readFileSync(path.join(root, 'src/components/portfolio/PurchaseDateField.tsx'), 'utf8');
   const create = fs.readFileSync(path.join(root, 'src/screens/portfolios/CreatePortfolioScreen.tsx'), 'utf8');
   const edit = fs.readFileSync(path.join(root, 'src/components/portfolio/HoldingsEditor.tsx'), 'utf8');
-  assert.match(picker, /calendar-outline/);
-  assert.match(picker, /maximumDate=\{maximumDate\}/);
-  assert.match(create, /<PurchaseDateField/);
-  assert.match(edit, /<PurchaseDateField/);
+  assert.match(create, /Quantity Owned/);
+  assert.match(edit, /Quantity Owned/);
+  assert.doesNotMatch(create, /<PurchaseDateField|Invested Amount|Shares Owned/);
+  assert.doesNotMatch(edit, /<PurchaseDateField|Invested Amount|Shares Owned/);
 });
 
 test('portfolio report entry points preserve newest-report AI grounding', () => {
@@ -748,10 +716,7 @@ test('real holding API clients send explicit currency and real holding payloads'
     './apiClient': { apiRequest: request }
   });
   const portfolioId = 'e6518442-58cb-408f-af47fb00b555';
-  const holdings = [{
-    symbol: 'AAPL', invested_amount: '1000', invested_currency: 'USD',
-    shares: '5', purchase_date: '2026-01-01'
-  }];
+  const holdings = [{ symbol: 'AAPL', shares: '5' }];
 
   await portfoliosApi.getValuation(portfolioId, 'THB');
   await portfoliosApi.replaceRealHoldings(portfolioId, holdings);
@@ -779,9 +744,8 @@ test('Create Portfolio records real holdings and leaves allocation to the backen
 
   assert.match(source, /createPortfolioWithRealHoldings/);
   assert.match(source, /validateRealHoldingDrafts/);
-  assert.match(source, /Invested Amount/);
-  assert.match(source, /Shares Owned/);
-  assert.match(source, /<PurchaseDateField/);
+  assert.match(source, /Quantity Owned/);
+  assert.doesNotMatch(source, /Invested Amount|Shares Owned|<PurchaseDateField/);
   assert.match(source, /Automatic allocation/);
   assert.ok(!/Weight %|TOTAL ALLOCATION|totalPercent/.test(source));
   assert.ok(!/current_allocation|asset_price|current_value/.test(source));
@@ -795,9 +759,8 @@ test('all portfolio CRUD screens use real holdings and never submit manual weigh
 
   assert.match(editor, /replaceRealHoldings/);
   assert.match(editor, /Convert legacy allocation/);
-  assert.match(editor, /Invested Amount/);
-  assert.match(editor, /Shares Owned/);
-  assert.match(editor, /<PurchaseDateField/);
+  assert.match(editor, /Quantity Owned/);
+  assert.doesNotMatch(editor, /Invested Amount|Shares Owned|<PurchaseDateField/);
   assert.ok(!/Weight %|TOTAL ALLOCATION|weightPercent/.test(`${create}\n${editor}`));
   assert.ok(!/createPortfolioWithHoldings|replaceHoldings\s*[:=(]/.test(`${provider}\n${api}`));
 });

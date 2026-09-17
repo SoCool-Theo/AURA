@@ -66,20 +66,48 @@ _PositiveNumeric28Scale12 = Annotated[
 
 
 class PortfolioRealHoldingInput(AuraBaseModel):
-    """Production write contract for one aggregate real asset position."""
+    """Production write contract for one current owned asset position.
+
+    Quantity is the only fact required for new current-portfolio holdings.
+    Historical investment provenance remains optional so existing full current
+    holdings continue to round-trip without being fabricated for new rows.
+    """
 
     symbol: AssetSymbol
-    invested_amount: _PositiveNumeric28Scale12
-    invested_currency: _InvestedCurrency = "USD"
     shares: _PositiveNumeric28Scale12
-    purchase_date: date
+    invested_amount: _PositiveNumeric28Scale12 | None = None
+    invested_currency: _InvestedCurrency | None = None
+    purchase_date: date | None = None
 
     @field_validator("purchase_date")
     @classmethod
-    def reject_future_purchase_date(cls, value: date) -> date:
-        if value > datetime.now(UTC).date():
+    def reject_future_purchase_date(cls, value: date | None) -> date | None:
+        if value is not None and value > datetime.now(UTC).date():
             raise ValueError("purchase_date must not be in the future")
         return value
+
+    @model_validator(mode="after")
+    def validate_optional_investment_provenance(self) -> Self:
+        provenance = (
+            self.invested_amount,
+            self.invested_currency,
+            self.purchase_date,
+        )
+        if all(value is None for value in provenance):
+            return self
+        if self.invested_amount is not None and self.purchase_date is not None:
+            if self.invested_currency is None:
+                if "invested_currency" in self.model_fields_set:
+                    raise ValueError(
+                        "invested_currency cannot be null when investment "
+                        "provenance is provided"
+                    )
+                self.invested_currency = "USD"
+            return self
+        raise ValueError(
+            "invested_amount, invested_currency, and purchase_date must be "
+            "supplied together when investment provenance is provided"
+        )
 
 
 class PortfolioPlannedHoldingInput(AuraBaseModel):
@@ -246,15 +274,16 @@ class PortfolioHoldingResponse(AuraBaseModel):
         if "id" in self.model_fields_set and self.id is None:
             raise ValueError("holding id cannot be null when supplied")
 
-        real_values = (
+        provenance = (
             self.invested_amount,
             self.invested_currency,
-            self.shares,
             self.purchase_date,
         )
         if self.proposed_amount is not None:
-            if self.weight is not None or any(
-                value is not None for value in real_values
+            if (
+                self.weight is not None
+                or self.shares is not None
+                or any(value is not None for value in provenance)
             ):
                 raise ValueError(
                     "holding response must use exactly one legacy, current, "
@@ -262,13 +291,22 @@ class PortfolioHoldingResponse(AuraBaseModel):
                 )
             return self
         if self.weight is not None:
-            if any(value is not None for value in real_values):
+            if self.shares is not None or any(
+                value is not None for value in provenance
+            ):
                 raise ValueError(
                     "holding response must use exactly one legacy, current, "
                     "or planned mode"
                 )
             return self
-        if all(value is not None for value in real_values):
+        if self.shares is None:
+            raise ValueError(
+                "holding response must use exactly one legacy, current, or "
+                "planned mode"
+            )
+        if all(value is None for value in provenance) or all(
+            value is not None for value in provenance
+        ):
             return self
         raise ValueError(
             "holding response must use exactly one legacy, current, or "
@@ -335,7 +373,7 @@ class PortfolioResponse(AuraBaseModel):
             valid_holdings = all(
                 holding.proposed_amount is None
                 and holding.weight is None
-                and holding.invested_amount is not None
+                and holding.shares is not None
                 for holding in self.holdings
             )
         else:
@@ -582,14 +620,14 @@ class PortfolioPlannedPreviewResponse(AuraBaseModel):
 
 
 class PortfolioHoldingValuationResponse(AuraBaseModel):
-    """Public current valuation of one saved real holding."""
+    """Public current valuation of one saved quantity-based holding."""
 
     id: UUID
     symbol: AssetSymbol
-    invested_amount: _PositiveNumeric28Scale12
-    invested_currency: _InvestedCurrency
+    invested_amount: _PositiveNumeric28Scale12 | None = None
+    invested_currency: _InvestedCurrency | None = None
     shares: _PositiveNumeric28Scale12
-    purchase_date: date
+    purchase_date: date | None = None
     position: Annotated[int, Field(strict=True, ge=0)]
     asset_price: _PositiveValuationDecimal
     asset_quote_currency: Literal["USD"]
@@ -597,6 +635,21 @@ class PortfolioHoldingValuationResponse(AuraBaseModel):
     current_value_usd: _PositiveValuationDecimal
     current_value: _PositiveValuationDecimal
     current_allocation: _AllocationDecimal
+
+    @model_validator(mode="after")
+    def validate_optional_investment_provenance(self) -> Self:
+        provenance = (
+            self.invested_amount,
+            self.invested_currency,
+            self.purchase_date,
+        )
+        if all(value is None for value in provenance) or all(
+            value is not None for value in provenance
+        ):
+            return self
+        raise ValueError(
+            "valuation investment provenance must be either complete or absent"
+        )
 
 
 class PortfolioValuationResponse(AuraBaseModel):

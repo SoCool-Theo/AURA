@@ -480,6 +480,63 @@ def test_phase3_duplicate_populated_portfolio_preserves_exact_holdings() -> None
     _assert_session_lifecycle_untouched(session)
 
 
+def test_duplicate_quantity_only_portfolio_preserves_mode_and_order() -> None:
+    service, session, repository, _ = _service_with_repository()
+    user_id = uuid4()
+    source = _portfolio(
+        user_id,
+        name="Quantity Source",
+        portfolio_type=PortfolioType.CURRENT.value,
+    )
+    source.holdings.extend(
+        [
+            Holding(
+                id=uuid4(),
+                symbol="AAPL",
+                weight=None,
+                invested_amount=None,
+                invested_currency=None,
+                shares=Decimal("5.000000000000"),
+                purchase_date=None,
+                position=0,
+            ),
+            Holding(
+                id=uuid4(),
+                symbol="BTC-USD",
+                weight=None,
+                invested_amount=None,
+                invested_currency=None,
+                shares=Decimal("0.250000000000"),
+                purchase_date=None,
+                position=1,
+            ),
+        ]
+    )
+    duplicate = _portfolio(
+        user_id,
+        name="Quantity Copy",
+        portfolio_type=PortfolioType.CURRENT.value,
+    )
+    repository.get_with_holdings.return_value = source
+    repository.create.return_value = duplicate
+
+    result = service.duplicate(
+        user_id=user_id,
+        portfolio_id=source.id,
+        name="Quantity Copy",
+    )
+
+    assert result is duplicate
+    repository.replace_real_holdings.assert_called_once_with(
+        duplicate.id,
+        (
+            ("AAPL", None, None, Decimal("5.000000000000"), None),
+            ("BTC-USD", None, None, Decimal("0.250000000000"), None),
+        ),
+    )
+    _assert_session_lifecycle_untouched(session)
+
+
 def test_phase6_duplicate_real_portfolio_preserves_mode_facts_and_order() -> None:
     service, session, repository, _ = _service_with_repository()
     user_id = uuid4()

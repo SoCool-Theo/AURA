@@ -257,15 +257,16 @@ Aura supports three complete, mutually exclusive persisted holding modes:
 | Mode | Persisted holding state | Current valuation |
 | --- | --- | --- |
 | `LEGACY` | `weight` is present; real-holding fields and `proposed_amount` are `NULL` | Not available |
-| `CURRENT` | `weight` and `proposed_amount` are `NULL`; all four real-holding fields are present | Available from persisted current market data |
+| `CURRENT` | `weight` and `proposed_amount` are `NULL`; `shares` is present; investment provenance is either complete or absent | Available from persisted current market data |
 | `PLANNED` | `proposed_amount` is present; `weight` and real-holding fields are `NULL` | Target allocation is derived without current prices; current valuation is not ownership-authoritative |
 
-For a current holding, the user controls `symbol`, `invested_amount`,
-`invested_currency`, `shares`, and `purchase_date`. The backend controls the
-zero-based `position` used to preserve order. Aura does not persist manual
-weight, current allocation, current price, current value, or FX rate for real
-holdings. `invested_amount` and `invested_currency` are provenance facts, not
-the portfolio's current value.
+For a current holding, the normal customer write contract is `symbol` plus
+positive `shares` (the quantity owned). The backend controls the zero-based
+`position` used to preserve order. Existing/full current records may also carry
+`invested_amount`, `invested_currency`, and `purchase_date` as one complete
+optional provenance group; Aura never fabricates those facts for new
+quantity-only rows. Aura does not persist manual weight, current allocation,
+current price, current value, or FX rate for current holdings.
 
 For a planned holding, the user controls `symbol` and positive
 `proposed_amount` in the portfolio's single `plan_currency`. The backend derives

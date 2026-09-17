@@ -317,78 +317,24 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
                 <HoldingDecimalInput
                   label={`Proposed Amount (${planCurrency})`}
                   value={row.proposedAmount}
-                  onValueChange={(proposedAmount) => patchRow(row.id, { proposedAmount })}
+                  onValueChange={(proposedAmount) =>
+                    patchRow(row.id, { proposedAmount })
+                  }
                   placeholder="4000.00"
                   editable={!saving}
                   error={fieldIssue(index, 'proposed_amount')}
                 />
-              ) : 'investedAmount' in row ? (
-                <>
-              <View style={styles.inline}>
-                <View style={styles.amountField}>
-                  <HoldingDecimalInput
-                    label="Invested Amount"
-                    value={row.investedAmount}
-                    onValueChange={(investedAmount) => patchRow(row.id, {
-                      investedAmount
-                    })}
-                    placeholder="1000.00"
-                    editable={!saving}
-                    style={styles.compactInput}
-                    error={fieldIssue(index, 'invested_amount')}
-                  />
-                </View>
-                <View style={styles.currencyField}>
-                  <Text style={styles.label}>Currency</Text>
-                  <View style={styles.currencyControl}>
-                    {(['USD', 'THB'] as PortfolioCurrency[]).map((currency) => {
-                      const selected = row.investedCurrency === currency;
-                      return (
-                        <Pressable
-                          accessibilityLabel={`${currency} invested currency`}
-                          accessibilityRole="radio"
-                          accessibilityState={{ selected, disabled: saving }}
-                          disabled={saving}
-                          key={currency}
-                          onPress={() => patchRow(row.id, {
-                            investedCurrency: currency
-                          })}
-                          style={[
-                            styles.currencyOption,
-                            selected && styles.currencyOptionSelected
-                          ]}
-                        >
-                          <Text style={[
-                            styles.currencyText,
-                            selected && styles.currencyTextSelected
-                          ]}>
-                            {currency}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              </View>
-
-              <HoldingDecimalInput
-                label="Shares Owned"
-                value={row.shares}
-                onValueChange={(shares) => patchRow(row.id, { shares })}
-                placeholder="10.00"
-                editable={!saving}
-                error={fieldIssue(index, 'shares')}
-              />
-
-              <PurchaseDateField
-                value={row.purchaseDate}
-                onChangeText={(purchaseDate) => patchRow(row.id, {
-                  purchaseDate
-                })}
-                editable={!saving}
-                error={fieldIssue(index, 'purchase_date')}
-              />
-                </>
+              ) : 'shares' in row ? (
+                <HoldingDecimalInput
+                  label="Quantity Owned"
+                  value={row.shares}
+                  onValueChange={(shares) =>
+                    patchRow(row.id, { shares })
+                  }
+                  placeholder="10.5"
+                  editable={!saving}
+                  error={fieldIssue(index, 'shares')}
+                />
               ) : null}
             </Card>
           ))}
