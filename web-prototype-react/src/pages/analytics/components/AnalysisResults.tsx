@@ -4,27 +4,31 @@ import { Icon } from '../../../components/ui/Icon';
 import {
   isPortfolioReportV2,
   isPortfolioReportV3,
-  type PortfolioReportMonetaryMetrics,
   type PortfolioReportResponse,
 } from '../../../types/report';
 import {
   formatPortfolioAllocation,
   formatPortfolioMoney,
   formatPortfolioQuantity,
-  formatSignedPortfolioMoney,
 } from '../../portfolios/portfolioUi';
 import { formatNumber, formatPercent } from '../analyticsUi';
+import {
+  reportMetricAmountContent,
+  reportMonetaryMetrics,
+  type ReportMonetaryMetricKey,
+} from '../reportMetricDetails';
+import {
+  RETURN_VIEW_RANGES,
+  visibleReturnPoints,
+  type ReturnViewRange,
+} from '../returnSeriesRange';
 import styles from '../AnalyticsIntegration.module.css';
 import { AnalysisSummary } from './AnalysisSummary';
 import { AssetAnalysisCard } from './AssetAnalysisCard';
 import { CorrelationHeatmap } from './CorrelationHeatmap';
-import {
-  MetricAmountDialog,
-  type MetricAmountDialogContent,
-} from './MetricAmountDialog';
+import { MetricAmountDialog } from './MetricAmountDialog';
 import { RiskDriverTable } from './RiskDriverTable';
-
-type MonetaryMetricKey = 'cumulative' | 'annualized' | 'drawdown';
+import { PortfolioReturnChart } from '../../dashboard/components/PortfolioReturnChart';
 
 type MetricTone = 'primary' | 'success' | 'warning' | 'danger' | 'blue' | 'purple';
 
@@ -40,67 +44,18 @@ function MetricLabel({ icon, label, tone }: { icon: string; label: string; tone:
   return <small className={styles.metricLabel}><i className={`${styles.metricIcon} ${toneClass}`}><Icon name={icon} size={17} /></i>{label}</small>;
 }
 
-function metricDialogContent(
-  key: MonetaryMetricKey | null,
-  monetary: PortfolioReportMonetaryMetrics | null,
-  report: PortfolioReportResponse,
-): MetricAmountDialogContent | null {
-  if (!key || !monetary) return null;
-  const metrics = report.analysis.portfolio_metrics;
-  const drawdown = report.analysis.max_drawdown;
-  const reference = monetary.basis === 'planned-proposed-amount'
-    ? `Based on the hypothetical ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} planned investment saved in this report.`
-    : `Based on the ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} portfolio valuation saved in this report.`;
-
-  if (key === 'cumulative') {
-    return {
-      title: 'Cumulative Return',
-      percentage: formatPercent(metrics.cumulative_return),
-      amount: formatSignedPortfolioMoney(monetary.cumulative_return_amount, monetary.currency),
-      amountLabel: 'Estimated change over this analysis period',
-      reference,
-      explanation: `This applies the historical cumulative return from ${report.analysis.start_date} to ${report.analysis.end_date} to the saved reference amount. It is not actual profit or a forecast.`,
-      tone: metrics.cumulative_return < 0 ? 'negative' : 'positive',
-    };
-  }
-
-  if (key === 'annualized') {
-    return {
-      title: 'Annualized Return',
-      percentage: formatPercent(metrics.annualized_return),
-      amount: formatSignedPortfolioMoney(monetary.annualized_return_amount, monetary.currency),
-      amountLabel: 'Estimated one-year equivalent',
-      reference,
-      explanation: 'This converts the historical annualized rate into a one-year money equivalent. It is not guaranteed profit, actual account performance, or a forecast.',
-      tone: metrics.annualized_return < 0 ? 'negative' : 'positive',
-    };
-  }
-
-  if (monetary.maximum_drawdown_amount === null) return null;
-  const period = drawdown.peak_date && drawdown.trough_date
-    ? ` from ${drawdown.peak_date} to ${drawdown.trough_date}`
-    : '';
-  return {
-    title: 'Maximum Drawdown',
-    percentage: formatPercent(drawdown.max_drawdown),
-    amount: formatSignedPortfolioMoney(monetary.maximum_drawdown_amount, monetary.currency),
-    amountLabel: 'Estimated peak-to-trough decline',
-    reference,
-    explanation: `This is the money equivalent of the same largest historical decline${period}. It is not a prediction of future loss.`,
-    tone: 'negative',
-  };
-}
-
 export function AnalysisResults({ report }: { report: PortfolioReportResponse }) {
   const analysis = report.analysis;
   const reportV2 = isPortfolioReportV2(report) ? report : null;
   const reportV3 = isPortfolioReportV3(report) ? report : null;
-  const monetary = reportV3?.monetary_metrics ?? reportV2?.monetary_metrics ?? null;
-  const [selectedMetric, setSelectedMetric] = useState<MonetaryMetricKey | null>(null);
+  const monetary = reportMonetaryMetrics(report);
+  const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
+  const [returnViewRange, setReturnViewRange] = useState<ReturnViewRange>('1Y');
   const metrics = analysis.portfolio_metrics;
   const drawdown = analysis.max_drawdown;
   const diversification = analysis.diversification;
   const concentration = analysis.concentration;
+  const visibleReturns = visibleReturnPoints(analysis.portfolio_returns, returnViewRange);
 
   return (
     <div className={styles.results}>
@@ -153,11 +108,11 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
       )}
 
       <div className={styles.metricGrid}>
-        {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('cumulative')}><MetricLabel icon="trend" label="Cumulative Return" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.cumulative_return)}</strong><span>Saved period · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="trend" label="Cumulative Return" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.cumulative_return)}</strong><span>Compounded return for the saved period</span></Card>}
-        {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('annualized')}><MetricLabel icon="analytics" label="Annualized Return" tone={metrics.annualized_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical equivalent · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="analytics" label="Annualized Return" tone={metrics.annualized_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical annualized portfolio return</span></Card>}
+        {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('cumulative')}><MetricLabel icon="trend" label="Cumulative Return" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><i className={styles.metricChevron}><Icon name="chevron-right" size={18} /></i><strong>{formatPercent(metrics.cumulative_return)}</strong><span>Saved period · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="trend" label="Cumulative Return" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.cumulative_return)}</strong><span>Compounded return for the saved period</span></Card>}
+        {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('annualized')}><MetricLabel icon="analytics" label="Annualized Return" tone={metrics.annualized_return < 0 ? 'danger' : 'success'} /><i className={styles.metricChevron}><Icon name="chevron-right" size={18} /></i><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical equivalent · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="analytics" label="Annualized Return" tone={metrics.annualized_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical annualized portfolio return</span></Card>}
         <Card className={styles.metric}><MetricLabel icon="pulse" label="Annualized Volatility" tone="warning" /><strong>{formatPercent(metrics.annualized_volatility)}</strong><span>Annualized variation over the saved period</span></Card>
         <Card className={styles.metric}><MetricLabel icon="stats-chart" label="Sharpe Ratio" tone="blue" /><strong>{formatNumber(metrics.sharpe_ratio)}</strong><span>Historical risk-adjusted return metric</span></Card>
-        {monetary?.maximum_drawdown_amount != null ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('drawdown')}><MetricLabel icon="drawdown" label="Maximum Drawdown" tone="danger" /><strong>{formatPercent(drawdown.max_drawdown)}</strong><span>{drawdown.peak_date ?? 'N/A'} to {drawdown.trough_date ?? 'N/A'} · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="drawdown" label="Maximum Drawdown" tone="danger" /><strong>{formatPercent(drawdown.max_drawdown)}</strong><span>{drawdown.peak_date ?? 'N/A'} to {drawdown.trough_date ?? 'N/A'}</span></Card>}
+        {monetary?.maximum_drawdown_amount != null ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('drawdown')}><MetricLabel icon="drawdown" label="Maximum Drawdown" tone="danger" /><i className={styles.metricChevron}><Icon name="chevron-right" size={18} /></i><strong>{formatPercent(drawdown.max_drawdown)}</strong><span>{drawdown.peak_date ?? 'N/A'} to {drawdown.trough_date ?? 'N/A'} · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="drawdown" label="Maximum Drawdown" tone="danger" /><strong>{formatPercent(drawdown.max_drawdown)}</strong><span>{drawdown.peak_date ?? 'N/A'} to {drawdown.trough_date ?? 'N/A'}</span></Card>}
         <Card className={styles.metric}><MetricLabel icon="diversification" label="Diversification" tone="primary" /><strong>{formatNumber(diversification.overall_score, 1)}</strong><span>{diversification.level}; {diversification.defined_pair_count}/{diversification.total_pair_count} pairs defined</span></Card>
         <Card className={styles.metric}><MetricLabel icon="pie-chart" label="Largest Weight" tone="purple" /><strong>{formatPercent(concentration.largest_weight)}</strong><span>Top {concentration.top_n} total: {formatPercent(concentration.top_n_weight)}</span></Card>
         <Card className={styles.metric}><MetricLabel icon="assets" label="Effective Assets" tone="blue" /><strong>{formatNumber(concentration.effective_number_of_assets)}</strong><span>HHI {formatNumber(concentration.hhi, 4)}</span></Card>
@@ -182,7 +137,17 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
           <div><h2>Portfolio Return Series</h2><p>Ordered historical return observations for this saved period.</p></div>
           <span className={styles.badge}>{analysis.portfolio_returns.length} observations</span>
         </div>
-        <div className={styles.tableWrap}>
+        {analysis.portfolio_returns.length > 0 && <div className={styles.returnChart}>
+          <div className={styles.returnChartToolbar}>
+            <span>Graph range</span>
+            <div className={styles.returnRangeTabs} role="group" aria-label="Portfolio return graph range">
+              {RETURN_VIEW_RANGES.map(range => <button type="button" key={range} className={range === returnViewRange ? styles.activeReturnRange : ''} aria-pressed={range === returnViewRange} onClick={() => setReturnViewRange(range)}>{range}</button>)}
+            </div>
+          </div>
+          <PortfolioReturnChart points={visibleReturns} />
+          <p className={styles.returnRangeSummary}>Showing {visibleReturns.length} of {analysis.portfolio_returns.length} saved observations · through {analysis.portfolio_returns[analysis.portfolio_returns.length - 1].date}</p>
+        </div>}
+        <div className={`${styles.tableWrap} ${styles.returnSeriesScroll}`} tabIndex={0} aria-label="Scrollable portfolio return observations">
           <table className={styles.dataTable}>
             <thead><tr><th>Date</th><th>Portfolio return</th></tr></thead>
             <tbody>{analysis.portfolio_returns.map(point => (
@@ -210,7 +175,7 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
 
       <p className={styles.education}>Historical analytics and money equivalents are educational. They are not actual profit or loss, forecasts, or investment recommendations.</p>
       <MetricAmountDialog
-        content={metricDialogContent(selectedMetric, monetary, report)}
+        content={reportMetricAmountContent(selectedMetric, report)}
         onClose={() => setSelectedMetric(null)}
       />
     </div>

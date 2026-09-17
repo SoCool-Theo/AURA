@@ -9,7 +9,7 @@ import type { AuraSelectOption } from '../../components/ui/AuraSelect';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import type { PortfolioSummaryResponse } from '../../types/portfolio';
 import type { PortfolioReportResponse } from '../../types/report';
-import { formatReportTimestamp } from './analyticsUi';
+import { analysisErrorMessage, formatReportTimestamp } from './analyticsUi';
 import styles from './AnalyticsIntegration.module.css';
 import { AnalysisResults } from './components/AnalysisResults';
 
@@ -167,7 +167,11 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
         </div>
       </Card>
 
-      {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to analyze this portfolio." />}
+      {Boolean(actionError) && <InlineErrorCard
+        error={actionError}
+        fallbackMessage="Unable to analyze this portfolio."
+        message={analysisErrorMessage(actionError, 'Unable to analyze this portfolio.')}
+      />}
       {loadingPortfolios && <Card className={styles.stateCard}><h2>Loading portfolios</h2><p role="status">Retrieving your saved portfolios.</p></Card>}
       {!loadingPortfolios && Boolean(loadError) && !portfolios.length && <ScreenErrorState error={loadError} fallbackMessage="Analysis cannot begin until your portfolios can be loaded." resourceName="Portfolio list" onRetry={() => setReloadKey(key => key + 1)} />}
       {!loadingPortfolios && !loadError && !portfolios.length && <Card className={styles.stateCard}><h2>No portfolios to analyze</h2><p>Create a portfolio with an ordered allocation before running analysis.</p><button className="primary-btn" onClick={() => go('create')}>Create Portfolio</button></Card>}

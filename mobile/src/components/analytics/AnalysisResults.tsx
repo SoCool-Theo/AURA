@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   formatCurrentAllocation,
@@ -17,6 +17,11 @@ import {
   type PortfolioReportResponse
 } from '../../types/report';
 import { colors, spacing } from '../../theme/theme';
+import {
+  filterReturnPoints,
+  RETURN_VIEW_RANGES,
+  type ReturnViewRange
+} from '../../dashboard/dashboardPresentation';
 import {
   formatAnalysisNumber,
   formatRatioPercent,
@@ -43,11 +48,13 @@ export function AnalysisResults({
   const reportV3 = isPortfolioReportV3(report) ? report : null;
   const monetary = reportMonetaryMetrics(report);
   const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
+  const [returnViewRange, setReturnViewRange] = useState<ReturnViewRange>('1Y');
   const metrics = analysis.portfolio_metrics;
   const drawdown = analysis.max_drawdown;
   const diversification = analysis.diversification;
   const concentration = analysis.concentration;
   const risk = analysis.risk_classification;
+  const visibleReturns = filterReturnPoints(analysis.portfolio_returns, returnViewRange);
 
   return (
     <View style={styles.results}>
@@ -186,9 +193,29 @@ export function AnalysisResults({
         <Text style={styles.cardText}>
           Historical periodic returns for the selected analysis period.
         </Text>
-        <PortfolioReturnsChart points={analysis.portfolio_returns} />
+        <View style={styles.returnRangeTabs} accessibilityRole="tablist">
+          {RETURN_VIEW_RANGES.map((range) => {
+            const selected = range === returnViewRange;
+            return (
+              <Pressable
+                key={range}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+                onPress={() => setReturnViewRange(range)}
+                style={({ pressed }) => [
+                  styles.returnRangeButton,
+                  selected && styles.returnRangeButtonActive,
+                  pressed && styles.returnRangeButtonPressed
+                ]}
+              >
+                <Text style={[styles.returnRangeText, selected && styles.returnRangeTextActive]}>{range}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <PortfolioReturnsChart points={visibleReturns} />
         <Text style={styles.observationCount}>
-          {analysis.portfolio_returns.length} return observations
+          Showing {visibleReturns.length} of {analysis.portfolio_returns.length} return observations
         </Text>
       </Card>
 
@@ -350,6 +377,24 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.text, fontSize: 15, fontWeight: '900', flex: 1 },
   cardText: { color: colors.textSecondary, fontSize: 11, lineHeight: 17 },
   observationCount: { color: colors.muted, fontSize: 10, textAlign: 'center' },
+  returnRangeTabs: { flexDirection: 'row', gap: spacing.xs },
+  returnRangeButton: {
+    flex: 1,
+    minHeight: 34,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 9,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  returnRangeButtonActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.selectedBackground
+  },
+  returnRangeButtonPressed: { opacity: 0.78 },
+  returnRangeText: { color: colors.textSecondary, fontSize: 10, fontWeight: '800' },
+  returnRangeTextActive: { color: colors.primary },
   rowBetween: {
     flexDirection: 'row',
     flexWrap: 'wrap',
