@@ -31,6 +31,7 @@ export function Icon({ name, size = 20 }: IconProps) {
     case 'search': return <svg {...common}><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>;
     case 'bell': return <svg {...common}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>;
     case 'chevron-down': return <svg {...common}><path d="m7 9.5 5 5 5-5"/></svg>;
+    case 'chevron-right': return <svg {...common}><path d="m9.5 7 5 5-5 5"/></svg>;
     case 'wallet': return <svg {...common}><path d="M4 7h16v12H4zM7 7V4h9v3M16 12h4"/></svg>;
     case 'calendar': return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>;
     case 'trend': return <svg {...common}><path d="m3 17 6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg>;

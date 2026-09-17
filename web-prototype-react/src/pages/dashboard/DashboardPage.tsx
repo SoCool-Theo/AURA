@@ -18,7 +18,12 @@ import type {
   PortfolioValuationResponse,
 } from '../../types/portfolio';
 import type { PortfolioReportResponse } from '../../types/report';
-import { resolvedPortfolioAllocation } from '../portfolios/portfolioUi';
+import {
+  isPortfolioMarketDataUnavailable,
+  PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE,
+  portfolioValuationErrorMessage,
+  resolvedPortfolioAllocation,
+} from '../portfolios/portfolioUi';
 import styles from './DashboardIntegration.module.css';
 import { AiInsight } from './components/AiInsight';
 import { DashboardHeader } from './components/DashboardHeader';
@@ -26,6 +31,7 @@ import { DashboardKpiGrid } from './components/DashboardKpiGrid';
 import { PortfolioAllocation } from './components/PortfolioAllocation';
 import { PortfolioAnalysisCard } from './components/PortfolioAnalysisCard';
 import { PortfolioPerformance } from './components/PortfolioPerformance';
+import { PortfolioSelector } from './components/PortfolioSelector';
 import { RiskDrivers } from './components/RiskDrivers';
 
 export function DashboardPage() {
@@ -112,22 +118,16 @@ export function DashboardPage() {
   const allocation = portfolio
     ? resolvedPortfolioAllocation(portfolio, valuation, plannedAllocation)
     : [];
+  const marketDataUnavailable = isPortfolioMarketDataUnavailable(contextError);
 
   return <div className="page dashboard-page">
-    <DashboardHeader firstName={firstName} portfolios={portfolios} selectedId={selectedId} report={report} onSelectPortfolio={selectPortfolio} />
+    <DashboardHeader firstName={firstName} report={report} />
     {Boolean(portfolioError) && <InlineErrorCard error={portfolioError} fallbackMessage="Unable to load the selected portfolio." resourceName="Portfolio" onRetry={() => setReportReloadKey(value => value + 1)} />}
     {portfolioLoading && <Card className={styles.state}><h2>Loading selected portfolio</h2><p role="status">Loading its holdings and saved analysis.</p></Card>}
     {!portfolioLoading && !portfolio && !portfolioError && <Card className={styles.state}><h2>Portfolio unavailable</h2><p>The selected portfolio could not be displayed.</p></Card>}
     {portfolio && <>
       <div className={styles.portfolioContextBar}>
-        <div>
-          <strong>{portfolio.portfolio_type === 'PLANNED' ? 'Planned portfolio · hypothetical' : portfolio.portfolio_type === 'LEGACY' ? 'Legacy saved allocation' : 'Current portfolio'}</strong>
-          <span>{portfolio.portfolio_type === 'PLANNED'
-            ? 'Target allocation comes from proposed amounts.'
-            : portfolio.portfolio_type === 'LEGACY'
-              ? 'Saved percentages remain readable until holdings are converted.'
-              : 'Current allocation comes from market-valued shares.'}</span>
-        </div>
+        <PortfolioSelector portfolios={portfolios} selectedId={selectedId} onSelect={selectPortfolio} />
         {portfolio.portfolio_type === 'CURRENT' && portfolio.holdings.length > 0 && (
           <div className={styles.currencyControl} role="group" aria-label="Dashboard value currency">
             {(['USD', 'THB'] as PortfolioCurrency[]).map(currency => (
@@ -139,14 +139,15 @@ export function DashboardPage() {
       {Boolean(contextError) && <InlineErrorCard
         error={contextError}
         fallbackMessage={portfolio.portfolio_type === 'PLANNED' ? 'Unable to load the planned target allocation.' : 'Unable to load the current portfolio value.'}
-        stale
-        staleMessage={portfolio.portfolio_type === 'CURRENT'
-          ? 'Current value could not be refreshed. Any existing analysis may be out of date; analyze the portfolio again to create a fresh report.'
+        message={portfolio.portfolio_type === 'CURRENT'
+          ? portfolioValuationErrorMessage(contextError)
           : undefined}
-        onRetry={portfolio.portfolio_type === 'CURRENT'
-          ? () => go(`analytics/${portfolio.id}`)
-          : () => setContextReloadKey(value => value + 1)}
-        retryTitle={portfolio.portfolio_type === 'CURRENT' ? 'Analyze Portfolio Again' : 'Retry allocation'}
+        stale={marketDataUnavailable || Boolean(valuation) || portfolio.portfolio_type === 'PLANNED'}
+        staleMessage={marketDataUnavailable
+          ? PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE
+          : undefined}
+        onRetry={() => setContextReloadKey(value => value + 1)}
+        retryTitle={portfolio.portfolio_type === 'CURRENT' ? 'Retry Current Value' : 'Retry allocation'}
         compactAction={portfolio.portfolio_type === 'CURRENT'}
       />}
       {Boolean(reportError) && <InlineErrorCard error={reportError} fallbackMessage="Unable to load the latest report." resourceName="Latest report" stale onRetry={() => setReportReloadKey(value => value + 1)} retryTitle="Retry report" />}

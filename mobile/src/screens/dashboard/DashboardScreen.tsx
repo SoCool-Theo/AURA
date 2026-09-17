@@ -14,6 +14,8 @@ import { useDashboard } from '../../dashboard/useDashboard';
 import { dashboardPercent, filterDashboardReturns, type DashboardRange } from '../../dashboard/dashboardPresentation';
 import { usePreferences } from '../../preferences/usePreferences';
 import {
+  isPortfolioMarketDataUnavailable,
+  PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE,
   portfolioErrorMessage,
   portfolioValuationErrorMessage
 } from '../../portfolio/portfolioErrors';
@@ -55,6 +57,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
   const selected = portfolios.find((item) => item.id === selectedId);
   const firstName = (displayName || 'Investor').split(' ')[0];
   const holdingMode = portfolio ? portfolioHoldingMode(portfolio.holdings) : 'empty';
+  const marketDataUnavailable = isPortfolioMarketDataUnavailable(dashboard.valuationError);
   const analyze = () => navigation.navigate('MoreTab', { screen: 'Analytics', params: { portfolioId: selectedId } });
   const openReport = () => {
     if (report) navigation.navigate('MoreTab', {
@@ -164,12 +167,12 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                 message={holdingMode === 'planned'
                   ? portfolioErrorMessage(dashboard.valuationError, 'Unable to load the planned target allocation.')
                   : portfolioValuationErrorMessage(dashboard.valuationError)}
-                stale={holdingMode === 'real' || Boolean(valuation)}
-                staleMessage={holdingMode === 'real'
-                  ? 'Current value could not be refreshed. Any existing analysis may be out of date; analyze the portfolio again to create a fresh report.'
+                stale={marketDataUnavailable || Boolean(valuation)}
+                staleMessage={marketDataUnavailable
+                  ? PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE
                   : undefined}
-                onRetry={holdingMode === 'real' ? analyze : dashboard.retryDetails}
-                retryTitle={holdingMode === 'real' ? 'Analyze Portfolio Again' : 'Retry allocation'}
+                onRetry={dashboard.retryDetails}
+                retryTitle={holdingMode === 'real' ? 'Retry Current Value' : 'Retry allocation'}
                 compactAction={holdingMode === 'real'}
               />
             ) : null}
