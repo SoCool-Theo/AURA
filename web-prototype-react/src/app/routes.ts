@@ -15,3 +15,7 @@ export function routeFromHash(): AppRoute {
 export function go(path: string): void {
   window.location.hash = `#/${path}`;
 }
+
+export function replace(path: string): void {
+  window.history.replaceState(null, '', `#/${path}`);
+}

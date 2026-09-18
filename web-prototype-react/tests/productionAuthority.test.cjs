@@ -462,11 +462,16 @@ test('web asset-risk detail is report-backed, navigable, and never recalculates 
   const results = read('src/pages/analytics/components/AnalysisResults.tsx');
   const card = read('src/pages/analytics/components/AssetAnalysisCard.tsx');
   const detail = read('src/pages/reports/AssetRiskDetailPage.tsx');
+  const reportDetail = read('src/pages/reports/ReportDetailPage.tsx');
   const app = read('src/app/App.tsx');
 
-  assert.match(results, /go\(`asset\/\$\{report\.portfolio_id\}\/\$\{report\.id\}\/\$\{encodeURIComponent\(asset\.symbol\)\}`\)/);
+  assert.match(results, /replace\(`reports\/\$\{report\.portfolio_id\}\/\$\{report\.id\}\/assets`\)/);
+  assert.match(results, /go\(`asset\/\$\{report\.portfolio_id\}\/\$\{report\.id\}\/\$\{encodeURIComponent\(symbol\)\}`\)/);
   assert.match(card, /onClick=\{onOpen\}/);
   assert.match(app, /case 'asset':/);
+  assert.match(app, /focusAssetSection=\{route\.contextId === 'assets'\}/);
+  assert.match(detail, /go\(`reports\/\$\{portfolioId\}\/\$\{reportId\}\/assets`\)/);
+  assert.match(reportDetail, /getElementById\('per-asset-analysis'\)\?\.scrollIntoView/);
   assert.match(detail, /getPortfolioReport\(portfolioId, reportId/);
   assert.match(detail, /asset\.risk_classification/);
   assert.match(detail, /report\.analysis\.asset_returns/);

@@ -18,9 +18,10 @@ import styles from './ReportDetailPage.module.css';
 interface ReportDetailPageProps {
   portfolioId: string;
   reportId: string;
+  focusAssetSection?: boolean;
 }
 
-export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProps) {
+export function ReportDetailPage({ portfolioId, reportId, focusAssetSection = false }: ReportDetailPageProps) {
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -47,6 +48,14 @@ export function ReportDetailPage({ portfolioId, reportId }: ReportDetailPageProp
 
     return () => controller.abort();
   }, [portfolioId, reportId, reloadKey]);
+
+  useEffect(() => {
+    if (!report || !focusAssetSection) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('per-asset-analysis')?.scrollIntoView({ block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusAssetSection, report]);
 
   async function remove() {
     if (deletingRef.current || !report) return;
