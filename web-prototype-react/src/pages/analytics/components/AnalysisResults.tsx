@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Icon } from '../../../components/ui/Icon';
+import { go } from '../../../app/routes';
 import {
   isPortfolioReportV2,
   isPortfolioReportV3,
@@ -126,7 +127,13 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
           <span className={styles.badge}>{analysis.asset_metrics.length} assets</span>
         </div>
         <div className={styles.assetGrid}>
-          {analysis.asset_metrics.map(asset => <AssetAnalysisCard key={asset.symbol} asset={asset} />)}
+          {analysis.asset_metrics.map(asset => (
+            <AssetAnalysisCard
+              key={asset.symbol}
+              asset={asset}
+              onOpen={() => go(`asset/${report.portfolio_id}/${report.id}/${encodeURIComponent(asset.symbol)}`)}
+            />
+          ))}
         </div>
       </Card>
 

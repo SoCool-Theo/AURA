@@ -925,3 +925,23 @@ test('mobile current-value failures explain the data refresh and retry valuation
   assert.match(reportErrors, /Analysis will be available after the market data refresh completes/);
   assert.match(errorState, /compactAction: \{ flexGrow: 0, flexBasis: 'auto', alignSelf: 'flex-start' \}/);
 });
+
+test('mobile asset-risk detail is report-backed, navigable, and never recalculates risk', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const results = read('src/components/analytics/AnalysisResults.tsx');
+  const reportDetail = read('src/screens/reports/ReportDetailScreen.tsx');
+  const analysis = read('src/screens/analytics/PortfolioAnalysisScreen.tsx');
+  const detail = read('src/screens/reports/AssetRiskDetailScreen.tsx');
+  const navigator = read('src/navigation/MainTabNavigator.tsx');
+
+  assert.match(results, /onOpenAsset/);
+  assert.match(results, /onPress=\{\(\) => onOpenAsset\?\.\(asset\.symbol\)\}/);
+  assert.match(reportDetail, /navigation\.navigate\('AssetRiskDetail'/);
+  assert.match(analysis, /navigation\.navigate\('AssetRiskDetail'/);
+  assert.match(navigator, /name="AssetRiskDetail"/);
+  assert.match(detail, /getReport\(portfolioId, reportId/);
+  assert.match(detail, /asset\.risk_classification/);
+  assert.match(detail, /report\.analysis\.asset_returns/);
+  assert.match(detail, /filterReturnPoints\(series\?\.points \?\? \[\], range\)/);
+  assert.doesNotMatch(detail, /Math\.(sqrt|pow)|annualized_volatility\s*[*/+-]|max_drawdown\s*[*/+-]/);
+});

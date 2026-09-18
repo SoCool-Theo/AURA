@@ -445,6 +445,35 @@ test('web portfolio actions use accessible Aura dialogs and one purchase-date ic
   assert.match(styles, /\.dateField svg[\s\S]*?color: var\(--purple-light\)/);
 });
 
+test('web portfolio detail exposes the newest saved report only after analysis exists', () => {
+  const detail = fs.readFileSync(
+    path.join(root, 'src/pages/portfolios/PortfolioDetailView.tsx'),
+    'utf8',
+  );
+
+  assert.match(detail, /listPortfolioReports\(portfolioId/);
+  assert.match(detail, /setLatestReport\(response\.reports\[0\] \?\? null\)/);
+  assert.match(detail, /\{latestReport && <button[\s\S]*?>View Latest Report<\/button>\}/);
+  assert.match(detail, /go\(`reports\/\$\{portfolio\.id\}\/\$\{latestReport\.id\}`\)/);
+});
+
+test('web asset-risk detail is report-backed, navigable, and never recalculates risk', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const results = read('src/pages/analytics/components/AnalysisResults.tsx');
+  const card = read('src/pages/analytics/components/AssetAnalysisCard.tsx');
+  const detail = read('src/pages/reports/AssetRiskDetailPage.tsx');
+  const app = read('src/app/App.tsx');
+
+  assert.match(results, /go\(`asset\/\$\{report\.portfolio_id\}\/\$\{report\.id\}\/\$\{encodeURIComponent\(asset\.symbol\)\}`\)/);
+  assert.match(card, /onClick=\{onOpen\}/);
+  assert.match(app, /case 'asset':/);
+  assert.match(detail, /getPortfolioReport\(portfolioId, reportId/);
+  assert.match(detail, /asset\.risk_classification/);
+  assert.match(detail, /report\.analysis\.asset_returns/);
+  assert.match(detail, /visibleReturnPoints\(series\?\.points \?\? \[\], range\)/);
+  assert.doesNotMatch(detail, /Math\.(sqrt|pow)|annualized_volatility\s*[*/+-]|max_drawdown\s*[*/+-]/);
+});
+
 test('production web source has no direct market, database, or LLM provider authority', () => {
   const sourceRoot = path.join(root, 'src');
   const files = [];

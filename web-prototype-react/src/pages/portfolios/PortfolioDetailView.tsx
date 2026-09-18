@@ -7,6 +7,7 @@ import {
   getPortfolioValuation,
   updatePortfolio,
 } from '../../api/portfoliosApi';
+import { listPortfolioReports } from '../../api/reportsApi';
 import { go } from '../../app/routes';
 import { AllocationLegend } from '../../components/portfolio/AllocationLegend';
 import { HoldingsTable } from '../../components/portfolio/HoldingsTable';
@@ -20,6 +21,7 @@ import type {
   PortfolioResponse,
   PortfolioValuationResponse,
 } from '../../types/portfolio';
+import type { PortfolioReportSummary } from '../../types/report';
 import { PortfolioHoldingsEditor } from './components/PortfolioHoldingsEditor';
 import {
   PortfolioActionDialog,
@@ -49,6 +51,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   const [valuationCurrency, setValuationCurrency] = useState<PortfolioCurrency>('USD');
   const [valuation, setValuation] = useState<PortfolioValuationResponse | null>(null);
   const [plannedPreview, setPlannedPreview] = useState<PortfolioPlannedPreviewResponse | null>(null);
+  const [latestReport, setLatestReport] = useState<PortfolioReportSummary | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [contextReloadKey, setContextReloadKey] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -76,6 +79,19 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [portfolioId, reloadKey]);
+
+  useEffect(() => {
+    setLatestReport(null);
+    if (!portfolioId) return;
+
+    const controller = new AbortController();
+    void listPortfolioReports(portfolioId, { signal: controller.signal })
+      .then(response => setLatestReport(response.reports[0] ?? null))
+      .catch(() => {
+        if (!controller.signal.aborted) setLatestReport(null);
       });
     return () => controller.abort();
   }, [portfolioId, reloadKey]);
@@ -193,6 +209,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
         </div>
         <div className="detail-header-actions">
           <button className="primary-btn" onClick={() => go(`analytics/${portfolio.id}`)} disabled={busy}>Analyze Portfolio</button>
+          {latestReport && <button className="secondary-btn" onClick={() => go(`reports/${portfolio.id}/${latestReport.id}`)} disabled={busy}>View Latest Report</button>}
           <button className="secondary-btn" onClick={() => setTab('Holdings')} disabled={busy}>Edit Holdings</button>
           <div className="relative">
             <button className="secondary-btn detail-more-btn" onClick={() => setMenu(!menu)} aria-expanded={menu} disabled={busy}>More <Icon name="chevron-down" size={16} /></button>

@@ -1,5 +1,3 @@
-import type { PortfolioReturnPoint } from '../../types/analytics';
-
 export type ReturnViewRange = '1M' | '3M' | '6M' | '1Y' | 'ALL';
 
 export const RETURN_VIEW_RANGES: ReturnViewRange[] = ['1M', '3M', '6M', '1Y', 'ALL'];
@@ -24,10 +22,10 @@ function calendarCutoff(anchor: string, months: number): string | null {
   return `${String(targetYear).padStart(4, '0')}-${String(targetMonthIndexInYear + 1).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
 }
 
-export function visibleReturnPoints(
-  points: PortfolioReturnPoint[],
+export function visibleReturnPoints<T extends { date: string }>(
+  points: T[],
   viewRange: ReturnViewRange,
-): PortfolioReturnPoint[] {
+): T[] {
   if (viewRange === 'ALL' || !points.length) return points;
   const anchor = points[points.length - 1].date;
   const cutoff = calendarCutoff(anchor, RANGE_MONTHS[viewRange]);

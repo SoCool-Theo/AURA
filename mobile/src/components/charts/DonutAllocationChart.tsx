@@ -48,7 +48,7 @@ export function DonutAllocationChart({ data }: { data: Array<{ symbol: string; w
           <View key={item.symbol} style={styles.row}>
             <View style={[styles.swatch, { backgroundColor: chartColors[index % chartColors.length] }]} />
             <Text style={styles.symbol}>{item.symbol}</Text>
-            <Text style={styles.weight}>{item.weight.toFixed(1)}%</Text>
+            <Text style={styles.weight}>{item.weight.toFixed(2)}%</Text>
           </View>
         ))}
       </View>

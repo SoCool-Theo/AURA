@@ -5,8 +5,11 @@ import numpy as np
 import pytest
 
 from backend.app.analytics.risk_classifier import (
+    AssetRiskClassificationResult,
     RiskClassificationResult,
+    analyze_asset_risk_classification,
     analyze_risk_classification,
+    calculate_asset_risk_score,
     calculate_overall_risk_score,
     classify_risk_score,
     score_concentration,
@@ -14,6 +17,52 @@ from backend.app.analytics.risk_classifier import (
     score_max_drawdown,
     score_volatility,
 )
+
+
+@pytest.mark.parametrize(
+    ("annualized_volatility", "max_drawdown", "expected"),
+    [
+        (0.05, -0.05, 0.0),
+        (0.15, -0.15, 100.0 / 3.0),
+        (0.25, -0.25, 200.0 / 3.0),
+        (0.35, -0.40, 100.0),
+    ],
+)
+def test_asset_risk_score_normalizes_applicable_components(
+    annualized_volatility: float,
+    max_drawdown: float,
+    expected: float,
+) -> None:
+    result = calculate_asset_risk_score(
+        annualized_volatility,
+        max_drawdown,
+    )
+
+    assert result == pytest.approx(expected)
+
+
+def test_asset_risk_classification_uses_asset_only_metrics() -> None:
+    result = analyze_asset_risk_classification(0.25, -0.40)
+
+    assert isinstance(result, AssetRiskClassificationResult)
+    assert result.risk_score == pytest.approx(250.0 / 3.0)
+    assert result.risk_level == "Very High"
+    assert result.volatility_points == 2
+    assert result.drawdown_points == 3
+    assert result.metrics_used == ("volatility", "maximum_drawdown")
+    assert result.reasons == (
+        "Elevated historical volatility",
+        "Severe historical drawdown",
+    )
+
+
+def test_asset_risk_classification_has_low_risk_fallback_reason() -> None:
+    result = analyze_asset_risk_classification(0.05, -0.05)
+
+    assert result.risk_level == "Low"
+    assert result.reasons == (
+        "No major risk flags under Aura's current asset thresholds",
+    )
 
 
 @pytest.mark.parametrize(

@@ -2,7 +2,10 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Line, Polyline } from 'react-native-svg';
 
-import type { PortfolioReturnPoint } from '../../types/analytics';
+import type {
+  AssetReturnPoint,
+  PortfolioReturnPoint
+} from '../../types/analytics';
 import { colors, spacing } from '../../theme/theme';
 import { formatRatioPercent } from '../../report/reportFormatting';
 
@@ -11,13 +14,15 @@ const HEIGHT = 130;
 const PADDING = 12;
 
 export function PortfolioReturnsChart({
-  points
+  points,
+  emptyMessage = 'No return observations are available.'
 }: {
-  points: PortfolioReturnPoint[];
+  points: Array<PortfolioReturnPoint | AssetReturnPoint>;
+  emptyMessage?: string;
 }) {
   const chart = useMemo(() => {
     if (!points.length) return null;
-    const values = points.map((point) => point.portfolio_return);
+    const values = points.map(returnValue);
     const minimum = Math.min(...values, 0);
     const maximum = Math.max(...values, 0);
     const range = maximum - minimum || 1;
@@ -27,7 +32,7 @@ export function PortfolioReturnsChart({
       const x = PADDING + (
         points.length === 1 ? usableWidth / 2 : (index / (points.length - 1)) * usableWidth
       );
-      const y = PADDING + ((maximum - point.portfolio_return) / range) * usableHeight;
+      const y = PADDING + ((maximum - returnValue(point)) / range) * usableHeight;
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     }).join(' ');
     const zeroY = PADDING + ((maximum - 0) / range) * usableHeight;
@@ -35,7 +40,7 @@ export function PortfolioReturnsChart({
   }, [points]);
 
   if (!chart) {
-    return <Text style={styles.empty}>No return observations are available.</Text>;
+    return <Text style={styles.empty}>{emptyMessage}</Text>;
   }
 
   return (
@@ -68,6 +73,12 @@ export function PortfolioReturnsChart({
       </View>
     </View>
   );
+}
+
+function returnValue(point: PortfolioReturnPoint | AssetReturnPoint): number {
+  return 'portfolio_return' in point
+    ? point.portfolio_return
+    : point.asset_return;
 }
 
 const styles = StyleSheet.create({

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import {
   formatCurrentAllocation,
@@ -39,9 +40,11 @@ import { Tag } from '../ui/Tag';
 import { WebKpiCard } from '../ui/WebKpiCard';
 
 export function AnalysisResults({
-  report
+  report,
+  onOpenAsset
 }: {
   report: PortfolioReportResponse;
+  onOpenAsset?: (symbol: string) => void;
 }) {
   const analysis = report.analysis;
   const reportV2 = isPortfolioReportV2(report) ? report : null;
@@ -255,11 +258,28 @@ export function AnalysisResults({
       <SectionHeader title={reportV2 ? 'Per-Asset Valuation and Risk' : reportV3 ? 'Planned Asset Risk' : 'Individual Asset Metrics'} />
       <View style={styles.list}>
         {reportV2 ? reportV2.holdings.map((holding) => (
-          <Card key={holding.id} style={styles.sectionCard}>
+          <Pressable
+            key={holding.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${holding.symbol} risk details`}
+            disabled={!onOpenAsset}
+            onPress={() => onOpenAsset?.(holding.symbol)}
+            style={({ pressed }) => pressed && styles.assetCardPressed}
+          >
+          <Card style={styles.sectionCard}>
             <View style={styles.rowBetween}>
               <Text style={styles.assetSymbol}>{holding.symbol}</Text>
-              <Tag label={formatCurrentAllocation(holding.current_allocation)} tone="primary" />
+              <View style={styles.assetActionRow}>
+                <Tag label={formatCurrentAllocation(holding.current_allocation)} tone="primary" />
+                {onOpenAsset ? <Ionicons name="chevron-forward" size={19} color={colors.primary} /> : null}
+              </View>
             </View>
+            {holding.asset_metrics.risk_classification ? (
+              <View style={styles.assetRiskRow}>
+                <RiskBadge level={holding.asset_metrics.risk_classification.risk_level} />
+                <Text style={styles.cardText}>{holding.asset_metrics.risk_classification.risk_score.toFixed(1)}/100</Text>
+              </View>
+            ) : null}
             <Text style={styles.cardText}>
               {formatPortfolioQuantity(holding.shares)} shares · invested {holding.invested_currency} {formatPortfolioQuantity(holding.invested_amount)} · purchased {holding.purchase_date}
             </Text>
@@ -274,12 +294,30 @@ export function AnalysisResults({
               <Metric label="Risk contribution" value={formatRatioPercent(holding.risk_driver.percentage_volatility_contribution)} />
             </View>
           </Card>
+          </Pressable>
         )) : analysis.asset_metrics.map((asset) => (
-          <Card key={asset.symbol} style={styles.sectionCard}>
+          <Pressable
+            key={asset.symbol}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${asset.symbol} risk details`}
+            disabled={!onOpenAsset}
+            onPress={() => onOpenAsset?.(asset.symbol)}
+            style={({ pressed }) => pressed && styles.assetCardPressed}
+          >
+          <Card style={styles.sectionCard}>
             <View style={styles.rowBetween}>
               <Text style={styles.assetSymbol}>{asset.symbol}</Text>
-              <Tag label={formatRatioPercent(asset.weight)} tone="primary" />
+              <View style={styles.assetActionRow}>
+                <Tag label={formatRatioPercent(asset.weight)} tone="primary" />
+                {onOpenAsset ? <Ionicons name="chevron-forward" size={19} color={colors.primary} /> : null}
+              </View>
             </View>
+            {asset.risk_classification ? (
+              <View style={styles.assetRiskRow}>
+                <RiskBadge level={asset.risk_classification.risk_level} />
+                <Text style={styles.cardText}>{asset.risk_classification.risk_score.toFixed(1)}/100</Text>
+              </View>
+            ) : null}
             <View style={styles.dataGrid}>
               <Metric label="Cumulative return" value={formatRatioPercent(asset.cumulative_return)} />
               <Metric label="Annualized return" value={formatRatioPercent(asset.annualized_return)} />
@@ -288,6 +326,7 @@ export function AnalysisResults({
               <Metric label="Sharpe ratio" value={formatAnalysisNumber(asset.sharpe_ratio)} />
             </View>
           </Card>
+          </Pressable>
         ))}
       </View>
 
@@ -405,6 +444,9 @@ const styles = StyleSheet.create({
   driverCard: { gap: spacing.md },
   driverTitle: { color: colors.text, fontSize: 16, fontWeight: '900' },
   assetSymbol: { color: colors.primary, fontSize: 18, fontWeight: '900' },
+  assetActionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  assetRiskRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  assetCardPressed: { opacity: 0.78, transform: [{ scale: 0.995 }] },
   scoreValue: { color: colors.primary, fontSize: 22, fontWeight: '900' },
   dataGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   metricItem: { flexGrow: 1, flexBasis: 132, gap: 3 },

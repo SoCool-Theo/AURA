@@ -8,6 +8,9 @@ from pydantic import ValidationError
 from backend.app.schemas.analytics import (
     AnalysisMetadata,
     AssetMetrics,
+    AssetReturnPoint,
+    AssetReturnSeries,
+    AssetRiskClassification,
     ConcentrationMetrics,
     CorrelationMatrix,
     CorrelationPair,
@@ -96,6 +99,14 @@ def _asset_metrics_data() -> dict[str, object]:
         "annualized_volatility": 0.20,
         "max_drawdown": -0.15,
         "sharpe_ratio": 0.90,
+        "risk_classification": {
+            "risk_score": 50.0,
+            "risk_level": "High",
+            "volatility_points": 2,
+            "drawdown_points": 1,
+            "metrics_used": ["volatility", "maximum_drawdown"],
+            "reasons": ["Elevated historical volatility"],
+        },
     }
 
 
@@ -528,6 +539,29 @@ def test_asset_metrics_accepts_complete_current_metric_set() -> None:
     assert result.model_dump() == _asset_metrics_data()
 
 
+def test_asset_metrics_accepts_legacy_record_without_asset_risk() -> None:
+    data = _asset_metrics_data()
+    data.pop("risk_classification")
+
+    result = AssetMetrics.model_validate(data)
+
+    assert result.risk_classification is None
+
+
+def test_asset_risk_classification_requires_asset_only_metric_order() -> None:
+    data = _asset_metrics_data()["risk_classification"]
+    assert isinstance(data, dict)
+
+    result = AssetRiskClassification.model_validate(data)
+
+    assert result.risk_level == "High"
+    assert result.metrics_used == ["volatility", "maximum_drawdown"]
+
+    data["metrics_used"] = ["maximum_drawdown", "volatility"]
+    with pytest.raises(ValidationError, match="asset risk metrics_used"):
+        AssetRiskClassification.model_validate(data)
+
+
 def test_asset_metrics_normalizes_symbol_and_accepts_zero_weight() -> None:
     data = _asset_metrics_data()
     data["symbol"] = " aapl "
@@ -797,6 +831,17 @@ def _second_asset_metrics_data() -> dict[str, object]:
             "annualized_volatility": 0.16,
             "max_drawdown": -0.10,
             "sharpe_ratio": 0.75,
+            "risk_classification": {
+                "risk_score": 100.0 / 3.0,
+                "risk_level": "Moderate",
+                "volatility_points": 1,
+                "drawdown_points": 1,
+                "metrics_used": ["volatility", "maximum_drawdown"],
+                "reasons": [
+                    "No major risk flags under Aura's current asset "
+                    "thresholds"
+                ],
+            },
         }
     )
     return data
@@ -858,6 +903,22 @@ def _portfolio_response_data() -> dict[str, object]:
             {"date": "2026-01-10", "portfolio_return": 0.04},
             {"date": "2026-01-20", "portfolio_return": 0.06},
         ],
+        "asset_returns": [
+            {
+                "symbol": "AAPL",
+                "points": [
+                    {"date": "2026-01-10", "asset_return": 0.03},
+                    {"date": "2026-01-20", "asset_return": 0.05},
+                ],
+            },
+            {
+                "symbol": "MSFT",
+                "points": [
+                    {"date": "2026-01-10", "asset_return": 0.02},
+                    {"date": "2026-01-20", "asset_return": 0.04},
+                ],
+            },
+        ],
     }
 
 
@@ -885,6 +946,7 @@ def _single_asset_response_data() -> dict[str, object]:
         "values": [[1.0]],
     }
     data["correlation_pairs"] = []
+    data["asset_returns"] = [data["asset_returns"][0]]
     return data
 
 
@@ -918,6 +980,16 @@ def _three_asset_response_data() -> dict[str, object]:
         "asset_count": 3,
     }
     data["asset_metrics"] = asset_metrics
+    data["asset_returns"] = [
+        {
+            "symbol": symbol,
+            "points": [
+                {"date": "2026-01-10", "asset_return": 0.03},
+                {"date": "2026-01-20", "asset_return": 0.05},
+            ],
+        }
+        for symbol in symbols
+    ]
     data["risk_drivers"] = {
         "portfolio_volatility": 0.16,
         "top_driver": "AAPL",
@@ -1051,6 +1123,44 @@ def test_portfolio_return_point_rejects_invalid_value(
         )
 
 
+def test_asset_return_series_preserves_ordered_json_safe_points() -> None:
+    result = AssetReturnSeries.model_validate(
+        {
+            "symbol": " aapl ",
+            "points": [
+                {"date": "2026-01-10", "asset_return": -0.02},
+                {"date": "2026-01-20", "asset_return": 0.04},
+            ],
+        }
+    )
+
+    assert result.symbol == "AAPL"
+    assert all(isinstance(point, AssetReturnPoint) for point in result.points)
+    assert result.model_dump(mode="json") == {
+        "symbol": "AAPL",
+        "points": [
+            {"date": "2026-01-10", "asset_return": -0.02},
+            {"date": "2026-01-20", "asset_return": 0.04},
+        ],
+    }
+
+
+def test_asset_return_series_rejects_non_increasing_dates() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="asset return dates must be strictly increasing",
+    ):
+        AssetReturnSeries.model_validate(
+            {
+                "symbol": "AAPL",
+                "points": [
+                    {"date": "2026-01-20", "asset_return": 0.04},
+                    {"date": "2026-01-10", "asset_return": -0.02},
+                ],
+            }
+        )
+
+
 def test_risk_driver_analysis_preserves_public_result_fields() -> None:
     data = _portfolio_response_data()["risk_drivers"]
 
@@ -1175,6 +1285,11 @@ def test_response_accepts_equal_period_dates_when_dated_values_match() -> None:
     data["portfolio_returns"] = [
         {"date": "2026-01-10", "portfolio_return": 0.04}
     ]
+    asset_returns = data["asset_returns"]
+    assert isinstance(asset_returns, list)
+    asset_returns[0]["points"] = [
+        {"date": "2026-01-10", "asset_return": 0.03}
+    ]
 
     result = PortfolioAnalysisResponse.model_validate(data)
 
@@ -1277,6 +1392,11 @@ def test_response_accepts_non_consecutive_portfolio_return_dates() -> None:
         {"date": "2026-01-02", "portfolio_return": 0.04},
         {"date": "2026-01-30", "portfolio_return": 0.06},
     ]
+    asset_returns = data["asset_returns"]
+    assert isinstance(asset_returns, list)
+    for series in asset_returns:
+        series["points"][0]["date"] = "2026-01-02"
+        series["points"][1]["date"] = "2026-01-30"
 
     result = PortfolioAnalysisResponse.model_validate(data)
 
@@ -1442,6 +1562,9 @@ def test_response_preserves_asset_metric_order() -> None:
     metrics = data["asset_metrics"]
     assert isinstance(metrics, list)
     metrics.reverse()
+    asset_returns = data["asset_returns"]
+    assert isinstance(asset_returns, list)
+    asset_returns.reverse()
 
     result = PortfolioAnalysisResponse.model_validate(data)
 
@@ -1449,6 +1572,62 @@ def test_response_preserves_asset_metric_order() -> None:
         "MSFT",
         "AAPL",
     ]
+
+
+def test_response_rejects_partial_asset_risk_classification() -> None:
+    data = _portfolio_response_data()
+    metrics = data["asset_metrics"]
+    assert isinstance(metrics, list)
+    metrics[1].pop("risk_classification")
+
+    with pytest.raises(
+        ValidationError,
+        match="asset risk classifications must be present for all assets",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_accepts_legacy_analysis_without_asset_extensions() -> None:
+    data = _portfolio_response_data()
+    data.pop("asset_returns")
+    metrics = data["asset_metrics"]
+    assert isinstance(metrics, list)
+    for metric in metrics:
+        metric.pop("risk_classification")
+
+    result = PortfolioAnalysisResponse.model_validate(data)
+
+    assert result.asset_returns == []
+    assert all(
+        metric.risk_classification is None
+        for metric in result.asset_metrics
+    )
+
+
+def test_response_rejects_asset_return_symbol_order_mismatch() -> None:
+    data = _portfolio_response_data()
+    asset_returns = data["asset_returns"]
+    assert isinstance(asset_returns, list)
+    asset_returns.reverse()
+
+    with pytest.raises(
+        ValidationError,
+        match="asset-return series symbols and order must match",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
+
+
+def test_response_rejects_asset_return_date_mismatch() -> None:
+    data = _portfolio_response_data()
+    asset_returns = data["asset_returns"]
+    assert isinstance(asset_returns, list)
+    asset_returns[0]["points"][0]["date"] = "2026-01-11"
+
+    with pytest.raises(
+        ValidationError,
+        match="asset-return dates must match portfolio-return dates",
+    ):
+        PortfolioAnalysisResponse.model_validate(data)
 
 
 def test_response_does_not_mutate_complete_caller_input() -> None:

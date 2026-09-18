@@ -38,11 +38,36 @@
 .emptyPanel p { margin: 0 0 13px; color: var(--text-muted); font-size: 13px; }
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 24px 20px; }
 .actions button { min-width: 0; }
-.driverValue { display: flex; align-items: flex-end; flex-direction: column; gap: 3px; }
-.driverValue small { color: var(--text-muted); }
+.driverValue { display: flex; align-items: flex-end; flex-direction: column; gap: 4px; text-align: right; }
+.driverValue small { margin: 0; color: var(--text-muted); font-size: 10px; }
+.driverValue strong { color: var(--text-primary); font-size: 17px; font-variant-numeric: tabular-nums; }
 .driverValue strong.negative { color: var(--red-bright); }
-:global(.dashboard-risk-list) > div { grid-template-columns: 42px minmax(0, 1fr) auto; }
+.driverIdentity { min-width: 0; }
+.driverIdentity > div { display: flex; align-items: center; gap: 7px; }
+.driverIdentity > div span { color: var(--purple-light); font-size: 11px; font-weight: 800; }
+.driverIdentity > div strong { overflow: hidden; color: var(--text-primary); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.driverIdentity > small { display: block; margin-top: 5px; color: var(--text-muted); font-size: 11px; }
+.driverTrack { height: 5px; grid-column: 2 / 4; border-radius: 999px; background: var(--border-divider); overflow: hidden; }
+.driverTrack span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--purple-deep), var(--purple-light)); }
+:global(.dashboard-risk-card) { display: flex; flex-direction: column; }
+:global(.dashboard-risk-list) { flex: 1; padding: 8px 22px 22px; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+:global(.dashboard-risk-list) > div.driverRow { padding: 14px; border: 1px solid var(--border-divider); border-radius: 12px; background: rgba(7, 22, 43, .58); display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 11px 13px; align-items: center; }
+:global(.dashboard-risk-list) > div.driverRow:last-child { border-bottom: 1px solid var(--border-divider); }
 .analysisMeta { flex: 1; margin: 2px 24px 14px; color: var(--text-secondary); font-size: 13px; line-height: 1.65; }
 .analysisMeta strong { color: var(--text-primary); }
 @media (max-width: 900px) { .rangeTabs { grid-column: 1/-1; order: 3; width: 100%; justify-content: space-between; } .rangeTabs button { flex: 1; } }
-@media (max-width: 640px) { .reportNotice, .portfolioContextBar { align-items: flex-start; flex-direction: column; } .portfolioContextBar :global(.dashboard-portfolio-picker) { width: 100%; } .reportNotice button { width: 100%; } .currencyControl { width: 100%; } .currencyControl button { flex: 1; } .actions { grid-template-columns: 1fr; } .chartFrame { padding-left: 9px; padding-right: 12px; grid-template-columns: 18px 45px minmax(0, 1fr); } .yTicks span { right: 5px; font-size: 9px; } .chartLabels { font-size: 9px; } .rangeSummary { padding-left: 72px; padding-right: 12px; } }
+@media (max-width: 640px) {
+  .reportNotice, .portfolioContextBar { align-items: flex-start; flex-direction: column; }
+  .portfolioContextBar :global(.dashboard-portfolio-picker) { width: 100%; }
+  .reportNotice button { width: 100%; }
+  .currencyControl { width: 100%; }
+  .currencyControl button { flex: 1; }
+  .actions { grid-template-columns: 1fr; }
+  .chartFrame { padding-left: 9px; padding-right: 12px; grid-template-columns: 18px 45px minmax(0, 1fr); }
+  .yTicks span { right: 5px; font-size: 9px; }
+  .chartLabels { font-size: 9px; }
+  .rangeSummary { padding-left: 72px; padding-right: 12px; }
+  :global(.dashboard-risk-list) > div.driverRow { grid-template-columns: 42px minmax(0, 1fr); }
+  .driverValue { grid-column: 2; align-items: flex-start; text-align: left; }
+  .driverTrack { grid-column: 1 / -1; }
+}

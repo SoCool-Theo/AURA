@@ -325,6 +325,56 @@ def test_analysis_response_serializes_to_json_safe_snapshot_and_round_trips(
     assert snapshot == response.model_dump(mode="json")
 
 
+def test_snapshot_freezes_asset_risk_and_historical_series() -> None:
+    data = _valid_analysis_data()
+    asset_metrics = data["asset_metrics"]
+    portfolio_returns = data["portfolio_returns"]
+    assert isinstance(asset_metrics, list)
+    assert isinstance(portfolio_returns, list)
+
+    for metric in asset_metrics:
+        metric["risk_classification"] = {
+            "risk_score": 50.0,
+            "risk_level": "High",
+            "volatility_points": 2,
+            "drawdown_points": 1,
+            "metrics_used": ["volatility", "maximum_drawdown"],
+            "reasons": ["Elevated historical volatility"],
+        }
+    data["asset_returns"] = [
+        {
+            "symbol": metric["symbol"],
+            "points": [
+                {
+                    "date": point["date"],
+                    "asset_return": 0.01,
+                }
+                for point in portfolio_returns
+            ],
+        }
+        for metric in asset_metrics
+    ]
+    response = PortfolioAnalysisResponse.model_validate(data)
+
+    snapshot = analysis_response_to_snapshot(response)
+
+    assert snapshot["asset_metrics"][0]["risk_classification"] == {
+        "risk_score": 50.0,
+        "risk_level": "High",
+        "volatility_points": 2,
+        "drawdown_points": 1,
+        "metrics_used": ["volatility", "maximum_drawdown"],
+        "reasons": ["Elevated historical volatility"],
+    }
+    assert [series["symbol"] for series in snapshot["asset_returns"]] == [
+        metric["symbol"] for metric in asset_metrics
+    ]
+    assert snapshot["asset_returns"][0]["points"] == [
+        {"date": point["date"], "asset_return": 0.01}
+        for point in portfolio_returns
+    ]
+
+
 def test_snapshot_serialization_does_not_mutate_source_response() -> None:
     response = _valid_response()
     original = response.model_dump(mode="python")

@@ -23,6 +23,7 @@ import { MoreScreen } from '../screens/settings/MoreScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
 import { ReportsScreen } from '../screens/reports/ReportsScreen';
 import { ReportDetailScreen } from '../screens/reports/ReportDetailScreen';
+import { AssetRiskDetailScreen } from '../screens/reports/AssetRiskDetailScreen';
 import { WatchlistScreen } from '../screens/watchlist/WatchlistScreen';
 import { LearnScreen } from '../screens/learn/LearnScreen';
 import { LearnDetailScreen } from '../screens/learn/LearnDetailScreen';
@@ -84,6 +85,7 @@ function PortfolioNavigator() {
         })}
       />
       <PortfolioStack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ title: 'Report Detail' }} />
+      <PortfolioStack.Screen name="AssetRiskDetail" component={AssetRiskDetailScreen} options={{ title: 'Asset Risk' }} />
     </PortfolioStack.Navigator>
   );
 }
@@ -158,6 +160,7 @@ function MoreNavigator() {
           )
         })}
       />
+      <MoreStack.Screen name="AssetRiskDetail" component={AssetRiskDetailScreen} options={{ title: 'Asset Risk' }} />
       <MoreStack.Screen name="Watchlist" component={WatchlistScreen} options={{ title: 'Watchlist' }} />
       <MoreStack.Screen name="Learn" component={LearnScreen} options={{ title: 'Learn' }} />
       <MoreStack.Screen name="LearnDetail" component={LearnDetailScreen} options={{ title: 'Lesson' }} />

@@ -1841,3 +1841,48 @@ The checked React source is ready for authenticated API acceptance testing.
 This is not a production-deployment claim: fresh Supabase deployment,
 environment-specific authenticated browser E2E, and plan-to-current conversion
 remain separate follow-on work.
+
+### Completed backend per-asset risk and historical-series contract
+
+- Each analyzed asset now receives a deterministic educational risk score and
+  `Low`/`Moderate`/`High`/`Very High` level derived equally from Aura's existing
+  annualized-volatility and maximum-drawdown point thresholds. Portfolio-only
+  concentration and diversification components are deliberately excluded.
+- `PortfolioAnalysisResponse` now exposes ordered dated return observations for
+  every asset. Symbols and dates are validated against `asset_metrics` and the
+  portfolio return series, so clients can render directly comparable graphs.
+- New V2 current and V3 planned report snapshots automatically freeze the
+  per-asset classifications and return series through the existing immutable
+  analysis payload. Older V1/V2/V3 snapshots without these additive fields
+  remain readable without market-data queries or recomputation.
+- No database migration or dependency change was required.
+
+### Per-asset backend verification
+
+- Focused analytics, schema, mapping, and service suite: 365 passed.
+- Focused reporting, example, and composition suite: 115 passed.
+- Complete backend unit suite: 2,356 passed.
+- Reporting and agent API integration suite: 70 passed with 54 existing short
+  JWT test-key warnings.
+- Python compilation completed successfully for `backend/app` and
+  `backend/tests`.
+- Web and mobile now expose report-backed asset-risk detail pages from every
+  per-asset analysis card. Each page shows the saved backend risk
+  classification, historical asset return graph with 1M/3M/6M/1Y/ALL views,
+  portfolio-impact contribution, saved holding or planned-position context,
+  and the existing educational limitation.
+- Direct web report/asset routes and both mobile navigation stacks preserve the
+  originating immutable report. Older reports remain readable and clearly
+  explain when their snapshots predate asset risk or return-series fields.
+- Neither client recalculates risk, volatility, drawdown, or historical return
+  data; both format the additive backend report contract only.
+
+### Per-asset client verification
+
+- Web production TypeScript/Vite build completed successfully.
+- Mobile TypeScript compilation completed with no errors.
+- Web production-authority suite: 18 passed, including a regression guard for
+  asset navigation and backend-only risk authority.
+- Mobile production-authority suite: 30 passed, including the equivalent
+  report-backed asset-detail guard in both navigation stacks.
+- Git whitespace validation completed with no errors.
