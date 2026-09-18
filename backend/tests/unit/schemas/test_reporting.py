@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from backend.app.schemas.analytics import PortfolioAnalysisResponse
 from backend.app.schemas.reporting import (
+    PortfolioReportAssetMonetaryMetrics,
     PortfolioReportListResponse,
     PortfolioReportResponse,
     PortfolioReportSummary,
@@ -175,6 +176,59 @@ def test_report_monetary_metrics_reject_positive_drawdown_amount() -> None:
 
     with pytest.raises(ValidationError, match="less than or equal to 0"):
         PortfolioReportV2Response.model_validate(data)
+
+
+def test_asset_monetary_metrics_reject_positive_drawdown_amount() -> None:
+    with pytest.raises(ValidationError, match="less than or equal to 0"):
+        PortfolioReportAssetMonetaryMetrics.model_validate(
+            {
+                "symbol": "AAPL",
+                "currency": "USD",
+                "basis": "saved-current-value",
+                "reference_amount": "1000",
+                "cumulative_return_amount": "80",
+                "annualized_return_amount": "240",
+                "maximum_drawdown_amount": "20",
+            }
+        )
+
+
+def test_v2_asset_monetary_metrics_match_saved_holding_context() -> None:
+    data = _valid_v2_report_data()
+    analysis = data["analysis"]
+    assert isinstance(analysis, dict)
+    metrics = analysis["asset_metrics"]
+    assert isinstance(metrics, list)
+    data["asset_monetary_metrics"] = [
+        {
+            "symbol": metric["symbol"],
+            "currency": "USD",
+            "basis": "saved-current-value",
+            "reference_amount": "1000.000000000000",
+            "cumulative_return_amount": "80",
+            "annualized_return_amount": "240",
+            "maximum_drawdown_amount": None,
+        }
+        for metric in metrics
+    ]
+
+    result = PortfolioReportV2Response.model_validate(data)
+
+    assert [
+        metric.symbol for metric in result.asset_monetary_metrics
+    ] == ["AAPL", "MSFT", "BND"]
+
+    invalid = deepcopy(data)
+    asset_money = invalid["asset_monetary_metrics"]
+    assert isinstance(asset_money, list)
+    first = asset_money[0]
+    assert isinstance(first, dict)
+    first["reference_amount"] = "999"
+    with pytest.raises(
+        ValidationError,
+        match="reference must match saved current value",
+    ):
+        PortfolioReportV2Response.model_validate(invalid)
 
 
 def test_v2_response_requires_fx_for_thb_and_rejects_unknown_fields() -> None:

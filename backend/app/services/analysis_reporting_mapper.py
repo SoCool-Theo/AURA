@@ -3,13 +3,18 @@
 from datetime import date
 from decimal import Decimal
 import math
-from typing import Any, Literal
+from typing import Any, Literal, Mapping
 
 from ..database.models import Analysis
-from ..schemas.analytics import PortfolioAnalysisResponse
+from ..schemas.analytics import (
+    AssetMetrics,
+    AssetReturnSeries,
+    PortfolioAnalysisResponse,
+)
 from ..schemas.portfolio import PortfolioValuationFxResponse
 from ..schemas.reporting import (
     PortfolioReportDetailResponse,
+    PortfolioReportAssetMonetaryMetrics,
     PortfolioReportMonetaryMetrics,
     PortfolioReportResponse,
     PortfolioReportSummary,
@@ -65,6 +70,49 @@ def analysis_to_report_monetary_metrics(
     )
 
 
+def analysis_to_asset_report_monetary_metrics(
+    analysis: PortfolioAnalysisResponse,
+    *,
+    currency: Literal["USD", "THB"],
+    basis: Literal["saved-current-value", "planned-proposed-amount"],
+    reference_amounts: Mapping[str, Decimal],
+) -> list[PortfolioReportAssetMonetaryMetrics]:
+    """Derive per-asset currency equivalents from one frozen report."""
+    expected_symbols = {
+        metric.symbol for metric in analysis.asset_metrics
+    }
+    if set(reference_amounts) != expected_symbols:
+        raise ValueError(
+            "asset monetary reference symbols must match analysis assets"
+        )
+
+    returns_by_symbol = {
+        series.symbol: series for series in analysis.asset_returns
+    }
+    return [
+        PortfolioReportAssetMonetaryMetrics(
+            symbol=metric.symbol,
+            currency=currency,
+            basis=basis,
+            reference_amount=reference_amounts[metric.symbol],
+            cumulative_return_amount=(
+                reference_amounts[metric.symbol]
+                * Decimal(str(metric.cumulative_return))
+            ),
+            annualized_return_amount=(
+                reference_amounts[metric.symbol]
+                * Decimal(str(metric.annualized_return))
+            ),
+            maximum_drawdown_amount=_asset_maximum_drawdown_amount(
+                metric,
+                returns_by_symbol.get(metric.symbol),
+                reference_amounts[metric.symbol],
+            ),
+        )
+        for metric in analysis.asset_metrics
+    ]
+
+
 def _maximum_drawdown_amount(
     analysis: PortfolioAnalysisResponse,
     reference_amount: Decimal,
@@ -102,6 +150,47 @@ def _maximum_drawdown_amount(
         return None
 
     amount = reference_amount * (trough_wealth - peak_wealth)
+    return min(amount, Decimal("0"))
+
+
+def _asset_maximum_drawdown_amount(
+    metric: AssetMetrics,
+    returns: AssetReturnSeries | None,
+    reference_amount: Decimal,
+) -> Decimal | None:
+    """Scale the asset's exact frozen peak-to-trough wealth decline."""
+    if metric.max_drawdown == 0.0:
+        return Decimal("0")
+    if returns is None:
+        return None
+
+    wealth = Decimal("1")
+    running_peak = Decimal("1")
+    drawdown_peak = Decimal("1")
+    drawdown_trough = Decimal("1")
+    deepest_drawdown = Decimal("0")
+
+    for point in returns.points:
+        periodic_return = Decimal(str(point.asset_return))
+        if periodic_return <= Decimal("-1"):
+            return None
+        wealth *= Decimal("1") + periodic_return
+        running_peak = max(running_peak, wealth)
+        drawdown = wealth / running_peak - Decimal("1")
+        if drawdown < deepest_drawdown:
+            deepest_drawdown = drawdown
+            drawdown_peak = running_peak
+            drawdown_trough = wealth
+
+    if not math.isclose(
+        float(deepest_drawdown),
+        metric.max_drawdown,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        return None
+
+    amount = reference_amount * (drawdown_trough - drawdown_peak)
     return min(amount, Decimal("0"))
 
 
@@ -236,6 +325,19 @@ def analysis_record_to_report_response(
                     validated_snapshot.valuation.total_current_value
                 ),
             ),
+            asset_monetary_metrics=(
+                analysis_to_asset_report_monetary_metrics(
+                    validated_snapshot.analysis,
+                    currency=(
+                        validated_snapshot.valuation.valuation_currency
+                    ),
+                    basis="saved-current-value",
+                    reference_amounts={
+                        holding.symbol: holding.current_value
+                        for holding in validated_snapshot.holdings
+                    },
+                )
+            ),
             **validated_snapshot.model_dump(),
         )
 
@@ -255,6 +357,17 @@ def analysis_record_to_report_response(
                 reference_amount=(
                     validated_snapshot.baseline.total_proposed_amount
                 ),
+            ),
+            asset_monetary_metrics=(
+                analysis_to_asset_report_monetary_metrics(
+                    validated_snapshot.analysis,
+                    currency=validated_snapshot.baseline.plan_currency,
+                    basis="planned-proposed-amount",
+                    reference_amounts={
+                        holding.symbol: holding.proposed_amount
+                        for holding in validated_snapshot.baseline.holdings
+                    },
+                )
             ),
             **validated_snapshot.model_dump(),
         )

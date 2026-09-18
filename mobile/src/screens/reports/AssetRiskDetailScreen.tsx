@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PortfolioReturnsChart } from '../../components/charts/PortfolioReturnsChart';
+import { MetricAmountSheet } from '../../components/analytics/MetricAmountSheet';
 import { Card } from '../../components/ui/Card';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { PageTitle } from '../../components/ui/PageTitle';
@@ -24,6 +25,11 @@ import {
   formatAnalysisNumber,
   formatRatioPercent
 } from '../../report/reportFormatting';
+import {
+  assetReportMetricAmountContent,
+  assetReportMonetaryMetrics,
+  type ReportMonetaryMetricKey
+} from '../../report/reportMetricDetails';
 import { useReports } from '../../report/useReports';
 import { colors, spacing } from '../../theme/theme';
 import {
@@ -49,6 +55,7 @@ export function AssetRiskDetailScreen({
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [error, setError] = useState<unknown>(null);
   const [range, setRange] = useState<ReturnViewRange>('1Y');
+  const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
 
   const loadReport = useCallback(async () => {
     setStatus('loading');
@@ -116,6 +123,7 @@ export function AssetRiskDetailScreen({
   const plannedHolding = reportV3?.baseline.holdings.find(
     (holding) => holding.symbol === assetSymbol
   );
+  const assetMonetary = assetReportMonetaryMetrics(report, assetSymbol);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -146,10 +154,10 @@ export function AssetRiskDetailScreen({
 
         <View style={styles.metricGrid}>
           <Metric label="Portfolio weight" value={formatRatioPercent(asset.weight)} />
-          <Metric label="Cumulative return" value={formatRatioPercent(asset.cumulative_return)} />
-          <Metric label="Annualized return" value={formatRatioPercent(asset.annualized_return)} />
+          <Metric label="Cumulative return" value={formatRatioPercent(asset.cumulative_return)} onPress={assetMonetary ? () => setSelectedMetric('cumulative') : undefined} />
+          <Metric label="Annualized return" value={formatRatioPercent(asset.annualized_return)} onPress={assetMonetary ? () => setSelectedMetric('annualized') : undefined} />
           <Metric label="Annualized volatility" value={formatRatioPercent(asset.annualized_volatility)} />
-          <Metric label="Maximum drawdown" value={formatRatioPercent(asset.max_drawdown)} />
+          <Metric label="Maximum drawdown" value={formatRatioPercent(asset.max_drawdown)} onPress={assetMonetary?.maximum_drawdown_amount != null ? () => setSelectedMetric('drawdown') : undefined} />
           <Metric label="Sharpe ratio" value={formatAnalysisNumber(asset.sharpe_ratio)} />
         </View>
 
@@ -214,12 +222,28 @@ export function AssetRiskDetailScreen({
 
         <Text style={styles.education}>Historical asset analytics are educational, not forecasts or investment recommendations.</Text>
       </ScrollView>
+      <MetricAmountSheet
+        content={assetReportMetricAmountContent(selectedMetric, report, assetSymbol)}
+        onClose={() => setSelectedMetric(null)}
+      />
     </SafeAreaView>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return <Card style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></Card>;
+function Metric({ label, value, onPress }: { label: string; value: string; onPress?: () => void }) {
+  const content = <><View style={styles.metricHeading}><Text style={styles.metricLabel}>{label}</Text>{onPress ? <Ionicons name="chevron-forward" size={17} color={colors.primary} /> : null}</View><Text style={styles.metricValue}>{value}</Text>{onPress ? <Text style={styles.metricHint}>Tap for amount</Text> : null}</>;
+  if (!onPress) return <Card style={styles.metric}>{content}</Card>;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}`}
+      accessibilityHint="Shows the percentage and saved money equivalent"
+      onPress={onPress}
+      style={({ pressed }) => [styles.metricPressable, pressed && styles.pressed]}
+    >
+      <Card style={styles.metricInteractive}>{content}</Card>
+    </Pressable>
+  );
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
@@ -240,8 +264,12 @@ const styles = StyleSheet.create({
   cardText: { color: colors.textSecondary, fontSize: 11, lineHeight: 17 },
   metricGrid: { marginTop: spacing.md, flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   metric: { flexGrow: 1, flexBasis: 145, minHeight: 86, gap: spacing.sm },
+  metricPressable: { flexGrow: 1, flexBasis: 145 },
+  metricInteractive: { minHeight: 86, gap: spacing.sm, borderColor: colors.primary },
+  metricHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   metricLabel: { color: colors.muted, fontSize: 9, textTransform: 'uppercase' },
   metricValue: { color: colors.text, fontSize: 18, fontWeight: '900' },
+  metricHint: { color: colors.primary, fontSize: 9, fontWeight: '800' },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '900', marginTop: spacing.xl, marginBottom: spacing.sm },
   sectionCard: { gap: spacing.md },
   returnRangeTabs: { flexDirection: 'row', gap: spacing.xs },

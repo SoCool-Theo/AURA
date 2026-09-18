@@ -6,6 +6,7 @@ import { Card } from '../../components/ui/Card';
 import { ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Icon } from '../../components/ui/Icon';
 import { SymbolBadge } from '../../components/ui/SymbolBadge';
+import { MetricAmountDialog } from '../analytics/components/MetricAmountDialog';
 import {
   isPortfolioReportV2,
   isPortfolioReportV3,
@@ -17,6 +18,11 @@ import {
   formatPortfolioQuantity,
 } from '../portfolios/portfolioUi';
 import { formatNumber, formatPercent, formatReportTimestamp } from '../analytics/analyticsUi';
+import {
+  assetReportMetricAmountContent,
+  assetReportMonetaryMetrics,
+  type ReportMonetaryMetricKey,
+} from '../analytics/reportMetricDetails';
 import {
   RETURN_VIEW_RANGES,
   visibleReturnPoints,
@@ -40,6 +46,7 @@ export function AssetRiskDetailPage({
   const [error, setError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [range, setRange] = useState<ReturnViewRange>('1Y');
+  const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
   const symbol = decodeURIComponent(assetSymbol).toUpperCase();
 
   useEffect(() => {
@@ -81,6 +88,7 @@ export function AssetRiskDetailPage({
   const reportV3 = isPortfolioReportV3(report) ? report : null;
   const currentHolding = reportV2?.holdings.find(holding => holding.symbol === symbol);
   const plannedHolding = reportV3?.baseline.holdings.find(holding => holding.symbol === symbol);
+  const assetMonetary = assetReportMonetaryMetrics(report, symbol);
   const scoreTone = !risk
     ? styles.unavailable
     : risk.risk_level === 'Low'
@@ -120,10 +128,10 @@ export function AssetRiskDetailPage({
 
       <section className={styles.metricGrid}>
         <Metric label="Portfolio weight" value={formatPercent(asset.weight)} />
-        <Metric label="Cumulative return" value={formatPercent(asset.cumulative_return)} />
-        <Metric label="Annualized return" value={formatPercent(asset.annualized_return)} />
+        <Metric label="Cumulative return" value={formatPercent(asset.cumulative_return)} onOpen={assetMonetary ? () => setSelectedMetric('cumulative') : undefined} />
+        <Metric label="Annualized return" value={formatPercent(asset.annualized_return)} onOpen={assetMonetary ? () => setSelectedMetric('annualized') : undefined} />
         <Metric label="Annualized volatility" value={formatPercent(asset.annualized_volatility)} />
-        <Metric label="Maximum drawdown" value={formatPercent(asset.max_drawdown)} />
+        <Metric label="Maximum drawdown" value={formatPercent(asset.max_drawdown)} onOpen={assetMonetary?.maximum_drawdown_amount != null ? () => setSelectedMetric('drawdown') : undefined} />
         <Metric label="Sharpe ratio" value={formatNumber(asset.sharpe_ratio)} />
       </section>
 
@@ -170,12 +178,19 @@ export function AssetRiskDetailPage({
       </section>
 
       <p className={styles.education}>Historical asset analytics are educational. They are not forecasts or investment recommendations.</p>
+      <MetricAmountDialog
+        content={assetReportMetricAmountContent(selectedMetric, report, symbol)}
+        onClose={() => setSelectedMetric(null)}
+      />
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return <Card className={styles.metric}><small>{label}</small><strong>{value}</strong></Card>;
+function Metric({ label, value, onOpen }: { label: string; value: string; onOpen?: () => void }) {
+  const content = <><small>{label}</small>{onOpen && <i className={styles.metricChevron}><Icon name="chevron-right" size={17} /></i>}<strong>{value}</strong>{onOpen && <span>Click for amount</span>}</>;
+  return onOpen
+    ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={onOpen} aria-label={`${label}: ${value}. Show money equivalent.`}>{content}</button>
+    : <Card className={styles.metric}>{content}</Card>;
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

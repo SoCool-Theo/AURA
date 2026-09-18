@@ -134,6 +134,13 @@ per-asset returns, and the hypothetical/non-forecast notice. Planned analysis
 does not require current prices or FX, and estimated shares are not saved in
 the report.
 
+V2 and V3 report detail responses derive both portfolio-level
+`monetary_metrics` and ordered per-asset `asset_monetary_metrics` from the
+immutable snapshot. Per-asset references are the V2 saved current value or V3
+proposed amount. Exact drawdown money uses each dated asset return path; it is
+`null` when an older snapshot lacks a verifiable path. These response-only
+fields do not trigger revaluation, mutate saved JSONB, or require a migration.
+
 ## Simulations and immutable history
 
 The three simulation POST request contracts are unchanged. A historical

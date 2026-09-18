@@ -178,11 +178,15 @@ test('saved report and simulation links preserve exact Ask Aura context', () => 
   const read = file => fs.readFileSync(path.join(root, file), 'utf8');
   const report = read('src/pages/reports/ReportDetailPage.tsx');
   const simulation = read('src/pages/simulations/SimulationHistoryDetailPage.tsx');
+  const dashboardAi = read('src/pages/dashboard/components/AiInsight.tsx');
   const assistant = read('src/pages/assistant/AssistantPage.tsx');
   const app = read('src/app/App.tsx');
 
   assert.match(report, /assistant\/\$\{report\.portfolio_id\}\/report\/\$\{report\.id\}/);
   assert.match(simulation, /assistant\/\$\{portfolioId\}\/simulation\/\$\{simulationId\}/);
+  assert.match(dashboardAi, /assistant\/\$\{report\.portfolio_id\}\/report\/\$\{report\.id\}/);
+  assert.match(dashboardAi, /assistant\/\$\{portfolioId\}/);
+  assert.match(dashboardAi, /Ask Aura<\/button>/);
   assert.match(assistant, /report_id: savedContext\.id/);
   assert.match(assistant, /simulation_id: savedContext\.id/);
   assert.match(assistant, /setLoadError\('Portfolio not found\.'\)/);
@@ -371,6 +375,10 @@ test('web portfolio cards and dashboard visuals use balanced formatted layouts',
     path.join(root, 'src/pages/dashboard/components/RiskDrivers.tsx'),
     'utf8',
   );
+  const dashboard = fs.readFileSync(
+    path.join(root, 'src/pages/dashboard/DashboardPage.tsx'),
+    'utf8',
+  );
 
   const ticks = dashboardUi.portfolioReturnAxisTicks(-0.026, 0.023);
   const labels = ticks.map(tick => dashboardUi.formatPortfolioReturnTick(tick, 0.049));
@@ -382,7 +390,10 @@ test('web portfolio cards and dashboard visuals use balanced formatted layouts',
   assert.match(styles, /\.portfolios-page \.portfolio-card-actions\{[^}]*margin-top:0/);
   assert.match(riskDrivers, /styles\.driverTrack/);
   assert.match(riskDrivers, /Math\.min\(100, Math\.abs/);
-  assert.match(dashboardStyles, /dashboard-risk-list[\s\S]*justify-content: center/);
+  assert.match(riskDrivers, /go\(`asset\/\$\{portfolioId\}\/\$\{reportId\}\/\$\{encodeURIComponent\(driver\.symbol\)\}`\)/);
+  assert.match(riskDrivers, /aria-label=\{`Open \$\{driver\.symbol\} asset risk details`\}/);
+  assert.match(dashboard, /reportId=\{report\?\.id \?\? null\}/);
+  assert.match(dashboardStyles, /dashboard-risk-list[\s\S]*justify-content: flex-start/);
   assert.match(dashboardStyles, /\.driverTrack/);
 });
 
@@ -462,6 +473,8 @@ test('web asset-risk detail is report-backed, navigable, and never recalculates 
   const results = read('src/pages/analytics/components/AnalysisResults.tsx');
   const card = read('src/pages/analytics/components/AssetAnalysisCard.tsx');
   const detail = read('src/pages/reports/AssetRiskDetailPage.tsx');
+  const metricDetails = read('src/pages/analytics/reportMetricDetails.ts');
+  const reportTypes = read('src/types/report.ts');
   const reportDetail = read('src/pages/reports/ReportDetailPage.tsx');
   const app = read('src/app/App.tsx');
 
@@ -476,6 +489,16 @@ test('web asset-risk detail is report-backed, navigable, and never recalculates 
   assert.match(detail, /asset\.risk_classification/);
   assert.match(detail, /report\.analysis\.asset_returns/);
   assert.match(detail, /visibleReturnPoints\(series\?\.points \?\? \[\], range\)/);
+  assert.match(reportTypes, /asset_monetary_metrics\?: PortfolioReportAssetMonetaryMetrics\[\]/);
+  assert.match(detail, /assetReportMonetaryMetrics\(report, symbol\)/);
+  assert.match(detail, /setSelectedMetric\('cumulative'\)/);
+  assert.match(detail, /setSelectedMetric\('annualized'\)/);
+  assert.match(detail, /setSelectedMetric\('drawdown'\)/);
+  assert.match(detail, /<MetricAmountDialog/);
+  assert.match(metricDetails, /monetary\.cumulative_return_amount/);
+  assert.match(metricDetails, /monetary\.annualized_return_amount/);
+  assert.match(metricDetails, /monetary\.maximum_drawdown_amount/);
+  assert.doesNotMatch(metricDetails, /reference_amount\s*\*/);
   assert.doesNotMatch(detail, /Math\.(sqrt|pow)|annualized_volatility\s*[*/+-]|max_drawdown\s*[*/+-]/);
 });
 

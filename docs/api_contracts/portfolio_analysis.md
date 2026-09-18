@@ -67,3 +67,25 @@ These amounts are historical educational equivalents, not actual realized
 profit/loss, guarantees, or forecasts. V1 legacy reports remain
 percentage-only because they do not contain a trustworthy currency reference
 amount.
+
+V2 and V3 report detail responses also include an ordered
+`asset_monetary_metrics` list. It is response-only and derived from the same
+immutable report snapshot; it is not written back to JSONB and does not fetch
+current market data.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `symbol` | Asset symbol | Asset whose saved metrics and return path were used. |
+| `currency` | `USD` or `THB` | Currency of every amount in this item. |
+| `basis` | `saved-current-value` or `planned-proposed-amount` | Identifies the asset's saved reference amount. |
+| `reference_amount` | Positive decimal string | V2 saved holding value or V3 proposed amount. |
+| `cumulative_return_amount` | Signed decimal string | Asset cumulative return applied to the saved asset reference amount. |
+| `annualized_return_amount` | Signed decimal string | Asset annualized rate expressed as a one-year equivalent on the saved asset reference amount. |
+| `maximum_drawdown_amount` | Non-positive decimal string or `null` | Currency decline for the asset's exact saved peak-to-trough return path. |
+
+The list follows `analysis.asset_metrics` order and is complete for every V2
+or V3 asset. For older snapshots without `asset_returns`, cumulative and
+annualized amounts remain available from saved metrics, while a non-zero
+`maximum_drawdown_amount` is `null`. Clients must not replace that `null` with
+`reference_amount × max_drawdown`; maximum drawdown must use the reconstructed
+historical peak and trough.
