@@ -84,10 +84,23 @@ def test_snapshot_version_constant_uses_approved_token() -> None:
     )
 
 
+def _current_share_analysis_response() -> PortfolioAnalysisResponse:
+    data = _real_analysis_response().model_dump(mode="json")
+    data["historical_value_context"] = {
+        "basis": "fixed-current-shares",
+        "currency": "USD",
+        "start_date": "2022-01-02",
+        "end_date": "2022-01-04",
+        "starting_value": "1000",
+        "ending_value": "1071",
+    }
+    return PortfolioAnalysisResponse.model_validate(data)
+
+
 def _valid_v2_snapshot() -> dict[str, object]:
     enriched = compose_portfolio_analysis(
         _real_preparation(),
-        _real_analysis_response(),
+        _current_share_analysis_response(),
     )
     return enriched_analysis_to_v2_snapshot(enriched)
 
@@ -260,7 +273,7 @@ def test_v3_record_restores_frozen_plan_without_recalculation_or_mutation() -> N
 
 def test_real_enriched_result_maps_to_complete_json_safe_v2_snapshot() -> None:
     preparation = _real_preparation()
-    analysis = _real_analysis_response()
+    analysis = _current_share_analysis_response()
     enriched = compose_portfolio_analysis(preparation, analysis)
 
     snapshot = enriched_analysis_to_v2_snapshot(enriched)
@@ -313,7 +326,7 @@ def _valid_thb_v2_snapshot() -> dict[str, object]:
     )
     enriched = compose_portfolio_analysis(
         replace(preparation, valuation=thb_valuation),
-        _real_analysis_response(),
+        _current_share_analysis_response(),
     )
     return enriched_analysis_to_v2_snapshot(enriched)
 
@@ -358,13 +371,12 @@ def test_v2_record_maps_snapshot_without_revaluation_or_mutation() -> None:
     )
     assert result.holdings[0].asset_price == Decimal("200.000000000000")
     assert result.holdings[0].current_allocation == Decimal("0.600000000000")
-    assert result.analysis == _real_analysis_response()
+    assert result.analysis == _current_share_analysis_response()
     assert result.monetary_metrics is not None
     assert result.monetary_metrics.currency == "USD"
-    assert result.monetary_metrics.basis == "saved-current-valuation"
-    assert result.monetary_metrics.reference_amount == Decimal(
-        "10000.000000000000"
-    )
+    assert result.monetary_metrics.basis == "fixed-shares-historical-value"
+    assert result.monetary_metrics.reference_amount == Decimal("1000")
+    assert result.monetary_metrics.cumulative_return_amount == Decimal("71")
     assert [
         metric.symbol for metric in result.asset_monetary_metrics
     ] == ["BND", "AAPL"]
@@ -383,6 +395,26 @@ def test_v2_record_maps_snapshot_without_revaluation_or_mutation() -> None:
         for metric in result.asset_monetary_metrics
     )
     assert analysis.result_snapshot == frozen_snapshot
+
+
+def test_legacy_v2_snapshot_does_not_infer_historical_amount_from_today_value(
+) -> None:
+    enriched = compose_portfolio_analysis(
+        _real_preparation(),
+        _real_analysis_response(),
+    )
+    snapshot = enriched_analysis_to_v2_snapshot(enriched)
+    analysis = _analysis_record(
+        result_snapshot=snapshot,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+        start_date=date(2022, 1, 1),
+        end_date=date(2022, 12, 31),
+    )
+
+    result = analysis_record_to_report_response(analysis)
+
+    assert isinstance(result, PortfolioReportV2Response)
+    assert result.monetary_metrics is None
 
 
 def test_malformed_v2_snapshot_is_rejected_strictly() -> None:

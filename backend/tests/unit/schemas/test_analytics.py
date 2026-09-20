@@ -1,5 +1,6 @@
 from copy import deepcopy
 from datetime import date
+from decimal import Decimal
 import json
 
 import pytest
@@ -920,6 +921,70 @@ def _portfolio_response_data() -> dict[str, object]:
             },
         ],
     }
+
+
+def test_portfolio_response_omits_unavailable_historical_value_context() -> None:
+    response = PortfolioAnalysisResponse.model_validate(
+        _portfolio_response_data()
+    )
+
+    assert response.historical_value_context is None
+    assert "historical_value_context" not in response.model_dump(mode="json")
+
+
+def test_portfolio_response_accepts_matching_fixed_share_value_context() -> None:
+    data = _portfolio_response_data()
+    data["historical_value_context"] = {
+        "basis": "fixed-current-shares",
+        "currency": "USD",
+        "start_date": "2026-01-01",
+        "end_date": "2026-01-20",
+        "starting_value": "1000",
+        "ending_value": "1100",
+    }
+
+    response = PortfolioAnalysisResponse.model_validate(data)
+
+    context = response.historical_value_context
+    assert context is not None
+    assert context.starting_value == Decimal("1000")
+    assert context.ending_value == Decimal("1100")
+    assert response.model_dump(mode="json")["historical_value_context"] == {
+        "basis": "fixed-current-shares",
+        "currency": "USD",
+        "start_date": "2026-01-01",
+        "end_date": "2026-01-20",
+        "starting_value": "1000",
+        "ending_value": "1100",
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("start_date", "2026-01-02", "dates must match"),
+        ("ending_value", "1099", "must match portfolio cumulative return"),
+    ],
+)
+def test_portfolio_response_rejects_inconsistent_historical_value_context(
+    field: str,
+    value: str,
+    message: str,
+) -> None:
+    data = _portfolio_response_data()
+    context = {
+        "basis": "fixed-current-shares",
+        "currency": "USD",
+        "start_date": "2026-01-01",
+        "end_date": "2026-01-20",
+        "starting_value": "1000",
+        "ending_value": "1100",
+    }
+    context[field] = value
+    data["historical_value_context"] = context
+
+    with pytest.raises(ValidationError, match=message):
+        PortfolioAnalysisResponse.model_validate(data)
 
 
 def _single_asset_response_data() -> dict[str, object]:

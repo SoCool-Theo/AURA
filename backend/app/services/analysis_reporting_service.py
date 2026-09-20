@@ -77,8 +77,18 @@ class AnalysisReportingService:
             display_currency=display_currency,
         )
         try:
+            analysis_kwargs = (
+                {
+                    "share_quantities": dict(
+                        preparation.current_share_quantities
+                    )
+                }
+                if preparation.current_share_quantities is not None
+                else {}
+            )
             response = self._analysis_service.analyze(
-                preparation.analysis_request
+                preparation.analysis_request,
+                **analysis_kwargs,
             )
         except ValueError as error:
             raise ReportAnalysisUnprocessableError from error

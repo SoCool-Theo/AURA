@@ -40,6 +40,14 @@ derives a real portfolio's current USD allocation and adapts it into this
 weight-based engine contract. Legacy portfolios continue to supply their saved
 weights during the temporary compatibility period.
 
+For current portfolios only, the service also supplies owned share quantities
+to the engine. The engine values those fixed quantities at each historical
+price date and derives all portfolio-level return/risk metrics from that value
+series. Current weights remain the authority for concentration,
+diversification, and risk contribution. The response optionally includes
+`historical_value_context` with its USD starting and ending values and exact
+observation dates.
+
 ## Saved-report monetary context
 
 Current V2 and planned V3 report detail responses include an optional
@@ -51,9 +59,9 @@ migration.
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `currency` | `USD` or `THB` | Currency of every amount in this object. |
-| `basis` | `saved-current-valuation` or `planned-proposed-amount` | Identifies the saved reference amount. |
-| `reference_amount` | Positive decimal string | Saved current valuation for V2 or total proposed amount for V3. |
-| `cumulative_return_amount` | Signed decimal string | Historical cumulative return applied to the reference amount. |
+| `basis` | `fixed-shares-historical-value`, `saved-current-valuation`, or `planned-proposed-amount` | Identifies the saved reference amount. The saved-current value is retained for compatibility. |
+| `reference_amount` | Positive decimal string | Historical starting value for new V2 reports or total proposed amount for V3. |
+| `cumulative_return_amount` | Signed decimal string | Exact historical ending value minus starting value for new V2 reports; planned historical change for V3. |
 | `annualized_return_amount` | Signed decimal string | Historical annualized rate expressed as a one-year equivalent on the reference amount. |
 | `maximum_drawdown_amount` | Non-positive decimal string or `null` | Currency decline for the exact saved peak-to-trough drawdown episode. |
 
@@ -66,7 +74,9 @@ from its historical peak rather than necessarily from the reference amount.
 These amounts are historical educational equivalents, not actual realized
 profit/loss, guarantees, or forecasts. V1 legacy reports remain
 percentage-only because they do not contain a trustworthy currency reference
-amount.
+amount. Older V2 snapshots without `historical_value_context` also omit
+portfolio-level monetary metrics instead of applying historical return to the
+saved current valuation.
 
 V2 and V3 report detail responses also include an ordered
 `asset_monetary_metrics` list. It is response-only and derived from the same

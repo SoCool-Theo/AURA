@@ -1437,8 +1437,9 @@ as completed. This ongoing expansion does not make deployment complete.
   allocation.
 - The 17 user assets remain distinct from the internal `THB=X` USD/THB
   instrument included in default and scheduled market-data updates.
-- Real analysis uses current allocation against the selected historical period
-  without replaying shares or changing financial formulas.
+- Current analysis uses fixed owned shares at each historical price date for
+  portfolio-level return/risk metrics; current allocation remains authoritative
+  for concentration, diversification, and risk contribution.
 - Reports retain V1 and add immutable
   `portfolio-analysis-response-v2` snapshots.
 - Historical, Allocation, and Combined simulations retain V1 and add immutable
@@ -1776,11 +1777,12 @@ are outside this mobile-only Step 8M.
 
 ### Completed mobile report monetary metric details
 
-- Current V2 and planned V3 report responses now include deterministic
-  `monetary_metrics` derived only from the saved report snapshot. Cumulative
-  return and annualized return use the saved reference amount; maximum
-  drawdown reconstructs the exact saved peak-to-trough wealth path instead of
-  multiplying the drawdown percentage by the wrong starting value.
+- Current V2 and planned V3 report responses include deterministic
+  `monetary_metrics` derived only from the saved report snapshot. New current
+  reports use the fixed-share historical starting value and exact ending-minus-
+  starting change; planned reports use the proposed reference amount. Maximum
+  drawdown remains tied to the saved historical path rather than today's
+  portfolio value.
 - The monetary context is response-only and does not modify persisted report
   JSONB, require a migration, fetch fresh prices, or revalue historical reports.
   V1 legacy reports remain percentage-only because they have no trustworthy
@@ -1972,3 +1974,23 @@ remain separate follow-on work.
 - Reporting regression suite: 131 passed. Web production-authority suite: 19
   passed. Mobile production-authority suite: 30 passed. Mobile TypeScript and
   the web production build completed successfully.
+
+### Completed fixed-share current portfolio history
+
+- Current portfolio analysis now values the same owned share quantities at
+  every aligned historical price date. Cumulative return, annualized return,
+  annualized volatility, Sharpe ratio, and maximum drawdown all come from that
+  historical portfolio-value series.
+- Current valuation weights remain authoritative for concentration,
+  diversification, and risk contribution against historical covariance.
+- New V2 snapshots freeze the historical USD starting and ending values.
+  Report mapping uses the exact ending-minus-starting change and no longer
+  multiplies today's saved portfolio value by historical return. Older V2
+  snapshots remain readable and omit unverifiable portfolio money context.
+- Web and mobile label the result **Historical Portfolio Return**, show the
+  fixed-share historical start/end values when available, and explicitly state
+  that the result is not the user's actual profit or loss.
+- Fixed-share focused backend suite: 445 passed. Complete backend unit suite:
+  2,386 passed. Reporting schema/API regression suite: 83 passed. Web
+  production-authority suite: 19 passed and production build completed. Mobile
+  production-authority suite: 30 passed and TypeScript compilation completed.

@@ -100,11 +100,15 @@ context, and ordered holding facts/prices/values/allocations.
 
 ## Analytics semantics and reports
 
-For real portfolios, analysis resolves the current USD dynamic allocation and
-applies that fixed allocation to the user-selected historical period using the
-existing periodically rebalanced analytics engine. It does not replay shares,
-infer historical ownership, or use `purchase_date` to change the analysis
-period. No analytics formula changed.
+For current portfolios, analysis resolves the latest USD valuation and dynamic
+allocation, then keeps the same owned share quantities across the selected
+historical period. Each aligned historical price row produces a portfolio
+value; that value series produces portfolio cumulative return, annualized
+return, volatility, Sharpe ratio, and maximum drawdown. `purchase_date`, trades,
+and cash flows are not reconstructed, so the result is labeled Historical
+Portfolio Return rather than actual profit/loss. Current allocation continues
+to drive concentration, diversification, and risk contribution against the
+historical covariance matrix.
 
 Individual asset return, volatility, maximum drawdown, and Sharpe describe the
 asset. Portfolio risk contribution also depends on portfolio weights and
@@ -127,7 +131,8 @@ Report versions are exact:
 V2 freezes valuation currency/date, price dates, canonical USD and display
 totals, optional FX, holding facts, prices, values, dynamic allocations,
 complete analytics, per-asset metrics, per-asset risk classifications, dated
-per-asset returns, and risk contribution/rank. Report detail is version-aware.
+per-asset returns, the fixed-share historical start/end value context, and risk
+contribution/rank. Report detail is version-aware.
 Opening a saved report reads its JSONB snapshot and never revalues the
 portfolio.
 
@@ -139,7 +144,11 @@ the report.
 
 V2 and V3 report detail responses derive both portfolio-level
 `monetary_metrics` and ordered per-asset `asset_monetary_metrics` from the
-immutable snapshot. Per-asset references are the V2 saved current value or V3
+immutable snapshot. New V2 portfolio monetary context uses the USD historical
+starting value and exact historical ending-minus-starting change; older V2
+snapshots without fixed-share value context remain readable but omit the
+portfolio monetary object rather than multiplying today's value by a
+historical return. Per-asset references are the V2 saved current value or V3
 proposed amount. Exact drawdown money uses each dated asset return path; it is
 `null` when an older snapshot lacks a verifiable path. These response-only
 fields do not trigger revaluation, mutate saved JSONB, or require a migration.

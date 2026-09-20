@@ -182,6 +182,64 @@ def test_analyze_portfolio_has_known_portfolio_returns_and_drawdown() -> None:
     )
 
 
+def test_fixed_share_analysis_uses_historical_portfolio_values_for_metrics(
+) -> None:
+    prices = _prices()
+    result = analyze_portfolio(
+        prices,
+        _weights(),
+        periods_per_year=3,
+        share_quantities={"ALPHA": 2.0, "BETA": 1.0},
+    )
+    expected_values = pd.Series(
+        [300.0, 310.0, 319.0, 327.8],
+        index=prices.index,
+        name="portfolio_value",
+    )
+    expected_returns = expected_values.pct_change().iloc[1:].rename(
+        "portfolio_return"
+    )
+
+    pd.testing.assert_series_equal(
+        result.historical_portfolio_values,
+        expected_values,
+    )
+    pd.testing.assert_series_equal(
+        result.portfolio_returns,
+        expected_returns,
+    )
+    assert result.cumulative_return == pytest.approx(327.8 / 300.0 - 1.0)
+    assert result.annualized_return == pytest.approx(
+        calculate_annualized_return(expected_returns, periods_per_year=3)
+    )
+    assert result.annualized_volatility == pytest.approx(
+        calculate_annualized_volatility(expected_returns, periods_per_year=3)
+    )
+    assert result.sharpe_ratio == pytest.approx(
+        calculate_sharpe_ratio(expected_returns, periods_per_year=3)
+    )
+    expected_drawdown = calculate_max_drawdown_details(expected_returns)
+    assert result.max_drawdown.max_drawdown == pytest.approx(
+        expected_drawdown.max_drawdown
+    )
+    assert result.max_drawdown.peak_date == expected_drawdown.peak_date
+    assert result.max_drawdown.trough_date == expected_drawdown.trough_date
+    expected_risk_drivers = analyze_risk_drivers(
+        result.asset_returns,
+        _weights(),
+        periods_per_year=3,
+    )
+    assert result.risk_drivers.portfolio_volatility == pytest.approx(
+        expected_risk_drivers.portfolio_volatility
+    )
+    pd.testing.assert_frame_equal(
+        result.risk_drivers.ranked_contributions,
+        expected_risk_drivers.ranked_contributions,
+    )
+    assert result.asset_metrics.loc["ALPHA", "weight"] == pytest.approx(0.4)
+    assert result.asset_metrics.loc["BETA", "weight"] == pytest.approx(0.6)
+
+
 def test_analyze_portfolio_result_is_frozen() -> None:
     result = _analyze()
 

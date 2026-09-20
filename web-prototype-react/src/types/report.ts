@@ -21,7 +21,10 @@ type PortfolioReportEnvelope = {
 
 export type PortfolioReportMonetaryMetrics = {
   currency: PortfolioCurrency;
-  basis: 'saved-current-valuation' | 'planned-proposed-amount';
+  basis:
+    | 'fixed-shares-historical-value'
+    | 'saved-current-valuation'
+    | 'planned-proposed-amount';
   reference_amount: DecimalString;
   cumulative_return_amount: DecimalString;
   annualized_return_amount: DecimalString;

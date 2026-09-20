@@ -56,6 +56,10 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
   const drawdown = analysis.max_drawdown;
   const diversification = analysis.diversification;
   const concentration = analysis.concentration;
+  const historicalValue = reportV2 ? analysis.historical_value_context : null;
+  const portfolioReturnLabel = reportV2
+    ? 'Historical Portfolio Return'
+    : 'Cumulative Return';
   const visibleReturns = visibleReturnPoints(analysis.portfolio_returns, returnViewRange);
 
   function openAssetDetail(symbol: string) {
@@ -107,6 +111,7 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
               </div>
             ))}
           </div>
+          {historicalValue && <p className={styles.contextNote}>Same shares at historical prices: {formatPortfolioMoney(historicalValue.starting_value, historicalValue.currency)} on {historicalValue.start_date} → {formatPortfolioMoney(historicalValue.ending_value, historicalValue.currency)} on {historicalValue.end_date}</p>}
           {reportV2.valuation.fx && <p className={styles.contextNote}>USD/THB {formatPortfolioQuantity(reportV2.valuation.fx.rate)} as of {reportV2.valuation.fx.as_of}</p>}
         </Card>
       ) : (
@@ -115,7 +120,7 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
 
       <div className={styles.metricGrid}>
         {reportV3 && monetary?.estimated_ending_value != null && <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('endingValue')}><MetricLabel icon="wallet" label="Estimated Value at End of Period" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><i className={styles.metricChevron}><Icon name="chevron-right" size={18} /></i><strong>{formatPortfolioMoney(monetary.estimated_ending_value, monetary.currency)}</strong><span>Historical estimate · Click to understand</span></button>}
-        {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('cumulative')}><MetricLabel icon="trend" label="Cumulative Return" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><i className={styles.metricChevron}><Icon name="chevron-right" size={18} /></i><strong>{formatPercent(metrics.cumulative_return)}</strong><span>Saved period · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="trend" label="Cumulative Return" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.cumulative_return)}</strong><span>Compounded return for the saved period</span></Card>}
+        {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('cumulative')}><MetricLabel icon="trend" label={portfolioReturnLabel} tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><i className={styles.metricChevron}><Icon name="chevron-right" size={18} /></i><strong>{formatPercent(metrics.cumulative_return)}</strong><span>{historicalValue ? 'Same shares at historical prices · Click for values' : 'Saved period · Click for amount'}</span></button> : <Card className={styles.metric}><MetricLabel icon="trend" label={portfolioReturnLabel} tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.cumulative_return)}</strong><span>{historicalValue ? 'Same shares valued across the saved period' : 'Compounded return for the saved period'}</span></Card>}
         {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('annualized')}><MetricLabel icon="analytics" label="Annualized Return" tone={metrics.annualized_return < 0 ? 'danger' : 'success'} /><i className={styles.metricChevron}><Icon name="chevron-right" size={18} /></i><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical equivalent · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="analytics" label="Annualized Return" tone={metrics.annualized_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical annualized portfolio return</span></Card>}
         <Card className={styles.metric}><MetricLabel icon="pulse" label="Annualized Volatility" tone="warning" /><strong>{formatPercent(metrics.annualized_volatility)}</strong><span>Annualized variation over the saved period</span></Card>
         <Card className={styles.metric}><MetricLabel icon="stats-chart" label="Sharpe Ratio" tone="blue" /><strong>{formatNumber(metrics.sharpe_ratio)}</strong><span>Historical risk-adjusted return metric</span></Card>
@@ -147,7 +152,7 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
 
       <Card className={styles.section}>
         <div className={styles.sectionHeading}>
-          <div><h2>Portfolio Return Series</h2><p>Ordered historical return observations for this saved period.</p></div>
+          <div><h2>{reportV2 ? 'Historical Portfolio Return Series' : 'Portfolio Return Series'}</h2><p>{historicalValue ? 'Returns calculated from the same share quantities at each historical price date.' : 'Ordered historical return observations for this saved period.'}</p></div>
           <span className={styles.badge}>{analysis.portfolio_returns.length} observations</span>
         </div>
         {analysis.portfolio_returns.length > 0 && <div className={styles.returnChart}>

@@ -46,7 +46,9 @@ export function reportMetricAmountContent(
   const drawdown = report.analysis.max_drawdown;
   const reference = monetary.basis === 'planned-proposed-amount'
     ? `Based on your hypothetical ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} planned investment.`
-    : `Based on the ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} portfolio valuation saved with this report.`;
+    : monetary.basis === 'fixed-shares-historical-value'
+      ? `Based on the ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} historical value of the same shares at the start of this period.`
+      : `Based on the ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} portfolio valuation saved with this report.`;
 
   if (key === 'endingValue') {
     if (
@@ -65,13 +67,18 @@ export function reportMetricAmountContent(
   }
 
   if (key === 'cumulative') {
+    const isFixedShareHistory = monetary.basis === 'fixed-shares-historical-value';
     return {
-      title: 'Cumulative Return',
+      title: isFixedShareHistory ? 'Historical Portfolio Return' : 'Cumulative Return',
       percentage: formatRatioPercent(metrics.cumulative_return),
       amount: formatSignedPortfolioMoney(monetary.cumulative_return_amount, monetary.currency),
-      amountLabel: 'Estimated change over this analysis period',
+      amountLabel: isFixedShareHistory
+        ? 'Historical change in value over this period'
+        : 'Estimated change over this analysis period',
       reference,
-      explanation: `This applies the historical cumulative return from ${report.analysis.start_date} to ${report.analysis.end_date} to the saved reference amount. It is not actual profit or a forecast.`,
+      explanation: isFixedShareHistory
+        ? `This shows how the value of the same share quantities changed when Aura applied historical prices from ${report.analysis.start_date} to ${report.analysis.end_date}. It is not your actual profit or loss because it does not track your trades or cash flows.`
+        : `This applies the historical cumulative return from ${report.analysis.start_date} to ${report.analysis.end_date} to the saved reference amount. It is not actual profit or a forecast.`,
       tone: metrics.cumulative_return < 0 ? 'danger' : 'success'
     };
   }

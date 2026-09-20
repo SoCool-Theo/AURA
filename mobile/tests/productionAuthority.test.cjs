@@ -574,6 +574,9 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(analysis, /setSelectedMetric\('endingValue'\)/);
   assert.match(analysis, /Estimated Value at End of Period/);
   assert.match(analysis, /monetary\.estimated_ending_value/);
+  assert.match(analysis, /Historical Portfolio Return/);
+  assert.match(analysis, /analysis\.historical_value_context/);
+  assert.match(analysis, /Same shares at historical prices/);
   assert.match(analysis, /RETURN_VIEW_RANGES\.map/);
   assert.match(analysis, /setReturnViewRange\(range\)/);
   assert.match(analysis, /accessibilityRole="tab"/);
@@ -583,6 +586,8 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(metricDetails, /maximum_drawdown_amount/);
   assert.match(metricDetails, /estimated_ending_value/);
   assert.match(metricDetails, /not a prediction of future value/);
+  assert.match(metricDetails, /fixed-shares-historical-value/);
+  assert.match(metricDetails, /not your actual profit or loss/);
   assert.ok(!/reference_amount\s*\*/.test(`${analysis}\n${metricDetails}`));
   assert.match(simulation, /Saved planned allocation/);
   assert.match(history, /isSimulationHistoryV3/);

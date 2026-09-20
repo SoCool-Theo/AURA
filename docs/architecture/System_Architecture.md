@@ -290,6 +290,12 @@ LEGACY  -> saved weights
                  analysis composition
 ```
 
+For `CURRENT`, the same valuation also supplies the owned share quantities.
+Those fixed quantities are valued at every aligned historical price date to
+produce the portfolio-value and portfolio-return series. The current dynamic
+weights remain authoritative for concentration, diversification, and risk
+contribution.
+
 Planned analysis therefore does not require current-price or FX availability.
 It still requires sufficient aligned historical price data under the same
 no-fabrication rules as other portfolio modes.
@@ -313,11 +319,12 @@ groups, while explicit user asset selection remains limited to the 17 assets.
 
 ## Analysis, Reporting, Simulation, and AI Composition
 
-For a real portfolio, Aura applies the current dynamic allocation to the
-user-selected historical price period and then reuses the existing fixed-weight,
-periodically rebalanced analytics engine. This is not a historical share-count
-backtest: `purchase_date` does not establish historical ownership and no
-analytics formula changed.
+For a current portfolio, Aura keeps today's owned share quantities fixed and
+values them using aligned prices throughout the user-selected historical
+period. Portfolio cumulative return, annualized return, volatility, Sharpe,
+and maximum drawdown come from that historical portfolio-value series. This is
+not realized profit/loss: `purchase_date`, trades, deposits, withdrawals, and
+other cash flows do not change the reconstructed series.
 
 Individual-asset return, volatility, maximum drawdown, and Sharpe describe the
 asset over the analysis period. Portfolio risk contribution additionally

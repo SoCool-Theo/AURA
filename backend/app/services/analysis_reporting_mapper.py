@@ -47,19 +47,26 @@ def analysis_to_report_monetary_metrics(
     analysis: PortfolioAnalysisResponse,
     *,
     currency: Literal["USD", "THB"],
-    basis: Literal["saved-current-valuation", "planned-proposed-amount"],
+    basis: Literal[
+        "fixed-shares-historical-value",
+        "saved-current-valuation",
+        "planned-proposed-amount",
+    ],
     reference_amount: Decimal,
+    cumulative_return_amount: Decimal | None = None,
 ) -> PortfolioReportMonetaryMetrics:
     """Derive stable currency equivalents from one frozen analysis path."""
-    cumulative_return_amount = (
-        reference_amount
+    resolved_cumulative_return_amount = (
+        cumulative_return_amount
+        if cumulative_return_amount is not None
+        else reference_amount
         * Decimal(str(analysis.portfolio_metrics.cumulative_return))
     )
     return PortfolioReportMonetaryMetrics(
         currency=currency,
         basis=basis,
         reference_amount=reference_amount,
-        cumulative_return_amount=cumulative_return_amount,
+        cumulative_return_amount=resolved_cumulative_return_amount,
         annualized_return_amount=(
             reference_amount
             * Decimal(str(analysis.portfolio_metrics.annualized_return))
@@ -69,7 +76,7 @@ def analysis_to_report_monetary_metrics(
             reference_amount,
         ),
         estimated_ending_value=(
-            reference_amount + cumulative_return_amount
+            reference_amount + resolved_cumulative_return_amount
             if basis == "planned-proposed-amount"
             else None
         ),
@@ -319,17 +326,24 @@ def analysis_record_to_report_response(
             analysis.result_snapshot
         )
         _validate_relational_period(analysis, validated_snapshot.analysis)
+        historical_value = validated_snapshot.analysis.historical_value_context
         return PortfolioReportV2Response(
             id=analysis.id,
             portfolio_id=analysis.portfolio_id,
             created_at=analysis.created_at,
-            monetary_metrics=analysis_to_report_monetary_metrics(
-                validated_snapshot.analysis,
-                currency=validated_snapshot.valuation.valuation_currency,
-                basis="saved-current-valuation",
-                reference_amount=(
-                    validated_snapshot.valuation.total_current_value
-                ),
+            monetary_metrics=(
+                None
+                if historical_value is None
+                else analysis_to_report_monetary_metrics(
+                    validated_snapshot.analysis,
+                    currency="USD",
+                    basis="fixed-shares-historical-value",
+                    reference_amount=historical_value.starting_value,
+                    cumulative_return_amount=(
+                        historical_value.ending_value
+                        - historical_value.starting_value
+                    ),
+                )
             ),
             asset_monetary_metrics=(
                 analysis_to_asset_report_monetary_metrics(

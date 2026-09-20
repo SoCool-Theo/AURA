@@ -364,6 +364,51 @@ def test_analysis_service_orchestrates_existing_boundaries_in_order() -> None:
     session.close.assert_not_called()
 
 
+def test_analysis_service_passes_normalized_share_quantities_to_engine() -> None:
+    session = MagicMock(spec=Session)
+    request = _analysis_request()
+    records = _retrieved_analysis_records()
+    prices = pd.DataFrame({"sentinel": [1.0]})
+    analytics_result = MagicMock(spec=PortfolioAnalyticsResult)
+    response = MagicMock(spec=PortfolioAnalysisResponse)
+    market_data_service, market_data_service_type = (
+        _mocked_market_data_service()
+    )
+    market_data_service.get_range.return_value = records
+
+    with (
+        patch.object(
+            service_module,
+            "MarketDataService",
+            market_data_service_type,
+        ),
+        patch.object(service_module, "_build_price_frame", return_value=prices),
+        patch.object(
+            service_module,
+            "analyze_portfolio",
+            return_value=analytics_result,
+        ) as analyze_portfolio,
+        patch.object(
+            service_module,
+            "_map_analysis_response",
+            return_value=response,
+        ),
+    ):
+        result = AnalysisService(session).analyze(
+            request,
+            share_quantities={
+                "MSFT": Decimal("2.5"),
+                "AAPL": Decimal("3"),
+                "BND": Decimal("4.25"),
+            },
+        )
+
+    assert result is response
+    assert analyze_portfolio.call_args.kwargs == {
+        "share_quantities": {"MSFT": 2.5, "AAPL": 3.0, "BND": 4.25}
+    }
+
+
 def test_analysis_service_integrates_real_phase_two_and_three_helpers() -> None:
     session = MagicMock(spec=Session)
     request = _analysis_request()
@@ -616,6 +661,35 @@ def test_map_analysis_response_constructs_complete_strict_response() -> None:
     )
     assert validated == response
     json.dumps(response.model_dump(mode="json"), allow_nan=False)
+
+
+def test_map_analysis_response_includes_fixed_share_historical_values() -> None:
+    result = replace(
+        _analytics_result(),
+        historical_portfolio_values=pd.Series(
+            [1000.0, 1010.0, 1020.0, 1032.0],
+            index=pd.DatetimeIndex(
+                [
+                    "2026-01-02",
+                    "2026-01-03",
+                    "2026-01-04",
+                    "2026-01-05",
+                ]
+            ),
+            name="portfolio_value",
+        ),
+    )
+
+    response = _map_analysis_response(_analysis_request(), result)
+
+    context = response.historical_value_context
+    assert context is not None
+    assert context.basis == "fixed-current-shares"
+    assert context.currency == "USD"
+    assert context.start_date == date(2026, 1, 2)
+    assert context.end_date == date(2026, 1, 5)
+    assert context.starting_value == Decimal("1000.0")
+    assert context.ending_value == Decimal("1032.0")
 
 
 def test_map_analysis_response_preserves_all_engine_collection_order() -> None:

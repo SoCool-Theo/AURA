@@ -68,8 +68,10 @@ calculations into understandable explanations.
 3. The user creates a portfolio and records ordered real holding facts.
 4. The backend values shares from fresh persisted USD market observations and
    derives the current allocation.
-5. Analytics apply that current allocation to a user-selected historical
-   period; they do not reconstruct historical ownership from share counts.
+5. Current-portfolio analytics keep the saved share quantities fixed and apply
+   historical prices across the selected period to build the portfolio-value
+   series. Current allocation still controls concentration and risk
+   contribution.
 6. The historical simulator tests the resolved allocation against past
    periods.
 7. Reports and simulation history persist immutable, versioned snapshots.

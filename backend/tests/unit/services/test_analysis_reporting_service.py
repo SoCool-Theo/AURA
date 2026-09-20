@@ -270,7 +270,7 @@ def test_real_creation_orchestrates_once_and_persists_v2() -> None:
     preparation_service.prepare.side_effect = lambda **kwargs: (
         events.append("prepare") or preparation
     )
-    analysis_service.analyze.side_effect = lambda request: (
+    analysis_service.analyze.side_effect = lambda request, **kwargs: (
         events.append("analyze") or response
     )
     repository.save_snapshot.side_effect = lambda **kwargs: (
@@ -321,7 +321,8 @@ def test_real_creation_orchestrates_once_and_persists_v2() -> None:
         display_currency=PortfolioDisplayCurrency.THB,
     )
     analysis_service.analyze.assert_called_once_with(
-        preparation.analysis_request
+        preparation.analysis_request,
+        share_quantities=dict(preparation.current_share_quantities or ()),
     )
     composer.assert_called_once_with(preparation, response)
     snapshot_mapper.assert_called_once_with(enriched)

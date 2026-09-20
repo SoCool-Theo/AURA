@@ -56,6 +56,10 @@ export function AnalysisResults({
   const drawdown = analysis.max_drawdown;
   const diversification = analysis.diversification;
   const concentration = analysis.concentration;
+  const historicalValue = reportV2 ? analysis.historical_value_context : null;
+  const portfolioReturnLabel = reportV2
+    ? 'Historical Portfolio Return'
+    : 'Cumulative Return';
   const risk = analysis.risk_classification;
   const visibleReturns = filterReturnPoints(analysis.portfolio_returns, returnViewRange);
 
@@ -121,6 +125,11 @@ export function AnalysisResults({
           <Text style={styles.cardText}>
             Captured {reportV2.valuation.requested_date} using prices from {reportV2.valuation.oldest_price_as_of} to {reportV2.valuation.newest_price_as_of}. This saved context is not revalued.
           </Text>
+          {historicalValue ? (
+            <Text style={styles.cardText}>
+              Same shares at historical prices: {formatPortfolioMoney(historicalValue.starting_value, historicalValue.currency)} on {historicalValue.start_date} → {formatPortfolioMoney(historicalValue.ending_value, historicalValue.currency)} on {historicalValue.end_date}
+            </Text>
+          ) : null}
           {reportV2.valuation.fx ? (
             <Text style={styles.cardText}>
               USD/THB {formatPortfolioQuantity(reportV2.valuation.fx.rate)} as of {reportV2.valuation.fx.as_of}
@@ -157,9 +166,15 @@ export function AnalysisResults({
         />
         <WebKpiCard
           icon="trending-up-outline"
-          label="Cumulative Return"
+          label={portfolioReturnLabel}
           value={formatRatioPercent(metrics.cumulative_return)}
-          meta={monetary ? 'Saved period · Tap for amount' : 'Saved period'}
+          meta={historicalValue
+            ? monetary
+              ? 'Same shares at historical prices · Tap for values'
+              : 'Same shares valued across the saved period'
+            : monetary
+              ? 'Saved period · Tap for amount'
+              : 'Saved period'}
           tone={metrics.cumulative_return < 0 ? 'danger' : 'success'}
           onPress={monetary ? () => setSelectedMetric('cumulative') : undefined}
           accessibilityHint={monetary ? 'Shows the percentage and estimated money amount' : undefined}
@@ -202,10 +217,12 @@ export function AnalysisResults({
         />
       </View>
 
-      <SectionHeader title="Portfolio Return Series" />
+      <SectionHeader title={reportV2 ? 'Historical Portfolio Return Series' : 'Portfolio Return Series'} />
       <Card style={styles.sectionCard}>
         <Text style={styles.cardText}>
-          Historical periodic returns for the selected analysis period.
+          {historicalValue
+            ? 'Returns calculated from the same share quantities at each historical price date.'
+            : 'Historical periodic returns for the selected analysis period.'}
         </Text>
         <View style={styles.returnRangeTabs} accessibilityRole="tablist">
           {RETURN_VIEW_RANGES.map((range) => {

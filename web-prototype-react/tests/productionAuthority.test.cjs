@@ -265,6 +265,9 @@ test('web return metrics expose saved money equivalents with side chevrons', () 
   assert.match(analysis, /setSelectedMetric\('endingValue'\)/);
   assert.match(analysis, /Estimated Value at End of Period/);
   assert.match(analysis, /monetary\.estimated_ending_value/);
+  assert.match(analysis, /Historical Portfolio Return/);
+  assert.match(analysis, /analysis\.historical_value_context/);
+  assert.match(analysis, /Same shares at historical prices/);
   assert.match(analysis, /name="chevron-right"/);
   assert.match(reportPage, /<AnalysisResults report=\{report\} \/>/);
   assert.match(icons, /case 'chevron-right'/);
@@ -272,6 +275,8 @@ test('web return metrics expose saved money equivalents with side chevrons', () 
   assert.match(reportDetails, /monetary\.maximum_drawdown_amount/);
   assert.match(reportDetails, /monetary\.estimated_ending_value/);
   assert.match(reportDetails, /not a prediction of future value/);
+  assert.match(reportDetails, /fixed-shares-historical-value/);
+  assert.match(reportDetails, /not your actual profit or loss/);
   assert.match(reportDetails, /monetary\.reference_amount/);
   assert.doesNotMatch(reportDetails, /reference_amount\s*\*/);
 });

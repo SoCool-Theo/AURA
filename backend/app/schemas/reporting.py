@@ -44,7 +44,11 @@ class PortfolioReportMonetaryMetrics(AuraBaseModel):
     """Currency equivalents derived only from one saved report snapshot."""
 
     currency: Literal["USD", "THB"]
-    basis: Literal["saved-current-valuation", "planned-proposed-amount"]
+    basis: Literal[
+        "fixed-shares-historical-value",
+        "saved-current-valuation",
+        "planned-proposed-amount",
+    ]
     reference_amount: _PositiveValuationDecimal
     cumulative_return_amount: _FiniteMonetaryDecimal
     annualized_return_amount: _FiniteMonetaryDecimal
