@@ -61,6 +61,33 @@ test('current and planned holding validation preserves facts and never creates w
     { symbol: 'NVDA', proposed_amount: '6000.00' },
   ]);
   assert.ok(planned.holdings.every(holding => !('weight' in holding) && !('shares' in holding)));
+
+  const invalid = validation.validateRealHoldingDrafts([{
+    id: 3,
+    symbol: 'AAPL',
+    shares: '0',
+  }]);
+  assert.deepEqual(plain(invalid.issue), {
+    index: 0,
+    field: 'shares',
+    message: invalid.error,
+  });
+});
+
+test('portfolio input warnings identify, reveal, and focus the first invalid web field', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const warning = read('src/pages/portfolios/portfolioInputWarning.ts');
+  const create = read('src/pages/portfolios/PortfolioCreateFlow.tsx');
+  const editor = read('src/pages/portfolios/components/PortfolioHoldingsEditor.tsx');
+  const symbol = read('src/pages/portfolios/components/AssetSymbolField.tsx');
+
+  assert.match(warning, /window\.alert\(`Check your information/);
+  assert.match(warning, /scrollIntoView\(\{ behavior: 'smooth', block: 'center' \}\)/);
+  assert.match(warning, /element\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(warning, /apiValidationIssues\(error\)/);
+  assert.match(create, /presentInputWarning\(localHoldingInputWarning/);
+  assert.match(editor, /presentInputWarning\(localHoldingInputWarning/);
+  assert.match(symbol, /aria-invalid=\{Boolean\(error\)\}/);
 });
 
 test('current, planned, and legacy allocation displays consume their authoritative source', () => {

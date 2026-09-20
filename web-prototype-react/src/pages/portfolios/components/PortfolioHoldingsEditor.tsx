@@ -29,6 +29,12 @@ import {
 } from '../portfolioValidation';
 import { AssetSymbolField } from './AssetSymbolField';
 import { HoldingDecimalInput } from './HoldingDecimalInput';
+import {
+  apiPortfolioInputWarning,
+  localHoldingInputWarning,
+  showPortfolioInputWarning,
+  type PortfolioInputWarning,
+} from '../portfolioInputWarning';
 
 type EditableHolding = RealHoldingDraft | PlannedHoldingDraft;
 
@@ -79,10 +85,28 @@ export function PortfolioHoldingsEditor({
   const [holdings, setHoldings] = useState(() => editableHoldings(portfolio));
   const [error, setError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
+  const [inputWarning, setInputWarning] = useState<PortfolioInputWarning | null>(null);
+
+  function inputIds() {
+    return {
+      emptyHoldings: 'edit-add-holding',
+      rows: holdings.map(holding => ({
+        symbol: `edit-holding-${holding.id}`,
+        shares: `edit-holding-${holding.id}-shares`,
+        proposedAmount: `edit-holding-${holding.id}-proposed-amount`,
+      })),
+    };
+  }
+
+  function presentInputWarning(warning: PortfolioInputWarning) {
+    setInputWarning(warning);
+    showPortfolioInputWarning(warning);
+  }
 
   useEffect(() => {
     setHoldings(editableHoldings(portfolio));
     nextId.current = portfolio.holdings.length || 1;
+    setInputWarning(null);
   }, [portfolio]);
 
   function updateHolding(id: number, update: Partial<EditableHolding>) {
@@ -90,6 +114,7 @@ export function PortfolioHoldingsEditor({
       holding.id === id ? { ...holding, ...update } : holding
     )));
     setError(null);
+    setInputWarning(null);
   }
 
   function moveHolding(index: number, direction: -1 | 1) {
@@ -107,6 +132,7 @@ export function PortfolioHoldingsEditor({
       : validateRealHoldingDrafts(holdings as RealHoldingDraft[]);
     if (!validation.holdings) {
       setError(validation.error);
+      presentInputWarning(localHoldingInputWarning(validation.issue, inputIds()));
       return;
     }
 
@@ -125,6 +151,8 @@ export function PortfolioHoldingsEditor({
       onSaved(updated);
     } catch (requestError) {
       setError(requestError);
+      const warning = apiPortfolioInputWarning(requestError, inputIds());
+      if (warning) presentInputWarning(warning);
     } finally {
       setSaving(false);
     }
@@ -172,10 +200,11 @@ export function PortfolioHoldingsEditor({
             <tbody>{holdings.map((holding, index) => (
               <tr key={holding.id}>
                 <td>{index + 1}</td>
-                <td><AssetSymbolField ariaLabel={`Holding ${index + 1} symbol`} id={`edit-holding-${holding.id}`} value={holding.symbol} onChange={symbol => updateHolding(holding.id, { symbol })} disabled={saving} /></td>
+                <td><AssetSymbolField ariaLabel={`Holding ${index + 1} symbol`} id={`edit-holding-${holding.id}`} value={holding.symbol} onChange={symbol => updateHolding(holding.id, { symbol })} disabled={saving} error={inputWarning?.elementId === `edit-holding-${holding.id}` ? inputWarning.message : null} /></td>
                 {planned && 'proposedAmount' in holding ? (
                   <td>
                     <HoldingDecimalInput
+                      id={`edit-holding-${holding.id}-proposed-amount`}
                       aria-label={`${holding.symbol || `Holding ${index + 1}`} proposed amount`}
                       value={holding.proposedAmount}
                       onValueChange={(proposedAmount) =>
@@ -183,11 +212,13 @@ export function PortfolioHoldingsEditor({
                       }
                       placeholder="4000.00"
                       disabled={saving}
+                      error={inputWarning?.elementId === `edit-holding-${holding.id}-proposed-amount` ? inputWarning.message : null}
                     />
                   </td>
                 ) : 'shares' in holding ? (
                   <td>
                     <HoldingDecimalInput
+                      id={`edit-holding-${holding.id}-shares`}
                       aria-label={`${holding.symbol || `Holding ${index + 1}`} quantity owned`}
                       value={holding.shares}
                       onValueChange={(shares) =>
@@ -195,13 +226,14 @@ export function PortfolioHoldingsEditor({
                       }
                       placeholder="10.5"
                       disabled={saving}
+                      error={inputWarning?.elementId === `edit-holding-${holding.id}-shares` ? inputWarning.message : null}
                     />
                   </td>
                 ) : null}
                 <td><div className={styles.orderActions}>
                   <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={saving || index === 0}>↑</button>
                   <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={saving || index === holdings.length - 1}>↓</button>
-                  <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => { setHoldings(previous => previous.filter(item => item.id !== holding.id)); setError(null); }} disabled={saving}>×</button>
+                  <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => { setHoldings(previous => previous.filter(item => item.id !== holding.id)); setError(null); setInputWarning(null); }} disabled={saving}>×</button>
                 </div></td>
               </tr>
             ))}</tbody>
@@ -213,7 +245,7 @@ export function PortfolioHoldingsEditor({
             ? 'Target allocation is calculated automatically from the proposed amounts. Estimated shares are display-only.'
             : 'Current value and allocation are calculated automatically from the saved quantity and backend market prices.'}</p>
           <div className={styles.editorActions}>
-            <button className="secondary-btn" disabled={saving} onClick={() => {
+            <button id="edit-add-holding" className="secondary-btn" disabled={saving} onClick={() => {
               const id = nextId.current;
               nextId.current += 1;
               setHoldings(previous => [
@@ -223,6 +255,7 @@ export function PortfolioHoldingsEditor({
                   : createRealHoldingDraft(id),
               ]);
               setError(null);
+              setInputWarning(null);
             }}>＋ Add holding</button>
             <button className="primary-btn" onClick={() => void save()} disabled={saving}>{saving
               ? 'Saving…'

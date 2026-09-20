@@ -3,6 +3,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  type TextInput,
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +11,12 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { apiValidationIssues } from '../../api/apiErrorPresentation';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
+import {
+  apiPortfolioInputWarning,
+  localHoldingInputWarning,
+  showPortfolioInputWarning,
+  type PortfolioInputWarning
+} from '../../portfolio/portfolioInputWarning';
 import {
   createPlannedHoldingDraft,
   createRealHoldingDraft,
@@ -62,8 +69,56 @@ export function HoldingsEditor({
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<unknown>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [inputWarning, setInputWarning] = useState<PortfolioInputWarning | null>(null);
   const requestRef = useRef(0);
   const submittingRef = useRef(false);
+  const fieldRefs = useRef(new Map<string, TextInput>());
+
+  function inputKeys() {
+    return {
+      emptyHoldings: 'edit-add-holding',
+      rows: rows.map((row) => ({
+        symbol: `edit-${row.id}-symbol`,
+        shares: `edit-${row.id}-shares`,
+        proposedAmount: `edit-${row.id}-proposed-amount`
+      }))
+    };
+  }
+
+  function revealField(fieldKey: string) {
+    if (fieldKey === 'edit-add-holding') {
+      const existing = rows[0];
+      if (existing) {
+        fieldRefs.current.get(`edit-${existing.id}-symbol`)?.focus();
+        return;
+      }
+      const row = holdingMode === 'planned'
+        ? createPlannedHoldingDraft()
+        : createRealHoldingDraft();
+      const symbolKey = `edit-${row.id}-symbol`;
+      setRows([row]);
+      setInputWarning((current) => current
+        ? { ...current, fieldKey: symbolKey }
+        : current);
+      setTimeout(() => {
+        fieldRefs.current.get(symbolKey)?.focus();
+      }, 120);
+      return;
+    }
+    fieldRefs.current.get(fieldKey)?.focus();
+  }
+
+  function presentInputWarning(warning: PortfolioInputWarning) {
+    setInputWarning(warning);
+    showPortfolioInputWarning(warning, revealField);
+  }
+
+  function fieldRef(fieldKey: string) {
+    return (input: TextInput | null) => {
+      if (input) fieldRefs.current.set(fieldKey, input);
+      else fieldRefs.current.delete(fieldKey);
+    };
+  }
 
   const loadPortfolio = useCallback(async () => {
     const requestId = requestRef.current + 1;
@@ -91,6 +146,7 @@ export function HoldingsEditor({
       setPlanCurrency(portfolio.plan_currency);
       setHoldingMode(mode);
       setRows(loadedRows);
+      setInputWarning(null);
       setLoadStatus('ready');
     } catch (error) {
       if (requestRef.current !== requestId) return;
@@ -109,6 +165,7 @@ export function HoldingsEditor({
   function patchRow(id: string, patch: Partial<HoldingDraft>) {
     setSubmitError(null);
     setSubmitMessage(null);
+    setInputWarning(null);
     setRows((current) => current.map((row) => (
       row.id === id ? { ...row, ...patch } : row
     )));
@@ -133,6 +190,7 @@ export function HoldingsEditor({
     if (!validation.holdings) {
       setSubmitError(null);
       setSubmitMessage(validation.error);
+      presentInputWarning(localHoldingInputWarning(validation.issue, inputKeys()));
       return;
     }
 
@@ -156,6 +214,8 @@ export function HoldingsEditor({
     } catch (error) {
       setSubmitError(error);
       setSubmitMessage(portfolioErrorMessage(error));
+      const warning = apiPortfolioInputWarning(error, inputKeys());
+      if (warning) presentInputWarning(warning);
     } finally {
       submittingRef.current = false;
       setSaving(false);
@@ -184,6 +244,9 @@ export function HoldingsEditor({
   const fieldIssue = (index: number, field: string) => validationIssues.find(
     (issue) => issue.path.endsWith(`holdings.${index}.${field}`)
   )?.message;
+  const visibleFieldError = (fieldKey: string, apiError?: string) => (
+    inputWarning?.fieldKey === fieldKey ? inputWarning.message : apiError
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -249,9 +312,14 @@ export function HoldingsEditor({
                     accessibilityLabel={`Remove holding ${index + 1}`}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: saving }}
-                    onPress={() => setRows((current) => (
-                      current.filter((item) => item.id !== row.id)
-                    ))}
+                    onPress={() => {
+                      setSubmitError(null);
+                      setSubmitMessage(null);
+                      setInputWarning(null);
+                      setRows((current) => (
+                        current.filter((item) => item.id !== row.id)
+                      ));
+                    }}
                     style={styles.iconButton}
                     disabled={saving}
                   >
@@ -263,24 +331,33 @@ export function HoldingsEditor({
               <View>
                 <Text style={styles.fieldLabel}>Symbol</Text>
                 <AssetSymbolField
+                  ref={fieldRef(`edit-${row.id}-symbol`)}
                   value={row.symbol}
                   onChangeText={(symbol) => patchRow(row.id, { symbol })}
                   editable={!saving}
-                  error={fieldIssue(index, 'symbol')}
+                  error={visibleFieldError(
+                    `edit-${row.id}-symbol`,
+                    fieldIssue(index, 'symbol')
+                  )}
                 />
               </View>
 
               {holdingMode === 'planned' && 'proposedAmount' in row ? (
                 <HoldingDecimalInput
+                  ref={fieldRef(`edit-${row.id}-proposed-amount`)}
                   label={`Proposed Amount (${planCurrency ?? 'USD'})`}
                   value={row.proposedAmount}
                   onValueChange={(proposedAmount) => patchRow(row.id, { proposedAmount })}
                   placeholder="4000.00"
                   editable={!saving}
-                  error={fieldIssue(index, 'proposed_amount')}
+                  error={visibleFieldError(
+                    `edit-${row.id}-proposed-amount`,
+                    fieldIssue(index, 'proposed_amount')
+                  )}
                 />
               ) : 'shares' in row ? (
               <HoldingDecimalInput
+                ref={fieldRef(`edit-${row.id}-shares`)}
                 label="Quantity Owned"
                 value={row.shares}
                 onValueChange={(shares) =>
@@ -288,7 +365,10 @@ export function HoldingsEditor({
                 }
                 placeholder="10.5"
                 editable={!saving}
-                error={fieldIssue(index, 'shares')}
+                error={visibleFieldError(
+                  `edit-${row.id}-shares`,
+                  fieldIssue(index, 'shares')
+                )}
               />
             ) : null}
             </Card>
@@ -300,12 +380,17 @@ export function HoldingsEditor({
           accessibilityRole="button"
           accessibilityState={{ disabled: saving }}
           style={styles.addRow}
-          onPress={() => setRows((current) => [
-            ...current,
-            holdingMode === 'planned'
-              ? createPlannedHoldingDraft()
-              : createRealHoldingDraft()
-          ])}
+          onPress={() => {
+            setSubmitError(null);
+            setSubmitMessage(null);
+            setInputWarning(null);
+            setRows((current) => [
+              ...current,
+              holdingMode === 'planned'
+                ? createPlannedHoldingDraft()
+                : createRealHoldingDraft()
+            ]);
+          }}
           disabled={saving}
         >
           <Ionicons name="add-circle-outline" size={17} color={colors.primary} />

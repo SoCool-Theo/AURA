@@ -11,9 +11,15 @@ export type RealHoldingDraft = {
   shares: string;
 };
 
+export type HoldingValidationIssue = {
+  index: number | null;
+  field: 'holdings' | 'symbol' | 'shares' | 'proposedAmount';
+  message: string;
+};
+
 export type RealHoldingValidationResult =
-  | { holdings: PortfolioRealHoldingInput[]; error: null }
-  | { holdings: null; error: string };
+  | { holdings: PortfolioRealHoldingInput[]; error: null; issue: null }
+  | { holdings: null; error: string; issue: HoldingValidationIssue };
 
 export type PlannedHoldingDraft = {
   id: string;
@@ -22,8 +28,16 @@ export type PlannedHoldingDraft = {
 };
 
 export type PlannedHoldingValidationResult =
-  | { holdings: PortfolioPlannedHoldingInput[]; error: null }
-  | { holdings: null; error: string };
+  | { holdings: PortfolioPlannedHoldingInput[]; error: null; issue: null }
+  | { holdings: null; error: string; issue: HoldingValidationIssue };
+
+function invalidHolding(
+  message: string,
+  field: HoldingValidationIssue['field'],
+  index: number | null
+): { holdings: null; error: string; issue: HoldingValidationIssue } {
+  return { holdings: null, error: message, issue: { field, index, message } };
+}
 
 function draftId(): string {
   return `${Date.now()}-${Math.random()}`;
@@ -82,7 +96,7 @@ export function validateRealHoldingDrafts(
   drafts: RealHoldingDraft[]
 ): RealHoldingValidationResult {
   if (!drafts.length) {
-    return { holdings: null, error: 'Add at least one holding.' };
+    return invalidHolding('Add at least one holding.', 'holdings', null);
   }
 
   const holdings: PortfolioRealHoldingInput[] = [];
@@ -92,35 +106,45 @@ export function validateRealHoldingDrafts(
     const draft = drafts[index];
     const symbol = draft.symbol.trim().toUpperCase();
     if (!symbol) {
-      return { holdings: null, error: `Holding ${index + 1} needs a symbol.` };
+      return invalidHolding(
+        `Holding ${index + 1} needs a symbol.`,
+        'symbol',
+        index
+      );
     }
     if (seenSymbols.has(symbol)) {
-      return {
-        holdings: null,
-        error: `${symbol} appears more than once. Holding symbols must be unique.`
-      };
+      return invalidHolding(
+        `${symbol} appears more than once. Holding symbols must be unique.`,
+        'symbol',
+        index
+      );
     }
 
     const shares = positiveDecimal(draft.shares);
     if (!shares) {
-      return {
-        holdings: null,
-        error: `${symbol} needs a positive quantity owned with up to 12 decimal places.`
-      };
+      return invalidHolding(
+        `${symbol} needs a positive quantity owned with up to 12 decimal places.`,
+        'shares',
+        index
+      );
     }
 
     seenSymbols.add(symbol);
     holdings.push({ symbol, shares });
   }
 
-  return { holdings, error: null };
+  return { holdings, error: null, issue: null };
 }
 
 export function validatePlannedHoldingDrafts(
   drafts: PlannedHoldingDraft[]
 ): PlannedHoldingValidationResult {
   if (!drafts.length) {
-    return { holdings: null, error: 'Add at least one planned holding.' };
+    return invalidHolding(
+      'Add at least one planned holding.',
+      'holdings',
+      null
+    );
   }
 
   const holdings: PortfolioPlannedHoldingInput[] = [];
@@ -129,19 +153,31 @@ export function validatePlannedHoldingDrafts(
     const draft = drafts[index];
     const symbol = draft.symbol.trim().toUpperCase();
     if (!symbol) {
-      return { holdings: null, error: `Holding ${index + 1} needs a symbol.` };
+      return invalidHolding(
+        `Holding ${index + 1} needs a symbol.`,
+        'symbol',
+        index
+      );
     }
     if (seenSymbols.has(symbol)) {
-      return { holdings: null, error: `${symbol} appears more than once. Holding symbols must be unique.` };
+      return invalidHolding(
+        `${symbol} appears more than once. Holding symbols must be unique.`,
+        'symbol',
+        index
+      );
     }
     const proposedAmount = positiveDecimal(draft.proposedAmount);
     if (!proposedAmount) {
-      return { holdings: null, error: `${symbol} needs a positive proposed amount with up to 12 decimal places.` };
+      return invalidHolding(
+        `${symbol} needs a positive proposed amount with up to 12 decimal places.`,
+        'proposedAmount',
+        index
+      );
     }
     seenSymbols.add(symbol);
     holdings.push({ symbol, proposed_amount: proposedAmount });
   }
-  return { holdings, error: null };
+  return { holdings, error: null, issue: null };
 }
 
 export function decimalWeightToPercent(weight: number): number {

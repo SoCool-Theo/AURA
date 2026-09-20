@@ -1994,3 +1994,18 @@ remain separate follow-on work.
   2,386 passed. Reporting schema/API regression suite: 83 passed. Web
   production-authority suite: 19 passed and production build completed. Mobile
   production-authority suite: 30 passed and TypeScript compilation completed.
+
+### Completed portfolio input warning navigation
+
+- Web and mobile create/edit portfolio forms now show a warning popup when
+  local validation or a backend `422` response identifies invalid input.
+- Validation returns the exact first invalid holding row and field. The same
+  message is shown inline, the field receives its error styling, and the form
+  moves focus to that input. Web scrolls the field into view; mobile reuses the
+  keyboard-aware form scroll behavior after focusing it.
+- Empty holding lists direct the user to the holdings area. On mobile, Aura
+  restores one blank row and focuses its symbol field so the user can correct
+  the problem immediately.
+- Web production-authority suite: 20 passed and the production build completed.
+  Mobile production-authority suite: 31 passed and TypeScript compilation
+  completed.

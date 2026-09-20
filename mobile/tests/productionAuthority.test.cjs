@@ -480,6 +480,14 @@ test('real holding contracts preserve precision, order, modes, and valuation all
     ]).error,
     /positive quantity owned/i
   );
+  const invalid = validation.validateRealHoldingDrafts([
+    { id: 'a', symbol: 'AAPL', shares: '0' }
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(invalid.issue)), {
+    index: 0,
+    field: 'shares',
+    message: invalid.error
+  });
 
   const legacy = { symbol: 'AAPL', weight: 1, invested_amount: null, invested_currency: null, shares: null, purchase_date: null, position: 0 };
   const real = { symbol: 'MSFT', weight: null, invested_amount: null, invested_currency: null, shares: '1', purchase_date: null, position: 0 };
@@ -495,6 +503,23 @@ test('real holding contracts preserve precision, order, modes, and valuation all
     { symbol: 'AAPL', current_allocation: '0.375' }
   ] });
   assert.deepEqual(JSON.parse(JSON.stringify(inputs)), { MSFT: '62.5', AAPL: '37.5' });
+});
+
+test('portfolio input warnings identify, reveal, and focus the first invalid mobile field', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const warning = read('src/portfolio/portfolioInputWarning.ts');
+  const create = read('src/screens/portfolios/CreatePortfolioScreen.tsx');
+  const editor = read('src/components/portfolio/HoldingsEditor.tsx');
+  const input = read('src/components/ui/Input.tsx');
+
+  assert.match(warning, /Alert\.alert\(/);
+  assert.match(warning, /text: 'Show me'/);
+  assert.match(warning, /revealField\(warning\.fieldKey\)/);
+  assert.match(warning, /apiValidationIssues\(error\)/);
+  assert.match(create, /presentInputWarning\(localHoldingInputWarning/);
+  assert.match(editor, /presentInputWarning\(localHoldingInputWarning/);
+  assert.match(create, /fieldRefs\.current\.get\(fieldKey\)\?\.focus\(\)/);
+  assert.match(input, /forwardRef<TextInput, InputProps>/);
 });
 
 test('planned mobile contracts preserve amount authority and consume backend target weights', async () => {

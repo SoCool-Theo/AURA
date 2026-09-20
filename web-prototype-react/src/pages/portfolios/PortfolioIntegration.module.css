@@ -29,6 +29,19 @@
   line-height: 1.45;
 }
 
+.fieldError {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--red-bright);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.holdingTable input[aria-invalid='true'] {
+  border-color: var(--red-bright);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red-bright) 18%, transparent);
+}
+
 .partialSuccess {
   margin-bottom: 18px;
   padding: 16px;

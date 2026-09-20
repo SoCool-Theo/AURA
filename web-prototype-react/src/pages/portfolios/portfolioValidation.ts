@@ -18,9 +18,23 @@ export type PlannedHoldingDraft = {
   proposedAmount: string;
 };
 
+export type HoldingValidationIssue = {
+  index: number | null;
+  field: 'holdings' | 'symbol' | 'shares' | 'proposedAmount';
+  message: string;
+};
+
 export type HoldingValidationResult<T> =
-  | { holdings: T[]; error: null }
-  | { holdings: null; error: string };
+  | { holdings: T[]; error: null; issue: null }
+  | { holdings: null; error: string; issue: HoldingValidationIssue };
+
+function invalidHolding(
+  message: string,
+  field: HoldingValidationIssue['field'],
+  index: number | null,
+): { holdings: null; error: string; issue: HoldingValidationIssue } {
+  return { holdings: null, error: message, issue: { field, index, message } };
+}
 
 export function createRealHoldingDraft(id: number): RealHoldingDraft {
   return {
@@ -93,7 +107,9 @@ function normalizedUniqueSymbol(
 export function validateRealHoldingDrafts(
   drafts: RealHoldingDraft[],
 ): HoldingValidationResult<PortfolioRealHoldingInput> {
-  if (!drafts.length) return { holdings: null, error: 'Add at least one holding.' };
+  if (!drafts.length) {
+    return invalidHolding('Add at least one holding.', 'holdings', null);
+  }
 
   const holdings: PortfolioRealHoldingInput[] = [];
   const seenSymbols = new Set<string>();
@@ -101,18 +117,20 @@ export function validateRealHoldingDrafts(
     const draft = drafts[index];
     const normalizedSymbol = normalizedUniqueSymbol(draft.symbol, index, seenSymbols);
     if (!normalizedSymbol.symbol) {
-      return {
-        holdings: null,
-        error: normalizedSymbol.error ?? `Holding ${index + 1} needs a symbol.`,
-      };
+      return invalidHolding(
+        normalizedSymbol.error ?? `Holding ${index + 1} needs a symbol.`,
+        'symbol',
+        index,
+      );
     }
 
     const shares = positiveDecimal(draft.shares);
     if (!shares) {
-      return {
-        holdings: null,
-        error: `${normalizedSymbol.symbol} needs a positive quantity owned with up to 12 decimal places.`,
-      };
+      return invalidHolding(
+        `${normalizedSymbol.symbol} needs a positive quantity owned with up to 12 decimal places.`,
+        'shares',
+        index,
+      );
     }
 
     holdings.push({
@@ -121,14 +139,18 @@ export function validateRealHoldingDrafts(
     });
   }
 
-  return { holdings, error: null };
+  return { holdings, error: null, issue: null };
 }
 
 export function validatePlannedHoldingDrafts(
   drafts: PlannedHoldingDraft[],
 ): HoldingValidationResult<PortfolioPlannedHoldingInput> {
   if (!drafts.length) {
-    return { holdings: null, error: 'Add at least one planned holding.' };
+    return invalidHolding(
+      'Add at least one planned holding.',
+      'holdings',
+      null,
+    );
   }
 
   const holdings: PortfolioPlannedHoldingInput[] = [];
@@ -137,18 +159,20 @@ export function validatePlannedHoldingDrafts(
     const draft = drafts[index];
     const normalizedSymbol = normalizedUniqueSymbol(draft.symbol, index, seenSymbols);
     if (!normalizedSymbol.symbol) {
-      return {
-        holdings: null,
-        error: normalizedSymbol.error ?? `Holding ${index + 1} needs a symbol.`,
-      };
+      return invalidHolding(
+        normalizedSymbol.error ?? `Holding ${index + 1} needs a symbol.`,
+        'symbol',
+        index,
+      );
     }
 
     const proposedAmount = positiveDecimal(draft.proposedAmount);
     if (!proposedAmount) {
-      return {
-        holdings: null,
-        error: `${normalizedSymbol.symbol} needs a positive proposed amount with up to 12 decimal places.`,
-      };
+      return invalidHolding(
+        `${normalizedSymbol.symbol} needs a positive proposed amount with up to 12 decimal places.`,
+        'proposedAmount',
+        index,
+      );
     }
 
     holdings.push({
@@ -157,5 +181,5 @@ export function validatePlannedHoldingDrafts(
     });
   }
 
-  return { holdings, error: null };
+  return { holdings, error: null, issue: null };
 }
