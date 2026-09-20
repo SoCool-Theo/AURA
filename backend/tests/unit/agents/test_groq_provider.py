@@ -122,6 +122,7 @@ def test_responses_api_maps_only_grounded_data_without_store_or_tools() -> None:
     input_data = json.loads(arguments["input"])
     assert input_data == {
         "aura_grounding_context": request.grounded_context,
+        "conversation_history": [],
         "user_question": request.user_message,
     }
     context = input_data["aura_grounding_context"]

@@ -7,7 +7,7 @@ import type { AuraSelectOption } from '../../components/ui/AuraSelect';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
-import type { AgentExplainResponse, AgentSourceReference } from '../../types/agent';
+import type { AgentConversationMessage, AgentExplainResponse, AgentSourceReference } from '../../types/agent';
 import type { PortfolioSummaryResponse } from '../../types/portfolio';
 import styles from './AssistantPage.module.css';
 import { AnswerContent } from './components/AnswerContent';
@@ -16,11 +16,49 @@ function sourceLabel(source: AgentSourceReference): string {
   return source.type.charAt(0).toUpperCase() + source.type.slice(1);
 }
 
+type ChatMessage =
+  | { id: number; role: 'user'; content: string }
+  | { id: number; role: 'assistant'; content: string; response: AgentExplainResponse };
+
 interface AssistantPageProps {
   portfolioId?: string;
   reportId?: string;
   simulationId?: string;
 }
+
+const CURRENT_STARTER_QUESTIONS = [
+  'What is my portfolio?',
+  'Explain my portfolio risk simply.',
+  'What are the main risks?',
+  'What are the advantages and disadvantages?',
+] as const;
+
+const PLANNED_STARTER_QUESTIONS = [
+  'What does this planned portfolio look like?',
+  'Explain this planned allocation simply.',
+  'What are the main risks of this plan?',
+  'Why is this planned allocation concentrated?',
+] as const;
+
+const REPORT_STARTER_QUESTIONS = [
+  'Summarize this report simply.',
+  'What are the main risk drivers?',
+  'What does maximum drawdown mean here?',
+  'What should I understand first from this report?',
+] as const;
+
+const SIMULATION_STARTER_QUESTIONS = [
+  'Explain this simulation result simply.',
+  'What caused the biggest change?',
+  'What does this result say about my portfolio risk?',
+  'Summarize the key takeaway from this simulation.',
+] as const;
+
+const FOLLOW_UP_QUESTIONS = [
+  'Explain that more simply.',
+  'Why does that matter?',
+  'Which number should I pay attention to most?',
+] as const;
 
 export function AssistantPage({
   portfolioId: requestedPortfolioId,
@@ -33,13 +71,16 @@ export function AssistantPage({
     reportId ? { type: 'report', id: reportId } : simulationId ? { type: 'simulation', id: simulationId } : null,
   );
   const [message, setMessage] = useState('');
-  const [response, setResponse] = useState<AgentExplainResponse | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loadingPortfolios, setLoadingPortfolios] = useState(true);
   const [sending, setSending] = useState(false);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [submitError, setSubmitError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const sendingRef = useRef(false);
+  const nextMessageIdRef = useRef(1);
+  const conversationEndRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -55,6 +96,7 @@ export function AssistantPage({
         if (requestedPortfolioId && !requestedExists) {
           setPortfolioId('');
           setSavedContext(null);
+          setMessages([]);
           setLoadError('Portfolio not found.');
           return;
         }
@@ -80,6 +122,10 @@ export function AssistantPage({
     return () => controller.abort();
   }, [reloadKey, reportId, requestedPortfolioId, simulationId]);
 
+  useEffect(() => {
+    conversationEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, sending]);
+
   async function submit() {
     if (sendingRef.current) return;
     const normalizedMessage = message.trim();
@@ -91,23 +137,60 @@ export function AssistantPage({
       setSubmitError('Enter a question for Aura.');
       return;
     }
+
+    const history: AgentConversationMessage[] = messages.slice(-8).map(item => ({
+      role: item.role,
+      content: item.content,
+    }));
+    const userMessage: ChatMessage = {
+      id: nextMessageIdRef.current++,
+      role: 'user',
+      content: normalizedMessage,
+    };
+
     sendingRef.current = true;
     setSending(true);
     setSubmitError(null);
-    setResponse(null);
+    setMessages(current => [...current, userMessage]);
+    setMessage('');
+
     try {
-      setResponse(await explainPortfolio({
+      const result = await explainPortfolio({
         portfolio_id: portfolioId,
         message: normalizedMessage,
+        history,
         ...(savedContext?.type === 'report' ? { report_id: savedContext.id } : {}),
         ...(savedContext?.type === 'simulation' ? { simulation_id: savedContext.id } : {}),
-      }));
+      });
+      const assistantMessage: ChatMessage = {
+        id: nextMessageIdRef.current++,
+        role: 'assistant',
+        content: result.answer,
+        response: result,
+      };
+      setMessages(current => [...current, assistantMessage]);
     } catch (requestError) {
+      setMessages(current => current.filter(item => item.id !== userMessage.id));
+      setMessage(normalizedMessage);
       setSubmitError(requestError);
     } finally {
       sendingRef.current = false;
       setSending(false);
     }
+  }
+
+  function startNewChat() {
+    if (sending) return;
+    setMessages([]);
+    setMessage('');
+    setSubmitError(null);
+  }
+
+  function chooseExampleQuestion(question: string) {
+    if (sending || !portfolioId) return;
+    setMessage(question);
+    setSubmitError(null);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
   const portfolioOptions: AuraSelectOption<string>[] = [{
@@ -140,6 +223,13 @@ export function AssistantPage({
       : portfolioMode === 'LEGACY'
         ? 'Aura will explain the portfolio’s saved compatibility allocation.'
         : 'Aura will explain the current allocation derived from your saved holdings.';
+  const starterQuestions = savedContext?.type === 'report'
+    ? REPORT_STARTER_QUESTIONS
+    : savedContext?.type === 'simulation'
+      ? SIMULATION_STARTER_QUESTIONS
+      : portfolioMode === 'PLANNED'
+        ? PLANNED_STARTER_QUESTIONS
+        : CURRENT_STARTER_QUESTIONS;
 
   if (!loadingPortfolios && loadError) {
     return <div className={`page ${styles.page}`}><ScreenErrorState
@@ -154,25 +244,64 @@ export function AssistantPage({
 
   return <div className={`page ${styles.page}`}>
     <header className={styles.header}>
-      <div><span>GROUNDED PORTFOLIO EXPLANATIONS</span><h1>Ask Aura</h1><p>Aura explains your saved portfolio results. It does not calculate, predict, or recommend investments.</p></div>
+      <div><span>GROUNDED PORTFOLIO EXPLANATIONS</span><h1>Ask Aura</h1><p>Ask follow-up questions in the same conversation. Aura keeps a short in-session chat context while grounding every answer in backend-owned portfolio data.</p></div>
       <div className={styles.safetyNote}><Icon name="shield" size={18} /><span>Educational explanations only</span></div>
     </header>
-    <Card className={styles.askCard}>
-      <div className={styles.field}><span>Portfolio</span><AuraSelect ariaLabel="Select portfolio for Aura explanation" value={portfolioId} options={portfolioOptions} onChange={nextPortfolioId => { setPortfolioId(nextPortfolioId); setSavedContext(null); setResponse(null); setSubmitError(null); }} disabled={loadingPortfolios || sending} /></div>
+
+    <Card className={styles.contextPanel}>
+      <div className={styles.field}><span>Portfolio</span><AuraSelect ariaLabel="Select portfolio for Aura explanation" value={portfolioId} options={portfolioOptions} onChange={nextPortfolioId => { setPortfolioId(nextPortfolioId); setSavedContext(null); setMessages([]); setMessage(''); setSubmitError(null); }} disabled={loadingPortfolios || sending} /></div>
       {selectedPortfolio && <div className={[styles.contextCard, portfolioMode === 'PLANNED' ? styles.plannedContext : ''].join(' ')}><div><small>{savedContext ? 'IMMUTABLE SNAPSHOT' : 'LIVE PORTFOLIO'}</small><strong>{modeTitle}</strong></div><span>{contextDescription}</span></div>}
-      <label className={styles.field}><span>Your question</span><textarea value={message} onChange={event => { setMessage(event.target.value); setSubmitError(null); }} placeholder={portfolioMode === 'PLANNED' ? 'For example: What are the main risks in this proposed allocation?' : 'For example: What are the main risk factors in this portfolio?'} maxLength={4000} disabled={sending} /></label>
-      <div className={styles.actionRow}><small>{savedContext ? `Aura will use the selected saved ${savedContext.type} as context.` : 'Aura will use the selected portfolio as context.'}</small><button type="button" className="primary-btn" onClick={() => void submit()} disabled={loadingPortfolios || sending || !portfolioId || !message.trim()}><Icon name="spark" size={17} /> {sending ? 'Asking Aura…' : 'Ask Aura'}</button></div>
     </Card>
-    {Boolean(submitError) && <InlineErrorCard error={submitError} resourceName="Assistant context" fallbackMessage="Aura could not prepare this explanation." onRetry={() => void submit()} />}
+
     {loadingPortfolios && <Card className={styles.stateCard}><h2>Loading portfolios</h2><p role="status">Retrieving your saved portfolios.</p></Card>}
     {!loadingPortfolios && !loadError && !portfolios.length && <Card className={styles.stateCard}><h2>No portfolios available</h2><p>Create a saved portfolio before asking Aura to explain its risk results.</p></Card>}
-    {sending && <Card className={styles.stateCard}><h2>Aura is preparing an explanation</h2><p role="status">Aura is using your selected saved context.</p></Card>}
-    {response && !sending && <section className={styles.responseSection} aria-live="polite">
-      <Card className={styles.answerCard}><div className={styles.answerHeading}><span><Icon name="spark" size={19} /></span><div><small>AURA’S EXPLANATION</small><h2>Grounded response</h2></div></div><AnswerContent answer={response.answer} /></Card>
-      <div className={styles.detailsGrid}>
-        <Card className={styles.detailCard}><h2>Sources</h2>{response.sources.length ? <ul>{response.sources.map(source => <li key={`${source.type}-${source.id}`}><strong>{sourceLabel(source)}</strong><span>{source.id}</span></li>)}</ul> : <p>No source references were returned.</p>}</Card>
-        <Card className={styles.detailCard}><h2>Limitations</h2>{response.limitations.length ? <ul>{response.limitations.map(limitation => <li key={limitation}>{limitation}</li>)}</ul> : <p>No additional limitations were returned.</p>}</Card>
-      </div>
+
+    {!loadingPortfolios && portfolios.length > 0 && <section className={styles.chatSection} aria-live="polite">
+      {!messages.length && !sending && <Card className={styles.emptyChat}>
+        <span><Icon name="spark" size={20} /></span>
+        <div className={styles.emptyChatContent}>
+          <h2>Start a conversation</h2>
+          <p>Ask about your holdings, risk, historical performance, or a saved simulation. Choose an example below or write your own question.</p>
+          <div className={styles.exampleQuestions} aria-label="Example questions">
+            <small>TRY ASKING</small>
+            <div className={styles.questionChips}>
+              {starterQuestions.map(question => <button type="button" key={question} className={styles.questionChip} onClick={() => chooseExampleQuestion(question)}>{question}</button>)}
+            </div>
+          </div>
+        </div>
+      </Card>}
+
+      {messages.map(item => item.role === 'user'
+        ? <div className={styles.userRow} key={item.id}><div className={styles.userBubble}><small>YOU</small><p>{item.content}</p></div></div>
+        : <div className={styles.assistantRow} key={item.id}>
+          <div className={styles.assistantAvatar}><Icon name="spark" size={17} /></div>
+          <Card className={styles.assistantBubble}>
+            <small>AURA</small>
+            <AnswerContent answer={item.content} />
+            {(item.response.sources.length > 0 || item.response.limitations.length > 0) && <details className={styles.groundingDetails}>
+              <summary>Grounding details</summary>
+              {item.response.sources.length > 0 && <div><strong>Sources</strong><ul>{item.response.sources.map(source => <li key={`${item.id}-${source.type}-${source.id}`}>{sourceLabel(source)} · {source.id}</li>)}</ul></div>}
+              {item.response.limitations.length > 0 && <div><strong>Limitations</strong><ul>{item.response.limitations.map(limitation => <li key={`${item.id}-${limitation}`}>{limitation}</li>)}</ul></div>}
+            </details>}
+          </Card>
+        </div>)}
+
+      {sending && <div className={styles.assistantRow}><div className={styles.assistantAvatar}><Icon name="spark" size={17} /></div><Card className={`${styles.assistantBubble} ${styles.typingBubble}`}><small>AURA</small><p role="status">Thinking about your portfolio context…</p></Card></div>}
+      <div ref={conversationEndRef} />
     </section>}
+
+    {Boolean(submitError) && <InlineErrorCard error={submitError} resourceName="Assistant context" fallbackMessage="Aura could not prepare this explanation." onRetry={() => void submit()} />}
+
+    {!loadingPortfolios && portfolios.length > 0 && <Card className={styles.composerCard}>
+      {messages.length > 0 && !sending && <div className={styles.followUpSuggestions}>
+        <small>FOLLOW-UP IDEAS</small>
+        <div className={styles.followUpChips}>{FOLLOW_UP_QUESTIONS.map(question => <button type="button" key={question} className={styles.followUpChip} onClick={() => chooseExampleQuestion(question)}>{question}</button>)}</div>
+      </div>}
+      <label className={styles.field}><span>Your question</span><textarea ref={textareaRef} value={message} onChange={event => { setMessage(event.target.value); setSubmitError(null); }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void submit(); } }} placeholder={portfolioMode === 'PLANNED' ? 'Ask about this proposed allocation…' : 'Ask about this portfolio…'} maxLength={4000} disabled={sending || !portfolioId} /></label>
+      <div className={styles.actionRow}>
+        <div className={styles.composerHints}><small>Enter to send · Shift+Enter for a new line</small>{messages.length > 0 && <button type="button" className={styles.newChatButton} onClick={startNewChat} disabled={sending}>New chat</button>}</div>
+        <button type="button" className="primary-btn" onClick={() => void submit()} disabled={sending || !portfolioId || !message.trim()}><Icon name="spark" size={17} /> {sending ? 'Asking Aura…' : 'Send'}</button>
+      </div>
+    </Card>}
   </div>;
 }

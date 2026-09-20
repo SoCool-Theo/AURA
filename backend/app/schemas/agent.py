@@ -3,7 +3,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BeforeValidator, Field, Strict
+from pydantic import BeforeValidator, Field, Strict, model_validator
 
 from .common import AuraBaseModel
 
@@ -38,6 +38,14 @@ AgentLimitation = Annotated[
     Field(min_length=1, max_length=1000),
 ]
 AgentSourceType = Literal["portfolio", "report", "simulation"]
+AgentConversationRole = Literal["user", "assistant"]
+
+
+class AgentConversationMessage(AuraBaseModel):
+    """One bounded prior chat message supplied for follow-up context."""
+
+    role: AgentConversationRole
+    content: AgentAnswer
 
 
 class AgentExplainRequest(AuraBaseModel):
@@ -47,6 +55,18 @@ class AgentExplainRequest(AuraBaseModel):
     message: AgentMessage
     report_id: UUID | None = None
     simulation_id: UUID | None = None
+    history: list[AgentConversationMessage] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode="after")
+    def validate_completed_history_turns(self):
+        """History must contain completed user/assistant pairs in order."""
+        if len(self.history) % 2 != 0:
+            raise ValueError("history must contain completed user/assistant pairs")
+        for index, item in enumerate(self.history):
+            expected_role = "user" if index % 2 == 0 else "assistant"
+            if item.role != expected_role:
+                raise ValueError("history must alternate user and assistant messages")
+        return self
 
 
 class AgentSourceReference(AuraBaseModel):
