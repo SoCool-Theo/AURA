@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { usePortfolios } from '../portfolio/usePortfolios';
-import type { PortfolioResponse } from '../types/portfolio';
+import {
+  portfolioHoldingMode,
+  type PortfolioPlannedAllocationResponse,
+  type PortfolioResponse,
+  type PortfolioValuationResponse
+} from '../types/portfolio';
 
 export function useSimulationPortfolio(requestedPortfolioId?: string) {
   const portfolioState = usePortfolios();
@@ -10,6 +15,8 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
     portfolios,
     listStatus,
     getPortfolio,
+    getPortfolioValuation,
+    getPlannedAllocation,
     selectPortfolio
   } = portfolioState;
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(
@@ -18,6 +25,10 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
   const [detailStatus, setDetailStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [detailError, setDetailError] = useState<unknown>(null);
+  const [valuation, setValuation] = useState<PortfolioValuationResponse | null>(null);
+  const [plannedAllocation, setPlannedAllocation] = useState<PortfolioPlannedAllocationResponse | null>(null);
+  const [valuationStatus, setValuationStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [valuationError, setValuationError] = useState<unknown>(null);
   const detailRequestRef = useRef(0);
 
   useEffect(() => {
@@ -57,6 +68,60 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
     };
   }, [listStatus, loadPortfolio, selectedPortfolioId]);
 
+  const selectedPortfolio = portfolio?.id === selectedPortfolioId
+    ? portfolio
+    : null;
+
+  useEffect(() => {
+    if (!selectedPortfolio) {
+      setValuation(null);
+      setPlannedAllocation(null);
+      setValuationStatus('idle');
+      setValuationError(null);
+      return;
+    }
+    if (selectedPortfolio.portfolio_type === 'PLANNED' && selectedPortfolio.holdings.length) {
+      let current = true;
+      setValuation(null);
+      setPlannedAllocation(null);
+      setValuationStatus('loading');
+      setValuationError(null);
+      void getPlannedAllocation(selectedPortfolio.id).then((response) => {
+        if (!current) return;
+        setPlannedAllocation(response);
+        setValuationStatus('ready');
+      }).catch((error: unknown) => {
+        if (!current) return;
+        setValuationError(error);
+        setValuationStatus('error');
+      });
+      return () => { current = false; };
+    }
+    if (portfolioHoldingMode(selectedPortfolio.holdings) !== 'real') {
+      setValuation(null);
+      setPlannedAllocation(null);
+      setValuationStatus('idle');
+      setValuationError(null);
+      return;
+    }
+
+    let current = true;
+    setValuation(null);
+    setPlannedAllocation(null);
+    setValuationStatus('loading');
+    setValuationError(null);
+    void getPortfolioValuation(selectedPortfolio.id, 'USD').then((response) => {
+      if (!current) return;
+      setValuation(response);
+      setValuationStatus('ready');
+    }).catch((error: unknown) => {
+      if (!current) return;
+      setValuationError(error);
+      setValuationStatus('error');
+    });
+    return () => { current = false; };
+  }, [getPlannedAllocation, getPortfolioValuation, selectedPortfolio]);
+
   const choosePortfolio = useCallback((portfolioId: string) => {
     setSelectedPortfolioId(portfolioId);
     selectPortfolio(portfolioId);
@@ -65,9 +130,17 @@ export function useSimulationPortfolio(requestedPortfolioId?: string) {
   return {
     ...portfolioState,
     selectedPortfolioId,
-    portfolio: portfolio?.id === selectedPortfolioId ? portfolio : null,
+    portfolio: selectedPortfolio,
     detailStatus,
     detailError,
+    valuation: valuation?.portfolio_id === selectedPortfolio?.id
+      ? valuation
+      : null,
+    plannedAllocation: plannedAllocation?.portfolio_id === selectedPortfolio?.id
+      ? plannedAllocation
+      : null,
+    valuationStatus,
+    valuationError,
     choosePortfolio,
     retryPortfolio: () => selectedPortfolioId
       ? loadPortfolio(selectedPortfolioId)

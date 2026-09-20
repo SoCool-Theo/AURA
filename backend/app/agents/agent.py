@@ -14,6 +14,7 @@ from ..schemas.agent import (
 from .guardrails import (
     GuardrailReason,
     HISTORICAL_LIMITATION,
+    PLANNED_PORTFOLIO_LIMITATION,
     UNAVAILABLE_DATA_RESPONSE,
     evaluate_user_message,
     validate_provider_output,
@@ -70,13 +71,17 @@ class AuraAgent:
             "report": report,
             "simulation": simulation,
         }
+        has_planned_context = self._has_planned_context(grounded_context)
         provider_request = ProviderRequest(
             system_instructions=build_system_instructions(),
             user_message=request.message,
             grounded_context=grounded_context,
         )
         provider_response = self.provider.generate(provider_request)
-        output_decision = validate_provider_output(provider_response.text)
+        output_decision = validate_provider_output(
+            provider_response.text,
+            planned_context=has_planned_context,
+        )
         if output_decision.reason is GuardrailReason.INVESTMENT_ADVICE:
             return AgentExplainResponse(
                 answer=output_decision.response
@@ -95,6 +100,7 @@ class AuraAgent:
         limitations = self._limitations(
             has_historical_context=report_source is not None or simulation_source is not None,
             report_unavailable=report_unavailable,
+            has_planned_context=has_planned_context,
         )
         return AgentExplainResponse(
             answer=provider_response.text,
@@ -145,13 +151,36 @@ class AuraAgent:
         *,
         has_historical_context: bool,
         report_unavailable: bool,
+        has_planned_context: bool,
     ) -> list[str]:
         limitations: list[str] = []
         if has_historical_context:
             limitations.append(HISTORICAL_LIMITATION)
+        if has_planned_context:
+            limitations.append(PLANNED_PORTFOLIO_LIMITATION)
         if report_unavailable:
             limitations.append(UNAVAILABLE_DATA_RESPONSE)
         return limitations
+
+    @staticmethod
+    def _has_planned_context(context: dict[str, Any]) -> bool:
+        portfolio = context.get("portfolio")
+        if (
+            isinstance(portfolio, dict)
+            and portfolio.get("portfolio_type") == "PLANNED"
+        ):
+            return True
+        for source_name in ("report", "simulation"):
+            source = context.get(source_name)
+            if not isinstance(source, dict):
+                continue
+            baseline = source.get("baseline")
+            if (
+                isinstance(baseline, dict)
+                and baseline.get("portfolio_type") == "PLANNED"
+            ):
+                return True
+        return False
 
 
 __all__ = [

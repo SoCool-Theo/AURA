@@ -10,7 +10,7 @@ const LESSONS: Lesson[] = [
   {
     title: 'Understanding Risk Score',
     text: 'How Aura combines volatility, drawdown, concentration, and diversification.',
-    icon: 'shield',
+    icon: 'speedometer',
     topic: 'Risk basics',
     time: '5 min',
     level: 'Beginner',
@@ -18,7 +18,7 @@ const LESSONS: Lesson[] = [
   {
     title: 'Volatility',
     text: 'Learn what historical price fluctuations mean for a portfolio.',
-    icon: 'trend',
+    icon: 'pulse',
     topic: 'Market behavior',
     time: '4 min',
     level: 'Beginner',
@@ -34,7 +34,7 @@ const LESSONS: Lesson[] = [
   {
     title: 'Sharpe Ratio',
     text: 'Learn about return relative to historical volatility.',
-    icon: 'analytics',
+    icon: 'stats-chart',
     topic: 'Risk-adjusted return',
     time: '7 min',
     level: 'Intermediate',
@@ -42,7 +42,7 @@ const LESSONS: Lesson[] = [
   {
     title: 'Correlation',
     text: 'See why assets moving together can increase concentration risk.',
-    icon: 'analysis',
+    icon: 'diversification',
     topic: 'Diversification',
     time: '6 min',
     level: 'Intermediate',
@@ -71,7 +71,7 @@ export function LearnPage() {
           <p>Build confidence with clear, beginner-friendly lessons about portfolio behavior.</p>
         </div>
         <div className="learn-progress-pill">
-          <span><Icon name="reports" size={18} /></span>
+          <span><Icon name="school" size={18} /></span>
           <div><strong>{LESSONS.length} lessons</strong><small>About 36 minutes total</small></div>
         </div>
       </header>
@@ -87,7 +87,7 @@ export function LearnPage() {
         <span><Icon name="spark" size={22} /></span>
         <div>
           <h2>Future AI explanations</h2>
-          <p>The AI Assistant is a truthful preview until Aura’s backend AI Agent is implemented.</p>
+          <p>The AI Assistant explains your saved Aura results and does not make investment recommendations.</p>
         </div>
         <button className="secondary-btn" onClick={() => go('assistant')}>
           View AI Preview <span>→</span>

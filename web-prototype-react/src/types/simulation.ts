@@ -1,6 +1,11 @@
 import type { IsoDate, IsoDateTime, Uuid } from './api';
 import type { AnalysisPeriod, MaximumDrawdownMetrics } from './analytics';
-import type { PortfolioHoldingInput } from './portfolio';
+import type {
+  DecimalString,
+  PlannedPortfolioBaselineContext,
+  PortfolioCurrency,
+  PortfolioHoldingInput,
+} from './portfolio';
 
 export type HistoricalScenarioResponse = {
   id: string;
@@ -123,7 +128,7 @@ export type SimulationHistoryListResponse = {
   simulations: SimulationHistorySummary[];
 };
 
-export type SimulationHistoryDetailResponse =
+export type SimulationHistoryV1DetailResponse =
   | (HistoricalScenarioHistorySummary & {
     result: HistoricalScenarioSimulationResponse;
   })
@@ -133,6 +138,95 @@ export type SimulationHistoryDetailResponse =
   | (CombinedHistorySummary & {
     result: CombinedSimulationResponse;
   });
+
+export type SimulationBaselineHolding = {
+  id: Uuid | null;
+  symbol: string;
+  invested_amount: DecimalString | null;
+  invested_currency: PortfolioCurrency | null;
+  shares: DecimalString;
+  purchase_date: IsoDate | null;
+  position: number;
+  asset_price: DecimalString;
+  asset_quote_currency: 'USD';
+  price_as_of: IsoDate;
+  current_value_usd: DecimalString;
+  current_allocation: DecimalString;
+};
+
+export type SimulationBaselineValuationContext = {
+  valuation_currency: 'USD';
+  valuation_date: IsoDate;
+  oldest_price_as_of: IsoDate;
+  newest_price_as_of: IsoDate;
+  total_current_value_usd: DecimalString;
+  holdings: SimulationBaselineHolding[];
+};
+
+export type HistoricalScenarioHistoryV2Detail =
+  HistoricalScenarioHistorySummary & {
+    schema_version: 'historical-scenario-simulation-response-v2';
+    baseline: SimulationBaselineValuationContext;
+    result: HistoricalScenarioSimulationResponse;
+  };
+
+export type AllocationHistoryV2Detail = AllocationHistorySummary & {
+  schema_version: 'allocation-simulation-response-v2';
+  baseline: SimulationBaselineValuationContext;
+  result: AllocationSimulationResponse;
+};
+
+export type CombinedHistoryV2Detail = CombinedHistorySummary & {
+  schema_version: 'combined-simulation-response-v2';
+  baseline: SimulationBaselineValuationContext;
+  result: CombinedSimulationResponse;
+};
+
+export type SimulationHistoryV2DetailResponse =
+  | HistoricalScenarioHistoryV2Detail
+  | AllocationHistoryV2Detail
+  | CombinedHistoryV2Detail;
+
+export type HistoricalScenarioHistoryV3Detail =
+  HistoricalScenarioHistorySummary & {
+    schema_version: 'historical-scenario-simulation-response-v3';
+    baseline: PlannedPortfolioBaselineContext;
+    result: HistoricalScenarioSimulationResponse;
+  };
+
+export type AllocationHistoryV3Detail = AllocationHistorySummary & {
+  schema_version: 'allocation-simulation-response-v3';
+  baseline: PlannedPortfolioBaselineContext;
+  result: AllocationSimulationResponse;
+};
+
+export type CombinedHistoryV3Detail = CombinedHistorySummary & {
+  schema_version: 'combined-simulation-response-v3';
+  baseline: PlannedPortfolioBaselineContext;
+  result: CombinedSimulationResponse;
+};
+
+export type SimulationHistoryV3DetailResponse =
+  | HistoricalScenarioHistoryV3Detail
+  | AllocationHistoryV3Detail
+  | CombinedHistoryV3Detail;
+
+export type SimulationHistoryDetailResponse =
+  | SimulationHistoryV1DetailResponse
+  | SimulationHistoryV2DetailResponse
+  | SimulationHistoryV3DetailResponse;
+
+export function isSimulationHistoryV2(
+  detail: SimulationHistoryDetailResponse,
+): detail is SimulationHistoryV2DetailResponse {
+  return 'schema_version' in detail && detail.schema_version.endsWith('-v2');
+}
+
+export function isSimulationHistoryV3(
+  detail: SimulationHistoryDetailResponse,
+): detail is SimulationHistoryV3DetailResponse {
+  return 'schema_version' in detail && detail.schema_version.endsWith('-v3');
+}
 
 // Legacy scenario view model retained for mock-backed pages outside the
 // production simulation route.

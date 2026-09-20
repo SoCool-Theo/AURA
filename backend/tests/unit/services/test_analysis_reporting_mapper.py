@@ -15,14 +15,20 @@ from backend.app.schemas.reporting import (
     PortfolioReportSummary,
     PortfolioReportV2Response,
     PortfolioReportV2Snapshot,
+    PortfolioReportV3Response,
+    PortfolioReportV3Snapshot,
 )
 from backend.app.services.analysis_reporting_mapper import (
     PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION,
     PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+    PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+    analysis_to_asset_report_monetary_metrics,
+    analysis_to_report_monetary_metrics,
     analysis_record_to_report_response,
     analysis_record_to_report_summary,
     analysis_response_to_snapshot,
     enriched_analysis_to_v2_snapshot,
+    enriched_analysis_to_v3_snapshot,
 )
 from backend.app.services.portfolio_analysis_composition import (
     compose_portfolio_analysis,
@@ -34,6 +40,7 @@ from backend.app.services.portfolio_valuation_service import (
 from backend.tests.unit.services.test_portfolio_analysis_composition import (
     _analysis_response as _real_analysis_response,
     _real_preparation,
+    _planned_preparation,
 )
 from backend.tests.unit.schemas.test_reporting import _valid_analysis_data
 
@@ -101,6 +108,139 @@ def test_v2_snapshot_version_constant_uses_approved_token() -> None:
     assert PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION == (
         "portfolio-analysis-response-v2"
     )
+
+
+def _valid_v3_snapshot() -> dict[str, object]:
+    enriched = compose_portfolio_analysis(
+        _planned_preparation(),
+        _real_analysis_response(),
+    )
+    return enriched_analysis_to_v3_snapshot(enriched)
+
+
+def test_v3_snapshot_version_constant_uses_approved_token() -> None:
+    assert PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION == (
+        "portfolio-analysis-response-v3"
+    )
+
+
+def test_report_monetary_metrics_use_saved_reference_and_exact_drawdown_path(
+) -> None:
+    metrics = analysis_to_report_monetary_metrics(
+        _valid_response(),
+        currency="USD",
+        basis="saved-current-valuation",
+        reference_amount=Decimal("1000"),
+    )
+
+    assert metrics.currency == "USD"
+    assert metrics.basis == "saved-current-valuation"
+    assert metrics.reference_amount == Decimal("1000")
+    assert metrics.cumulative_return_amount == Decimal("40.094000")
+    assert metrics.annualized_return_amount == Decimal("200.0")
+    assert metrics.maximum_drawdown_amount == Decimal("-10.200000")
+
+
+def test_asset_report_monetary_metrics_use_each_saved_reference_and_path(
+) -> None:
+    metrics = analysis_to_asset_report_monetary_metrics(
+        _valid_response(),
+        currency="USD",
+        basis="saved-current-value",
+        reference_amounts={
+            "AAPL": Decimal("1000"),
+            "MSFT": Decimal("2000"),
+            "BND": Decimal("3000"),
+        },
+    )
+
+    assert [metric.symbol for metric in metrics] == ["AAPL", "MSFT", "BND"]
+    assert metrics[0].currency == "USD"
+    assert metrics[0].basis == "saved-current-value"
+    assert metrics[0].reference_amount == Decimal("1000")
+    assert metrics[0].cumulative_return_amount == Decimal("80.00")
+    assert metrics[0].annualized_return_amount == Decimal("240.00")
+    assert metrics[0].maximum_drawdown_amount == Decimal("-20.60000")
+    assert metrics[1].reference_amount == Decimal("2000")
+    assert metrics[1].cumulative_return_amount == Decimal("120.00")
+    assert metrics[1].annualized_return_amount == Decimal("360.00")
+    assert metrics[1].maximum_drawdown_amount is None
+
+
+def test_asset_report_monetary_metrics_require_complete_reference_symbols(
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match="reference symbols must match analysis assets",
+    ):
+        analysis_to_asset_report_monetary_metrics(
+            _valid_response(),
+            currency="USD",
+            basis="saved-current-value",
+            reference_amounts={"AAPL": Decimal("1000")},
+        )
+
+
+def test_planned_enriched_result_maps_to_complete_json_safe_v3_snapshot() -> None:
+    preparation = _planned_preparation()
+    analysis = _real_analysis_response()
+    enriched = compose_portfolio_analysis(preparation, analysis)
+
+    snapshot = enriched_analysis_to_v3_snapshot(enriched)
+    validated = PortfolioReportV3Snapshot.model_validate(snapshot)
+
+    json.dumps(snapshot, allow_nan=False)
+    assert validated.schema_version == "portfolio-analysis-response-v3"
+    assert validated.analysis == analysis
+    assert validated.baseline.portfolio_type == "PLANNED"
+    assert validated.baseline.baseline_source == (
+        "proposed-amount-target-allocation"
+    )
+    assert validated.baseline.total_proposed_amount == Decimal("1000")
+    assert [holding.symbol for holding in validated.baseline.holdings] == [
+        "AAPL",
+        "BND",
+    ]
+    assert [
+        holding.proposed_amount for holding in validated.baseline.holdings
+    ] == [Decimal("600"), Decimal("400")]
+    assert "estimated_shares" not in snapshot["baseline"]["holdings"][0]
+
+
+def test_v3_record_restores_frozen_plan_without_recalculation_or_mutation() -> None:
+    snapshot = _valid_v3_snapshot()
+    frozen_snapshot = deepcopy(snapshot)
+    analysis = _analysis_record(
+        result_snapshot=snapshot,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+        start_date=date(2022, 1, 1),
+        end_date=date(2022, 12, 31),
+    )
+
+    result = analysis_record_to_report_response(analysis)
+
+    assert isinstance(result, PortfolioReportV3Response)
+    assert result.schema_version == "portfolio-analysis-response-v3"
+    assert result.baseline.total_proposed_amount == Decimal("1000")
+    assert result.analysis == _real_analysis_response()
+    assert result.monetary_metrics is not None
+    assert result.monetary_metrics.basis == "planned-proposed-amount"
+    assert result.monetary_metrics.reference_amount == Decimal("1000")
+    assert [
+        metric.symbol for metric in result.asset_monetary_metrics
+    ] == ["BND", "AAPL"]
+    assert [
+        metric.reference_amount for metric in result.asset_monetary_metrics
+    ] == [Decimal("400"), Decimal("600")]
+    assert all(
+        metric.basis == "planned-proposed-amount"
+        for metric in result.asset_monetary_metrics
+    )
+    assert all(
+        metric.maximum_drawdown_amount is None
+        for metric in result.asset_monetary_metrics
+    )
+    assert analysis.result_snapshot == frozen_snapshot
 
 
 def test_real_enriched_result_maps_to_complete_json_safe_v2_snapshot() -> None:
@@ -204,6 +344,29 @@ def test_v2_record_maps_snapshot_without_revaluation_or_mutation() -> None:
     assert result.holdings[0].asset_price == Decimal("200.000000000000")
     assert result.holdings[0].current_allocation == Decimal("0.600000000000")
     assert result.analysis == _real_analysis_response()
+    assert result.monetary_metrics is not None
+    assert result.monetary_metrics.currency == "USD"
+    assert result.monetary_metrics.basis == "saved-current-valuation"
+    assert result.monetary_metrics.reference_amount == Decimal(
+        "10000.000000000000"
+    )
+    assert [
+        metric.symbol for metric in result.asset_monetary_metrics
+    ] == ["BND", "AAPL"]
+    assert [
+        metric.reference_amount for metric in result.asset_monetary_metrics
+    ] == [
+        Decimal("4000.000000000000"),
+        Decimal("6000.000000000000"),
+    ]
+    assert all(
+        metric.basis == "saved-current-value"
+        for metric in result.asset_monetary_metrics
+    )
+    assert all(
+        metric.maximum_drawdown_amount is None
+        for metric in result.asset_monetary_metrics
+    )
     assert analysis.result_snapshot == frozen_snapshot
 
 
@@ -232,6 +395,56 @@ def test_analysis_response_serializes_to_json_safe_snapshot_and_round_trips(
     assert isinstance(serialized, str)
     assert round_tripped == response
     assert snapshot == response.model_dump(mode="json")
+
+
+def test_snapshot_freezes_asset_risk_and_historical_series() -> None:
+    data = _valid_analysis_data()
+    asset_metrics = data["asset_metrics"]
+    portfolio_returns = data["portfolio_returns"]
+    assert isinstance(asset_metrics, list)
+    assert isinstance(portfolio_returns, list)
+
+    for metric in asset_metrics:
+        metric["risk_classification"] = {
+            "risk_score": 50.0,
+            "risk_level": "High",
+            "volatility_points": 2,
+            "drawdown_points": 1,
+            "metrics_used": ["volatility", "maximum_drawdown"],
+            "reasons": ["Elevated historical volatility"],
+        }
+    data["asset_returns"] = [
+        {
+            "symbol": metric["symbol"],
+            "points": [
+                {
+                    "date": point["date"],
+                    "asset_return": 0.01,
+                }
+                for point in portfolio_returns
+            ],
+        }
+        for metric in asset_metrics
+    ]
+    response = PortfolioAnalysisResponse.model_validate(data)
+
+    snapshot = analysis_response_to_snapshot(response)
+
+    assert snapshot["asset_metrics"][0]["risk_classification"] == {
+        "risk_score": 50.0,
+        "risk_level": "High",
+        "volatility_points": 2,
+        "drawdown_points": 1,
+        "metrics_used": ["volatility", "maximum_drawdown"],
+        "reasons": ["Elevated historical volatility"],
+    }
+    assert [series["symbol"] for series in snapshot["asset_returns"]] == [
+        metric["symbol"] for metric in asset_metrics
+    ]
+    assert snapshot["asset_returns"][0]["points"] == [
+        {"date": point["date"], "asset_return": 0.01}
+        for point in portfolio_returns
+    ]
 
 
 def test_snapshot_serialization_does_not_mutate_source_response() -> None:
@@ -344,7 +557,7 @@ def test_supported_analysis_record_maps_to_validated_report_response() -> None:
 
 
 def test_unsupported_snapshot_version_is_rejected() -> None:
-    analysis = _analysis_record(schema_version="portfolio-analysis-response-v3")
+    analysis = _analysis_record(schema_version="portfolio-analysis-response-v4")
 
     with pytest.raises(
         ValueError,

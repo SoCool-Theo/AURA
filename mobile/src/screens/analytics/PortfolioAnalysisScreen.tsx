@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { apiValidationIssues } from '../../api/apiErrorPresentation';
 import { AnalysisResults } from '../../components/analytics/AnalysisResults';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -17,6 +18,7 @@ import {
   type DateRange
 } from '../../components/ui/DateRangeSelector';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { FormErrorSummary, InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { PageTitle } from '../../components/ui/PageTitle';
@@ -26,6 +28,7 @@ import { reportErrorMessage } from '../../report/reportErrors';
 import { formatReportTimestamp } from '../../report/reportFormatting';
 import { useReports } from '../../report/useReports';
 import { colors, spacing } from '../../theme/theme';
+import type { PortfolioCurrency } from '../../types/portfolio';
 import type { PortfolioReportResponse } from '../../types/report';
 
 function localIsoDate(date: Date): string {
@@ -82,8 +85,10 @@ export function PortfolioAnalysisScreen({
   const [startDate, setStartDate] = useState(initialPeriod.start);
   const [endDate, setEndDate] = useState(initialPeriod.end);
   const [selectedRange, setSelectedRange] = useState<DateRange | null>('1Y');
+  const [currency, setCurrency] = useState<PortfolioCurrency>('USD');
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<unknown>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const submittingRef = useRef(false);
   const requestedSelectionHandledRef = useRef(false);
@@ -129,6 +134,7 @@ export function PortfolioAnalysisScreen({
     selectPortfolio(portfolioId);
     setReport(null);
     setError(null);
+    setRequestError(null);
   }
 
   function chooseRange(range: DateRange) {
@@ -139,6 +145,7 @@ export function PortfolioAnalysisScreen({
     setEndDate(period.end);
     setReport(null);
     setError(null);
+    setRequestError(null);
   }
 
   function editStartDate(value: string) {
@@ -146,6 +153,7 @@ export function PortfolioAnalysisScreen({
     setStartDate(value);
     setReport(null);
     setError(null);
+    setRequestError(null);
   }
 
   function editEndDate(value: string) {
@@ -153,23 +161,28 @@ export function PortfolioAnalysisScreen({
     setEndDate(value);
     setReport(null);
     setError(null);
+    setRequestError(null);
   }
 
   async function analyze() {
     if (submittingRef.current) return;
     if (!selectedPortfolioId) {
+      setRequestError(null);
       setError('Choose a portfolio to analyze.');
       return;
     }
     if (!startDate.trim() || !endDate.trim()) {
+      setRequestError(null);
       setError('Enter both the analysis start date and end date.');
       return;
     }
     if (!isIsoDate(startDate) || !isIsoDate(endDate)) {
+      setRequestError(null);
       setError('Enter valid dates in YYYY-MM-DD format.');
       return;
     }
     if (startDate > endDate) {
+      setRequestError(null);
       setError('Start date must be on or before end date.');
       return;
     }
@@ -177,13 +190,15 @@ export function PortfolioAnalysisScreen({
     submittingRef.current = true;
     setAnalyzing(true);
     setError(null);
+    setRequestError(null);
     setReport(null);
     try {
       setReport(await createReport(selectedPortfolioId, {
         start_date: startDate,
         end_date: endDate
-      }));
+      }, currency));
     } catch (requestError) {
+      setRequestError(requestError);
       setError(reportErrorMessage(
         requestError,
         'Unable to analyze this portfolio.'
@@ -204,13 +219,12 @@ export function PortfolioAnalysisScreen({
   if (listStatus === 'error' && !portfolios.length) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <View style={styles.centerState}>
-          <Card style={styles.stateCard}>
-            <Text style={styles.errorTitle}>Portfolios unavailable</Text>
-            <Text style={styles.stateText}>{portfolioErrorMessage(listError)}</Text>
-            <Button title="Retry" onPress={() => void refreshPortfolios()} />
-          </Card>
-        </View>
+        <ScreenErrorState
+          error={listError}
+          resourceName="Portfolio list"
+          fallbackMessage="Unable to load portfolios for analysis."
+          onRetry={() => void refreshPortfolios()}
+        />
       </SafeAreaView>
     );
   }
@@ -223,7 +237,7 @@ export function PortfolioAnalysisScreen({
             <EmptyState
               icon="analytics-outline"
               title="No portfolio to analyze"
-              description="Create a real portfolio and complete its holdings before running analysis."
+              description="Create a current or planned portfolio and complete its holdings before running analysis."
             />
           </Card>
         </View>
@@ -234,6 +248,9 @@ export function PortfolioAnalysisScreen({
   const selectedPortfolio = portfolios.find(
     (item) => item.id === selectedPortfolioId
   );
+  const validationIssues = apiValidationIssues(requestError);
+  const startDateError = validationIssues.find((issue) => issue.path.endsWith('start_date'))?.message;
+  const endDateError = validationIssues.find((issue) => issue.path.endsWith('end_date'))?.message;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -244,15 +261,17 @@ export function PortfolioAnalysisScreen({
         <PageTitle
           eyebrow="PORTFOLIO ANALYSIS"
           title="Analytics"
-          subtitle="Run Aura's backend analytics and save one immutable report."
+          subtitle="Analyze historical risk and save the results."
         />
 
         {listStatus === 'error' ? (
-          <Card style={styles.stateCard}>
-            <Text style={styles.errorTitle}>Portfolio list refresh failed</Text>
-            <Text style={styles.stateText}>Using the previously loaded portfolios. {portfolioErrorMessage(listError)}</Text>
-            <Button title="Retry portfolios" onPress={() => void refreshPortfolios()} />
-          </Card>
+          <InlineErrorCard
+            error={listError}
+            message={portfolioErrorMessage(listError)}
+            stale
+            onRetry={() => void refreshPortfolios()}
+            retryTitle="Retry portfolios"
+          />
         ) : null}
 
         <Card style={styles.controlsCard}>
@@ -266,6 +285,9 @@ export function PortfolioAnalysisScreen({
               const selected = portfolio.id === selectedPortfolioId;
               return (
                 <Pressable
+                  accessibilityLabel={`${portfolio.name} portfolio`}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected, disabled: analyzing }}
                   key={portfolio.id}
                   onPress={() => choosePortfolio(portfolio.id)}
                   disabled={analyzing}
@@ -282,6 +304,43 @@ export function PortfolioAnalysisScreen({
             })}
           </ScrollView>
 
+          {selectedPortfolio?.portfolio_type === 'PLANNED' ? (
+            <Card style={styles.plannedNotice}>
+              <Text style={styles.controlLabel}>Hypothetical planned analysis</Text>
+              <Text style={styles.stateText}>
+                Aura analyzes target weights calculated from proposed amounts. Estimated shares are for display only.
+              </Text>
+            </Card>
+          ) : <>
+          <View style={styles.periodHeader}>
+            <Text style={styles.controlLabel}>Report currency</Text>
+            <Text style={styles.helper}>Saved with this report</Text>
+          </View>
+          <View style={styles.currencyControl}>
+            {(['USD', 'THB'] as PortfolioCurrency[]).map((option) => {
+              const selected = currency === option;
+              return (
+                <Pressable
+                  accessibilityLabel={`${option} report currency`}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected, disabled: analyzing }}
+                  disabled={analyzing}
+                  key={option}
+                  onPress={() => {
+                    setCurrency(option);
+                    setReport(null);
+                    setError(null);
+                    setRequestError(null);
+                  }}
+                  style={[styles.currencyOption, selected && styles.selectedOption]}
+                >
+                  <Text style={[styles.portfolioName, selected && styles.selectedOptionText]}>{option}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          </>}
+
           <View style={styles.periodHeader}>
             <Text style={styles.controlLabel}>Analysis period</Text>
             <Text style={styles.helper}>Inclusive calendar dates</Text>
@@ -292,6 +351,8 @@ export function PortfolioAnalysisScreen({
             <View style={styles.dateField}>
               <Text style={styles.dateLabel}>Start date</Text>
               <TextInput
+                accessibilityLabel="Analysis start date"
+                accessibilityState={{ disabled: analyzing }}
                 value={startDate}
                 onChangeText={editStartDate}
                 placeholder="YYYY-MM-DD"
@@ -299,12 +360,15 @@ export function PortfolioAnalysisScreen({
                 autoCapitalize="none"
                 keyboardType="numbers-and-punctuation"
                 editable={!analyzing}
-                style={styles.input}
+                style={[styles.input, startDateError ? styles.inputError : null]}
               />
+              {startDateError ? <Text style={styles.fieldError}>{startDateError}</Text> : null}
             </View>
             <View style={styles.dateField}>
               <Text style={styles.dateLabel}>End date</Text>
               <TextInput
+                accessibilityLabel="Analysis end date"
+                accessibilityState={{ disabled: analyzing }}
                 value={endDate}
                 onChangeText={editEndDate}
                 placeholder="YYYY-MM-DD"
@@ -312,8 +376,9 @@ export function PortfolioAnalysisScreen({
                 autoCapitalize="none"
                 keyboardType="numbers-and-punctuation"
                 editable={!analyzing}
-                style={styles.input}
+                style={[styles.input, endDateError ? styles.inputError : null]}
               />
+              {endDateError ? <Text style={styles.fieldError}>{endDateError}</Text> : null}
             </View>
           </View>
 
@@ -325,17 +390,14 @@ export function PortfolioAnalysisScreen({
         </Card>
 
         {error ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Analysis unavailable</Text>
-            <Text style={styles.stateText}>{error}</Text>
-          </Card>
+          <FormErrorSummary error={requestError} message={error} />
         ) : null}
 
         {analyzing ? (
           <Card style={styles.stateCard}>
             <Text style={styles.stateTitle}>Running portfolio analysis</Text>
             <Text style={styles.stateText}>
-              Aura is calculating the requested period and saving the backend report snapshot.
+              Aura is analyzing the requested period and saving the results.
             </Text>
           </Card>
         ) : null}
@@ -348,7 +410,7 @@ export function PortfolioAnalysisScreen({
                 Created {formatReportTimestamp(report.created_at)} for {selectedPortfolio?.name ?? report.analysis.portfolio_name}.
               </Text>
               <Button
-                title="Open Immutable Report"
+                title="Open Saved Report"
                 variant="secondary"
                 onPress={() => navigation.navigate('ReportDetail', {
                   portfolioId: report.portfolio_id,
@@ -356,7 +418,14 @@ export function PortfolioAnalysisScreen({
                 })}
               />
             </Card>
-            <AnalysisResults analysis={report.analysis} />
+            <AnalysisResults
+              report={report}
+              onOpenAsset={(assetSymbol) => navigation.navigate('AssetRiskDetail', {
+                portfolioId: report.portfolio_id,
+                reportId: report.id,
+                assetSymbol
+              })}
+            />
           </>
         ) : null}
       </KeyboardAwareScrollView>
@@ -368,11 +437,23 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: 110 },
   controlsCard: { gap: spacing.md, marginTop: spacing.xl },
+  plannedNotice: { gap: spacing.sm, backgroundColor: colors.summaryBackground, borderColor: colors.primary },
   controlLabel: { color: colors.text, fontSize: 12, fontWeight: '900' },
   helper: { color: colors.muted, fontSize: 9 },
   portfolioOptions: { gap: spacing.sm, paddingRight: spacing.md },
+  currencyControl: { flexDirection: 'row', gap: spacing.sm },
+  currencyOption: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt
+  },
   portfolioOption: {
-    minHeight: 42,
+    minHeight: 44,
     maxWidth: 190,
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
@@ -389,12 +470,13 @@ const styles = StyleSheet.create({
   selectedOptionText: { color: colors.primary },
   periodHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: spacing.sm
   },
-  dateRow: { flexDirection: 'row', gap: spacing.md },
-  dateField: { flex: 1 },
+  dateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  dateField: { flexGrow: 1, flexBasis: 140 },
   dateLabel: { color: colors.muted, fontSize: 10, marginBottom: 6 },
   input: {
     minHeight: 46,
@@ -407,6 +489,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700'
   },
+  inputError: { borderColor: colors.danger },
+  fieldError: { color: colors.danger, fontSize: 10, lineHeight: 15, marginTop: 4 },
   errorCard: { gap: spacing.sm, marginTop: spacing.md, borderColor: colors.dangerBorder },
   errorTitle: { color: colors.danger, fontSize: 15, fontWeight: '900' },
   stateCard: { gap: spacing.md, marginTop: spacing.md },

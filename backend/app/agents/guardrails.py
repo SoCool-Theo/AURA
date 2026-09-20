@@ -16,11 +16,15 @@ UNAVAILABLE_DATA_RESPONSE = (
     "I can explain Aura's available historical results, but the information needed "
     "for that explanation is unavailable."
 )
+PLANNED_PORTFOLIO_LIMITATION = (
+    "This planned portfolio is hypothetical; its historical results are not a "
+    "forecast, recommendation, or executable order."
+)
 INVESTMENT_ADVICE_REFUSAL = (
     "I can explain the historical risk characteristics of your portfolio, but I "
     "can't recommend whether you should buy, sell, or hold a specific investment, "
     "add or remove assets, or change your allocation. "
-    "I can explain how a holding contributes to your portfolio's calculated risk."
+    "I can explain how an asset contributes to the portfolio's calculated risk."
 )
 INVALID_MESSAGE_RESPONSE = "Please ask a portfolio-risk or historical-simulation question."
 
@@ -34,6 +38,7 @@ class GuardrailReason(str, Enum):
     INVALID_OUTPUT = "invalid_output"
     OUTPUT_TOO_LONG = "output_too_long"
     SYSTEM_LEAKAGE = "system_leakage"
+    PLANNED_OWNERSHIP_CLAIM = "planned_ownership_claim"
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +107,14 @@ _PROHIBITED_OUTPUT_ADVICE_PATTERNS = (
     ),
     re.compile(r"(?:^|[.!?]\s*|\n\s*(?:[-*]\s*)?)(?:buy|purchase|sell)\b"),
 )
+_PLANNED_OWNERSHIP_CLAIM_PATTERNS = (
+    re.compile(r"\byou\s+(?:currently\s+)?(?:own|hold)\b"),
+    re.compile(
+        r"\byour\s+(?:(?:current|planned)\s+)?"
+        r"(?:holdings|owned\s+assets|positions)\b"
+    ),
+    re.compile(r"\byour\s+current\s+(?:portfolio|allocation)\b"),
+)
 
 
 def _normalized_message(value: object) -> str | None:
@@ -131,7 +144,11 @@ def evaluate_user_message(message: object) -> GuardrailDecision:
     return GuardrailDecision(allowed=True, reason=GuardrailReason.ALLOWED)
 
 
-def validate_provider_output(text: object) -> GuardrailDecision:
+def validate_provider_output(
+    text: object,
+    *,
+    planned_context: bool = False,
+) -> GuardrailDecision:
     """Validate Aura-specific provider output safety without changing its text."""
     if not isinstance(text, str) or not text.strip():
         return GuardrailDecision(False, GuardrailReason.INVALID_OUTPUT)
@@ -145,6 +162,14 @@ def validate_provider_output(text: object) -> GuardrailDecision:
             GuardrailReason.INVESTMENT_ADVICE,
             INVESTMENT_ADVICE_REFUSAL,
         )
+    if planned_context and any(
+        pattern.search(text.casefold())
+        for pattern in _PLANNED_OWNERSHIP_CLAIM_PATTERNS
+    ):
+        return GuardrailDecision(
+            False,
+            GuardrailReason.PLANNED_OWNERSHIP_CLAIM,
+        )
     return GuardrailDecision(True, GuardrailReason.ALLOWED)
 
 
@@ -155,6 +180,7 @@ __all__ = [
     "INVALID_MESSAGE_RESPONSE",
     "INVESTMENT_ADVICE_REFUSAL",
     "MAX_PROVIDER_OUTPUT_CHARACTERS",
+    "PLANNED_PORTFOLIO_LIMITATION",
     "UNAVAILABLE_DATA_RESPONSE",
     "evaluate_user_message",
     "validate_provider_output",

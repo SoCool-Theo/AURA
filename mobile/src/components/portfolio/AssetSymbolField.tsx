@@ -12,19 +12,22 @@ import {
   View
 } from 'react-native';
 
-import { supportedAssetSymbols } from '../../portfolio/supportedAssetSymbols';
+import { supportedAssets } from '../../portfolio/supportedAssetSymbols';
 import { colors, spacing } from '../../theme/theme';
 
 type AssetSymbolFieldProps = Omit<
   TextInputProps,
   'onChangeText' | 'value'
 > & {
+  error?: string | null;
   onChangeText: (value: string) => void;
   value: string;
 };
 
 export function AssetSymbolField({
+  accessibilityLabel,
   editable = true,
+  error,
   onChangeText,
   placeholder = 'AAPL',
   style,
@@ -51,8 +54,10 @@ export function AssetSymbolField({
 
   return (
     <>
-      <View style={styles.field}>
+      <View style={[styles.field, error ? styles.errorField : null]}>
         <TextInput
+          accessibilityLabel={accessibilityLabel ?? 'Asset symbol'}
+          accessibilityState={{ disabled: !editable }}
           autoCapitalize="characters"
           autoCorrect={false}
           editable={editable}
@@ -82,6 +87,7 @@ export function AssetSymbolField({
           />
         </Pressable>
       </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       <Modal
         animationType="fade"
@@ -93,6 +99,7 @@ export function AssetSymbolField({
         <View style={styles.backdrop}>
           <Pressable
             accessibilityLabel="Close asset symbol picker"
+            accessibilityRole="button"
             onPress={() => setPickerVisible(false)}
             style={StyleSheet.absoluteFill}
           />
@@ -125,26 +132,30 @@ export function AssetSymbolField({
               showsVerticalScrollIndicator
               style={styles.options}
             >
-              {supportedAssetSymbols.map((symbol) => {
-                const selected = symbol === normalizedValue;
+              {supportedAssets.map((asset) => {
+                const selected = asset.symbol === normalizedValue;
                 return (
                   <Pressable
-                    accessibilityRole="button"
+                    accessibilityLabel={`${asset.symbol}, ${asset.name}`}
+                    accessibilityRole="radio"
                     accessibilityState={{ selected }}
-                    key={symbol}
-                    onPress={() => chooseSymbol(symbol)}
+                    key={asset.symbol}
+                    onPress={() => chooseSymbol(asset.symbol)}
                     style={({ pressed }) => [
                       styles.option,
                       selected && styles.optionSelected,
                       pressed && styles.optionPressed
                     ]}
                   >
-                    <Text style={[
-                      styles.optionText,
-                      selected && styles.optionTextSelected
-                    ]}>
-                      {symbol}
-                    </Text>
+                    <View style={styles.optionCopy}>
+                      <Text style={[
+                        styles.optionText,
+                        selected && styles.optionTextSelected
+                      ]}>
+                        {asset.symbol}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.optionName}>— {asset.name}</Text>
+                    </View>
                     {selected ? (
                       <Ionicons color={colors.primary} name="checkmark" size={19} />
                     ) : null}
@@ -165,6 +176,8 @@ export function AssetSymbolField({
 
 const styles = StyleSheet.create({
   field: { position: 'relative' },
+  errorField: { borderRadius: 14, borderWidth: 1, borderColor: colors.danger },
+  errorText: { color: colors.danger, fontSize: 11, lineHeight: 16, marginTop: 4 },
   input: {
     minHeight: 48,
     borderRadius: 14,
@@ -178,10 +191,10 @@ const styles = StyleSheet.create({
   },
   pickerButton: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    bottom: 4,
-    width: 42,
+    top: 2,
+    right: 2,
+    bottom: 2,
+    width: 44,
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
@@ -217,8 +230,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs
   },
   closeButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -247,8 +260,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.selectedBackground
   },
   optionPressed: { backgroundColor: colors.surfaceElevated },
+  optionCopy: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   optionText: { color: colors.textSecondary, fontSize: 14, fontWeight: '800' },
   optionTextSelected: { color: colors.primary },
+  optionName: { flex: 1, color: colors.muted, fontSize: 11 },
   menuNote: {
     color: colors.muted,
     fontSize: 10,

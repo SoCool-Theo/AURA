@@ -27,6 +27,8 @@ type AuthContextValue = {
   user: AuthenticatedUserResponse | null;
   status: AuthStatus;
   sessionError: string | null;
+  sessionFailure: unknown;
+  sessionExpired: boolean;
   signIn: (request: LoginRequest) => Promise<void>;
   register: (
     request: RegistrationRequest
@@ -41,6 +43,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<AuthenticatedUserResponse | null>(null);
   const [status, setStatus] = useState<AuthStatus>('initializing');
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [sessionFailure, setSessionFailure] = useState<unknown>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const activeTokenRef = useRef<string | null>(null);
   const invalidationRef = useRef<Promise<void> | null>(null);
   const restorationAttemptRef = useRef(0);
@@ -64,9 +68,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
         await clearToken();
         setUser(null);
         setSessionError(null);
+        setSessionFailure(null);
+        setSessionExpired(rejectedToken !== undefined);
         setStatus('unauthenticated');
       } catch (error) {
         setUser(null);
+        setSessionFailure(error);
         setSessionError('Aura could not remove the saved session from this device. Retry sign out.');
         setStatus('error');
         throw error;
@@ -88,6 +95,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     restorationAttemptRef.current = attempt;
     setStatus('initializing');
     setSessionError(null);
+    setSessionFailure(null);
 
     let token: string | null;
     try {
@@ -96,6 +104,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (restorationAttemptRef.current !== attempt) return;
       activeTokenRef.current = null;
       setUser(null);
+      setSessionFailure(error);
+      setSessionExpired(false);
       setSessionError(sessionRestoreErrorMessage(error));
       setStatus('error');
       return;
@@ -118,6 +128,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return;
       }
       setUser(currentUser);
+      setSessionFailure(null);
+      setSessionExpired(false);
       setStatus('authenticated');
     } catch (error) {
       if (
@@ -158,6 +170,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     restorationAttemptRef.current = attempt;
     setUser(null);
     setSessionError(null);
+    setSessionFailure(null);
+    setSessionExpired(false);
     setStatus('initializing');
 
     try {
@@ -169,6 +183,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return;
       }
       setUser(currentUser);
+      setSessionExpired(false);
       setStatus('authenticated');
     } catch (error) {
       if (
@@ -180,6 +195,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           await invalidateSession(activeTokenRef.current);
         } else {
           setSessionError(sessionRestoreErrorMessage(error));
+          setSessionFailure(error);
           setStatus('error');
         }
       }
@@ -197,6 +213,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     user,
     status,
     sessionError,
+    sessionFailure,
+    sessionExpired,
     signIn,
     register,
     signOut,
@@ -205,6 +223,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     register,
     restoreSession,
     sessionError,
+    sessionFailure,
+    sessionExpired,
     signIn,
     signOut,
     status,

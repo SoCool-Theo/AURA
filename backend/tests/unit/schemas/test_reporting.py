@@ -1,6 +1,7 @@
 import json
 from copy import deepcopy
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 from uuid import UUID
 
@@ -9,10 +10,12 @@ from pydantic import ValidationError
 
 from backend.app.schemas.analytics import PortfolioAnalysisResponse
 from backend.app.schemas.reporting import (
+    PortfolioReportAssetMonetaryMetrics,
     PortfolioReportListResponse,
     PortfolioReportResponse,
     PortfolioReportSummary,
     PortfolioReportV2Response,
+    PortfolioReportV3Response,
 )
 
 
@@ -86,6 +89,40 @@ def _valid_v2_report_data() -> dict[str, object]:
     }
 
 
+def _valid_v3_report_data() -> dict[str, object]:
+    analysis = _valid_analysis_data()
+    symbols = ["AAPL", "MSFT", "BND"]
+    amounts = ["5000", "3000", "2000"]
+    allocations = ["0.5", "0.3", "0.2"]
+    return {
+        "id": _REPORT_ID,
+        "portfolio_id": _PORTFOLIO_ID,
+        "created_at": "2026-09-13T10:00:00+00:00",
+        "schema_version": "portfolio-analysis-response-v3",
+        "analysis": analysis,
+        "baseline": {
+            "portfolio_type": "PLANNED",
+            "baseline_source": "proposed-amount-target-allocation",
+            "plan_currency": "USD",
+            "total_proposed_amount": "10000",
+            "hypothetical_notice": (
+                "Hypothetical historical analysis only; not a forecast, "
+                "recommendation, or executable order."
+            ),
+            "holdings": [
+                {
+                    "id": f"40000000-0000-0000-0000-{index + 1:012d}",
+                    "symbol": symbol,
+                    "proposed_amount": amounts[index],
+                    "target_allocation": allocations[index],
+                    "position": index,
+                }
+                for index, symbol in enumerate(symbols)
+            ],
+        },
+    }
+
+
 def _valid_summary_data(
     *,
     report_id: str = _REPORT_ID,
@@ -126,6 +163,74 @@ def test_v2_response_accepts_strict_immutable_real_holding_report() -> None:
     json.dumps(result.model_dump(mode="json"), allow_nan=False)
 
 
+def test_report_monetary_metrics_reject_positive_drawdown_amount() -> None:
+    data = _valid_v2_report_data()
+    data["monetary_metrics"] = {
+        "currency": "USD",
+        "basis": "saved-current-valuation",
+        "reference_amount": "3000",
+        "cumulative_return_amount": "120.282",
+        "annualized_return_amount": "600",
+        "maximum_drawdown_amount": "30",
+    }
+
+    with pytest.raises(ValidationError, match="less than or equal to 0"):
+        PortfolioReportV2Response.model_validate(data)
+
+
+def test_asset_monetary_metrics_reject_positive_drawdown_amount() -> None:
+    with pytest.raises(ValidationError, match="less than or equal to 0"):
+        PortfolioReportAssetMonetaryMetrics.model_validate(
+            {
+                "symbol": "AAPL",
+                "currency": "USD",
+                "basis": "saved-current-value",
+                "reference_amount": "1000",
+                "cumulative_return_amount": "80",
+                "annualized_return_amount": "240",
+                "maximum_drawdown_amount": "20",
+            }
+        )
+
+
+def test_v2_asset_monetary_metrics_match_saved_holding_context() -> None:
+    data = _valid_v2_report_data()
+    analysis = data["analysis"]
+    assert isinstance(analysis, dict)
+    metrics = analysis["asset_metrics"]
+    assert isinstance(metrics, list)
+    data["asset_monetary_metrics"] = [
+        {
+            "symbol": metric["symbol"],
+            "currency": "USD",
+            "basis": "saved-current-value",
+            "reference_amount": "1000.000000000000",
+            "cumulative_return_amount": "80",
+            "annualized_return_amount": "240",
+            "maximum_drawdown_amount": None,
+        }
+        for metric in metrics
+    ]
+
+    result = PortfolioReportV2Response.model_validate(data)
+
+    assert [
+        metric.symbol for metric in result.asset_monetary_metrics
+    ] == ["AAPL", "MSFT", "BND"]
+
+    invalid = deepcopy(data)
+    asset_money = invalid["asset_monetary_metrics"]
+    assert isinstance(asset_money, list)
+    first = asset_money[0]
+    assert isinstance(first, dict)
+    first["reference_amount"] = "999"
+    with pytest.raises(
+        ValidationError,
+        match="reference must match saved current value",
+    ):
+        PortfolioReportV2Response.model_validate(invalid)
+
+
 def test_v2_response_requires_fx_for_thb_and_rejects_unknown_fields() -> None:
     missing_fx = _valid_v2_report_data()
     valuation = missing_fx["valuation"]
@@ -138,6 +243,77 @@ def test_v2_response_requires_fx_for_thb_and_rejects_unknown_fields() -> None:
     extra["unexpected"] = True
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         PortfolioReportV2Response.model_validate(extra)
+
+
+def test_v3_response_accepts_strict_immutable_planned_report() -> None:
+    result = PortfolioReportV3Response.model_validate(_valid_v3_report_data())
+
+    assert result.schema_version == "portfolio-analysis-response-v3"
+    assert result.baseline.portfolio_type == "PLANNED"
+    assert result.baseline.plan_currency == "USD"
+    assert result.baseline.total_proposed_amount == 10000
+    assert [holding.target_allocation for holding in result.baseline.holdings] == [
+        Decimal("0.5"),
+        Decimal("0.3"),
+        Decimal("0.2"),
+    ]
+    serialized = result.model_dump(mode="json")
+    assert "estimated_shares" not in serialized["baseline"]["holdings"][0]
+    json.dumps(serialized, allow_nan=False)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    [
+        ("portfolio_type", "CURRENT", "PLANNED"),
+        ("baseline_source", "saved-weights", "proposed-amount"),
+        ("hypothetical_notice", "Buy this now", "Hypothetical historical"),
+    ],
+)
+def test_v3_response_rejects_non_planned_baseline_discriminators(
+    field: str,
+    value: str,
+    error: str,
+) -> None:
+    data = _valid_v3_report_data()
+    baseline = data["baseline"]
+    assert isinstance(baseline, dict)
+    baseline[field] = value
+
+    with pytest.raises(ValidationError, match=error):
+        PortfolioReportV3Response.model_validate(data)
+
+
+def test_v3_response_rejects_inconsistent_planned_totals() -> None:
+    data = _valid_v3_report_data()
+    baseline = data["baseline"]
+    assert isinstance(baseline, dict)
+    baseline["total_proposed_amount"] = "9999"
+
+    with pytest.raises(ValidationError, match="proposed total is inconsistent"):
+        PortfolioReportV3Response.model_validate(data)
+
+
+def test_v3_response_rejects_analysis_weights_that_do_not_match_plan() -> None:
+    data = _valid_v3_report_data()
+    baseline = data["baseline"]
+    assert isinstance(baseline, dict)
+    holdings = baseline["holdings"]
+    assert isinstance(holdings, list)
+    first_holding = holdings[0]
+    second_holding = holdings[1]
+    assert isinstance(first_holding, dict)
+    assert isinstance(second_holding, dict)
+    first_holding["proposed_amount"] = "4000"
+    first_holding["target_allocation"] = "0.4"
+    second_holding["proposed_amount"] = "4000"
+    second_holding["target_allocation"] = "0.4"
+
+    with pytest.raises(
+        ValidationError,
+        match="baseline weight does not match analysis",
+    ):
+        PortfolioReportV3Response.model_validate(data)
 
 
 def test_report_summary_accepts_valid_metadata() -> None:

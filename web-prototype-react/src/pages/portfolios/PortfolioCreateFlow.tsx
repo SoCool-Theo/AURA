@@ -1,57 +1,56 @@
 import { useRef, useState } from 'react';
 import {
   createPortfolio,
-  replacePortfolioHoldings,
+  replacePlannedPortfolioHoldings,
+  replaceRealPortfolioHoldings,
 } from '../../api/portfoliosApi';
 import { go } from '../../app/routes';
+import { FormErrorSummary } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
-import type { PortfolioResponse } from '../../types/portfolio';
+import type {
+  PortfolioCurrency,
+  PortfolioPlannedHoldingInput,
+  PortfolioRealHoldingInput,
+  PortfolioResponse,
+} from '../../types/portfolio';
 import styles from './PortfolioIntegration.module.css';
-import { portfolioErrorMessage, requestWeight } from './portfolioUi';
+import {
+  createPlannedHoldingDraft,
+  createRealHoldingDraft,
+  type PlannedHoldingDraft,
+  type RealHoldingDraft,
+  validatePlannedHoldingDrafts,
+  validateRealHoldingDrafts,
+} from './portfolioValidation';
+import { AssetSymbolField } from './components/AssetSymbolField';
+import { HoldingDecimalInput } from './components/HoldingDecimalInput';
 
-type DraftHolding = {
-  id: number;
-  symbol: string;
-  percentage: string;
-};
-
-function validateHoldings(holdings: DraftHolding[]): string | null {
-  if (!holdings.length) return 'Add at least one holding.';
-  if (holdings.some(holding => !holding.symbol.trim())) {
-    return 'Enter a symbol for every holding.';
-  }
-
-  const percentages = holdings.map(holding => Number(holding.percentage));
-  if (percentages.some(weight => !Number.isFinite(weight) || weight < 0 || weight > 100)) {
-    return 'Each allocation must be a number from 0% to 100%.';
-  }
-
-  const total = percentages.reduce((sum, weight) => sum + weight, 0);
-  if (Math.abs(total - 100) > 1e-7) {
-    return `Displayed allocations total ${Number(total.toFixed(10))}%; they must total 100%.`;
-  }
-  return null;
-}
+type CreateMode = 'CURRENT' | 'PLANNED';
+type DraftHolding = RealHoldingDraft | PlannedHoldingDraft;
 
 export function PortfolioCreateFlow() {
   const nextHoldingId = useRef(1);
   const [name, setName] = useState('');
+  const [mode, setMode] = useState<CreateMode>('CURRENT');
+  const [planCurrency, setPlanCurrency] = useState<PortfolioCurrency>('USD');
   const [holdings, setHoldings] = useState<DraftHolding[]>([
-    { id: 0, symbol: '', percentage: '100' },
+    createRealHoldingDraft(0),
   ]);
-  const [error, setError] = useState<string | null>(null);
-  const [partialError, setPartialError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [partialError, setPartialError] = useState<unknown>(null);
   const [createdPortfolio, setCreatedPortfolio] = useState<PortfolioResponse | null>(null);
   const [saving, setSaving] = useState(false);
-  const totalPercentage = holdings.reduce((sum, holding) => (
-    sum + (Number(holding.percentage) || 0)
-  ), 0);
 
   function addHolding() {
     const id = nextHoldingId.current;
     nextHoldingId.current += 1;
-    setHoldings(previous => [...previous, { id, symbol: '', percentage: '0' }]);
+    setHoldings(previous => [
+      ...previous,
+      mode === 'PLANNED'
+        ? createPlannedHoldingDraft(id)
+        : createRealHoldingDraft(id),
+    ]);
     setError(null);
   }
 
@@ -70,6 +69,19 @@ export function PortfolioCreateFlow() {
     setHoldings(next);
   }
 
+  function selectMode(nextMode: CreateMode) {
+    if (nextMode === mode || saving || createdPortfolio) return;
+    setMode(nextMode);
+    setHoldings([
+      nextMode === 'PLANNED'
+        ? createPlannedHoldingDraft(0)
+        : createRealHoldingDraft(0),
+    ]);
+    nextHoldingId.current = 1;
+    setError(null);
+    setPartialError(null);
+  }
+
   async function savePortfolio() {
     if (saving) return;
     if (!name.trim()) {
@@ -77,9 +89,11 @@ export function PortfolioCreateFlow() {
       return;
     }
 
-    const validationError = validateHoldings(holdings);
-    if (validationError) {
-      setError(validationError);
+    const validation = mode === 'PLANNED'
+      ? validatePlannedHoldingDrafts(holdings as PlannedHoldingDraft[])
+      : validateRealHoldingDrafts(holdings as RealHoldingDraft[]);
+    if (!validation.holdings) {
+      setError(validation.error);
       return;
     }
 
@@ -90,25 +104,37 @@ export function PortfolioCreateFlow() {
     let target = createdPortfolio;
     if (!target) {
       try {
-        target = await createPortfolio({ name: name.trim() });
+        target = await createPortfolio(mode === 'PLANNED'
+          ? {
+            name: name.trim(),
+            portfolio_type: 'PLANNED',
+            plan_currency: planCurrency,
+          }
+          : {
+            name: name.trim(),
+            portfolio_type: 'CURRENT',
+          });
         setCreatedPortfolio(target);
       } catch (requestError) {
-        setError(portfolioErrorMessage(requestError, 'Unable to create portfolio.'));
+        setError(requestError);
         setSaving(false);
         return;
       }
     }
 
     try {
-      const saved = await replacePortfolioHoldings(target.id, {
-        holdings: holdings.map(holding => ({
-          symbol: holding.symbol.trim(),
-          weight: requestWeight(holding.percentage),
-        })),
-      });
+      const saved = mode === 'PLANNED'
+        ? await replacePlannedPortfolioHoldings(
+          target.id,
+          validation.holdings as PortfolioPlannedHoldingInput[],
+        )
+        : await replaceRealPortfolioHoldings(
+          target.id,
+          validation.holdings as PortfolioRealHoldingInput[],
+        );
       go(`portfolio/${saved.id}`);
     } catch (requestError) {
-      setPartialError(portfolioErrorMessage(requestError, 'Unable to save portfolio holdings.'));
+      setPartialError(requestError);
     } finally {
       setSaving(false);
     }
@@ -118,13 +144,19 @@ export function PortfolioCreateFlow() {
     <div className="page create-page">
       <button className="create-back-link" onClick={() => go('portfolios')} disabled={saving}>← Back to Portfolios</button>
       <section className="create-header">
-        <div><h1>Create New Portfolio</h1><p>Save a name and an ordered symbol-and-weight allocation.</p></div>
+        <div>
+          <h1>Create New Portfolio</h1>
+          <p>{mode === 'PLANNED'
+            ? 'Model a proposed investment before you invest.'
+            : 'Record investments you already own.'}</p>
+        </div>
       </section>
 
-      {partialError && createdPortfolio && (
+      {Boolean(partialError) && createdPortfolio && (
         <div className={styles.partialSuccess} role="alert">
-          <strong>Portfolio created; holdings not saved</strong>
-          <p>“{createdPortfolio.name}” exists as an empty portfolio, but the separate holdings request failed: {partialError}</p>
+          <strong>Portfolio created; holdings still need attention</strong>
+          <p>“{createdPortfolio.name}” was created, but its holdings could not be saved.</p>
+          <FormErrorSummary error={partialError} message="Review the holdings and retry saving them." />
           <div className={styles.partialActions}>
             <button className="primary-btn" onClick={() => void savePortfolio()} disabled={saving}>Retry holdings</button>
             <button className="secondary-btn" onClick={() => go(`portfolio/${createdPortfolio.id}`)} disabled={saving}>Open empty portfolio</button>
@@ -132,36 +164,108 @@ export function PortfolioCreateFlow() {
         </div>
       )}
 
-      {error && <p className={styles.error} role="alert">{error}</p>}
+      {Boolean(error) && <FormErrorSummary error={error} />}
 
       <div className="create-workspace">
         <Card className="wizard-main">
           <div className="wizard-section-header">
-            <span>PORTFOLIO RECORD</span>
-            <h2>Name and Ordered Holdings</h2>
-            <p>The browser creates the named portfolio first, then saves all holdings with a second request.</p>
+            <span>PORTFOLIO SETUP</span>
+            <h2>Name and Holdings</h2>
+            <p>Choose whether you are analyzing investments you own or a plan you are considering.</p>
           </div>
 
           <div className="wizard-step-content basic-info-step">
             <label className="wizard-field">
-              <span>Portfolio Name</span><small>The backend trims and validates the final name.</small>
+              <span>Portfolio Name</span><small>Choose a clear name you will recognize later.</small>
               <input value={name} onChange={event => { setName(event.target.value); setError(null); }} placeholder="e.g. Long-Term Growth" disabled={saving || Boolean(createdPortfolio)} />
             </label>
           </div>
 
+          <fieldset className={styles.modeFieldset} disabled={saving || Boolean(createdPortfolio)}>
+            <legend>What would you like to analyze?</legend>
+            <div className={styles.modeSelector}>
+              <button
+                type="button"
+                className={mode === 'CURRENT' ? styles.modeSelected : ''}
+                aria-pressed={mode === 'CURRENT'}
+                onClick={() => selectMode('CURRENT')}
+              >
+                <strong>My Current Portfolio</strong>
+                <span>I already own these investments.</span>
+              </button>
+              <button
+                type="button"
+                className={mode === 'PLANNED' ? styles.modeSelected : ''}
+                aria-pressed={mode === 'PLANNED'}
+                onClick={() => selectMode('PLANNED')}
+              >
+                <strong>A Planned Portfolio</strong>
+                <span>I want to evaluate amounts before investing.</span>
+              </button>
+            </div>
+          </fieldset>
+
+          {mode === 'PLANNED' && (
+            <fieldset className={styles.currencyFieldset} disabled={saving || Boolean(createdPortfolio)}>
+              <legend>Plan currency</legend>
+              <div className={styles.currencySelector}>
+                {(['USD', 'THB'] as PortfolioCurrency[]).map(currency => (
+                  <button
+                    type="button"
+                    key={currency}
+                    className={planCurrency === currency ? styles.currencySelected : ''}
+                    aria-pressed={planCurrency === currency}
+                    onClick={() => setPlanCurrency(currency)}
+                  >{currency}</button>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
           <div className="wizard-step-content holdings-step">
             <div className="wizard-title-row">
-              <div><strong>Manual symbol entry</strong><p>No asset catalogue, autocomplete, price, or company metadata is used.</p></div>
+              <div><strong>Holdings</strong><p>Add each asset in the order you want it displayed.</p></div>
               <button className="primary-btn" onClick={addHolding} disabled={saving}>＋ Add Holding</button>
             </div>
             <div className="table-scroll">
               <table className={styles.holdingTable}>
-                <thead><tr><th>Order</th><th>Symbol</th><th>Allocation (%)</th><th>Actions</th></tr></thead>
+                <thead><tr>
+                  <th>Order</th>
+                  <th>Symbol</th>
+                  {mode === 'PLANNED' ? (
+                    <th>Proposed Amount ({planCurrency})</th>
+                  ) : <th>Quantity Owned</th>}
+                  <th>Actions</th>
+                </tr></thead>
                 <tbody>{holdings.map((holding, index) => (
                   <tr key={holding.id}>
                     <td>{index + 1}</td>
-                    <td><input aria-label={`Holding ${index + 1} symbol`} value={holding.symbol} onChange={event => updateHolding(holding.id, { symbol: event.target.value })} placeholder="e.g. AAPL" disabled={saving} /></td>
-                    <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} allocation percentage`} type="number" min="0" max="100" step="0.01" value={holding.percentage} onChange={event => updateHolding(holding.id, { percentage: event.target.value })} disabled={saving} /></td>
+                    <td><AssetSymbolField ariaLabel={`Holding ${index + 1} symbol`} id={`create-holding-${holding.id}`} value={holding.symbol} onChange={symbol => updateHolding(holding.id, { symbol })} disabled={saving} /></td>
+                    {mode === 'PLANNED' && 'proposedAmount' in holding ? (
+                      <td>
+                        <HoldingDecimalInput
+                          aria-label={`${holding.symbol || `Holding ${index + 1}`} proposed amount`}
+                          value={holding.proposedAmount}
+                          onValueChange={(proposedAmount) =>
+                            updateHolding(holding.id, { proposedAmount })
+                          }
+                          placeholder="4000.00"
+                          disabled={saving}
+                        />
+                      </td>
+                    ) : 'shares' in holding ? (
+                      <td>
+                        <HoldingDecimalInput
+                          aria-label={`${holding.symbol || `Holding ${index + 1}`} quantity owned`}
+                          value={holding.shares}
+                          onValueChange={(shares) =>
+                            updateHolding(holding.id, { shares })
+                          }
+                          placeholder="10.5"
+                          disabled={saving}
+                        />
+                      </td>
+                    ) : null}
                     <td><div className={styles.orderActions}>
                       <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={saving || index === 0}>↑</button>
                       <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={saving || index === holdings.length - 1}>↓</button>
@@ -171,22 +275,21 @@ export function PortfolioCreateFlow() {
                 ))}</tbody>
               </table>
             </div>
-            <div className="allocation-status">
-              <div><span>Total allocation</span><small>30% is sent to the backend as 0.30.</small></div>
-              <div className="allocation-progress"><span style={{ width: `${Math.min(100, Math.max(0, totalPercentage))}%` }} /><b className={Math.abs(totalPercentage - 100) <= 1e-7 ? 'green-text' : 'orange-text'}>{Number(totalPercentage.toFixed(10))}%</b></div>
-            </div>
           </div>
 
           <div className="review-holdings-card">
             <div className="review-holdings-title"><h3>Request Review</h3></div>
             <div className={styles.metadataGrid}>
               <div><small>Name</small><strong>{name.trim() || 'Missing name'}</strong></div>
+              <div><small>Type</small><strong>{mode === 'PLANNED' ? 'Planned portfolio' : 'Current portfolio'}</strong></div>
               <div><small>Holdings</small><strong>{holdings.length}</strong></div>
-              <div><small>Allocation</small><strong>{Number(totalPercentage.toFixed(10))}%</strong></div>
+              <div><small>Allocation</small><strong>Calculated automatically</strong></div>
             </div>
           </div>
 
-          <div className="educational-notice"><Icon name="shield" size={19} /><p>Only the name, ordered symbols, and decimal weights are persisted. Aura does not infer prices, shares, values, or asset metadata here.</p></div>
+          <div className="educational-notice"><Icon name="spark" size={19} /><p>{mode === 'PLANNED'
+            ? 'Aura calculates target percentages from your proposed amounts. Estimated shares are for display only and do not control the analysis.'
+            : 'Aura stores the quantity you own, then uses backend market prices to calculate current value and allocation automatically.'}</p></div>
 
           <div className="wizard-footer">
             <button className="secondary-btn" onClick={() => go('portfolios')} disabled={saving}>Cancel</button>
@@ -198,9 +301,14 @@ export function PortfolioCreateFlow() {
 
         <aside className="create-sidebar">
           <Card className="after-create-card">
-            <h3>Two backend operations</h3>
-            <div><span>1</span><p><strong>Create portfolio</strong><small>POST saves the named empty portfolio.</small></p></div>
-            <div><span>2</span><p><strong>Save holdings</strong><small>PUT replaces the complete ordered allocation.</small></p></div>
+            <h3>{mode === 'PLANNED' ? 'Planned portfolio' : 'Current portfolio'}</h3>
+            {mode === 'PLANNED' ? <>
+              <div><span>1</span><p><strong>Enter proposed amounts</strong><small>Use one currency for the complete plan.</small></p></div>
+              <div><span>2</span><p><strong>Review historical risk</strong><small>The plan remains hypothetical and is not an order.</small></p></div>
+            </> : <>
+              <div><span>1</span><p><strong>Record what you own</strong><small>Add the asset and quantity you currently own.</small></p></div>
+              <div><span>2</span><p><strong>See current allocation</strong><small>Aura values the holdings using available market data.</small></p></div>
+            </>}
           </Card>
         </aside>
       </div>

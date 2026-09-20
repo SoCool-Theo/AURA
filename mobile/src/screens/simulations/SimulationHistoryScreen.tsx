@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { Tag } from '../../components/ui/Tag';
@@ -46,19 +46,15 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
   }
 
   const blockingError = listStatus === 'error' && !portfolios.length
-    ? portfolioErrorMessage(listError)
+    ? listError
     : historyStatus === 'error' && !history.length
-      ? simulationErrorMessage(historyError, 'Unable to load complete simulation history.')
+      ? historyError
       : null;
 
   if (blockingError) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <View style={styles.center}><Card style={styles.errorCard}>
-          <Text style={styles.errorTitle}>Simulation history unavailable</Text>
-          <Text style={styles.errorText}>{blockingError}</Text>
-          <Button title="Retry" onPress={retry} />
-        </Card></View>
+        <ScreenErrorState error={blockingError} resourceName="Simulation history" fallbackMessage="Unable to load complete simulation history." onRetry={retry} />
       </SafeAreaView>
     );
   }
@@ -71,42 +67,34 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
         refreshControl={<RefreshControl refreshing={isRefreshingHistory} onRefresh={retry} tintColor={colors.primary} />}
       >
         <Text style={styles.title}>Simulation History</Text>
-        <Text style={styles.subtitle}>Immutable simulation runs stored by Aura's backend, newest first.</Text>
+        <Text style={styles.subtitle}>Saved simulation results, newest first.</Text>
 
         {listStatus === 'error' && portfolios.length ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Portfolio list refresh failed</Text>
-            <Text style={styles.errorText}>History uses the previously loaded portfolio list. {portfolioErrorMessage(listError)}</Text>
-            <Button title="Retry portfolios" onPress={retry} />
-          </Card>
+          <InlineErrorCard error={listError} message={portfolioErrorMessage(listError)} stale onRetry={retry} retryTitle="Retry portfolios" />
         ) : null}
 
         {historyStatus === 'error' && history.length ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Could not refresh complete history</Text>
-            <Text style={styles.errorText}>{simulationErrorMessage(historyError, 'At least one portfolio history request failed. The prior complete list remains visible.')}</Text>
-            <Button title="Retry" onPress={retry} />
-          </Card>
+          <InlineErrorCard error={historyError} message={simulationErrorMessage(historyError, 'Unable to refresh complete simulation history.')} stale onRetry={retry} />
         ) : null}
 
         {history.length ? (
           <>
             <View style={styles.search}>
               <Ionicons name="search-outline" color={colors.muted} size={17} />
-              <TextInput value={query} onChangeText={setQuery} placeholder="Search portfolio name or simulation ID" placeholderTextColor={colors.muted} style={styles.searchInput} />
+              <TextInput accessibilityLabel="Search simulation history" value={query} onChangeText={setQuery} placeholder="Search portfolio name or simulation ID" placeholderTextColor={colors.muted} style={styles.searchInput} />
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-              <Pressable onPress={() => setPortfolioFilter('')}><Tag label="All portfolios" tone={!portfolioFilter ? 'primary' : 'default'} /></Pressable>
-              {portfolios.map((portfolio) => <Pressable key={portfolio.id} onPress={() => setPortfolioFilter(portfolio.id)}><Tag label={portfolio.name} tone={portfolioFilter === portfolio.id ? 'primary' : 'default'} /></Pressable>)}
+              <Pressable accessibilityLabel="All portfolios simulation filter" accessibilityRole="radio" accessibilityState={{ selected: !portfolioFilter }} onPress={() => setPortfolioFilter('')} style={styles.filterOption}><Tag label="All portfolios" tone={!portfolioFilter ? 'primary' : 'default'} /></Pressable>
+              {portfolios.map((portfolio) => <Pressable accessibilityLabel={`${portfolio.name} simulation filter`} accessibilityRole="radio" accessibilityState={{ selected: portfolioFilter === portfolio.id }} key={portfolio.id} onPress={() => setPortfolioFilter(portfolio.id)} style={styles.filterOption}><Tag label={portfolio.name} tone={portfolioFilter === portfolio.id ? 'primary' : 'default'} /></Pressable>)}
             </ScrollView>
           </>
         ) : null}
 
         <View style={styles.list}>
           {!history.length ? (
-            <Card><EmptyState icon="pulse-outline" title="No simulations yet" description="Run a historical, allocation, or combined simulation to create backend history." /></Card>
+            <Card><EmptyState icon="pulse-outline" title="No simulations yet" description="Run a historical, allocation, or combined simulation to save your first result." /></Card>
           ) : filtered.length ? filtered.map((item) => (
-            <Pressable key={item.id} onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}>
+            <Pressable accessibilityLabel={`Open ${item.portfolio_name} ${simulationTypeLabel(item.simulation_type)} simulation`} accessibilityRole="button" key={item.id} onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}>
               <Card style={styles.card}>
                 <View style={styles.icon}><Ionicons name="pulse-outline" color={colors.primary} size={22} /></View>
                 <View style={{ flex: 1 }}>
@@ -136,6 +124,7 @@ const styles = StyleSheet.create({
   search: { height: 44, borderRadius: 13, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.borderSoft, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
   searchInput: { flex: 1, color: colors.text, fontSize: 12 },
   filters: { gap: spacing.sm, paddingVertical: spacing.lg },
+  filterOption: { minHeight: 44, justifyContent: 'center' },
   list: { gap: spacing.md },
   card: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   icon: { width: 48, height: 48, borderRadius: 15, backgroundColor: colors.cyanBackground, alignItems: 'center', justifyContent: 'center' },

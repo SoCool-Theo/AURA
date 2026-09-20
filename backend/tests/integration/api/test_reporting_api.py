@@ -21,6 +21,7 @@ from app.schemas.reporting import (
     PortfolioReportResponse,
     PortfolioReportSummary,
     PortfolioReportV2Response,
+    PortfolioReportV3Response,
 )
 from app.services.analysis_reporting_service import (
     ReportAnalysisUnprocessableError,
@@ -40,6 +41,7 @@ from backend.tests.unit.services.test_analysis_reporting_mapper import (
 from backend.tests.unit.schemas.test_reporting import (
     _valid_report_data,
     _valid_summary_data,
+    _valid_v3_report_data,
 )
 
 
@@ -251,6 +253,28 @@ def test_post_accepts_thb_and_returns_valid_v2_report(
     api_harness.session.commit.assert_called_once_with()
 
 
+def test_post_returns_valid_v3_planned_report_and_commits_once(
+    api_harness: ApiHarness,
+) -> None:
+    data = _valid_v3_report_data()
+    data["portfolio_id"] = str(PORTFOLIO_ID)
+    report = PortfolioReportV3Response.model_validate(data)
+    api_harness.service.create_report.return_value = report
+
+    response = api_harness.client.post(
+        REPORT_PATH,
+        headers=REQUEST_HEADERS,
+        json={"start_date": "2022-01-01", "end_date": "2022-12-31"},
+    )
+
+    assert response.status_code == 201
+    assert response.json() == report.model_dump(mode="json")
+    validated = PortfolioReportV3Response.model_validate(response.json())
+    assert validated.baseline.portfolio_type == "PLANNED"
+    assert validated.baseline.hypothetical_notice.startswith("Hypothetical")
+    api_harness.session.commit.assert_called_once_with()
+
+
 def test_post_rejects_unsupported_currency_before_service_call(
     api_harness: ApiHarness,
 ) -> None:
@@ -433,6 +457,10 @@ def test_get_detail_returns_saved_v2_without_write(
     assert response.status_code == 200
     assert response.json() == report.model_dump(mode="json")
     PortfolioReportV2Response.model_validate(response.json())
+    assert [
+        metric["symbol"]
+        for metric in response.json()["asset_monetary_metrics"]
+    ] == ["BND", "AAPL"]
     api_harness.service.get_report.assert_called_once_with(
         user_id=OWNER_ID,
         portfolio_id=PORTFOLIO_ID,
@@ -659,6 +687,15 @@ def test_openapi_exposes_all_reporting_operations(
     assert response_schema["anyOf"] == [
         {"$ref": "#/components/schemas/PortfolioReportResponse"},
         {"$ref": "#/components/schemas/PortfolioReportV2Response"},
+        {"$ref": "#/components/schemas/PortfolioReportV3Response"},
     ]
     methods = _registered_methods()
-    assert len(methods) == 23
+    assert len(methods) == 25
+    assert (
+        "/api/portfolios/{portfolio_id}/planned-allocation",
+        "GET",
+    ) in methods
+    assert (
+        "/api/portfolios/{portfolio_id}/planned-preview",
+        "GET",
+    ) in methods

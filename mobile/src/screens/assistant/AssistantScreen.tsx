@@ -20,6 +20,7 @@ import { PortfolioSelector } from '../../components/simulations/PortfolioSelecto
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { FormErrorSummary, InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { PageTitle } from '../../components/ui/PageTitle';
@@ -35,7 +36,13 @@ function sourceLabel(source: AgentSourceReference): string {
   return `${source.type.charAt(0).toUpperCase()}${source.type.slice(1)}`;
 }
 
-export function AssistantScreen({ navigation }: { navigation: any }) {
+export function AssistantScreen({
+  navigation,
+  route
+}: {
+  navigation: any;
+  route: any;
+}) {
   const {
     portfolios,
     activePortfolioId,
@@ -49,10 +56,12 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
   const [message, setMessage] = useState('');
   const [response, setResponse] = useState<AgentExplainResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [requestFailure, setRequestFailure] = useState<unknown>(null);
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
   const requestVersionRef = useRef(0);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const requestedPortfolioId = route.params?.portfolioId as string | undefined;
 
   const cancelActiveRequest = useCallback(() => {
     requestVersionRef.current += 1;
@@ -71,6 +80,23 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
 
   useEffect(() => {
     if (listStatus !== 'ready' && !portfolios.length) return;
+    if (
+      requestedPortfolioId
+      && portfolios.some((item) => item.id === requestedPortfolioId)
+    ) {
+      navigation.setParams({ portfolioId: undefined });
+      if (requestedPortfolioId === selectedPortfolioId) return;
+      cancelActiveRequest();
+      setSelectedPortfolioId(requestedPortfolioId);
+      selectPortfolio(requestedPortfolioId);
+      setResponse(null);
+      setError(null);
+      setRequestFailure(null);
+      return;
+    }
+    if (requestedPortfolioId) {
+      navigation.setParams({ portfolioId: undefined });
+    }
     if (portfolios.some((item) => item.id === selectedPortfolioId)) return;
 
     const nextPortfolioId = (
@@ -82,6 +108,7 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
     setSelectedPortfolioId(nextPortfolioId);
     setResponse(null);
     setError(null);
+    setRequestFailure(null);
     if (nextPortfolioId && nextPortfolioId !== activePortfolioId) {
       selectPortfolio(nextPortfolioId);
     }
@@ -89,7 +116,9 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
     activePortfolioId,
     cancelActiveRequest,
     listStatus,
+    navigation,
     portfolios,
+    requestedPortfolioId,
     selectPortfolio,
     selectedPortfolioId
   ]);
@@ -101,26 +130,31 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
     selectPortfolio(portfolioId);
     setResponse(null);
     setError(null);
+    setRequestFailure(null);
   }
 
   function editMessage(value: string) {
     setMessage(value);
     setResponse(null);
     setError(null);
+    setRequestFailure(null);
   }
 
   async function askAura() {
     if (sendingRef.current) return;
     const normalizedMessage = message.trim();
     if (!selectedPortfolioId) {
+      setRequestFailure(null);
       setError('Choose a portfolio before asking Aura a question.');
       return;
     }
     if (!normalizedMessage) {
+      setRequestFailure(null);
       setError('Enter a question for Aura.');
       return;
     }
     if (normalizedMessage.length > 4000) {
+      setRequestFailure(null);
       setError('Questions must contain no more than 4,000 characters.');
       return;
     }
@@ -132,6 +166,7 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
     sendingRef.current = true;
     setSending(true);
     setError(null);
+    setRequestFailure(null);
     setResponse(null);
 
     try {
@@ -151,6 +186,7 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
         return;
       }
       setError(agentErrorMessage(requestError));
+      setRequestFailure(requestError);
       if (requestError instanceof ApiError && requestError.status === 404) {
         void refreshPortfolios();
       }
@@ -173,17 +209,13 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
   if (listStatus === 'error' && !portfolios.length) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <View style={styles.centerState}>
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Portfolios unavailable</Text>
-            <Text style={styles.body}>{portfolioErrorMessage(listError)}</Text>
-            <Button
-              title={isRefreshing ? 'Retrying…' : 'Retry'}
-              disabled={isRefreshing}
-              onPress={() => void refreshPortfolios()}
-            />
-          </Card>
-        </View>
+        <ScreenErrorState
+          error={listError}
+          resourceName="Portfolio list"
+          fallbackMessage="Unable to load portfolios for Aura."
+          onRetry={() => void refreshPortfolios()}
+          retryTitle={isRefreshing ? 'Retrying…' : 'Retry'}
+        />
       </SafeAreaView>
     );
   }
@@ -196,7 +228,7 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
             <EmptyState
               icon="sparkles-outline"
               title="Create a portfolio first"
-              description="Aura needs a saved backend portfolio before it can provide a grounded explanation."
+              description="Create and save a portfolio before asking Aura about its risk."
             />
             <Button
               title="Create Portfolio"
@@ -210,6 +242,8 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
     );
   }
 
+  const selectedPortfolio = portfolios.find((item) => item.id === selectedPortfolioId);
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <KeyboardAwareScrollView
@@ -219,7 +253,7 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
         <PageTitle
           eyebrow="GROUNDED PORTFOLIO EXPLANATIONS"
           title="Ask Aura"
-          subtitle="Understand backend-calculated portfolio risk in plain language."
+          subtitle="Understand your portfolio risk in plain language."
         />
 
         <Card style={styles.safetyCard}>
@@ -239,17 +273,13 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
         </Card>
 
         {listStatus === 'error' ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Portfolio refresh failed</Text>
-            <Text style={styles.body}>
-              Using the previously loaded portfolio list. {portfolioErrorMessage(listError)}
-            </Text>
-            <Button
-              title={isRefreshing ? 'Retrying…' : 'Retry portfolios'}
-              disabled={isRefreshing || sending}
-              onPress={() => void refreshPortfolios()}
-            />
-          </Card>
+          <InlineErrorCard
+            error={listError}
+            message={portfolioErrorMessage(listError)}
+            stale
+            onRetry={() => void refreshPortfolios()}
+            retryTitle={isRefreshing ? 'Retrying…' : 'Retry portfolios'}
+          />
         ) : null}
 
         <Card style={styles.askCard}>
@@ -269,6 +299,8 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
               <Text style={styles.counter}>{message.length}/4000</Text>
             </View>
             <TextInput
+              accessibilityLabel="Question for Aura"
+              accessibilityState={{ disabled: sending }}
               value={message}
               onChangeText={editMessage}
               placeholder="For example: What are the main risk factors in this portfolio?"
@@ -282,7 +314,9 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
           </View>
 
           <Text style={styles.contextNote}>
-            The backend uses this portfolio and its newest saved report when available. No financial calculations run on this device.
+            Aura uses {selectedPortfolio?.portfolio_type === 'PLANNED'
+              ? 'this hypothetical plan and its target allocation'
+              : 'this portfolio'} together with its newest saved report when available.
           </Text>
           <Button
             title={sending ? 'Asking Aura…' : 'Ask Aura'}
@@ -292,16 +326,7 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
         </Card>
 
         {error ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Explanation unavailable</Text>
-            <Text style={styles.body}>{error}</Text>
-            <Button
-              title="Try again"
-              variant="secondary"
-              disabled={sending}
-              onPress={() => void askAura()}
-            />
-          </Card>
+          <FormErrorSummary error={requestFailure} message={error} title="Explanation unavailable" />
         ) : null}
 
         {sending ? (
@@ -310,7 +335,7 @@ export function AssistantScreen({ navigation }: { navigation: any }) {
             <View style={styles.statusCopy}>
               <Text style={styles.statusTitle}>Aura is preparing an explanation</Text>
               <Text style={styles.body}>
-                Using backend-owned portfolio and saved-report context.
+                Reviewing your portfolio and latest saved analysis.
               </Text>
             </View>
           </Card>

@@ -14,7 +14,7 @@ export function MetricCard({ label, value, hint }: { label: string; value: strin
 }
 
 const styles = StyleSheet.create({
-  card: { width: '48%', gap: spacing.xs },
+  card: { flexGrow: 1, flexBasis: 140, gap: spacing.xs },
   label: { color: colors.muted, fontSize: 12, fontWeight: '700' },
   value: { color: colors.text, fontSize: 22, fontWeight: '800' },
   hint: { color: colors.textSecondary, fontSize: 11 }

@@ -2,14 +2,19 @@
 
 from datetime import date
 from decimal import Decimal
+import math
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import AwareDatetime, Field, model_validator
 
 from .analytics import AssetMetrics, PortfolioAnalysisResponse, RiskDriverEntry
-from .common import AnalysisPeriod, AuraBaseModel
-from .portfolio import PortfolioHoldingValuationResponse, PortfolioValuationFxResponse
+from .common import AnalysisPeriod, AssetSymbol, AuraBaseModel
+from .portfolio import (
+    PlannedPortfolioBaselineContext,
+    PortfolioHoldingValuationResponse,
+    PortfolioValuationFxResponse,
+)
 
 
 class PortfolioReportResponse(AuraBaseModel):
@@ -25,6 +30,37 @@ _PositiveValuationDecimal = Annotated[
     Decimal,
     Field(gt=Decimal("0"), allow_inf_nan=False),
 ]
+_FiniteMonetaryDecimal = Annotated[
+    Decimal,
+    Field(allow_inf_nan=False),
+]
+_NonPositiveMonetaryDecimal = Annotated[
+    Decimal,
+    Field(le=Decimal("0"), allow_inf_nan=False),
+]
+
+
+class PortfolioReportMonetaryMetrics(AuraBaseModel):
+    """Currency equivalents derived only from one saved report snapshot."""
+
+    currency: Literal["USD", "THB"]
+    basis: Literal["saved-current-valuation", "planned-proposed-amount"]
+    reference_amount: _PositiveValuationDecimal
+    cumulative_return_amount: _FiniteMonetaryDecimal
+    annualized_return_amount: _FiniteMonetaryDecimal
+    maximum_drawdown_amount: _NonPositiveMonetaryDecimal | None
+
+
+class PortfolioReportAssetMonetaryMetrics(AuraBaseModel):
+    """Currency equivalents for one asset in a saved report snapshot."""
+
+    symbol: AssetSymbol
+    currency: Literal["USD", "THB"]
+    basis: Literal["saved-current-value", "planned-proposed-amount"]
+    reference_amount: _PositiveValuationDecimal
+    cumulative_return_amount: _FiniteMonetaryDecimal
+    annualized_return_amount: _FiniteMonetaryDecimal
+    maximum_drawdown_amount: _NonPositiveMonetaryDecimal | None
 
 
 class PortfolioReportV2ValuationContext(AuraBaseModel):
@@ -79,9 +115,138 @@ class PortfolioReportV2Response(PortfolioReportV2Snapshot):
     id: UUID
     portfolio_id: UUID
     created_at: AwareDatetime
+    monetary_metrics: PortfolioReportMonetaryMetrics | None = None
+    asset_monetary_metrics: list[
+        PortfolioReportAssetMonetaryMetrics
+    ] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_asset_monetary_metrics(self) -> Self:
+        if not self.asset_monetary_metrics:
+            return self
+
+        expected_symbols = [
+            metric.symbol for metric in self.analysis.asset_metrics
+        ]
+        actual_symbols = [
+            metric.symbol for metric in self.asset_monetary_metrics
+        ]
+        if actual_symbols != expected_symbols:
+            raise ValueError(
+                "asset monetary metrics must match analysis asset order"
+            )
+
+        holdings_by_symbol = {
+            holding.symbol: holding for holding in self.holdings
+        }
+        for metric in self.asset_monetary_metrics:
+            if metric.currency != self.valuation.valuation_currency:
+                raise ValueError(
+                    "asset monetary currency must match report valuation"
+                )
+            if metric.basis != "saved-current-value":
+                raise ValueError(
+                    "V2 asset monetary basis must use saved current value"
+                )
+            holding = holdings_by_symbol.get(metric.symbol)
+            if (
+                holding is None
+                or metric.reference_amount != holding.current_value
+            ):
+                raise ValueError(
+                    "asset monetary reference must match saved current value"
+                )
+        return self
 
 
-PortfolioReportDetailResponse = PortfolioReportResponse | PortfolioReportV2Response
+class PortfolioReportV3Snapshot(AuraBaseModel):
+    """Strict JSONB payload for a hypothetical planned analysis report."""
+
+    schema_version: Literal["portfolio-analysis-response-v3"]
+    analysis: PortfolioAnalysisResponse
+    baseline: PlannedPortfolioBaselineContext
+
+    @model_validator(mode="after")
+    def validate_analysis_baseline(self) -> Self:
+        metrics_by_symbol = {
+            metric.symbol: metric for metric in self.analysis.asset_metrics
+        }
+        baseline_symbols = [
+            holding.symbol for holding in self.baseline.holdings
+        ]
+        if set(metrics_by_symbol) != set(baseline_symbols):
+            raise ValueError(
+                "planned report baseline symbols do not match analysis"
+            )
+        for holding in self.baseline.holdings:
+            if not math.isclose(
+                metrics_by_symbol[holding.symbol].weight,
+                float(holding.target_allocation),
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            ):
+                raise ValueError(
+                    "planned report baseline weight does not match analysis: "
+                    f"{holding.symbol}"
+                )
+        return self
+
+
+class PortfolioReportV3Response(PortfolioReportV3Snapshot):
+    """Persisted V3 envelope and immutable planned-portfolio snapshot."""
+
+    id: UUID
+    portfolio_id: UUID
+    created_at: AwareDatetime
+    monetary_metrics: PortfolioReportMonetaryMetrics | None = None
+    asset_monetary_metrics: list[
+        PortfolioReportAssetMonetaryMetrics
+    ] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_asset_monetary_metrics(self) -> Self:
+        if not self.asset_monetary_metrics:
+            return self
+
+        expected_symbols = [
+            metric.symbol for metric in self.analysis.asset_metrics
+        ]
+        actual_symbols = [
+            metric.symbol for metric in self.asset_monetary_metrics
+        ]
+        if actual_symbols != expected_symbols:
+            raise ValueError(
+                "asset monetary metrics must match analysis asset order"
+            )
+
+        holdings_by_symbol = {
+            holding.symbol: holding for holding in self.baseline.holdings
+        }
+        for metric in self.asset_monetary_metrics:
+            if metric.currency != self.baseline.plan_currency:
+                raise ValueError(
+                    "asset monetary currency must match plan currency"
+                )
+            if metric.basis != "planned-proposed-amount":
+                raise ValueError(
+                    "V3 asset monetary basis must use proposed amount"
+                )
+            holding = holdings_by_symbol.get(metric.symbol)
+            if (
+                holding is None
+                or metric.reference_amount != holding.proposed_amount
+            ):
+                raise ValueError(
+                    "asset monetary reference must match proposed amount"
+                )
+        return self
+
+
+PortfolioReportDetailResponse = (
+    PortfolioReportResponse
+    | PortfolioReportV2Response
+    | PortfolioReportV3Response
+)
 
 
 class PortfolioReportSummary(AnalysisPeriod):

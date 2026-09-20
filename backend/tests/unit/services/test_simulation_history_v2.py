@@ -164,7 +164,7 @@ def test_v2_mapper_rejects_malformed_and_cross_type_snapshots() -> None:
     ):
         restore_simulation_snapshot(
             simulation_type="allocation",
-            schema_version="allocation-simulation-response-v3",
+            schema_version="allocation-simulation-response-v4",
             snapshot=snapshot,
         )
 

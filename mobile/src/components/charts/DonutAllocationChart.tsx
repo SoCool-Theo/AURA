@@ -48,7 +48,7 @@ export function DonutAllocationChart({ data }: { data: Array<{ symbol: string; w
           <View key={item.symbol} style={styles.row}>
             <View style={[styles.swatch, { backgroundColor: chartColors[index % chartColors.length] }]} />
             <Text style={styles.symbol}>{item.symbol}</Text>
-            <Text style={styles.weight}>{item.weight.toFixed(1)}%</Text>
+            <Text style={styles.weight}>{item.weight.toFixed(2)}%</Text>
           </View>
         ))}
       </View>
@@ -57,12 +57,12 @@ export function DonutAllocationChart({ data }: { data: Array<{ symbol: string; w
 }
 
 const styles = StyleSheet.create({
-  wrap: { flexDirection: 'row', gap: spacing.lg, alignItems: 'center' },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, alignItems: 'center' },
   donutWrap: { width: 120, height: 120, alignItems: 'center', justifyContent: 'center' },
   center: { position: 'absolute', alignItems: 'center' },
   centerValue: { color: colors.text, fontSize: 22, fontWeight: '900' },
   centerLabel: { color: colors.muted, fontSize: 9, marginTop: 1 },
-  legend: { flex: 1, gap: spacing.sm },
+  legend: { flexGrow: 1, flexBasis: 120, gap: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   swatch: { width: 8, height: 8, borderRadius: 4 },
   symbol: { color: colors.textSecondary, flex: 1, fontSize: 11, fontWeight: '800' },

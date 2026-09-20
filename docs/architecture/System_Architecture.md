@@ -245,20 +245,54 @@ AURA/
 
 ## Current Holding and Valuation Architecture
 
-Aura supports two complete, mutually exclusive persisted holding modes during
-the compatibility period:
+The currently implemented compatibility architecture below is being extended
+by the approved [planned-portfolio target contract](../api_contracts/planned_portfolios.md).
+Type-aware CRUD exposes user-facing `CURRENT` and `PLANNED` portfolio types
+while retaining `LEGACY` as internal compatibility state. The shared baseline
+resolver, analysis composition, reporting, simulations, and AI grounding now
+support all three modes.
+
+Aura supports three complete, mutually exclusive persisted holding modes:
 
 | Mode | Persisted holding state | Current valuation |
 | --- | --- | --- |
-| `LEGACY` | `weight` is present; `invested_amount`, `invested_currency`, `shares`, and `purchase_date` are `NULL` | Not available |
-| `REAL` | `weight` is `NULL`; all four real-holding fields are present | Available from persisted current market data |
+| `LEGACY` | `weight` is present; real-holding fields and `proposed_amount` are `NULL` | Not available |
+| `CURRENT` | `weight` and `proposed_amount` are `NULL`; `shares` is present; investment provenance is either complete or absent | Available from persisted current market data |
+| `PLANNED` | `proposed_amount` is present; `weight` and real-holding fields are `NULL` | Target allocation is derived without current prices; current valuation is not ownership-authoritative |
 
-For a real holding, the user controls `symbol`, `invested_amount`,
-`invested_currency`, `shares`, and `purchase_date`. The backend controls the
-zero-based `position` used to preserve order. Aura does not persist manual
-weight, current allocation, current price, current value, or FX rate for real
-holdings. `invested_amount` and `invested_currency` are provenance facts, not
-the portfolio's current value.
+For a current holding, the normal customer write contract is `symbol` plus
+positive `shares` (the quantity owned). The backend controls the zero-based
+`position` used to preserve order. Existing/full current records may also carry
+`invested_amount`, `invested_currency`, and `purchase_date` as one complete
+optional provenance group; Aura never fabricates those facts for new
+quantity-only rows. Aura does not persist manual weight, current allocation,
+current price, current value, or FX rate for current holdings.
+
+For a planned holding, the user controls `symbol` and positive
+`proposed_amount` in the portfolio's single `plan_currency`. The backend derives
+the total and exact canonical target allocation without market or FX data.
+`GET /api/portfolios/{portfolio_id}/planned-preview` may also derive estimated
+shares from a best-effort current USD asset price and, for THB plans, USD/THB
+FX. Each estimate carries explicit availability and provenance; estimates are
+never persisted and never influence canonical weights or analytics.
+
+`PortfolioBaselineResolutionService` is the sole analysis baseline resolver:
+
+```text
+CURRENT -> current valuation -> dynamic weights
+PLANNED -> proposed amounts -> target weights
+LEGACY  -> saved weights
+                            |
+                            v
+                   canonical weights
+                            |
+                            v
+                 analysis composition
+```
+
+Planned analysis therefore does not require current-price or FX availability.
+It still requires sufficient aligned historical price data under the same
+no-fabrication rules as other portfolio modes.
 
 Current valuation is calculated once in `PortfolioValuationService`:
 
@@ -292,10 +326,13 @@ not make the asset itself more volatile, although a larger current allocation
 can increase its contribution to portfolio risk.
 
 Report persistence supports `portfolio-analysis-response-v1` for legacy
-portfolios and `portfolio-analysis-response-v2` for real portfolios. V2 freezes
-the valuation currency/date, price dates, USD/display totals, optional FX,
-holding facts, prices, values, dynamic allocations, complete analytics,
-per-asset metrics, and risk contribution/rank.
+portfolios, `portfolio-analysis-response-v2` for current portfolios, and
+`portfolio-analysis-response-v3` for planned portfolios. V2 freezes the
+valuation currency/date, price dates, USD/display totals, optional FX, holding
+facts, prices, values, dynamic allocations, complete analytics, per-asset
+metrics, and risk contribution/rank. V3 freezes the plan currency, ordered
+proposed amounts, exact backend target weights, complete analytics, and the
+hypothetical/non-forecast limitation. It does not store estimated shares.
 
 Simulation history supports the existing V1 formats and these V2 formats:
 
@@ -303,17 +340,30 @@ Simulation history supports the existing V1 formats and these V2 formats:
 - `allocation-simulation-response-v2`
 - `combined-simulation-response-v2`
 
+Planned simulation history uses separate V3 formats:
+
+- `historical-scenario-simulation-response-v3`
+- `allocation-simulation-response-v3`
+- `combined-simulation-response-v3`
+
 The real simulation's original allocation is the current canonical USD
 allocation. Allocation and Combined retain the user's hypothetical percentages
-as the modified allocation. V2 history freezes the baseline used at creation.
-Opening a saved report or simulation restores the JSONB snapshot and never
-revalues or reruns it.
+as the modified allocation. For planned simulations, the original allocation
+is the target allocation resolved from proposed amounts; modified percentages
+remain separate hypothetical input. V2 and V3 history freeze their baseline at
+creation. Opening a saved report or simulation restores the JSONB snapshot and
+never revalues or reruns it.
 
 AI grounding follows the same source boundary: live legacy portfolios use
-saved weights, live real portfolios use current USD valuation, Report V2 uses
-the frozen report snapshot, and Simulation V2 uses the frozen snapshot. Saved
-resources do not require current market prices. AI remains educational,
-non-advisory, and cannot produce buy/sell recommendations.
+saved weights, live current portfolios use current USD valuation, and live
+planned portfolios use proposed amounts and their exact target weights. Report
+V2/V3 and Simulation V2/V3 use their frozen snapshots. Saved resources do not
+require current market prices. Context carries `portfolio_type`,
+`baseline_source`, and snapshot version so the model uses current, planned, or
+saved-allocation language correctly. Planned context excludes estimated shares
+and adds an explicit hypothetical/non-forecast limitation. AI remains
+educational, non-advisory, cannot claim proposed assets are currently owned,
+and cannot produce buy/sell recommendations.
 
 ## Transaction Ownership
 

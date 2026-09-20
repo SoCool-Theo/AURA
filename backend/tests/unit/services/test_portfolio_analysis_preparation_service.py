@@ -13,7 +13,7 @@ import backend.app.services.portfolio_baseline_resolver as baseline_module
 import backend.app.services.portfolio_analysis_preparation_service as preparation_module
 import backend.app.services.portfolio_valuation_service as valuation_module
 from backend.app.analytics import PortfolioAnalyticsResult
-from backend.app.database.models import Holding, MarketData, Portfolio
+from backend.app.database.models import Holding, MarketData, Portfolio, PortfolioType
 from backend.app.schemas import (
     AnalysisPeriod,
     PortfolioAnalysisRequest,
@@ -88,6 +88,20 @@ def _real_holding(
         invested_currency=invested_currency,
         shares=shares,
         purchase_date=date(2026, 1, position + 1),
+        position=position,
+    )
+
+
+def _planned_holding(
+    symbol: str,
+    proposed_amount: Decimal,
+    position: int,
+) -> Holding:
+    return Holding(
+        id=UUID(f"54000000-0000-0000-0000-{position + 1:012d}"),
+        portfolio_id=PORTFOLIO_ID,
+        symbol=symbol,
+        proposed_amount=proposed_amount,
         position=position,
     )
 
@@ -337,6 +351,40 @@ def test_real_thb_baseline_uses_one_requested_currency_valuation() -> None:
     session.commit.assert_not_called()
 
 
+def test_planned_baseline_builds_analysis_request_without_current_prices() -> None:
+    service, session, valuation_service = _service_with_mocked_valuation()
+    portfolio = _portfolio(
+        [
+            _planned_holding("AAPL", Decimal("4000"), 0),
+            _planned_holding("BND", Decimal("1000"), 1),
+        ]
+    )
+    portfolio.portfolio_type = PortfolioType.PLANNED.value
+    portfolio.plan_currency = "USD"
+
+    result = service.prepare(
+        portfolio=portfolio,
+        analysis_period=_period(),
+        valuation_date=VALUATION_DATE,
+        display_currency=PortfolioDisplayCurrency.THB,
+    )
+
+    assert result.baseline_kind is PortfolioAnalysisBaselineKind.PLANNED
+    assert [holding.weight for holding in result.resolved_weights] == [
+        Decimal("0.800000000000000000"),
+        Decimal("0.200000000000000000"),
+    ]
+    assert [
+        (holding.symbol, holding.weight)
+        for holding in result.analysis_request.holdings
+    ] == [("AAPL", 0.8), ("BND", 0.2)]
+    assert result.valuation is None
+    assert result.valuation_as_of is None
+    assert result.planned_allocation is not None
+    valuation_service.value.assert_not_called()
+    session.commit.assert_not_called()
+
+
 def test_real_baseline_uses_canonical_usd_without_fx_lookup() -> None:
     session = MagicMock(spec=Session)
     market_data_service = MagicMock(spec=MarketDataService)
@@ -472,7 +520,7 @@ def test_real_baseline_propagates_valuation_failures_without_fallback(
     session.close.assert_not_called()
 
 
-@pytest.mark.parametrize("baseline_kind", ["legacy", "real"])
+@pytest.mark.parametrize("baseline_kind", ["legacy", "real", "planned"])
 def test_existing_analysis_service_accepts_prepared_request_unchanged(
     baseline_kind: str,
 ) -> None:
@@ -486,7 +534,7 @@ def test_existing_analysis_service_accepts_prepared_request_unchanged(
                 _legacy_holding("BND", Decimal("0.4"), 1),
             ]
         )
-    else:
+    elif baseline_kind == "real":
         portfolio = _portfolio(
             [
                 _real_holding(
@@ -506,6 +554,15 @@ def test_existing_analysis_service_accepts_prepared_request_unchanged(
             ]
         )
         valuation_service.value.return_value = _valuation_result()
+    else:
+        portfolio = _portfolio(
+            [
+                _planned_holding("AAPL", Decimal("600"), 0),
+                _planned_holding("BND", Decimal("400"), 1),
+            ]
+        )
+        portfolio.portfolio_type = PortfolioType.PLANNED.value
+        portfolio.plan_currency = "USD"
     preparation = preparation_service.prepare(
         portfolio=portfolio,
         analysis_period=_period(),

@@ -5,6 +5,8 @@
 .header p { margin: 8px 0 0; color: var(--text-secondary); }
 .card { min-height: 280px; padding: 34px; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
 .icon { width: 58px; height: 58px; border-radius: 17px; background: rgba(53, 215, 192, .15); display: grid; place-items: center; color: var(--purple-light); }
+.warningIcon { background: var(--warning-background); color: var(--amber-primary); }
+.neutralIcon { background: var(--bg-card-hover); color: var(--text-secondary); }
 .badge { margin-top: 17px; padding: 6px 9px; border: 1px solid var(--border-control); border-radius: 99px; color: var(--amber-bright); font-size: 11px; }
 .card h2 { margin: 13px 0 7px; }
 .card > p { max-width: 650px; margin: 0; color: var(--text-muted); line-height: 1.65; }

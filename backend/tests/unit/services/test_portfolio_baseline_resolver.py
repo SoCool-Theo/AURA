@@ -1,9 +1,11 @@
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 import backend.app.services.portfolio_baseline_resolver as resolver_module
+from backend.app.database.models import Holding, PortfolioType
 from backend.app.services.portfolio_baseline_resolver import (
     PortfolioBaselineKind,
     PortfolioBaselineResolutionService,
@@ -121,6 +123,58 @@ def test_real_resolution_calls_one_explicit_usd_valuation_and_keeps_decimals() -
     session.commit.assert_not_called()
     session.rollback.assert_not_called()
     session.close.assert_not_called()
+
+
+def test_planned_resolution_uses_proposed_amounts_without_market_data() -> None:
+    service, session, valuation_service = _service()
+    portfolio = _portfolio([])
+    portfolio.portfolio_type = PortfolioType.PLANNED.value
+    portfolio.plan_currency = "USD"
+    portfolio.holdings.extend(
+        [
+            Holding(
+                id=None,
+                symbol="AAPL",
+                proposed_amount=Decimal("4000"),
+                position=0,
+            ),
+            Holding(
+                id=None,
+                symbol="BND",
+                proposed_amount=Decimal("1000"),
+                position=1,
+            ),
+        ]
+    )
+    for position, holding in enumerate(portfolio.holdings, start=1):
+        holding.id = UUID(
+            f"83000000-0000-0000-0000-{position:012d}"
+        )
+
+    result = service.resolve(
+        portfolio=portfolio,
+        valuation_date=VALUATION_DATE,
+        display_currency=PortfolioDisplayCurrency.THB,
+    )
+
+    assert result.baseline_kind is PortfolioBaselineKind.PLANNED
+    assert result.resolved_weights == (
+        ResolvedPortfolioWeight(
+            "AAPL",
+            Decimal("0.800000000000000000"),
+        ),
+        ResolvedPortfolioWeight(
+            "BND",
+            Decimal("0.200000000000000000"),
+        ),
+    )
+    assert result.valuation is None
+    assert result.valuation_as_of is None
+    assert result.planned_allocation is not None
+    assert result.planned_allocation.plan_currency == "USD"
+    valuation_service.value.assert_not_called()
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
 
 
 def test_resolution_requires_an_explicit_plain_date() -> None:

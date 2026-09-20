@@ -12,9 +12,14 @@ import { portfoliosApi } from '../api/portfoliosApi';
 import { ApiError } from '../api/apiClient';
 import { useAuth } from '../auth/useAuth';
 import type {
-  PortfolioHoldingInput,
+  PortfolioCurrency,
+  PortfolioPlannedAllocationResponse,
+  PortfolioPlannedHoldingInput,
+  PortfolioPlannedPreviewResponse,
+  PortfolioRealHoldingInput,
   PortfolioResponse,
-  PortfolioSummaryResponse
+  PortfolioSummaryResponse,
+  PortfolioValuationResponse
 } from '../types/portfolio';
 import { PortfolioCreatedWithoutHoldingsError } from './portfolioErrors';
 
@@ -29,17 +34,32 @@ type PortfolioContextValue = {
   refreshPortfolios: () => Promise<void>;
   selectPortfolio: (portfolioId: string) => void;
   getPortfolio: (portfolioId: string) => Promise<PortfolioResponse>;
-  createPortfolioWithHoldings: (
+  getPortfolioValuation: (
+    portfolioId: string,
+    currency?: PortfolioCurrency
+  ) => Promise<PortfolioValuationResponse>;
+  getPlannedAllocation: (portfolioId: string) => Promise<PortfolioPlannedAllocationResponse>;
+  getPlannedPreview: (portfolioId: string) => Promise<PortfolioPlannedPreviewResponse>;
+  createPortfolioWithRealHoldings: (
     name: string,
-    holdings: PortfolioHoldingInput[]
+    holdings: PortfolioRealHoldingInput[]
+  ) => Promise<PortfolioResponse>;
+  createPortfolioWithPlannedHoldings: (
+    name: string,
+    planCurrency: PortfolioCurrency,
+    holdings: PortfolioPlannedHoldingInput[]
   ) => Promise<PortfolioResponse>;
   renamePortfolio: (
     portfolioId: string,
     name: string
   ) => Promise<PortfolioResponse>;
-  replaceHoldings: (
+  replaceRealHoldings: (
     portfolioId: string,
-    holdings: PortfolioHoldingInput[]
+    holdings: PortfolioRealHoldingInput[]
+  ) => Promise<PortfolioResponse>;
+  replacePlannedHoldings: (
+    portfolioId: string,
+    holdings: PortfolioPlannedHoldingInput[]
   ) => Promise<PortfolioResponse>;
   duplicatePortfolio: (
     portfolioId: string,
@@ -56,6 +76,8 @@ function toSummary(portfolio: PortfolioResponse): PortfolioSummaryResponse {
   return {
     id: portfolio.id,
     name: portfolio.name,
+    portfolio_type: portfolio.portfolio_type,
+    plan_currency: portfolio.plan_currency,
     created_at: portfolio.created_at,
     updated_at: portfolio.updated_at
   };
@@ -138,18 +160,58 @@ export function PortfolioProvider({ children }: PropsWithChildren) {
     return portfolio;
   }, [upsertSummary]);
 
-  const createPortfolioWithHoldings = useCallback(async (
+  const getPortfolioValuation = useCallback((
+    portfolioId: string,
+    currency: PortfolioCurrency = 'USD'
+  ) => portfoliosApi.getValuation(portfolioId, currency), []);
+
+  const getPlannedAllocation = useCallback(
+    (portfolioId: string) => portfoliosApi.getPlannedAllocation(portfolioId),
+    []
+  );
+
+  const getPlannedPreview = useCallback(
+    (portfolioId: string) => portfoliosApi.getPlannedPreview(portfolioId),
+    []
+  );
+
+  const createPortfolioWithRealHoldings = useCallback(async (
     name: string,
-    holdings: PortfolioHoldingInput[]
+    holdings: PortfolioRealHoldingInput[]
   ) => {
-    const created = await portfoliosApi.create({ name });
+    const created = await portfoliosApi.create({ name, portfolio_type: 'CURRENT' });
     upsertSummary(created, true);
     setActivePortfolioId(created.id);
 
     try {
-      const completed = await portfoliosApi.replaceHoldings(created.id, {
+      const completed = await portfoliosApi.replaceRealHoldings(
+        created.id,
         holdings
-      });
+      );
+      upsertSummary(completed, false);
+      return completed;
+    } catch (error) {
+      throw new PortfolioCreatedWithoutHoldingsError(created, error);
+    }
+  }, [upsertSummary]);
+
+  const createPortfolioWithPlannedHoldings = useCallback(async (
+    name: string,
+    planCurrency: PortfolioCurrency,
+    holdings: PortfolioPlannedHoldingInput[]
+  ) => {
+    const created = await portfoliosApi.create({
+      name,
+      portfolio_type: 'PLANNED',
+      plan_currency: planCurrency
+    });
+    upsertSummary(created, true);
+    setActivePortfolioId(created.id);
+    try {
+      const completed = await portfoliosApi.replacePlannedHoldings(
+        created.id,
+        holdings
+      );
       upsertSummary(completed, false);
       return completed;
     } catch (error) {
@@ -166,13 +228,26 @@ export function PortfolioProvider({ children }: PropsWithChildren) {
     return portfolio;
   }, [upsertSummary]);
 
-  const replaceHoldings = useCallback(async (
+  const replaceRealHoldings = useCallback(async (
     portfolioId: string,
-    holdings: PortfolioHoldingInput[]
+    holdings: PortfolioRealHoldingInput[]
   ) => {
-    const portfolio = await portfoliosApi.replaceHoldings(portfolioId, {
+    const portfolio = await portfoliosApi.replaceRealHoldings(
+      portfolioId,
       holdings
-    });
+    );
+    upsertSummary(portfolio, false);
+    return portfolio;
+  }, [upsertSummary]);
+
+  const replacePlannedHoldings = useCallback(async (
+    portfolioId: string,
+    holdings: PortfolioPlannedHoldingInput[]
+  ) => {
+    const portfolio = await portfoliosApi.replacePlannedHoldings(
+      portfolioId,
+      holdings
+    );
     upsertSummary(portfolio, false);
     return portfolio;
   }, [upsertSummary]);
@@ -203,24 +278,34 @@ export function PortfolioProvider({ children }: PropsWithChildren) {
     refreshPortfolios,
     selectPortfolio: setActivePortfolioId,
     getPortfolio,
-    createPortfolioWithHoldings,
+    getPortfolioValuation,
+    getPlannedAllocation,
+    getPlannedPreview,
+    createPortfolioWithRealHoldings,
+    createPortfolioWithPlannedHoldings,
     renamePortfolio,
-    replaceHoldings,
+    replaceRealHoldings,
+    replacePlannedHoldings,
     duplicatePortfolio,
     deletePortfolio
   }), [
     activePortfolioId,
-    createPortfolioWithHoldings,
+    createPortfolioWithRealHoldings,
+    createPortfolioWithPlannedHoldings,
     deletePortfolio,
     duplicatePortfolio,
     getPortfolio,
+    getPortfolioValuation,
+    getPlannedAllocation,
+    getPlannedPreview,
     isRefreshing,
     listError,
     listStatus,
     portfolios,
     refreshPortfolios,
     renamePortfolio,
-    replaceHoldings
+    replacePlannedHoldings,
+    replaceRealHoldings
   ]);
 
   return (

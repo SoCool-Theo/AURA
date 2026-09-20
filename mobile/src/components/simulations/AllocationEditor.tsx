@@ -37,6 +37,8 @@ export function AllocationEditor({
             </View>
             <View style={styles.inputBox}>
               <TextInput
+                accessibilityLabel={`${holding.symbol} modified allocation percent`}
+                accessibilityState={{ disabled }}
                 editable={!disabled}
                 value={inputs[holding.symbol] ?? ''}
                 onChangeText={(value) => onChange(holding.symbol, value)}

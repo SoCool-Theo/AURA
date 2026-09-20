@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../../components/ui/Card';
+import { InlineErrorCard } from '../../components/ui/ErrorState';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { usePortfolios } from '../../portfolio/usePortfolios';
 import { useReports } from '../../report/useReports';
@@ -12,22 +13,30 @@ import { useFocusEffect } from '@react-navigation/native';
 
 const items = [
   { label: 'Analytics', description: 'Detailed risk metrics', icon: 'analytics-outline', color: colors.primary, bg: colors.cyanBackground, route: 'Analytics' },
-  { label: 'Reports', description: 'Saved analysis snapshots', icon: 'document-text-outline', color: colors.purpleSoft, bg: colors.purpleBackground, route: 'Reports' },
+  { label: 'Reports', description: 'Saved analysis results', icon: 'document-text-outline', color: colors.purpleSoft, bg: colors.purpleBackground, route: 'Reports' },
   { label: 'Watchlist', description: 'Unavailable · coming later', icon: 'eye-outline', color: colors.warning, bg: colors.warningBackground, route: 'Watchlist' },
   { label: 'Learn', description: 'Portfolio-risk education', icon: 'school-outline', color: colors.blue, bg: colors.blueBackground, route: 'Learn' },
   { label: 'Settings', description: 'Account and preferences', icon: 'settings-outline', color: colors.textSecondary, bg: colors.surfaceAlt, route: 'Settings' }
 ] as const;
 
 export function MoreScreen({ navigation }: { navigation: any }) {
-  const { portfolios, activePortfolioId, listStatus } = usePortfolios();
+  const {
+    portfolios,
+    activePortfolioId,
+    listStatus,
+    listError,
+    refreshPortfolios
+  } = usePortfolios();
   const {
     reports,
     historyStatus,
+    historyError,
     refreshReportHistory
   } = useReports();
   const {
     history: simulations,
     historyStatus: simulationHistoryStatus,
+    historyError: simulationHistoryError,
     refreshHistory: refreshSimulationHistory
   } = useSimulations();
 
@@ -68,13 +77,39 @@ export function MoreScreen({ navigation }: { navigation: any }) {
           </Card>
         </View>
 
-        {listStatus === 'error' || historyStatus === 'error' || simulationHistoryStatus === 'error' ? (
-          <Text style={styles.description}>Some counts could not refresh. Open Reports or Simulations to retry.</Text>
+        {listStatus === 'error' ? (
+          <InlineErrorCard
+            error={listError}
+            stale={Boolean(portfolios.length)}
+            onRetry={() => void refreshPortfolios()}
+            retryTitle="Retry portfolios"
+          />
+        ) : null}
+        {historyStatus === 'error' ? (
+          <InlineErrorCard
+            error={historyError}
+            stale={Boolean(reports.length)}
+            onRetry={() => void refreshReportHistory(portfolios)}
+            retryTitle="Retry reports"
+          />
+        ) : null}
+        {simulationHistoryStatus === 'error' ? (
+          <InlineErrorCard
+            error={simulationHistoryError}
+            stale={Boolean(simulations.length)}
+            onRetry={() => void refreshSimulationHistory(portfolios)}
+            retryTitle="Retry simulations"
+          />
         ) : null}
 
         <View style={styles.list}>
           {items.map((item) => (
-            <Pressable key={item.label} onPress={() => open(item.route)}>
+            <Pressable
+              accessibilityLabel={item.label}
+              accessibilityRole="button"
+              key={item.label}
+              onPress={() => open(item.route)}
+            >
               <Card style={styles.item}>
                 <View style={[styles.icon, { backgroundColor: item.bg }]}>
                   <Ionicons name={item.icon} color={item.color} size={22} />

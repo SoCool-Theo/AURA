@@ -93,6 +93,38 @@ def test_valid_provider_output_passes_without_changing_content() -> None:
 
 
 @pytest.mark.parametrize(
+    "ownership_claim",
+    [
+        "You currently own AAPL in your current portfolio.",
+        "Your planned holdings include AAPL.",
+    ],
+)
+def test_planned_output_accepts_proposed_language_and_rejects_ownership(
+    ownership_claim: str,
+) -> None:
+    allowed = validate_provider_output(
+        "Your planned allocation assigns 60% to AAPL.",
+        planned_context=True,
+    )
+    rejected = validate_provider_output(
+        ownership_claim,
+        planned_context=True,
+    )
+
+    assert allowed.reason is GuardrailReason.ALLOWED
+    assert rejected.allowed is False
+    assert rejected.reason is GuardrailReason.PLANNED_OWNERSHIP_CLAIM
+
+
+def test_current_output_is_not_subject_to_planned_terminology_check() -> None:
+    decision = validate_provider_output(
+        "Your current holdings have a calculated historical drawdown.",
+    )
+
+    assert decision.reason is GuardrailReason.ALLOWED
+
+
+@pytest.mark.parametrize(
     "text",
     [
         "Your portfolio is concentrated in two crypto assets, so movements in those assets can have a large effect on the total portfolio.",

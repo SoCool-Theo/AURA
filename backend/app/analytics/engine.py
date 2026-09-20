@@ -24,7 +24,9 @@ from .returns import (
     calculate_portfolio_returns,
 )
 from .risk_classifier import (
+    AssetRiskClassificationResult,
     RiskClassificationResult,
+    analyze_asset_risk_classification,
     analyze_risk_classification,
 )
 from .risk_driver import RiskDriverResult, analyze_risk_drivers
@@ -70,6 +72,9 @@ class PortfolioAnalyticsResult:
     risk_classification: RiskClassificationResult
 
     asset_metrics: pd.DataFrame
+    asset_risk_classifications: Mapping[
+        str, AssetRiskClassificationResult
+    ]
     asset_returns: pd.DataFrame
     portfolio_returns: pd.Series
     correlation_matrix: pd.DataFrame
@@ -132,9 +137,24 @@ def _calculate_asset_metrics(
     )
 
 
+def _calculate_asset_risk_classifications(
+    asset_metrics: pd.DataFrame,
+) -> dict[str, AssetRiskClassificationResult]:
+    return {
+        str(symbol): analyze_asset_risk_classification(
+            float(row["annualized_volatility"]),
+            float(row["max_drawdown"]),
+        )
+        for symbol, row in asset_metrics.iterrows()
+    }
+
+
 def _confirm_result_consistency(
     price_symbols: pd.Index,
     asset_metrics: pd.DataFrame,
+    asset_risk_classifications: Mapping[
+        str, AssetRiskClassificationResult
+    ],
     asset_returns: pd.DataFrame,
     portfolio_returns: pd.Series,
     correlation_matrix: pd.DataFrame,
@@ -156,6 +176,10 @@ def _confirm_result_consistency(
     if tuple(asset_metrics.columns) != _ASSET_METRIC_COLUMNS:
         raise ValueError(
             "calculated asset-metric columns must match the engine contract"
+        )
+    if list(asset_risk_classifications) != list(price_symbols):
+        raise ValueError(
+            "calculated asset-risk symbols must match price columns"
         )
     if not portfolio_returns.index.equals(asset_returns.index):
         raise ValueError(
@@ -209,6 +233,9 @@ def analyze_portfolio(
         annual_risk_free_rate,
         periods_per_year,
     )
+    asset_risk_classifications = _calculate_asset_risk_classifications(
+        asset_metrics
+    )
     correlation_matrix = calculate_correlation_matrix(asset_returns)
     correlation_pairs = extract_correlation_pairs(correlation_matrix)
     concentration = analyze_concentration(
@@ -234,6 +261,7 @@ def analyze_portfolio(
     _confirm_result_consistency(
         prices.columns,
         asset_metrics,
+        asset_risk_classifications,
         asset_returns,
         portfolio_returns,
         correlation_matrix,
@@ -255,6 +283,7 @@ def analyze_portfolio(
         risk_drivers=risk_drivers,
         risk_classification=risk_classification,
         asset_metrics=asset_metrics,
+        asset_risk_classifications=asset_risk_classifications,
         asset_returns=asset_returns,
         portfolio_returns=portfolio_returns,
         correlation_matrix=correlation_matrix,

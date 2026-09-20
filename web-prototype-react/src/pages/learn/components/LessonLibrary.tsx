@@ -28,7 +28,7 @@ export function LessonLibrary({ lessons, onOpen }: LessonLibraryProps) {
       </div>
       <div className="lesson-grid">
         {lessons.map((lesson, index) => (
-          <Card key={lesson.title} className={`lesson-card lesson-tone-${index % 3}`}>
+          <Card key={lesson.title} className={`lesson-card lesson-tone-${index % 4}`}>
             <div className="lesson-card-top">
               <span><Icon name={lesson.icon} size={21} /></span>
               <b>{String(index + 1).padStart(2, '0')}</b>

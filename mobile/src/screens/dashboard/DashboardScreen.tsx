@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { MetricAmountSheet } from '../../components/analytics/MetricAmountSheet';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 import { WebKpiCard } from '../../components/ui/WebKpiCard';
@@ -11,29 +13,76 @@ import { PortfolioReturnsChart } from '../../components/charts/PortfolioReturnsC
 import { useDashboard } from '../../dashboard/useDashboard';
 import { dashboardPercent, filterDashboardReturns, type DashboardRange } from '../../dashboard/dashboardPresentation';
 import { usePreferences } from '../../preferences/usePreferences';
-import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
+import {
+  isPortfolioMarketDataUnavailable,
+  PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE,
+  portfolioErrorMessage,
+  portfolioValuationErrorMessage
+} from '../../portfolio/portfolioErrors';
+import { formatPortfolioMoney } from '../../portfolio/portfolioFormatting';
 import { reportErrorMessage } from '../../report/reportErrors';
 import { formatReportTimestamp, riskTone } from '../../report/reportFormatting';
+import {
+  reportMetricAmountContent,
+  reportMonetaryMetrics,
+  type ReportMonetaryMetricKey
+} from '../../report/reportMetricDetails';
 import { colors, spacing } from '../../theme/theme';
+import {
+  portfolioHoldingMode,
+  type PortfolioCurrency
+} from '../../types/portfolio';
 
 const ranges: DashboardRange[] = ['1M', '3M', '6M', '1Y', 'ALL'];
 
 export function DashboardScreen({ navigation }: { navigation: any }) {
   const { displayName } = usePreferences();
   const dashboard = useDashboard();
-  const { portfoliosState, reportsState, selectedId, portfolio, report, newest } = dashboard;
+  const {
+    portfoliosState,
+    reportsState,
+    selectedId,
+    portfolio,
+    report,
+    newest,
+    valuation,
+    plannedAllocation
+  } = dashboard;
   const { portfolios, listStatus, listError, selectPortfolio } = portfoliosState;
   const [range, setRange] = useState<DashboardRange>('1M');
+  const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
   const analysis = report?.analysis;
+  const monetary = reportMonetaryMetrics(report);
   const points = useMemo(() => filterDashboardReturns(analysis?.portfolio_returns ?? [], range), [analysis, range]);
   const selected = portfolios.find((item) => item.id === selectedId);
   const firstName = (displayName || 'Investor').split(' ')[0];
+  const holdingMode = portfolio ? portfolioHoldingMode(portfolio.holdings) : 'empty';
+  const marketDataUnavailable = isPortfolioMarketDataUnavailable(dashboard.valuationError);
   const analyze = () => navigation.navigate('MoreTab', { screen: 'Analytics', params: { portfolioId: selectedId } });
   const openReport = () => {
     if (report) navigation.navigate('MoreTab', {
       screen: 'ReportDetail', params: { portfolioId: report.portfolio_id, reportId: report.id }
     });
   };
+  const openAssetRisk = (assetSymbol: string) => {
+    if (report) navigation.navigate('MoreTab', {
+      screen: 'AssetRiskDetail',
+      params: { portfolioId: report.portfolio_id, reportId: report.id, assetSymbol }
+    });
+  };
+
+  if (listStatus === 'error' && !portfolios.length) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScreenErrorState
+          error={listError}
+          resourceName="Portfolio list"
+          fallbackMessage="Unable to load your dashboard."
+          onRetry={() => void dashboard.refresh()}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -43,12 +92,12 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
         <PageTitle eyebrow="AURA" title={`Welcome back, ${firstName}`} subtitle="Your portfolios and latest saved analysis." />
 
         {listStatus === 'error' ? (
-          <Card style={styles.state}>
-            <Text style={styles.error}>Could not refresh portfolios</Text>
-            <Text style={styles.body}>{portfolioErrorMessage(listError)}</Text>
-            {portfolios.length ? <Text style={styles.body}>Showing the previously loaded portfolio list.</Text> : null}
-            <Button title="Retry" disabled={dashboard.refreshing} onPress={() => void dashboard.refresh()} />
-          </Card>
+          <InlineErrorCard
+            error={listError}
+            message={portfolioErrorMessage(listError)}
+            stale
+            onRetry={() => void dashboard.refresh()}
+          />
         ) : null}
 
         {!portfolios.length ? (
@@ -68,7 +117,14 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
               <Text style={styles.heading}>{selected?.name}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
                 {portfolios.map((item) => (
-                  <Pressable key={item.id} onPress={() => selectPortfolio(item.id)} style={[styles.chip, item.id === selectedId && styles.activeChip]}>
+                  <Pressable
+                    accessibilityLabel={`${item.name} portfolio`}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: item.id === selectedId }}
+                    key={item.id}
+                    onPress={() => selectPortfolio(item.id)}
+                    style={[styles.chip, item.id === selectedId && styles.activeChip]}
+                  >
                     <Text style={styles.chipText}>{item.name}</Text>
                   </Pressable>
                 ))}
@@ -78,29 +134,103 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
 
             {dashboard.portfolioLoading ? <Text style={styles.notice}>Loading selected portfolio holdings…</Text> : null}
             {dashboard.portfolioError ? (
-              <Card style={styles.state}>
-                <Text style={styles.error}>Holdings unavailable or could not refresh</Text>
-                <Text style={styles.body}>{portfolioErrorMessage(dashboard.portfolioError)}</Text>
-                {portfolio ? <Text style={styles.body}>Showing previously loaded holdings; they may be out of date.</Text> : null}
-                <Button title="Retry holdings" disabled={dashboard.refreshing} onPress={dashboard.retryDetails} />
-              </Card>
+              <InlineErrorCard
+                error={dashboard.portfolioError}
+                message={portfolioErrorMessage(dashboard.portfolioError)}
+                stale={Boolean(portfolio)}
+                onRetry={dashboard.retryDetails}
+                retryTitle="Retry holdings"
+              />
+            ) : null}
+
+            {holdingMode === 'real' ? (
+              <View style={styles.valuationControls}>
+                <Text style={styles.overline}>CURRENT VALUE CURRENCY</Text>
+                <View style={styles.currencyControl}>
+                  {(['USD', 'THB'] as PortfolioCurrency[]).map((currency) => {
+                    const active = dashboard.valuationCurrency === currency;
+                    return (
+                      <Pressable
+                        accessibilityLabel={`${currency} valuation currency`}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: active }}
+                        key={currency}
+                        onPress={() => dashboard.setValuationCurrency(currency)}
+                        style={[styles.currencyOption, active && styles.activeCurrency]}
+                      >
+                        <Text style={[styles.currencyText, active && styles.activeCurrencyText]}>{currency}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
+            {dashboard.valuationLoading ? <Text style={styles.notice}>{holdingMode === 'planned' ? 'Loading planned target allocation…' : 'Loading current portfolio value…'}</Text> : null}
+            {dashboard.valuationError ? (
+              <InlineErrorCard
+                error={dashboard.valuationError}
+                message={holdingMode === 'planned'
+                  ? portfolioErrorMessage(dashboard.valuationError, 'Unable to load the planned target allocation.')
+                  : portfolioValuationErrorMessage(dashboard.valuationError)}
+                stale={marketDataUnavailable || Boolean(valuation)}
+                staleMessage={marketDataUnavailable
+                  ? PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE
+                  : undefined}
+                onRetry={dashboard.retryDetails}
+                retryTitle={holdingMode === 'real' ? 'Retry Current Value' : 'Retry allocation'}
+                compactAction={holdingMode === 'real'}
+              />
             ) : null}
 
             <View style={styles.kpiGrid}>
-              <WebKpiCard icon="layers-outline" label="Holdings Count" value={portfolio ? String(portfolio.holdings.length) : 'N/A'} meta="Saved portfolio holdings" tone="blue" />
+              <WebKpiCard
+                icon="wallet-outline"
+                label={holdingMode === 'planned' ? 'Proposed Investment' : 'Current Value'}
+                value={holdingMode === 'planned' && plannedAllocation
+                  ? formatPortfolioMoney(plannedAllocation.total_proposed_amount, plannedAllocation.plan_currency)
+                  : valuation
+                  ? formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency)
+                  : 'N/A'}
+                meta={holdingMode === 'planned' && plannedAllocation
+                  ? 'Hypothetical plan · target weights from proposed amounts'
+                  : valuation
+                  ? `Prices as of ${valuation.newest_price_as_of}`
+                  : holdingMode === 'legacy'
+                    ? 'Legacy portfolios have saved weights only'
+                    : 'Current valuation unavailable'}
+                tone="blue"
+              />
               <WebKpiCard icon="speedometer-outline" label="Risk Score" value={analysis?.risk_classification.risk_score == null ? 'N/A' : `${analysis.risk_classification.risk_score.toFixed(1)}/100`} meta={analysis?.risk_classification.risk_level ?? 'No verified report loaded'} tone={analysis ? riskTone(analysis.risk_classification.risk_level) : 'primary'} />
-              <WebKpiCard icon="trending-up-outline" label="Annualized Return" value={dashboardPercent(analysis?.portfolio_metrics.annualized_return)} meta="Saved report period" />
-              <WebKpiCard icon="trending-down-outline" label="Maximum Drawdown" value={dashboardPercent(analysis?.max_drawdown.max_drawdown)} meta="Saved report peak-to-trough" tone="danger" />
+              <WebKpiCard
+                icon="trending-up-outline"
+                label="Annualized Return"
+                value={dashboardPercent(analysis?.portfolio_metrics.annualized_return)}
+                meta={monetary ? 'Historical equivalent · Tap for amount' : 'Saved report period'}
+                tone={analysis?.portfolio_metrics.annualized_return != null && analysis.portfolio_metrics.annualized_return < 0 ? 'danger' : 'success'}
+                onPress={monetary ? () => setSelectedMetric('annualized') : undefined}
+                accessibilityHint={monetary ? 'Shows the percentage and estimated annual money amount' : undefined}
+              />
+              <WebKpiCard
+                icon="trending-down-outline"
+                label="Maximum Drawdown"
+                value={dashboardPercent(analysis?.max_drawdown.max_drawdown)}
+                meta={monetary?.maximum_drawdown_amount != null ? 'Saved peak-to-trough · Tap for amount' : 'Saved report peak-to-trough'}
+                tone="danger"
+                onPress={monetary?.maximum_drawdown_amount != null ? () => setSelectedMetric('drawdown') : undefined}
+                accessibilityHint={monetary?.maximum_drawdown_amount != null ? 'Shows the percentage and estimated peak-to-trough money amount' : undefined}
+              />
             </View>
 
             <SectionHeader title="Latest saved analysis" action="Analyze" onPress={analyze} />
             {reportsState.historyStatus === 'error' ? (
-              <Card style={styles.state}>
-                <Text style={styles.error}>Report history unavailable</Text>
-                <Text style={styles.body}>{reportErrorMessage(reportsState.historyError, 'Unable to verify the newest saved report.')}</Text>
-                <Text style={styles.body}>Analytics are unavailable until history can be verified. Loaded holdings remain available below.</Text>
-                <Button title="Retry report history" disabled={dashboard.refreshing} onPress={dashboard.retryDetails} />
-              </Card>
+              <InlineErrorCard
+                error={reportsState.historyError}
+                message={reportErrorMessage(reportsState.historyError, 'Unable to verify the newest saved report.')}
+                stale={Boolean(report)}
+                onRetry={dashboard.retryDetails}
+                retryTitle="Retry report history"
+              />
             ) : reportsState.historyStatus === 'idle' || reportsState.historyStatus === 'loading' ? (
               <Card style={styles.state}><Text style={styles.body}>Loading report history…</Text></Card>
             ) : !newest ? (
@@ -114,12 +244,13 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                 {reportsState.isRefreshing ? <Text style={styles.notice}>Refreshing report history; the displayed report is from the previous load.</Text> : null}
                 {dashboard.reportLoading ? <Text style={styles.notice}>Loading newest saved report…</Text> : null}
                 {dashboard.reportError ? (
-                  <Card style={styles.state}>
-                    <Text style={styles.error}>Could not load the newest report</Text>
-                    <Text style={styles.body}>{reportErrorMessage(dashboard.reportError)}</Text>
-                    {report ? <Text style={styles.body}>Showing the previously loaded immutable report.</Text> : null}
-                    <Button title="Retry report" disabled={dashboard.refreshing} onPress={dashboard.retryDetails} />
-                  </Card>
+                  <InlineErrorCard
+                    error={dashboard.reportError}
+                    message={reportErrorMessage(dashboard.reportError)}
+                    stale={Boolean(report)}
+                    onRetry={dashboard.retryDetails}
+                    retryTitle="Retry report"
+                  />
                 ) : null}
                 {report && analysis ? (
                   <>
@@ -135,7 +266,14 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                     <Card style={styles.state}>
                       <View style={styles.ranges}>
                         {ranges.map((item) => (
-                          <Pressable key={item} onPress={() => setRange(item)} style={[styles.range, range === item && styles.activeChip]}><Text style={styles.chipText}>{item}</Text></Pressable>
+                          <Pressable
+                            accessibilityLabel={`${item} chart range`}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected: range === item }}
+                            key={item}
+                            onPress={() => setRange(item)}
+                            style={[styles.range, range === item && styles.activeChip]}
+                          ><Text style={styles.chipText}>{item}</Text></Pressable>
                         ))}
                       </View>
                       <PortfolioReturnsChart points={points} />
@@ -144,13 +282,21 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                     <SectionHeader title="Top Risk Drivers" action="View report" onPress={openReport} />
                     <Card>
                       {analysis.risk_drivers.entries.slice(0, 3).map((driver) => (
-                        <View key={driver.symbol} style={styles.row}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open ${driver.symbol} asset risk details`}
+                          accessibilityHint="Shows this asset's saved risk metrics and historical graph"
+                          key={driver.symbol}
+                          onPress={() => openAssetRisk(driver.symbol)}
+                          style={({ pressed }) => [styles.row, styles.driverRow, pressed && styles.pressed]}
+                        >
                           <Text style={styles.symbol}>{driver.rank}. {driver.symbol}</Text>
                           <View style={styles.contribution}>
                             <Text style={styles.weight}>{dashboardPercent(driver.percentage_volatility_contribution)}</Text>
                             <Text style={styles.body}>Volatility contribution</Text>
                           </View>
-                        </View>
+                          <Text aria-hidden style={styles.driverChevron}>›</Text>
+                        </Pressable>
                       ))}
                     </Card>
                   </>
@@ -158,15 +304,28 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
               </>
             )}
 
-            <SectionHeader title="Current Portfolio Allocation" />
+            <SectionHeader title={holdingMode === 'planned' ? 'Planned Target Allocation' : 'Current Portfolio Allocation'} />
             <Card>
-              {portfolio ? portfolio.holdings.length ? portfolio.holdings.map((holding) => (
+              {holdingMode === 'planned' && plannedAllocation ? plannedAllocation.holdings.map((holding) => (
+                <View key={holding.symbol} style={styles.row}>
+                  <Text style={styles.symbol}>{holding.symbol}</Text>
+                  <Text style={styles.weight}>{dashboardPercent(Number(holding.target_allocation))}</Text>
+                </View>
+              )) : holdingMode === 'real' && valuation ? valuation.holdings.map((holding) => (
+                <View key={holding.symbol} style={styles.row}>
+                  <Text style={styles.symbol}>{holding.symbol}</Text>
+                  <Text style={styles.weight}>{dashboardPercent(Number(holding.current_allocation))}</Text>
+                </View>
+              )) : holdingMode === 'legacy' && portfolio ? portfolio.holdings.map((holding) => (
                 <View key={holding.symbol} style={styles.row}>
                   <Text style={styles.symbol}>{holding.symbol}</Text>
                   <Text style={styles.weight}>{dashboardPercent(holding.weight)}</Text>
                 </View>
-              )) : <Text style={styles.body}>No holdings saved. Add holdings from Portfolio Detail.</Text>
-                : <Text style={styles.body}>Allocation is unavailable until holdings load successfully.</Text>}
+              )) : portfolio?.holdings.length ? (
+                <Text style={styles.body}>Current allocation is unavailable until Aura can load market prices.</Text>
+              ) : portfolio ? (
+                <Text style={styles.body}>No holdings saved. Add holdings from Portfolio Detail.</Text>
+              ) : <Text style={styles.body}>Allocation is unavailable until holdings load successfully.</Text>}
             </Card>
             <View style={styles.actions}>
               <Button title="Analyze Portfolio" onPress={analyze} />
@@ -176,6 +335,10 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
           </>
         )}
       </ScrollView>
+      <MetricAmountSheet
+        content={reportMetricAmountContent(selectedMetric, report)}
+        onClose={() => setSelectedMetric(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -190,15 +353,31 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, fontWeight: '800' },
   notice: { color: colors.textSecondary, fontSize: 12, marginTop: spacing.md },
   chips: { gap: spacing.sm },
-  chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt },
   activeChip: { borderColor: colors.primary, backgroundColor: colors.selectedBackground },
   chipText: { color: colors.text, fontSize: 11, fontWeight: '800' },
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.md, marginTop: spacing.md },
   ranges: { flexDirection: 'row', gap: spacing.xs },
-  range: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border },
+  range: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  driverRow: { minHeight: 64, borderBottomWidth: 1, borderBottomColor: colors.border },
+  driverChevron: { color: colors.primary, fontSize: 24, lineHeight: 26 },
+  pressed: { opacity: 0.72 },
   symbol: { color: colors.text, fontWeight: '800', flex: 1 },
   weight: { color: colors.text, fontWeight: '900' },
   contribution: { alignItems: 'flex-end' },
+  valuationControls: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.lg
+  },
+  currencyControl: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: 12, padding: 3 },
+  currencyOption: { minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 9 },
+  activeCurrency: { backgroundColor: colors.selectedBackground },
+  currencyText: { color: colors.muted, fontSize: 11, fontWeight: '900' },
+  activeCurrencyText: { color: colors.primary },
   actions: { gap: spacing.md, marginTop: spacing.xl }
 });

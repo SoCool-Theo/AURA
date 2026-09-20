@@ -10,10 +10,12 @@ import {
 } from 'react-native';
 import { colors, spacing } from '../../theme/theme';
 
-type InputProps = TextInputProps & { label?: string };
+type InputProps = TextInputProps & { label?: string; error?: string | null };
 
 export function Input({
+  accessibilityLabel,
   editable,
+  error,
   label,
   secureTextEntry,
   style,
@@ -26,8 +28,10 @@ export function Input({
   return (
     <View style={styles.wrapper}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <View style={styles.inputWrapper}>
+      <View style={[styles.inputWrapper, error ? styles.errorWrapper : null]}>
         <TextInput
+          accessibilityLabel={accessibilityLabel ?? label}
+          accessibilityState={{ disabled: editable === false }}
           style={[
             styles.input,
             showsPasswordToggle && styles.passwordInput,
@@ -60,6 +64,7 @@ export function Input({
           </Pressable>
         ) : null}
       </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
@@ -68,6 +73,7 @@ const styles = StyleSheet.create({
   wrapper: { gap: spacing.sm },
   label: { color: colors.textSecondary, fontWeight: '700' },
   inputWrapper: { position: 'relative' },
+  errorWrapper: { borderRadius: 15, borderWidth: 1, borderColor: colors.danger },
   input: {
     minHeight: 52,
     borderRadius: 15,
@@ -89,5 +95,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 12
   },
-  visibilityButtonPressed: { opacity: 0.65 }
+  visibilityButtonPressed: { opacity: 0.65 },
+  errorText: { color: colors.danger, fontSize: 11, lineHeight: 16 }
 });

@@ -1,53 +1,98 @@
-import type { PortfolioHoldingInput } from '../types/portfolio';
+import type {
+  PortfolioPlannedHoldingInput,
+  PortfolioPlannedHoldingResponse,
+  PortfolioRealHoldingInput,
+  PortfolioRealHoldingResponse
+} from '../types/portfolio';
 
-export type HoldingDraft = {
+export type RealHoldingDraft = {
   id: string;
   symbol: string;
-  weightPercent: string;
+  shares: string;
 };
 
-export type HoldingValidationResult =
-  | { holdings: PortfolioHoldingInput[]; error: null }
+export type RealHoldingValidationResult =
+  | { holdings: PortfolioRealHoldingInput[]; error: null }
   | { holdings: null; error: string };
 
-export function createHoldingDraft(
-  symbol = '',
-  weightPercent = ''
-): HoldingDraft {
+export type PlannedHoldingDraft = {
+  id: string;
+  symbol: string;
+  proposedAmount: string;
+};
+
+export type PlannedHoldingValidationResult =
+  | { holdings: PortfolioPlannedHoldingInput[]; error: null }
+  | { holdings: null; error: string };
+
+function draftId(): string {
+  return `${Date.now()}-${Math.random()}`;
+}
+
+export function createRealHoldingDraft(
+  values: Partial<Omit<RealHoldingDraft, 'id'>> = {}
+): RealHoldingDraft {
   return {
-    id: `${Date.now()}-${Math.random()}`,
-    symbol,
-    weightPercent
+    id: draftId(),
+    symbol: values.symbol ?? '',
+    shares: values.shares ?? ''
   };
 }
 
-export function decimalWeightToPercent(weight: number): number {
-  return weight * 100;
+export function realHoldingToDraft(
+  holding: PortfolioRealHoldingResponse
+): RealHoldingDraft {
+  return createRealHoldingDraft({
+    symbol: holding.symbol,
+    shares: holding.shares
+  });
 }
 
-export function decimalWeightToInput(weight: number): string {
-  return String(Number(decimalWeightToPercent(weight).toFixed(10)));
+export function createPlannedHoldingDraft(
+  values: Partial<Omit<PlannedHoldingDraft, 'id'>> = {}
+): PlannedHoldingDraft {
+  return {
+    id: draftId(),
+    symbol: values.symbol ?? '',
+    proposedAmount: values.proposedAmount ?? ''
+  };
 }
 
-export function validateHoldingDrafts(
-  drafts: HoldingDraft[]
-): HoldingValidationResult {
+export function plannedHoldingToDraft(
+  holding: PortfolioPlannedHoldingResponse
+): PlannedHoldingDraft {
+  return createPlannedHoldingDraft({
+    symbol: holding.symbol,
+    proposedAmount: holding.proposed_amount
+  });
+}
+
+function positiveDecimal(value: string): string | null {
+  const normalized = value.trim();
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(normalized);
+  if (!match || !/[1-9]/.test(normalized)) return null;
+
+  const integerDigits = match[1].replace(/^0+/, '').length || 1;
+  const decimalDigits = match[2]?.length ?? 0;
+  if (integerDigits > 16 || decimalDigits > 12) return null;
+  return normalized;
+}
+
+export function validateRealHoldingDrafts(
+  drafts: RealHoldingDraft[]
+): RealHoldingValidationResult {
   if (!drafts.length) {
     return { holdings: null, error: 'Add at least one holding.' };
   }
 
-  const holdings: PortfolioHoldingInput[] = [];
+  const holdings: PortfolioRealHoldingInput[] = [];
   const seenSymbols = new Set<string>();
-  let totalPercent = 0;
 
   for (let index = 0; index < drafts.length; index += 1) {
     const draft = drafts[index];
     const symbol = draft.symbol.trim().toUpperCase();
     if (!symbol) {
-      return {
-        holdings: null,
-        error: `Holding ${index + 1} needs a symbol.`
-      };
+      return { holdings: null, error: `Holding ${index + 1} needs a symbol.` };
     }
     if (seenSymbols.has(symbol)) {
       return {
@@ -56,31 +101,49 @@ export function validateHoldingDrafts(
       };
     }
 
-    const rawPercent = draft.weightPercent.trim();
-    const weightPercent = Number(rawPercent);
-    if (
-      !rawPercent
-      || !Number.isFinite(weightPercent)
-      || weightPercent < 0
-      || weightPercent > 100
-    ) {
+    const shares = positiveDecimal(draft.shares);
+    if (!shares) {
       return {
         holdings: null,
-        error: `${symbol} needs a weight from 0% through 100%.`
+        error: `${symbol} needs a positive quantity owned with up to 12 decimal places.`
       };
     }
 
     seenSymbols.add(symbol);
-    totalPercent += weightPercent;
-    holdings.push({ symbol, weight: weightPercent / 100 });
-  }
-
-  if (Math.abs(totalPercent - 100) > 1e-7) {
-    return {
-      holdings: null,
-      error: `Total allocation must equal 100%. Current total: ${totalPercent.toFixed(2)}%.`
-    };
+    holdings.push({ symbol, shares });
   }
 
   return { holdings, error: null };
+}
+
+export function validatePlannedHoldingDrafts(
+  drafts: PlannedHoldingDraft[]
+): PlannedHoldingValidationResult {
+  if (!drafts.length) {
+    return { holdings: null, error: 'Add at least one planned holding.' };
+  }
+
+  const holdings: PortfolioPlannedHoldingInput[] = [];
+  const seenSymbols = new Set<string>();
+  for (let index = 0; index < drafts.length; index += 1) {
+    const draft = drafts[index];
+    const symbol = draft.symbol.trim().toUpperCase();
+    if (!symbol) {
+      return { holdings: null, error: `Holding ${index + 1} needs a symbol.` };
+    }
+    if (seenSymbols.has(symbol)) {
+      return { holdings: null, error: `${symbol} appears more than once. Holding symbols must be unique.` };
+    }
+    const proposedAmount = positiveDecimal(draft.proposedAmount);
+    if (!proposedAmount) {
+      return { holdings: null, error: `${symbol} needs a positive proposed amount with up to 12 decimal places.` };
+    }
+    seenSymbols.add(symbol);
+    holdings.push({ symbol, proposed_amount: proposedAmount });
+  }
+  return { holdings, error: null };
+}
+
+export function decimalWeightToPercent(weight: number): number {
+  return weight * 100;
 }

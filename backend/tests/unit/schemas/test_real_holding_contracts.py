@@ -53,6 +53,29 @@ def test_real_input_accepts_normal_usd_holding_as_decimals() -> None:
     assert type(result.shares) is Decimal
 
 
+def test_real_input_accepts_quantity_only_holding() -> None:
+    result = PortfolioRealHoldingInput.model_validate(
+        {"symbol": " aapl ", "shares": "0.250000000000"}
+    )
+
+    assert result.symbol == "AAPL"
+    assert result.shares == Decimal("0.250000000000")
+    assert result.invested_amount is None
+    assert result.invested_currency is None
+    assert result.purchase_date is None
+
+
+def test_real_input_rejects_partial_optional_provenance() -> None:
+    with pytest.raises(ValidationError, match="supplied together"):
+        PortfolioRealHoldingInput.model_validate(
+            {
+                "symbol": "AAPL",
+                "shares": "2",
+                "invested_amount": "1000",
+            }
+        )
+
+
 def test_real_input_defaults_invested_currency_to_usd() -> None:
     data = _valid_real_input()
     data.pop("invested_currency")
@@ -228,6 +251,27 @@ def test_legacy_response_preserves_weight_and_explicit_null_facts() -> None:
     }
 
 
+def test_quantity_only_real_response_is_valid_and_preserves_null_provenance() -> None:
+    result = PortfolioHoldingResponse.model_validate(
+        {
+            "id": HOLDING_ID,
+            "symbol": "AAPL",
+            "weight": None,
+            "invested_amount": None,
+            "invested_currency": None,
+            "shares": Decimal("5.000000000000"),
+            "purchase_date": None,
+            "position": 0,
+        }
+    )
+
+    assert result.weight is None
+    assert result.shares == Decimal("5.000000000000")
+    assert result.invested_amount is None
+    assert result.invested_currency is None
+    assert result.purchase_date is None
+
+
 def test_real_response_serializes_decimals_as_strings_and_weight_as_null() -> None:
     result = PortfolioHoldingResponse.model_validate(_valid_real_response())
 
@@ -276,13 +320,16 @@ def test_real_response_rejects_hybrid_or_partial_modes(
 
     with pytest.raises(
         ValidationError,
-        match="exactly one legacy or real mode",
+        match="exactly one legacy, current, or planned mode",
     ):
         PortfolioHoldingResponse.model_validate(data)
 
 
 def test_response_rejects_empty_mode_and_explicit_null_id() -> None:
-    with pytest.raises(ValidationError, match="exactly one legacy or real mode"):
+    with pytest.raises(
+        ValidationError,
+        match="exactly one legacy, current, or planned mode",
+    ):
         PortfolioHoldingResponse(symbol="AAPL", position=0)
 
     data = _valid_real_response()
@@ -309,7 +356,7 @@ def test_response_validates_complete_orm_style_attributes(mode: str) -> None:
     assert result.weight == (0.5 if mode == "legacy" else None)
 
 
-def test_portfolio_response_preserves_mixed_holding_order() -> None:
+def test_portfolio_response_rejects_mixed_holding_modes() -> None:
     legacy = {
         "id": UUID("31000000-0000-0000-0000-000000000002"),
         "symbol": "BND",
@@ -323,16 +370,18 @@ def test_portfolio_response_preserves_mixed_holding_order() -> None:
     real = _valid_real_response()
     real["position"] = 1
 
-    result = PortfolioResponse(
-        id=PORTFOLIO_ID,
-        name="Mixed facts",
-        created_at=datetime(2026, 1, 1, tzinfo=UTC),
-        updated_at=datetime(2026, 1, 2, tzinfo=UTC),
-        holdings=[legacy, real],
-    )
-
-    assert [holding.symbol for holding in result.holdings] == ["BND", "AAPL"]
-    assert [holding.position for holding in result.holdings] == [0, 1]
+    with pytest.raises(
+        ValidationError,
+        match="holdings do not match portfolio_type",
+    ):
+        PortfolioResponse(
+            id=PORTFOLIO_ID,
+            name="Mixed facts",
+            portfolio_type="CURRENT",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 2, tzinfo=UTC),
+            holdings=[legacy, real],
+        )
 
 
 def test_contracts_contain_no_valuation_fields() -> None:

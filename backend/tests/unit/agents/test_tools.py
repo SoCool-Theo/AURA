@@ -13,11 +13,12 @@ from backend.app.agents.tools import (
     AuraAgentTools,
     _reduce_time_series,
 )
-from backend.app.database.models import Holding, Portfolio
+from backend.app.database.models import Holding, Portfolio, PortfolioType
 from backend.app.schemas.reporting import (
     PortfolioReportListResponse,
     PortfolioReportResponse,
     PortfolioReportV2Response,
+    PortfolioReportV3Response,
 )
 from backend.app.schemas.simulation_history import (
     SimulationBaselineHolding,
@@ -25,7 +26,9 @@ from backend.app.schemas.simulation_history import (
     SimulationHistoryDetailResponse,
     SimulationHistoryListResponse,
     SimulationHistoryV2DetailResponse,
+    SimulationHistoryV3DetailResponse,
 )
+from backend.app.schemas.portfolio import PlannedPortfolioBaselineContext
 from backend.app.services.analysis_reporting_service import ReportNotFoundError
 from backend.app.services.market_data_service import MarketDataUnavailableError
 from backend.app.services.portfolio_valuation_service import (
@@ -37,6 +40,7 @@ import backend.app.agents.tools as tools_module
 from backend.tests.unit.schemas.test_reporting import (
     _valid_report_data,
     _valid_v2_report_data,
+    _valid_v3_report_data,
 )
 from backend.tests.unit.schemas.test_simulation_history import (
     _response_for_type,
@@ -107,6 +111,35 @@ def _real_portfolio() -> Portfolio:
                 invested_currency="USD",
                 shares=Decimal("1.000000000000"),
                 purchase_date=date(2026, 1, 2),
+                position=1,
+            ),
+        ]
+    )
+    return portfolio
+
+
+def _planned_portfolio() -> Portfolio:
+    portfolio = Portfolio(
+        id=_PORTFOLIO_ID,
+        user_id=_USER_ID,
+        name="Planned Portfolio",
+        portfolio_type=PortfolioType.PLANNED.value,
+        plan_currency="USD",
+    )
+    portfolio.holdings.extend(
+        [
+            Holding(
+                id=UUID("53000000-0000-0000-0000-000000000001"),
+                portfolio_id=_PORTFOLIO_ID,
+                symbol="AAPL",
+                proposed_amount=Decimal("600"),
+                position=0,
+            ),
+            Holding(
+                id=UUID("53000000-0000-0000-0000-000000000002"),
+                portfolio_id=_PORTFOLIO_ID,
+                symbol="BND",
+                proposed_amount=Decimal("400"),
                 position=1,
             ),
         ]
@@ -197,6 +230,47 @@ def _v2_simulation_detail() -> SimulationHistoryV2DetailResponse:
     )
 
 
+def _v3_simulation_detail() -> SimulationHistoryV3DetailResponse:
+    payload = _summary_payload(
+        "allocation",
+        simulation_id=str(_SIMULATION_ID),
+    )
+    payload["portfolio_id"] = str(_PORTFOLIO_ID)
+    result = _response_for_type("allocation").model_dump(mode="json")
+    result["portfolio_id"] = str(_PORTFOLIO_ID)
+    return SimulationHistoryV3DetailResponse(
+        **payload,
+        schema_version="allocation-simulation-response-v3",
+        result=result,
+        baseline=PlannedPortfolioBaselineContext(
+            portfolio_type="PLANNED",
+            baseline_source="proposed-amount-target-allocation",
+            plan_currency="USD",
+            total_proposed_amount="1000",
+            hypothetical_notice=(
+                "Hypothetical historical analysis only; not a forecast, "
+                "recommendation, or executable order."
+            ),
+            holdings=[
+                {
+                    "id": "53000000-0000-0000-0000-000000000001",
+                    "symbol": "MSFT",
+                    "proposed_amount": "600",
+                    "target_allocation": "0.6",
+                    "position": 0,
+                },
+                {
+                    "id": "53000000-0000-0000-0000-000000000002",
+                    "symbol": "AAPL",
+                    "proposed_amount": "400",
+                    "target_allocation": "0.4",
+                    "position": 1,
+                },
+            ],
+        ),
+    )
+
+
 def _tools_with_services() -> tuple[
     AuraAgentTools,
     MagicMock,
@@ -258,6 +332,8 @@ def test_portfolio_context_uses_bound_identity_and_projects_ordered_holdings() -
     assert context == {
         "id": str(_PORTFOLIO_ID),
         "name": "Learning Portfolio",
+        "portfolio_type": "LEGACY",
+        "baseline_source": "saved-weights",
         "holdings": [
             {"symbol": "BND", "weight": 0.0},
             {"symbol": "AAPL", "weight": 1.0},
@@ -287,6 +363,8 @@ def test_real_portfolio_context_uses_one_authoritative_usd_valuation() -> None:
     assert context == {
         "id": str(_PORTFOLIO_ID),
         "name": "Real Holdings",
+        "portfolio_type": "CURRENT",
+        "baseline_source": "current-valuation",
         "valuation": {
             "valuation_currency": "USD",
             "valuation_date": "2026-09-12",
@@ -331,6 +409,51 @@ def test_real_portfolio_context_uses_one_authoritative_usd_valuation() -> None:
     _assert_session_lifecycle_untouched(session)
 
 
+def test_planned_portfolio_context_uses_price_independent_target_weights() -> None:
+    tools, session, portfolio_service, reporting_service, simulation_service = (
+        _tools_with_services()
+    )
+    portfolio_service.get.return_value = _planned_portfolio()
+
+    context = tools.get_portfolio_context()
+
+    assert context == {
+        "id": str(_PORTFOLIO_ID),
+        "name": "Planned Portfolio",
+        "portfolio_type": "PLANNED",
+        "baseline_source": "proposed-amount-target-allocation",
+        "plan_currency": "USD",
+        "total_proposed_amount": "1000",
+        "hypothetical_notice": (
+            "Hypothetical historical analysis only; not a forecast, "
+            "recommendation, or executable order."
+        ),
+        "holdings": [
+            {
+                "symbol": "AAPL",
+                "proposed_amount": "600",
+                "target_allocation": "0.600000000000000000",
+                "position": 0,
+            },
+            {
+                "symbol": "BND",
+                "proposed_amount": "400",
+                "target_allocation": "0.400000000000000000",
+                "position": 1,
+            },
+        ],
+    }
+    assert all("id" not in holding for holding in context["holdings"])
+    assert all(
+        "estimated_shares" not in holding
+        for holding in context["holdings"]
+    )
+    tools._test_valuation_service.value.assert_not_called()
+    reporting_service.assert_not_called()
+    simulation_service.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
 def test_saved_context_preserves_legacy_weights_without_current_data() -> None:
     tools, session, portfolio_service, _, _ = _tools_with_services()
     portfolio_service.get.return_value = _portfolio()
@@ -340,6 +463,8 @@ def test_saved_context_preserves_legacy_weights_without_current_data() -> None:
     assert context == {
         "id": str(_PORTFOLIO_ID),
         "name": "Learning Portfolio",
+        "portfolio_type": "LEGACY",
+        "baseline_source": "saved-weights",
         "holdings": [
             {"symbol": "BND", "weight": 0.0},
             {"symbol": "AAPL", "weight": 1.0},
@@ -362,6 +487,22 @@ def test_saved_context_uses_real_portfolio_identity_without_current_data() -> No
     assert context == {
         "id": str(_PORTFOLIO_ID),
         "name": "Real Holdings",
+        "portfolio_type": "CURRENT",
+    }
+    tools._test_valuation_service.value.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_saved_context_uses_planned_identity_without_live_plan_values() -> None:
+    tools, session, portfolio_service, _, _ = _tools_with_services()
+    portfolio_service.get.return_value = _planned_portfolio()
+
+    context = tools.get_portfolio_context(resolve_current_baseline=False)
+
+    assert context == {
+        "id": str(_PORTFOLIO_ID),
+        "name": "Planned Portfolio",
+        "portfolio_type": "PLANNED",
     }
     tools._test_valuation_service.value.assert_not_called()
     _assert_session_lifecycle_untouched(session)
@@ -486,6 +627,34 @@ def test_v2_report_projection_preserves_frozen_valuation_and_holdings() -> None:
     _assert_session_lifecycle_untouched(session)
 
 
+def test_v3_report_projects_frozen_planned_baseline_without_ids() -> None:
+    tools, session, _, reporting_service, _ = _tools_with_services()
+    report = PortfolioReportV3Response.model_validate(_valid_v3_report_data())
+    source_before = report.model_dump(mode="python")
+    reporting_service.get_report.return_value = report
+
+    context = tools.get_report(_REPORT_ID)
+
+    assert context is not None
+    assert context["schema_version"] == "portfolio-analysis-response-v3"
+    assert context["portfolio_type"] == "PLANNED"
+    assert context["baseline_source"] == (
+        "proposed-amount-target-allocation"
+    )
+    assert context["baseline"]["plan_currency"] == "USD"
+    assert context["baseline"]["total_proposed_amount"] == "10000"
+    assert all(
+        "id" not in holding
+        for holding in context["baseline"]["holdings"]
+    )
+    assert all(
+        "estimated_shares" not in holding
+        for holding in context["baseline"]["holdings"]
+    )
+    assert report.model_dump(mode="python") == source_before
+    _assert_session_lifecycle_untouched(session)
+
+
 def test_simulation_list_uses_bound_identity_and_preserves_newest_first_order() -> None:
     tools, session, _, _, simulation_service = _tools_with_services()
     newest = _simulation_detail("combined")
@@ -587,6 +756,33 @@ def test_v2_simulation_projection_preserves_frozen_baseline_without_ids() -> Non
     )
     assert context["result"] == simulation.result.model_dump(mode="json")
     tools._test_valuation_service.value.assert_not_called()
+    assert simulation.model_dump(mode="python") == source_before
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_v3_simulation_projects_frozen_planned_baseline_without_ids() -> None:
+    tools, session, _, _, simulation_service = _tools_with_services()
+    simulation = _v3_simulation_detail()
+    source_before = simulation.model_dump(mode="python")
+    simulation_service.get.return_value = simulation
+
+    context = tools.get_simulation(_SIMULATION_ID)
+
+    assert context is not None
+    assert context["schema_version"] == (
+        "allocation-simulation-response-v3"
+    )
+    assert context["portfolio_type"] == "PLANNED"
+    assert context["baseline_source"] == (
+        "proposed-amount-target-allocation"
+    )
+    assert context["baseline"]["plan_currency"] == "USD"
+    assert context["baseline"]["total_proposed_amount"] == "1000"
+    assert all(
+        "id" not in holding
+        for holding in context["baseline"]["holdings"]
+    )
+    assert context["result"] == simulation.result.model_dump(mode="json")
     assert simulation.model_dump(mode="python") == source_before
     _assert_session_lifecycle_untouched(session)
 

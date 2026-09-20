@@ -37,7 +37,9 @@ from backend.app.analytics.returns import (
     calculate_portfolio_returns,
 )
 from backend.app.analytics.risk_classifier import (
+    AssetRiskClassificationResult,
     RiskClassificationResult,
+    analyze_asset_risk_classification,
     analyze_risk_classification,
 )
 from backend.app.analytics.risk_driver import (
@@ -295,6 +297,12 @@ def test_engine_results_match_direct_public_module_calls() -> None:
                 periods_per_year=3,
             )
         )
+        assert result.asset_risk_classifications[symbol] == (
+            analyze_asset_risk_classification(
+                float(asset_volatilities[symbol]),
+                calculate_max_drawdown(symbol_returns),
+            )
+        )
 
 
 def test_asset_metrics_have_required_structure_and_alignment() -> None:
@@ -464,6 +472,11 @@ def test_engine_result_has_expected_pandas_and_nested_types() -> None:
     result = _analyze()
 
     assert isinstance(result.asset_metrics, pd.DataFrame)
+    assert list(result.asset_risk_classifications) == ["BETA", "ALPHA"]
+    assert all(
+        isinstance(classification, AssetRiskClassificationResult)
+        for classification in result.asset_risk_classifications.values()
+    )
     assert isinstance(result.asset_returns, pd.DataFrame)
     assert isinstance(result.portfolio_returns, pd.Series)
     assert result.portfolio_returns.name == "portfolio_return"

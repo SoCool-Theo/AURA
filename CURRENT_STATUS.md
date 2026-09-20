@@ -1352,6 +1352,60 @@ authoritative local chat history or financial calculations. Mobile verification
 passed TypeScript checking and all 11 production-authority tests; the focused
 backend AI regression passed 187 tests.
 
+## Customer Mobile Real-Holdings Integration
+
+**Status:** Priority 0 contracts, Priority 1 core screens, the shared mobile
+error-state contract, and Priority 2 source-level UX hardening are implemented;
+runtime device verification remains
+
+**Source branch:** `feat/mobile-real-holdings-integration`
+
+- Mobile portfolio CRUD now records complete ordered real holding facts and no
+  longer exposes or submits manual portfolio weights.
+- Portfolio Detail and Dashboard request backend-owned USD/THB valuation and
+  keep current values separate from persisted facts and saved analysis.
+- Analysis creation supports USD/THB, while V1 reports remain readable and V2
+  reports display their immutable valuation and per-asset composition.
+- Allocation and Combined simulation editors keep hypothetical percentages but
+  initialize real portfolios from the backend-resolved current USD allocation.
+- Saved Simulation Detail supports V1 and all V2 variants, displaying the
+  frozen real-holding baseline without revaluation.
+- Mobile API failures now retain their original status through presentation:
+  expired authenticated sessions route to a visible 401 sign-in state; missing
+  detail resources use blocking 404 states; 422 responses remain inside forms
+  with field messages when the backend supplies locations; and 500/network
+  failures use distinct retryable states. Previously loaded data remains visible
+  behind inline stale-data notices when the page can still serve its purpose.
+- Priority 2 accessibility and compact-phone hardening now gives every direct
+  mobile `Pressable` an explicit role, every direct `TextInput` an accessible
+  label, selection controls selected/disabled state, and the audited compact
+  controls at least a 44-point target. Dense holding, date, action, metric,
+  valuation, report, and simulation layouts wrap rather than clipping on narrow
+  screens or with enlarged text. Keyboard-aware form scrolling remains shared
+  across holding, analysis, simulation, search, and Assistant workflows.
+- A missing `sessionExpired` auth-context binding in `RootNavigator` was repaired
+  after the Priority 2 typecheck exposed it, restoring the intended expired-
+  session route and a clean TypeScript build.
+- Create Portfolio and Edit Holdings now share an accessible native purchase-
+  date picker with a calendar affordance. It permits any valid past date through
+  the backend-approved current date, blocks future selection, and preserves the
+  public `YYYY-MM-DD` request format. Expo's compatible
+  `@react-native-community/datetimepicker` module and config plugin were added
+  specifically for this native control.
+- Report Detail now offers a truthful Assistant handoff that preselects the
+  report's portfolio while stating that backend AI grounding uses the newest
+  saved report. My Portfolios loads report history and shows `View Latest
+  Report` only on portfolio cards with a confirmed saved analysis; loading,
+  stale-history failure, and retry states remain explicit.
+- Mobile TypeScript checking passes, and the production-authority suite passes
+  21 tests, including regression guards for interactive accessibility semantics,
+  compact-layout wrapping, purchase-date limits, and report/Assistant entry
+  points. Expo web preview is
+  unavailable because the optional web runtime is not installed, and no Android
+  SDK/emulator is present;
+  no dependency was added solely for preview. No backend, database, or financial-
+  formula change was made by this mobile work.
+
 ## Backend API Integration and Feature Expansion
 
 **Status:** Baseline integration completed; additional feature work in progress
@@ -1476,3 +1530,429 @@ Fresh Supabase deployment
 The backend real-holding branch is complete. Customer real-holding parity,
 fresh Supabase deployment, optional product gaps, and Admin integration remain
 incomplete.
+
+## Planned Portfolio Expansion
+
+**Status:** Step 6 mode-aware planned AI grounding complete
+
+### Approved product target contract
+
+- Customer-facing portfolio types are `CURRENT` and `PLANNED`; `LEGACY` is
+  internal compatibility state and cannot be selected for new portfolios.
+- Current holdings keep actual ownership facts. Planned holdings persist only
+  positive proposed amounts under one USD/THB plan currency.
+- Planned target weights are backend-derived from proposed amounts. Estimated
+  shares are optional display context and never analytics authority.
+- The shared baseline resolver now produces one provenance-aware canonical
+  allocation for `CURRENT`, `PLANNED`, and `LEGACY` analysis preparation.
+
+### Completed database foundation
+
+- Added explicit `portfolios.portfolio_type`, nullable `plan_currency`, and
+  optional self-referencing `source_plan_id` with database constraints.
+- Added nullable positive `holdings.proposed_amount` and extended the complete
+  holding-shape constraint for mutually exclusive legacy, current, and planned
+  rows.
+- Added additive Alembic revision `e5b7c9d2a4f1`. It classifies existing real
+  and empty portfolios as `CURRENT`, saved-weight portfolios as `LEGACY`, and
+  refuses mixed/incomplete source state before mutation.
+- Downgrade refuses to discard planned holdings or source-plan provenance. A
+  safe downgrade restores the prior real/legacy schema without rewriting
+  holding facts or fabricating weights.
+
+### Step 2 verification
+
+- Database unit suite: 142 passed.
+- Complete backend unit suite: 2,261 passed.
+- Credential-safe preflight confirmed the approved local PostgreSQL 18.4 test
+  database at starting revision `d4a6f8c2e1b7`.
+- Guarded live upgrade, backfill, constraints, downgrade refusal, cleanup, and
+  restoration: 2 passed.
+- The preserved local database was restored to `d4a6f8c2e1b7`; repository
+  Alembic head is `e5b7c9d2a4f1`.
+
+### Completed Step 3 runtime foundation
+
+- Portfolio create and response contracts are type-aware. New clients can
+  create `CURRENT` or `PLANNED` portfolios; omitted type still defaults to
+  `CURRENT`, and clients cannot create `LEGACY` portfolios.
+- Planned portfolios require one normalized `USD` or `THB` plan currency and
+  accept only ordered, unique symbols with positive proposed amounts.
+- The shared holdings replacement route dispatches complete current facts or
+  planned amounts by request shape and returns a sanitized `409` when the body
+  conflicts with the saved portfolio type. The existing explicit
+  `LEGACY`-to-`CURRENT` compatibility replacement remains supported.
+- Portfolio duplication preserves the source portfolio type and copies the
+  corresponding complete holding shape. Planned copies retain proposed amounts
+  and plan currency without inventing shares.
+- `GET /api/portfolios/{portfolio_id}/planned-allocation` returns the
+  backend-derived total and canonical target allocations at 18-decimal
+  precision. It is read-only and independent of current market prices and FX.
+- Full portfolio responses expose `portfolio_type`, `plan_currency`, and
+  optional `source_plan_id`; list summaries expose the type and plan currency.
+
+### Step 3 verification
+
+- Focused schema, repository, service, allocation, and portfolio API suite:
+  282 passed.
+- Complete backend unit suite: 2,288 passed.
+- Non-PostgreSQL API integration suite: 265 passed. Live PostgreSQL modules were
+  intentionally excluded because this step made no schema change and the
+  preserved database remains at the pre-Step-2 revision by design.
+- Python compile verification completed for `backend/app` and `backend/tests`.
+- Ruff was not available in the existing environment; no dependency was added.
+
+### Completed Step 4 preview and analysis integration
+
+- `GET /api/portfolios/{portfolio_id}/planned-preview` returns canonical target
+  allocations plus optional current-price estimated shares. Estimate status is
+  explicit per holding, and missing price or THB FX data does not prevent the
+  successful allocation response.
+- Estimated shares retain full calculation precision, include their price/FX
+  provenance when available, remain read-only, and never become saved ownership
+  facts or analytics inputs.
+- `PortfolioBaselineResolutionService` is now the common baseline source:
+  `CURRENT` uses current valuation weights, `PLANNED` uses proposed-amount target
+  weights, and `LEGACY` uses saved weights.
+- Analysis preparation and composition accept the planned baseline and enrich
+  per-asset output with proposed amount and holding position without requiring
+  current prices. Historical-data sufficiency rules remain unchanged.
+- Planned report snapshots, simulations, and AI grounding remain deliberately
+  guarded with sanitized compatibility errors until their dedicated steps. No
+  later-stage persistence contract was activated early.
+
+### Step 4 verification
+
+- Focused preview, schema, baseline, composition, reporting/simulation guard,
+  AI guard, and API suite: 362 passed.
+- Complete backend unit suite: 2,310 passed.
+- Non-PostgreSQL API integration suite: 270 passed. Live PostgreSQL modules were
+  intentionally excluded because Step 4 makes no schema change.
+- Python compile verification completed for `backend/app` and `backend/tests`.
+- No database, Docker, external LLM, branch, commit, or dependency operation was
+  performed.
+
+### Completed Step 5 immutable planned history
+
+- Planned analysis now uses its canonical proposed-amount target allocation and
+  persists `portfolio-analysis-response-v3`. The snapshot freezes the plan
+  currency, ordered proposed amounts, exact backend target weights, complete
+  analytics, and an explicit hypothetical/non-forecast notice.
+- Historical Scenario, Allocation, and Combined simulations now accept planned
+  baselines. Their immutable history uses the exact V3 versions
+  `historical-scenario-simulation-response-v3`,
+  `allocation-simulation-response-v3`, and
+  `combined-simulation-response-v3`.
+- Allocation and Combined V3 snapshots verify that the result's original
+  allocation matches the frozen plan baseline. Snapshot validation also
+  verifies proposed totals, exact amount-derived weights, unique holdings, and
+  saved ordering.
+- V1 legacy and V2 current report/simulation readers remain unchanged and
+  readable. V3 history retrieval revalidates only the stored JSONB snapshot and
+  never requests current market data, FX, valuation, or recomputation.
+- Estimated shares are intentionally excluded from V3 snapshots because they
+  are optional display context and do not control planned analytics.
+- Existing AI tools continue to reject V3 context with a sanitized compatibility
+  error until the dedicated mode-aware grounding step.
+- No migration was needed because the existing report and simulation tables
+  already persist an explicit schema version and JSONB payload.
+
+### Step 5 verification
+
+- Focused report, simulation, snapshot, AI guard, and API suite: 399 passed.
+- Complete backend unit suite: 2,332 passed.
+- Non-PostgreSQL API integration suite: 273 passed with 50 existing short JWT
+  test-key warnings. The three explicitly live PostgreSQL API modules were
+  excluded; an accidentally broad collection that reached those modules was
+  stopped during setup before any test body or database mutation.
+- Python compile verification completed for `backend/app` and `backend/tests`.
+- No database, Docker, external LLM, branch, commit, or dependency operation was
+  performed.
+
+### Completed Step 6 mode-aware AI grounding
+
+- Live AI context now identifies `CURRENT`, `PLANNED`, and `LEGACY` portfolio
+  types and their authoritative baseline source. Planned context contains only
+  plan currency, proposed amounts, exact target weights, order, and the explicit
+  hypothetical notice; it never includes estimated shares or internal holding
+  IDs.
+- Saved Report V3 and all Simulation V3 variants are projected from their frozen
+  snapshots. Their schema version, portfolio type, baseline source, proposed
+  amounts, target weights, results, and historical period/scenario are preserved
+  without live price, FX, valuation, or recomputation calls.
+- Saved-context portfolio projection exposes identity and portfolio type while
+  omitting mutable live planned/current facts, so a later portfolio edit cannot
+  conflict with the selected immutable snapshot.
+- System instructions require mode-aware wording: actual/current terminology
+  for `CURRENT`, planned/proposed/hypothetical terminology for `PLANNED`, and
+  saved-allocation terminology for `LEGACY`.
+- Planned explanations receive a deterministic hypothetical/non-forecast/
+  non-order limitation. A planned response that claims the user currently owns
+  the proposed assets is rejected before it reaches the API response.
+- Existing advice refusal, prompt-injection resistance, signed/null/zero value
+  preservation, source attribution, ownership privacy, and output-safety rules
+  remain in force.
+
+### Step 6 verification
+
+- Focused AI tool, prompt, guardrail, orchestration, API, Report V3, and
+  Simulation V3 regression suite: 422 passed with 54 existing short JWT test-key
+  warnings.
+- Complete backend unit suite: 2,339 passed.
+- Isolated non-PostgreSQL API integration suite: 275 passed with 54 existing
+  short JWT test-key warnings. The three explicitly live PostgreSQL API modules
+  were not run.
+- Python compile verification completed for `backend/app` and `backend/tests`.
+- No database, Docker, external LLM, migration, dependency, branch, commit, or
+  push operation was performed.
+
+### Completed Step 7A mobile planned-portfolio integration
+
+- Mobile portfolio contracts and API clients now distinguish `CURRENT`,
+  `PLANNED`, and `LEGACY`, submit planned proposed amounts, and consume the
+  backend planned-allocation and planned-preview endpoints.
+- Create Portfolio offers explicit current/planned choices. Planned entry uses
+  one USD/THB plan currency plus symbol and proposed amount only; current entry
+  retains actual shares, invested amount/currency, and purchase date. Edit
+  Holdings preserves the saved type and cannot mix the two holding shapes.
+- Portfolio list/detail and Dashboard identify hypothetical plans, display the
+  backend-derived total and target allocation, and show estimated shares only
+  as optional, non-authoritative preview information.
+- Mobile analytics and saved reports render immutable Report V3 planned
+  baselines and the hypothetical notice. Report V1/V2 behavior remains intact.
+- Allocation and Combined simulation editors initialize planned portfolios
+  from `planned-allocation`, never from on-device amount division. Saved
+  simulation detail renders all planned V3 baseline variants without current
+  price or FX requests.
+- The Assistant keeps its unchanged authenticated request shape while the UI
+  identifies planned context; wording and limitations remain backend-owned.
+
+### Step 7A verification
+
+- Mobile TypeScript compilation completed with no errors.
+- Mobile production-authority suite: 23 passed, including planned amount
+  validation, exact API payload/path checks, backend target-weight consumption,
+  display-only estimate guards, and V3 report/simulation presentation checks.
+- No web client, backend, database, Docker, external LLM, dependency, branch,
+  commit, or push operation was performed.
+
+### Remaining planned-portfolio work
+
+The atomic plan-to-new-current conversion capability and its client flow, plus
+final guarded deployment verification, remain pending. Conversion is not
+exposed in either client because the required backend operation does not exist
+yet.
+
+### Completed Step 8M mobile readiness verification
+
+- The committed mobile planned-portfolio integration was verified on branch
+  `feat/mobile-real-holdings-integration`; the worktree was clean before this
+  documentation update and no web files were changed.
+- Mobile TypeScript compilation completed successfully and the complete mobile
+  production-authority/regression suite passed 23 tests.
+- The installed dependency tree resolved successfully with no missing package.
+- Expo/Metro resolved 1,153 modules and produced a release Android Hermes
+  bundle plus its assets and metadata. The temporary export directory was
+  removed after verification.
+- The production mobile source audit found no embedded LLM keys, database URLs,
+  PostgreSQL credentials, or Supabase service-role configuration. Backend-only
+  financial authority remains enforced: current valuation, planned target
+  allocation, planned share previews, reports, simulations, and AI context are
+  consumed from authenticated API responses.
+- `CURRENT`, `PLANNED`, and `LEGACY` presentation remains distinct. Planned
+  estimates remain display-only, planned V3 history remains immutable, and
+  error presentation continues to distinguish authentication, not-found,
+  validation, server, and network failures.
+- No database, migration, rollback, Docker, external LLM, dependency install,
+  branch change, commit, or push operation was performed during this step.
+
+### Mobile-only readiness boundary
+
+The checked mobile source is ready for device/API acceptance testing, but this
+is not a claim that the entire product is deployment-ready. A signed native
+binary, physical-device or emulator E2E run against a deployed backend,
+plan-to-current conversion, and the broader database/deployment verification
+are outside this mobile-only Step 8M.
+
+### Completed mobile report monetary metric details
+
+- Current V2 and planned V3 report responses now include deterministic
+  `monetary_metrics` derived only from the saved report snapshot. Cumulative
+  return and annualized return use the saved reference amount; maximum
+  drawdown reconstructs the exact saved peak-to-trough wealth path instead of
+  multiplying the drawdown percentage by the wrong starting value.
+- The monetary context is response-only and does not modify persisted report
+  JSONB, require a migration, fetch fresh prices, or revalue historical reports.
+  V1 legacy reports remain percentage-only because they have no trustworthy
+  currency reference amount.
+- On mobile, cumulative return, annualized return, and maximum drawdown cards
+  show a chevron and tap hint when monetary context is available. Tapping opens
+  an accessible bottom sheet with the percentage, signed USD/THB equivalent,
+  saved reference amount, time basis, and explicit educational/non-forecast
+  wording.
+- The mobile client does not calculate these financial amounts. It formats the
+  decimal strings supplied by the authenticated report response and remains
+  compatible with older responses that omit `monetary_metrics`.
+- Report Detail opened through More now has an explicit accessible back arrow
+  that returns to the Reports list; the existing Home action remains available.
+
+### Monetary metric verification
+
+- Focused report schema, mapper, service, and API suite: 124 passed.
+- Complete backend unit suite: 2,341 passed.
+- Mobile TypeScript compilation completed with no errors.
+- Mobile production-authority suite: 24 passed, including signed currency
+  formatting and guards against client-side reference-amount multiplication.
+- No database, migration, Docker, external LLM, dependency, branch, commit, or
+  push operation was performed.
+
+### Completed Step 8W web readiness verification
+
+- The React web client now supports `CURRENT`, `PLANNED`, and `LEGACY`
+  portfolio presentation and workflows without replacing the established web
+  design system.
+- Current CRUD records real ownership facts; planned CRUD records proposed
+  amounts and one plan currency. Neither workflow accepts manual saved weights.
+- Current valuation uses backend-returned market values and allocation. Planned
+  detail uses backend target allocation and optional display-only estimated
+  shares; missing estimates do not become analytics authority.
+- Dashboard, Analytics, Reports, all simulation modes and V1/V2/V3 history,
+  monetary metric details, portfolio report shortcuts, and mode-aware Ask Aura
+  context are integrated. Saved report and simulation assistant links preserve
+  their exact immutable context identifiers.
+- Shared web error presentation distinguishes authentication, not-found,
+  validation, server, temporary-data, configuration, and network failures.
+  Blocking failures use page-level states and recoverable actions remain inline;
+  unexpected server details are not shown to users.
+- A final routing correction prevents an invalid Ask Aura portfolio deep link
+  from silently falling back to another owned portfolio.
+- Web TypeScript compilation, the 7-test production-authority suite, dependency
+  resolution, production Vite build, source secret/authority audit, and Git
+  whitespace checks pass.
+- Local browser smoke verification passed login rendering, sign-up navigation,
+  protected-route redirection, and console-error inspection. Authenticated live
+  browser E2E was not run because no test-user credentials were supplied.
+- No backend, database, migration, Docker, external LLM, dependency install,
+  branch, commit, push, merge, or PR operation was performed during Step 8W.
+
+### Web readiness boundary
+
+The checked React source is ready for authenticated API acceptance testing.
+This is not a production-deployment claim: fresh Supabase deployment,
+environment-specific authenticated browser E2E, and plan-to-current conversion
+remain separate follow-on work.
+
+### Completed backend per-asset risk and historical-series contract
+
+- Each analyzed asset now receives a deterministic educational risk score and
+  `Low`/`Moderate`/`High`/`Very High` level derived equally from Aura's existing
+  annualized-volatility and maximum-drawdown point thresholds. Portfolio-only
+  concentration and diversification components are deliberately excluded.
+- `PortfolioAnalysisResponse` now exposes ordered dated return observations for
+  every asset. Symbols and dates are validated against `asset_metrics` and the
+  portfolio return series, so clients can render directly comparable graphs.
+- New V2 current and V3 planned report snapshots automatically freeze the
+  per-asset classifications and return series through the existing immutable
+  analysis payload. Older V1/V2/V3 snapshots without these additive fields
+  remain readable without market-data queries or recomputation.
+- No database migration or dependency change was required.
+
+### Per-asset backend verification
+
+- Focused analytics, schema, mapping, and service suite: 365 passed.
+- Focused reporting, example, and composition suite: 115 passed.
+- Complete backend unit suite: 2,356 passed.
+- Reporting and agent API integration suite: 70 passed with 54 existing short
+  JWT test-key warnings.
+- Python compilation completed successfully for `backend/app` and
+  `backend/tests`.
+- Web and mobile now expose report-backed asset-risk detail pages from every
+  per-asset analysis card. Each page shows the saved backend risk
+  classification, historical asset return graph with 1M/3M/6M/1Y/ALL views,
+  portfolio-impact contribution, saved holding or planned-position context,
+  and the existing educational limitation.
+- Direct web report/asset routes and both mobile navigation stacks preserve the
+  originating immutable report. Older reports remain readable and clearly
+  explain when their snapshots predate asset risk or return-series fields.
+- Neither client recalculates risk, volatility, drawdown, or historical return
+  data; both format the additive backend report contract only.
+
+### Per-asset client verification
+
+- Web production TypeScript/Vite build completed successfully.
+- Mobile TypeScript compilation completed with no errors.
+- Web production-authority suite: 18 passed, including a regression guard for
+  asset navigation and backend-only risk authority.
+- Mobile production-authority suite: 30 passed, including the equivalent
+  report-backed asset-detail guard in both navigation stacks.
+- Git whitespace validation completed with no errors.
+
+### Completed backend per-asset monetary metrics
+
+- V2 current and V3 planned report detail responses now include ordered
+  `asset_monetary_metrics` derived only from the immutable saved report.
+- Each asset exposes its saved currency/reference amount plus cumulative-return,
+  annualized-return, and exact peak-to-trough maximum-drawdown amounts. V2 uses
+  saved current value; V3 uses proposed amount.
+- Exact drawdown money is reconstructed from the saved dated asset return path
+  and verified against the saved asset drawdown percentage. Older snapshots
+  without a verifiable path return `null` for non-zero drawdown money rather
+  than using misleading percentage multiplication.
+- The field is response-only: no snapshot mutation, live market-data request,
+  database migration, or dependency change was required. Client presentation
+  remains a separate follow-on step.
+
+### Per-asset monetary backend verification
+
+- Focused reporting schema, mapper, service, and API suite: 129 passed.
+- Complete backend unit suite: 2,360 passed.
+- Reporting and agent API integration suite: 70 passed with 54 existing short
+  JWT test-key warnings.
+- Python compilation completed successfully for `backend/app` and
+  `backend/tests`; Git whitespace validation completed with no errors.
+
+### Completed per-asset monetary metric details in both clients
+
+- The web and mobile asset-risk detail pages now make cumulative return,
+  annualized return, and maximum drawdown selectable when the immutable report
+  includes the corresponding per-asset monetary context.
+- Web opens the existing accessible metric dialog; mobile opens the existing
+  accessible bottom sheet. Both show the saved percentage, signed USD/THB
+  amount, saved asset reference amount, and whether that basis is a current
+  saved value or a planned proposed amount.
+- Exact maximum-drawdown money is shown only when the backend supplies it.
+  Older reports and unverifiable non-zero drawdowns stay percentage-only rather
+  than displaying a locally estimated or misleading amount.
+- Both clients treat `asset_monetary_metrics` as an additive optional report
+  field and only format backend decimal strings; neither client multiplies a
+  reference amount by a return or drawdown percentage.
+
+### Per-asset monetary client verification
+
+- Web production TypeScript/Vite build completed successfully.
+- Mobile TypeScript compilation completed with no errors.
+- Web production-authority suite: 19 passed, including guards for optional
+  legacy compatibility and backend-only per-asset monetary authority.
+- Mobile production-authority suite: 30 passed with the equivalent asset-detail
+  monetary interaction and no-client-calculation guards.
+- Git whitespace validation completed with no errors.
+
+### Completed dashboard risk-driver asset links
+
+- Every displayed Top Risk Drivers entry on the web and mobile home pages is
+  now an accessible control that opens that asset's risk-detail page.
+- Navigation carries the exact portfolio ID, immutable latest report ID, and
+  asset symbol shown on the dashboard, so the detail page remains grounded in
+  the same saved analysis rather than loading unrelated or live data.
+- Web risk-driver asset rows align directly beneath their section header rather
+  than being vertically centered inside a taller dashboard card.
+- Web and mobile production-authority suites remain green at 19 and 30 tests;
+  both TypeScript checks and the web production Vite build pass.
+
+### Completed dashboard AI explanation action
+
+- The web home-page AI Explanation card now includes a prominent Ask Aura
+  button and a compact context panel instead of leaving most of the card empty.
+- When a latest report exists, the action grounds Aura in that exact immutable
+  report. Otherwise it opens the selected portfolio context without inventing
+  saved analysis results.

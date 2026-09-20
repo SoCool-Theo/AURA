@@ -11,11 +11,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
+import { apiValidationIssues } from '../../api/apiErrorPresentation';
 import type { AuthStackParamList } from '../../navigation/navigationTypes';
 import { authenticationErrorMessage } from '../../auth/authErrors';
 import { useAuth } from '../../auth/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { FormErrorSummary } from '../../components/ui/ErrorState';
 import { Input } from '../../components/ui/Input';
 import { colors, spacing } from '../../theme/theme';
 
@@ -27,22 +29,31 @@ export function RegisterScreen({ navigation }: Props) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<unknown>(null);
+  const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
   const submittingRef = useRef(false);
 
   async function submit() {
     if (submittingRef.current) return;
 
     const normalizedEmail = email.trim();
+    setFormError(null);
+    setFormMessage(null);
+    setLocalErrors({});
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
-      Alert.alert('Check your email', 'Enter a valid email address.');
+      setLocalErrors({ email: 'Enter a valid email address.' });
+      setFormMessage('Correct the highlighted information and try again.');
       return;
     }
     if (password.length < 8) {
-      Alert.alert('Check your password', 'Password must contain at least 8 characters.');
+      setLocalErrors({ password: 'Password must contain at least 8 characters.' });
+      setFormMessage('Correct the highlighted information and try again.');
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Check your passwords', 'Passwords do not match.');
+      setLocalErrors({ confirmPassword: 'Passwords do not match.' });
+      setFormMessage('Correct the highlighted information and try again.');
       return;
     }
 
@@ -58,18 +69,21 @@ export function RegisterScreen({ navigation }: Props) {
         [{ text: 'Continue to sign in', onPress: () => navigation.navigate('Login') }]
       );
     } catch (error) {
-      Alert.alert(
-        'Unable to register',
-        authenticationErrorMessage(
-          error,
-          'Aura could not create the account. Please try again.'
-        )
-      );
+      setFormError(error);
+      setFormMessage(authenticationErrorMessage(
+        error,
+        'Aura could not create the account. Please try again.'
+      ));
     } finally {
       submittingRef.current = false;
       setLoading(false);
     }
   }
+
+  const validationIssues = apiValidationIssues(formError);
+  const apiFieldError = (field: string) => validationIssues.find(
+    (issue) => issue.path.endsWith(field)
+  )?.message;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -88,9 +102,10 @@ export function RegisterScreen({ navigation }: Props) {
 
           <Card style={styles.formCard}>
             <View style={styles.form}>
-              <Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" editable={!loading} />
-              <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry editable={!loading} />
-              <Input label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry editable={!loading} />
+              <Input label="Email" value={email} onChangeText={(value) => { setEmail(value); setLocalErrors({}); setFormError(null); setFormMessage(null); }} error={localErrors.email ?? apiFieldError('email')} keyboardType="email-address" autoCapitalize="none" editable={!loading} />
+              <Input label="Password" value={password} onChangeText={(value) => { setPassword(value); setLocalErrors({}); setFormError(null); setFormMessage(null); }} error={localErrors.password ?? apiFieldError('password')} secureTextEntry editable={!loading} />
+              <Input label="Confirm password" value={confirmPassword} onChangeText={(value) => { setConfirmPassword(value); setLocalErrors({}); setFormError(null); setFormMessage(null); }} error={localErrors.confirmPassword} secureTextEntry editable={!loading} />
+              {formMessage ? <FormErrorSummary error={formError} message={formMessage} title="Registration unsuccessful" /> : null}
               <Button title={loading ? 'Creating account…' : 'Create account'} onPress={submit} disabled={loading} />
               <Button title="Back to sign in" variant="secondary" onPress={() => navigation.navigate('Login')} disabled={loading} />
             </View>

@@ -14,6 +14,7 @@ import { PortfolioDetailPage } from '../pages/portfolios/PortfolioDetailPage';
 import { PortfoliosPage } from '../pages/portfolios/PortfoliosPage';
 import { ReportsPage } from '../pages/reports/ReportsPage';
 import { ReportDetailPage } from '../pages/reports/ReportDetailPage';
+import { AssetRiskDetailPage } from '../pages/reports/AssetRiskDetailPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
 import { SimulationsPage } from '../pages/simulations/SimulationsPage';
 import { SimulationHistoryDetailPage } from '../pages/simulations/SimulationHistoryDetailPage';
@@ -44,10 +45,18 @@ function App() {
     case 'simulations': content = route.id && route.reportId
       ? <SimulationHistoryDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} simulationId={route.reportId} />
       : <SimulationsPage key={route.id} portfolioId={route.id} />; break;
-    case 'assistant': content = <AssistantPage />; break;
+    case 'assistant': content = <AssistantPage
+      key={[route.id, route.reportId, route.contextId].filter(Boolean).join('/')}
+      portfolioId={route.id}
+      reportId={route.reportId === 'report' ? route.contextId : route.contextId ? undefined : route.reportId}
+      simulationId={route.reportId === 'simulation' ? route.contextId : undefined}
+    />; break;
     case 'reports': content = route.id && route.reportId
-      ? <ReportDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} reportId={route.reportId} />
+      ? <ReportDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} reportId={route.reportId} focusAssetSection={route.contextId === 'assets'} />
       : <ReportsPage />; break;
+    case 'asset': content = route.id && route.reportId && route.contextId
+      ? <AssetRiskDetailPage key={`${route.id}/${route.reportId}/${route.contextId}`} portfolioId={route.id} reportId={route.reportId} assetSymbol={route.contextId} />
+      : <NotFoundPage />; break;
     case 'watchlist': content = <WatchlistPage />; break;
     case 'learn': content = <LearnPage />; break;
     case 'create': content = <CreatePortfolioPage />; break;

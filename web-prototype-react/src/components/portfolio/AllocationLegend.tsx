@@ -1,35 +1,48 @@
-import type { PortfolioHoldingResponse } from '../../types/portfolio';
+import type { PortfolioAllocationDisplayHolding } from '../../pages/portfolios/portfolioUi';
+
+const allocationColors = [
+  'var(--purple-primary)',
+  'var(--blue-primary)',
+  'var(--teal-primary)',
+  'var(--amber-primary)',
+  '#a855f7',
+];
 
 interface AllocationLegendProps {
-  holdings: PortfolioHoldingResponse[];
+  holdings: PortfolioAllocationDisplayHolding[];
+  label?: string;
 }
 
-export function AllocationLegend({ holdings }: AllocationLegendProps) {
+export function AllocationLegend({ holdings, label = 'Allocation' }: AllocationLegendProps) {
   return (
     <>
       <div className="portfolio-allocation-heading">
-        <span>Allocation</span>
+        <span>{label}</span>
         <small>{holdings.length} holdings</small>
       </div>
       <div className="portfolio-card-allocation">
-        {holdings.slice(0, 5).map(holding => (
+        {holdings.map((holding, index) => (
           <span
             key={holding.symbol}
-            style={{ width: `${holding.weight * 100}%` }}
+            style={{
+              width: `${holding.weight * 100}%`,
+              backgroundColor: allocationColors[index % allocationColors.length],
+            }}
             title={`${holding.symbol} ${(holding.weight * 100).toFixed(2)}%`}
           />
         ))}
       </div>
       <div className="holding-chips">
-        {holdings.slice(0, 4).map(holding => (
+        {holdings.map((holding, index) => (
           <span key={holding.symbol}>
+            <i
+              aria-hidden="true"
+              style={{ backgroundColor: allocationColors[index % allocationColors.length] }}
+            />
             <b>{holding.symbol}</b>
-            {Number((holding.weight * 100).toFixed(4))}%
+            <em>{(holding.weight * 100).toFixed(2)}%</em>
           </span>
         ))}
-        {holdings.length > 4 && (
-          <span className="more-holdings">+{holdings.length - 4} more</span>
-        )}
       </div>
     </>
   );

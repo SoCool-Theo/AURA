@@ -504,7 +504,7 @@ def test_get_unowned_parent_returns_none_before_simulation_lookup(
         (
             _record(
                 "allocation",
-                schema_version="allocation-simulation-response-v3",
+                schema_version="allocation-simulation-response-v4",
             ),
             "unsupported simulation snapshot schema version",
         ),

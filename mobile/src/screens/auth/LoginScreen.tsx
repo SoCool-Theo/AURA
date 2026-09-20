@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,11 +11,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
+import { apiValidationIssues } from '../../api/apiErrorPresentation';
 import type { AuthStackParamList } from '../../navigation/navigationTypes';
 import { authenticationErrorMessage } from '../../auth/authErrors';
 import { useAuth } from '../../auth/useAuth';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { FormErrorSummary } from '../../components/ui/ErrorState';
 import { Input } from '../../components/ui/Input';
 import { colors, spacing } from '../../theme/theme';
 
@@ -29,22 +30,32 @@ const featureRows = [
 ] as const;
 
 export function LoginScreen({ navigation }: Props) {
-  const { signIn } = useAuth();
+  const { sessionExpired, signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<unknown>(null);
+  const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const submittingRef = useRef(false);
 
   async function submit() {
     if (submittingRef.current) return;
 
     const normalizedEmail = email.trim();
+    setFormError(null);
+    setFormMessage(null);
+    setEmailError(null);
+    setPasswordError(null);
     if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
-      Alert.alert('Check your email', 'Enter a valid email address.');
+      setEmailError('Enter a valid email address.');
+      setFormMessage('Correct the highlighted information and try again.');
       return;
     }
     if (password.length < 8) {
-      Alert.alert('Check your password', 'Password must contain at least 8 characters.');
+      setPasswordError('Password must contain at least 8 characters.');
+      setFormMessage('Correct the highlighted information and try again.');
       return;
     }
 
@@ -54,18 +65,21 @@ export function LoginScreen({ navigation }: Props) {
       await signIn({ email: normalizedEmail, password });
       setPassword('');
     } catch (error) {
-      Alert.alert(
-        'Unable to sign in',
-        authenticationErrorMessage(
-          error,
-          'Aura could not complete sign in. Please try again.'
-        )
-      );
+      setFormError(error);
+      setFormMessage(authenticationErrorMessage(
+        error,
+        'Aura could not complete sign in. Please try again.'
+      ));
     } finally {
       submittingRef.current = false;
       setLoading(false);
     }
   }
+
+  const validationIssues = apiValidationIssues(formError);
+  const apiFieldError = (field: string) => validationIssues.find(
+    (issue) => issue.path.endsWith(field)
+  )?.message;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -99,11 +113,19 @@ export function LoginScreen({ navigation }: Props) {
           </View>
 
           <Card style={styles.formCard}>
+            {sessionExpired ? (
+              <View style={styles.sessionNotice}>
+                <Text style={styles.sessionCode}>401 · SESSION EXPIRED</Text>
+                <Text style={styles.sessionTitle}>Sign in again</Text>
+                <Text style={styles.formText}>Your previous session ended. Sign in to continue securely.</Text>
+              </View>
+            ) : null}
             <Text style={styles.formTitle}>Welcome back</Text>
             <Text style={styles.formText}>Sign in to continue to your Aura dashboard.</Text>
             <View style={styles.form}>
-              <Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" editable={!loading} />
-              <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry editable={!loading} />
+              <Input label="Email" value={email} onChangeText={(value) => { setEmail(value); setEmailError(null); setFormError(null); setFormMessage(null); }} error={emailError ?? apiFieldError('email')} keyboardType="email-address" autoCapitalize="none" editable={!loading} />
+              <Input label="Password" value={password} onChangeText={(value) => { setPassword(value); setPasswordError(null); setFormError(null); setFormMessage(null); }} error={passwordError ?? apiFieldError('password')} secureTextEntry editable={!loading} />
+              {formMessage ? <FormErrorSummary error={formError} message={formMessage} title="Sign-in unsuccessful" /> : null}
               <Button title={loading ? 'Signing in…' : 'Sign in'} onPress={submit} disabled={loading} />
               <Button title="Create an account" variant="secondary" onPress={() => navigation.navigate('Register')} disabled={loading} />
             </View>
@@ -133,6 +155,17 @@ const styles = StyleSheet.create({
   featureIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   featureText: { color: colors.textSecondary, fontSize: 11, fontWeight: '700' },
   formCard: { marginTop: 34 },
+  sessionNotice: {
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.dangerBorder,
+    borderRadius: 14,
+    backgroundColor: colors.negativeBackground,
+    padding: spacing.md,
+    marginBottom: spacing.lg
+  },
+  sessionCode: { color: colors.danger, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  sessionTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
   formTitle: { color: colors.text, fontSize: 20, fontWeight: '900' },
   formText: { color: colors.textSecondary, fontSize: 11, marginTop: 4 },
   form: { gap: spacing.md, marginTop: spacing.xl },

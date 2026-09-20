@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { InlineErrorCard } from '../../components/ui/ErrorState';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { SectionHeader } from '../../components/ui/SectionHeader';
@@ -17,7 +17,7 @@ import { useSimulations } from '../../simulation/useSimulations';
 import { colors, spacing } from '../../theme/theme';
 
 const modes = [
-  { title: 'Historical Scenario', subtitle: 'Run your saved portfolio through a backend-defined market event.', icon: 'time-outline' as const, bg: colors.purpleBackground, fg: colors.purpleSoft, route: 'HistoricalScenario' },
+  { title: 'Historical Scenario', subtitle: 'See how your saved portfolio would have performed during a market event.', icon: 'time-outline' as const, bg: colors.purpleBackground, fg: colors.purpleSoft, route: 'HistoricalScenario' },
   { title: 'Allocation Change', subtitle: 'Compare original and modified weights over an explicit period.', icon: 'pie-chart-outline' as const, bg: colors.cyanBackground, fg: colors.primary, route: 'AllocationChange' },
   { title: 'Combined Simulation', subtitle: 'Compare both allocations during the same historical event.', icon: 'git-compare-outline' as const, bg: colors.blueBackground, fg: colors.blue, route: 'CombinedSimulation' }
 ] as const;
@@ -33,11 +33,16 @@ export function SimulationsScreen({ navigation }: { navigation: any }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
-        <PageTitle title="Simulations" subtitle="Backend-powered what-if analysis for historical events and portfolio allocations." />
+        <PageTitle title="Simulations" subtitle="Explore historical events and portfolio allocation changes." />
 
         <View style={styles.modeList}>
           {modes.map((mode) => (
-            <Pressable key={mode.title} onPress={() => navigation.navigate(mode.route, { portfolioId: activePortfolioId ?? undefined })}>
+            <Pressable
+              accessibilityLabel={mode.title}
+              accessibilityRole="button"
+              key={mode.title}
+              onPress={() => navigation.navigate(mode.route, { portfolioId: activePortfolioId ?? undefined })}
+            >
               <Card style={[styles.modeCard, { borderColor: mode.bg }]}>
                 <View style={[styles.modeIcon, { backgroundColor: mode.bg }]}><Ionicons name={mode.icon} color={mode.fg} size={27} /></View>
                 <View style={{ flex: 1 }}><Text style={styles.modeTitle}>{mode.title}</Text><Text style={styles.modeText}>{mode.subtitle}</Text></View>
@@ -50,22 +55,20 @@ export function SimulationsScreen({ navigation }: { navigation: any }) {
         <SectionHeader title="Recent simulations" action="View all" onPress={() => navigation.navigate('SimulationHistory')} />
 
         {listStatus === 'error' ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Could not refresh portfolios</Text>
-            <Text style={styles.errorText}>{portfolioErrorMessage(listError)}</Text>
-            <Button title="Retry portfolios" onPress={() => void refreshPortfolios()} />
-          </Card>
+          <InlineErrorCard error={listError} message={portfolioErrorMessage(listError)} stale={Boolean(portfolios.length)} onRetry={() => void refreshPortfolios()} retryTitle="Retry portfolios" />
         ) : historyStatus === 'error' ? (
-          <Card style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Complete history unavailable</Text>
-            <Text style={styles.errorText}>{simulationErrorMessage(historyError, 'At least one portfolio history request failed. Retry from Simulation History.')}</Text>
-          </Card>
+          <InlineErrorCard error={historyError} message={simulationErrorMessage(historyError, 'At least one portfolio history request failed. Retry from Simulation History.')} stale={Boolean(history.length)} />
         ) : historyStatus === 'loading' || historyStatus === 'idle' ? (
-          <Text style={styles.loading}>Loading backend history…</Text>
+          <Text style={styles.loading}>Loading simulation history…</Text>
         ) : history.length ? (
           <View style={styles.recentList}>
             {history.slice(0, 3).map((item) => (
-              <Pressable key={item.id} onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}>
+              <Pressable
+                accessibilityLabel={`Open ${item.portfolio_name} ${simulationTypeLabel(item.simulation_type)} simulation`}
+                accessibilityRole="button"
+                key={item.id}
+                onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}
+              >
                 <Card style={styles.recentCard}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.recentPortfolio}>{item.portfolio_name}</Text>
@@ -81,7 +84,7 @@ export function SimulationsScreen({ navigation }: { navigation: any }) {
           <Card style={styles.emptyCard}>
             <Ionicons name="pulse-outline" color={colors.muted} size={28} />
             <Text style={styles.emptyTitle}>No simulation history yet</Text>
-            <Text style={styles.emptyText}>Run one of the three backend simulation modes above.</Text>
+            <Text style={styles.emptyText}>Choose one of the three simulation modes above to get started.</Text>
           </Card>
         )}
       </ScrollView>

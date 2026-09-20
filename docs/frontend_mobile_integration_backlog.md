@@ -1,8 +1,10 @@
 # Real-Holding Frontend and Mobile Integration Backlog
 
-The backend branch is complete, but the current customer React and mobile
-clients were built against the earlier authoritative-weight model. This file
-records the required later integration work; Phase 13 does not implement it.
+The backend contracts are complete. The mobile client now supports current,
+planned, and legacy portfolio modes and has passed its mobile-only readiness
+verification. The equivalent customer React integration is intentionally
+skipped by current product direction. Plan-to-current conversion remains
+unavailable until its atomic backend operation exists.
 
 ## Required real-holding integration
 
@@ -54,10 +56,10 @@ V2 report/simulation snapshot as appropriate.
 
 | Feature | Current client behavior | Missing backend capability/API | Priority | Recommended future action |
 | --- | --- | --- | --- | --- |
-| Real holding CRUD | Web and mobile forms still enter weights and require 100%; their TypeScript holding responses require `weight` | None; the backend real holding contract is complete | Core | Dedicated React/mobile real-holding integration branch |
-| Current valuation | Dashboard/detail read saved weights and do not call the valuation route | None; USD/THB valuation exists | Core | Add shared valuation types/API clients and explicit loading, 409, and 503 states |
-| Report V2 | Both clients type and render only the V1 `analysis` envelope | None; report create/detail are V1/V2-aware | Core | Add discriminated V1/V2 response handling and frozen valuation UI |
-| Simulation History V2 | Both clients type history detail as V1-only and initialize hypothetical inputs from saved weights | None; all three V2 formats exist | Core | Add V2 unions, frozen baseline views, and real-baseline editor initialization |
+| Current/planned holding CRUD | Web and mobile submit real ownership facts or planned proposed amounts without manual CRUD weights; legacy weights remain readable for compatibility | Atomic plan-to-new-current conversion | Core integration complete | Add conversion only after its backend contract is approved |
+| Current valuation / planned allocation | Both clients consume valuation for current holdings and planned allocation/preview for plans; estimated shares remain display-only | None | Core integration complete | Run environment-specific authenticated acceptance checks before deployment |
+| Report V2/V3 | Both clients render legacy V1, current V2, and planned V3. Current/planned metric cards can show response-derived currency equivalents for cumulative return, annualized return, and exact maximum drawdown | None | Core integration complete | Preserve versioned immutable rendering |
+| Simulation History V2/V3 | Both clients render current V2 and planned V3 history and initialize editors from the appropriate backend baseline | None | Core integration complete | Preserve frozen history and backend-owned baselines |
 | Assistant | Both clients call the real authenticated AI endpoint and show sources/limitations | No core gap for current stateless explanations | Optional | Preserve the contract; add conversation persistence only if separately approved |
 | Watchlist | Web and mobile truthfully show unavailable/deferred UI; mock files/components remain for isolated prototype/test use | Persistent watchlist CRUD and customer quote/market summary endpoints | Optional | Add a separate backend product proposal before client activation |
 | Search | Web global search is disabled; local portfolio/report/simulation/Learn filtering exists | No global search API or asset-catalogue search endpoint | Optional | Define searchable resources and ownership/pagination contracts first |
@@ -65,8 +67,8 @@ V2 report/simulation snapshot as appropriate.
 | Profile update/edit | Web account profile is read-only; web preferences are browser-local; mobile display name is explicitly device-local | Authenticated profile update/password-management API | Optional | Add backend account/profile contract before syncing edits |
 | Export/share/download | Report screens explicitly say these actions are unavailable | Secure render/export, download authorization, and share/revocation APIs | Optional | Define privacy, format, expiry, and audit requirements first |
 | Mock/static market data | Watchlist/prototype mock assets and demo calculations remain, while production portfolio/analytics/simulation flows use backend APIs; Learn content is code-owned educational content | Customer quote/watchlist APIs for live market UI | Optional | Keep mocks test/demo-only; remove or isolate stale demo modules during client integration |
-| Saved-weight assumptions | Portfolio cards, detail, dashboard allocation, and simulation editor code dereference `holding.weight` | None for backend; client migration is pending | Core | Replace CRUD assumptions with real fields and valuation-derived allocations |
-| Percentage-entry assumptions | Portfolio create/edit requires 0–100 inputs summing to 100%; simulation modified allocation correctly remains percentage-based | None for portfolio CRUD; simulation percentages remain the intended contract | Core | Remove percentages only from CRUD; retain them for Allocation/Combined hypotheses |
+| Saved-weight assumptions | Removed from web and mobile current/planned production flows; legacy display remains compatible | None | Core integration complete | Retain legacy readers until a separate migration policy is approved |
+| Percentage-entry assumptions | Web and mobile CRUD no longer accept weights; Allocation/Combined simulation percentages correctly remain user-controlled hypotheses | None | Core integration complete | Preserve the distinction between saved holdings and simulation hypotheses |
 
 ## Explicit product boundaries
 

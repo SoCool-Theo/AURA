@@ -7,6 +7,7 @@ from types import MappingProxyType
 from typing import Any, Mapping
 from uuid import UUID
 
+from ..schemas.portfolio import PlannedPortfolioBaselineContext
 from ..schemas.simulation import (
     AllocationSimulationResponse,
     CombinedSimulationResponse,
@@ -14,12 +15,17 @@ from ..schemas.simulation import (
 )
 from ..schemas.simulation_history import (
     AllocationSimulationV2Snapshot,
+    AllocationSimulationV3Snapshot,
     CombinedSimulationV2Snapshot,
+    CombinedSimulationV3Snapshot,
     HistoricalScenarioSimulationV2Snapshot,
+    HistoricalScenarioSimulationV3Snapshot,
     SimulationBaselineHolding,
     SimulationBaselineValuationContext,
     SimulationHistoryResult,
 )
+from .planned_snapshot_mapper import planned_allocation_to_snapshot_baseline
+from .portfolio_planned_allocation_service import PlannedPortfolioAllocation
 from .portfolio_valuation_service import (
     PortfolioDisplayCurrency,
     PortfolioValuationResult,
@@ -44,6 +50,15 @@ ALLOCATION_SIMULATION_RESPONSE_V2_SCHEMA_VERSION = (
 COMBINED_SIMULATION_RESPONSE_V2_SCHEMA_VERSION = (
     "combined-simulation-response-v2"
 )
+HISTORICAL_SCENARIO_SIMULATION_RESPONSE_V3_SCHEMA_VERSION = (
+    "historical-scenario-simulation-response-v3"
+)
+ALLOCATION_SIMULATION_RESPONSE_V3_SCHEMA_VERSION = (
+    "allocation-simulation-response-v3"
+)
+COMBINED_SIMULATION_RESPONSE_V3_SCHEMA_VERSION = (
+    "combined-simulation-response-v3"
+)
 
 SIMULATION_SCHEMA_VERSIONS: Mapping[str, str] = MappingProxyType(
     {
@@ -63,6 +78,15 @@ SIMULATION_V2_SCHEMA_VERSIONS: Mapping[str, str] = MappingProxyType(
         "combined": COMBINED_SIMULATION_RESPONSE_V2_SCHEMA_VERSION,
     }
 )
+SIMULATION_V3_SCHEMA_VERSIONS: Mapping[str, str] = MappingProxyType(
+    {
+        "historical-scenario": (
+            HISTORICAL_SCENARIO_SIMULATION_RESPONSE_V3_SCHEMA_VERSION
+        ),
+        "allocation": ALLOCATION_SIMULATION_RESPONSE_V3_SCHEMA_VERSION,
+        "combined": COMBINED_SIMULATION_RESPONSE_V3_SCHEMA_VERSION,
+    }
+)
 
 _RESPONSE_SCHEMAS: Mapping[
     str,
@@ -78,6 +102,9 @@ _SUPPORTED_SCHEMA_VERSIONS = frozenset(SIMULATION_SCHEMA_VERSIONS.values())
 _SUPPORTED_V2_SCHEMA_VERSIONS = frozenset(
     SIMULATION_V2_SCHEMA_VERSIONS.values()
 )
+_SUPPORTED_V3_SCHEMA_VERSIONS = frozenset(
+    SIMULATION_V3_SCHEMA_VERSIONS.values()
+)
 _V2_SNAPSHOT_SCHEMAS = MappingProxyType(
     {
         "historical-scenario": HistoricalScenarioSimulationV2Snapshot,
@@ -85,14 +112,25 @@ _V2_SNAPSHOT_SCHEMAS = MappingProxyType(
         "combined": CombinedSimulationV2Snapshot,
     }
 )
+_V3_SNAPSHOT_SCHEMAS = MappingProxyType(
+    {
+        "historical-scenario": HistoricalScenarioSimulationV3Snapshot,
+        "allocation": AllocationSimulationV3Snapshot,
+        "combined": CombinedSimulationV3Snapshot,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
 class RestoredSimulationSnapshot:
-    """Validated result plus optional immutable real-baseline context."""
+    """Validated result plus optional immutable baseline context."""
 
     response: SimulationHistoryResult
-    baseline: SimulationBaselineValuationContext | None
+    baseline: (
+        SimulationBaselineValuationContext
+        | PlannedPortfolioBaselineContext
+        | None
+    )
     schema_version: str
 
 
@@ -110,6 +148,16 @@ def simulation_type_to_v2_schema_version(simulation_type: str) -> str:
     """Return the approved V2 schema version for one simulation type."""
     try:
         return SIMULATION_V2_SCHEMA_VERSIONS[simulation_type]
+    except KeyError as error:
+        raise ValueError(
+            f"unsupported simulation type: {simulation_type!r}"
+        ) from error
+
+
+def simulation_type_to_v3_schema_version(simulation_type: str) -> str:
+    """Return the approved planned-baseline V3 version for one type."""
+    try:
+        return SIMULATION_V3_SCHEMA_VERSIONS[simulation_type]
     except KeyError as error:
         raise ValueError(
             f"unsupported simulation type: {simulation_type!r}"
@@ -134,14 +182,17 @@ def _response_schema_for_snapshot(
 ) -> type[SimulationHistoryResult]:
     expected_v1 = simulation_type_to_schema_version(simulation_type)
     expected_v2 = simulation_type_to_v2_schema_version(simulation_type)
+    expected_v3 = simulation_type_to_v3_schema_version(simulation_type)
     if schema_version not in (
-        _SUPPORTED_SCHEMA_VERSIONS | _SUPPORTED_V2_SCHEMA_VERSIONS
+        _SUPPORTED_SCHEMA_VERSIONS
+        | _SUPPORTED_V2_SCHEMA_VERSIONS
+        | _SUPPORTED_V3_SCHEMA_VERSIONS
     ):
         raise ValueError(
             "unsupported simulation snapshot schema version: "
             f"{schema_version!r}"
         )
-    if schema_version not in {expected_v1, expected_v2}:
+    if schema_version not in {expected_v1, expected_v2, expected_v3}:
         raise ValueError(
             "simulation type and schema version do not match: "
             f"{simulation_type!r}, {schema_version!r}"
@@ -214,13 +265,35 @@ def simulation_response_to_v2_snapshot(
     return deepcopy(snapshot.model_dump(mode="json"))
 
 
+def simulation_response_to_v3_snapshot(
+    *,
+    simulation_type: str,
+    response: SimulationHistoryResult,
+    planned_allocation: PlannedPortfolioAllocation,
+) -> dict[str, Any]:
+    """Serialize a result and its immutable planned target-allocation baseline."""
+    expected_type = _response_schema_for_type(simulation_type)
+    if not isinstance(response, expected_type):
+        raise ValueError(
+            "simulation response type does not match simulation_type"
+        )
+
+    snapshot_schema = _V3_SNAPSHOT_SCHEMAS[simulation_type]
+    snapshot = snapshot_schema(
+        schema_version=simulation_type_to_v3_schema_version(simulation_type),
+        result=response,
+        baseline=planned_allocation_to_snapshot_baseline(planned_allocation),
+    )
+    return deepcopy(snapshot.model_dump(mode="json"))
+
+
 def restore_simulation_snapshot(
     *,
     simulation_type: str,
     schema_version: str,
     snapshot: Mapping[str, Any],
 ) -> RestoredSimulationSnapshot:
-    """Revalidate one V1 or V2 snapshot through its exact contract."""
+    """Revalidate one V1, V2, or V3 snapshot through its exact contract."""
     response_schema = _response_schema_for_snapshot(
         simulation_type=simulation_type,
         schema_version=schema_version,
@@ -233,7 +306,11 @@ def restore_simulation_snapshot(
             schema_version=schema_version,
         )
 
-    snapshot_schema = _V2_SNAPSHOT_SCHEMAS[simulation_type]
+    snapshot_schema = (
+        _V2_SNAPSHOT_SCHEMAS[simulation_type]
+        if schema_version in _SUPPORTED_V2_SCHEMA_VERSIONS
+        else _V3_SNAPSHOT_SCHEMAS[simulation_type]
+    )
     validated = snapshot_schema.model_validate(payload)
     return RestoredSimulationSnapshot(
         response=validated.result,
@@ -316,12 +393,18 @@ __all__ = [
     "HISTORICAL_SCENARIO_SIMULATION_RESPONSE_V2_SCHEMA_VERSION",
     "ALLOCATION_SIMULATION_RESPONSE_V2_SCHEMA_VERSION",
     "COMBINED_SIMULATION_RESPONSE_V2_SCHEMA_VERSION",
+    "HISTORICAL_SCENARIO_SIMULATION_RESPONSE_V3_SCHEMA_VERSION",
+    "ALLOCATION_SIMULATION_RESPONSE_V3_SCHEMA_VERSION",
+    "COMBINED_SIMULATION_RESPONSE_V3_SCHEMA_VERSION",
     "SIMULATION_SCHEMA_VERSIONS",
     "SIMULATION_V2_SCHEMA_VERSIONS",
+    "SIMULATION_V3_SCHEMA_VERSIONS",
     "simulation_type_to_schema_version",
     "simulation_type_to_v2_schema_version",
+    "simulation_type_to_v3_schema_version",
     "simulation_response_to_snapshot",
     "simulation_response_to_v2_snapshot",
+    "simulation_response_to_v3_snapshot",
     "simulation_snapshot_to_response",
     "restore_simulation_snapshot",
     "RestoredSimulationSnapshot",

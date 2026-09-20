@@ -69,8 +69,7 @@ function buildApiUrl(path: string): string {
   if (!environment.apiBaseUrl) {
     throw new ApiError({
       kind: 'configuration',
-      message:
-        'Aura could not determine the API address. Set EXPO_PUBLIC_API_URL explicitly.'
+      message: 'Aura is missing a required connection setting.'
     });
   }
 
@@ -80,7 +79,7 @@ function buildApiUrl(path: string): string {
   } catch (cause) {
     throw new ApiError({
       kind: 'configuration',
-      message: 'EXPO_PUBLIC_API_URL must be a valid absolute URL.',
+      message: 'Aura has an invalid connection address.',
       cause
     });
   }
@@ -95,7 +94,7 @@ function buildApiUrl(path: string): string {
   ) {
     throw new ApiError({
       kind: 'configuration',
-      message: 'EXPO_PUBLIC_API_URL must be an HTTP(S) origin without credentials, a path, query, or fragment.'
+      message: 'Aura has an invalid connection address.'
     });
   }
 
@@ -103,7 +102,7 @@ function buildApiUrl(path: string): string {
   if (normalizedPath !== '/api' && !normalizedPath.startsWith('/api/')) {
     throw new ApiError({
       kind: 'configuration',
-      message: 'Aura API request paths must begin with /api.'
+      message: 'Aura tried to open an invalid service address.'
     });
   }
 
@@ -135,7 +134,7 @@ function extractDetail(body: ParsedResponseBody): JsonValue | null {
 }
 
 function httpErrorMessage(status: number, detail: JsonValue | null): string {
-  if (status >= 500) return `Aura API is unavailable (HTTP ${status}). Please try again.`;
+  if (status >= 500) return 'Aura is temporarily unavailable. Please try again.';
   if (typeof detail === 'string' && detail.trim()) return detail;
   return `Request failed with HTTP ${status}.`;
 }
@@ -179,7 +178,7 @@ export async function apiRequest<TResponse, TBody = never>(
     } catch (cause) {
       throw new ApiError({
         kind: 'request',
-        message: 'Aura could not serialize the API request body.',
+        message: 'Aura could not prepare the request.',
         cause
       });
     }
@@ -197,7 +196,7 @@ export async function apiRequest<TResponse, TBody = never>(
   } catch (cause) {
     throw new ApiError({
       kind: 'network',
-      message: 'Unable to reach the Aura API.',
+      message: 'Unable to reach Aura.',
       cause
     });
   }
@@ -214,7 +213,7 @@ export async function apiRequest<TResponse, TBody = never>(
   } catch (cause) {
     throw new ApiError({
       kind: 'network',
-      message: 'Aura lost the API response before it could be read.',
+      message: 'Aura lost the response before it could be read.',
       status: response.status,
       cause
     });
@@ -244,8 +243,8 @@ export async function apiRequest<TResponse, TBody = never>(
     throw new ApiError({
       kind: 'malformed-response',
       message: !responseText
-        ? 'Aura API returned an unexpected empty response.'
-        : 'Aura API returned a malformed or unexpected response.',
+        ? 'Aura returned an unexpected empty response.'
+        : 'Aura returned an unexpected response.',
       status: response.status,
       responseBody
     });

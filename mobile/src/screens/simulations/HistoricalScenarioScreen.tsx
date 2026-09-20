@@ -8,6 +8,7 @@ import { SimulationResults } from '../../components/simulations/SimulationResult
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { FormErrorSummary, InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import { simulationErrorMessage } from '../../simulation/simulationErrors';
@@ -22,6 +23,7 @@ export function HistoricalScenarioScreen({ route }: { route: any }) {
   const [scenarioId, setScenarioId] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  const [runFailure, setRunFailure] = useState<unknown>(null);
   const [result, setResult] = useState<SimulationRunResult | null>(null);
   const runningRef = useRef(false);
 
@@ -38,10 +40,12 @@ export function HistoricalScenarioScreen({ route }: { route: any }) {
     runningRef.current = true;
     setRunning(true);
     setRunError(null);
+    setRunFailure(null);
     try {
       const response = await runHistorical(portfolioState.portfolio.id, scenarioId);
       setResult({ type: 'historical-scenario', response });
     } catch (error) {
+      setRunFailure(error);
       setRunError(simulationErrorMessage(error));
     } finally {
       runningRef.current = false;
@@ -54,22 +58,25 @@ export function HistoricalScenarioScreen({ route }: { route: any }) {
   }
 
   if (portfolioState.listStatus === 'error' && !portfolioState.portfolios.length) {
-    return <SafeAreaView style={styles.safe}><Card style={styles.errorCard}>
-      <Text style={styles.error}>{portfolioErrorMessage(portfolioState.listError)}</Text>
-      <Button title="Retry portfolios" onPress={() => void portfolioState.refreshPortfolios()} />
-    </Card></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><ScreenErrorState
+      error={portfolioState.listError}
+      resourceName="Portfolio list"
+      fallbackMessage="Unable to load portfolios for simulation."
+      onRetry={() => void portfolioState.refreshPortfolios()}
+      retryTitle="Retry portfolios"
+    /></SafeAreaView>;
   }
   const portfolioFailure = portfolioState.listStatus === 'error'
-    ? portfolioErrorMessage(portfolioState.listError)
+    ? portfolioState.listError
     : portfolioState.detailStatus === 'error'
-      ? portfolioErrorMessage(portfolioState.detailError)
+      ? portfolioState.detailError
       : null;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Historical Scenario</Text>
-        <Text style={styles.subtitle}>Run a backend-defined historical event against a saved portfolio.</Text>
+        <Text style={styles.subtitle}>See how a saved portfolio would have performed during a historical event.</Text>
 
         {!portfolioState.portfolios.length ? (
           <Card><EmptyState title="No portfolio available" description="Create a portfolio with holdings before running a simulation." /></Card>
@@ -88,26 +95,34 @@ export function HistoricalScenarioScreen({ route }: { route: any }) {
             />
             {portfolioState.detailStatus === 'loading' ? <Text style={styles.state}>Loading holdings…</Text> : null}
             {portfolioFailure ? (
-              <Card style={styles.errorCard}>
-                <Text style={styles.error}>{portfolioFailure}</Text>
-                <Button title="Retry portfolio" onPress={() => void (portfolioState.listStatus === 'error' ? portfolioState.refreshPortfolios() : portfolioState.retryPortfolio())} />
-              </Card>
+              <InlineErrorCard
+                error={portfolioFailure}
+                message={portfolioErrorMessage(portfolioFailure)}
+                stale={Boolean(portfolioState.portfolio)}
+                onRetry={() => void (portfolioState.listStatus === 'error'
+                  ? portfolioState.refreshPortfolios()
+                  : portfolioState.retryPortfolio())}
+                retryTitle="Retry portfolio"
+              />
             ) : null}
 
             <Text style={styles.section}>Scenario</Text>
-            {scenarioStatus === 'loading' && !scenarios.length ? <Text style={styles.state}>Loading backend scenarios…</Text> : null}
+            {scenarioStatus === 'loading' && !scenarios.length ? <Text style={styles.state}>Loading historical scenarios…</Text> : null}
             {scenarioStatus === 'error' ? (
-              <Card style={styles.errorCard}>
-                <Text style={styles.error}>{simulationErrorMessage(scenarioError, 'Unable to load historical scenarios.')}</Text>
-                <Button title="Retry scenarios" onPress={() => void refreshScenarios()} />
-              </Card>
+              <InlineErrorCard
+                error={scenarioError}
+                message={simulationErrorMessage(scenarioError, 'Unable to load historical scenarios.')}
+                stale={Boolean(scenarios.length)}
+                onRetry={() => void refreshScenarios()}
+                retryTitle="Retry scenarios"
+              />
             ) : scenarios.length ? (
               <ScenarioSelector disabled={running} scenarios={scenarios} selectedId={scenarioId} onSelect={(id) => { if (runningRef.current) return; setScenarioId(id); setResult(null); }} />
             ) : scenarioStatus === 'ready' ? (
-              <Card><EmptyState title="No scenarios available" description="The backend did not return any historical scenarios." /></Card>
+              <Card><EmptyState title="No scenarios available" description="Aura could not find any historical scenarios." /></Card>
             ) : null}
 
-            {runError ? <Card style={styles.errorCard}><Text style={styles.error}>{runError}</Text></Card> : null}
+            {runError ? <FormErrorSummary error={runFailure} message={runError} /> : null}
             {portfolioState.portfolio && !portfolioState.portfolio.holdings.length ? <Text style={styles.state}>Add saved holdings before running a simulation.</Text> : null}
             <Button
               title={running ? 'Running…' : 'Run historical scenario'}

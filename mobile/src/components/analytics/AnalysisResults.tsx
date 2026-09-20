@@ -1,8 +1,28 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-import type { PortfolioAnalysisResponse } from '../../types/analytics';
+import {
+  formatCurrentAllocation,
+  formatPortfolioMoney,
+  formatPortfolioQuantity
+} from '../../portfolio/portfolioFormatting';
+import {
+  reportMetricAmountContent,
+  reportMonetaryMetrics,
+  type ReportMonetaryMetricKey
+} from '../../report/reportMetricDetails';
+import {
+  isPortfolioReportV2,
+  isPortfolioReportV3,
+  type PortfolioReportResponse
+} from '../../types/report';
 import { colors, spacing } from '../../theme/theme';
+import {
+  filterReturnPoints,
+  RETURN_VIEW_RANGES,
+  type ReturnViewRange
+} from '../../dashboard/dashboardPresentation';
 import {
   formatAnalysisNumber,
   formatRatioPercent,
@@ -10,6 +30,9 @@ import {
 } from '../../report/reportFormatting';
 import { AssetRelationshipBars } from '../charts/AssetRelationshipBars';
 import { PortfolioReturnsChart } from '../charts/PortfolioReturnsChart';
+import {
+  MetricAmountSheet
+} from './MetricAmountSheet';
 import { Card } from '../ui/Card';
 import { RiskBadge } from '../ui/RiskBadge';
 import { SectionHeader } from '../ui/SectionHeader';
@@ -17,22 +40,31 @@ import { Tag } from '../ui/Tag';
 import { WebKpiCard } from '../ui/WebKpiCard';
 
 export function AnalysisResults({
-  analysis
+  report,
+  onOpenAsset
 }: {
-  analysis: PortfolioAnalysisResponse;
+  report: PortfolioReportResponse;
+  onOpenAsset?: (symbol: string) => void;
 }) {
+  const analysis = report.analysis;
+  const reportV2 = isPortfolioReportV2(report) ? report : null;
+  const reportV3 = isPortfolioReportV3(report) ? report : null;
+  const monetary = reportMonetaryMetrics(report);
+  const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
+  const [returnViewRange, setReturnViewRange] = useState<ReturnViewRange>('1Y');
   const metrics = analysis.portfolio_metrics;
   const drawdown = analysis.max_drawdown;
   const diversification = analysis.diversification;
   const concentration = analysis.concentration;
   const risk = analysis.risk_classification;
+  const visibleReturns = filterReturnPoints(analysis.portfolio_returns, returnViewRange);
 
   return (
     <View style={styles.results}>
       <Card style={styles.summaryCard}>
         <View style={styles.summaryHeading}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.overline}>BACKEND ANALYSIS</Text>
+            <Text style={styles.overline}>RISK ANALYSIS</Text>
             <Text style={styles.summaryTitle}>{analysis.portfolio_name}</Text>
           </View>
           <RiskBadge level={risk.risk_level} />
@@ -44,6 +76,65 @@ export function AnalysisResults({
           <Text key={`${index}-${reason}`} style={styles.reason}>• {reason}</Text>
         ))}
       </Card>
+
+      {reportV3 ? (
+        <Card style={styles.plannedCard}>
+          <View style={styles.rowBetween}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.overline}>SAVED PLANNED ALLOCATION</Text>
+              <Text style={styles.snapshotValue}>
+                {formatPortfolioMoney(
+                  reportV3.baseline.total_proposed_amount,
+                  reportV3.baseline.plan_currency
+                )}
+              </Text>
+            </View>
+            <Tag label={reportV3.baseline.plan_currency} tone="primary" />
+          </View>
+          <Text style={styles.cardText}>{reportV3.baseline.hypothetical_notice}</Text>
+          {reportV3.baseline.holdings.map((holding) => (
+            <View key={holding.id} style={styles.metadataRow}>
+              <Text style={styles.metadataLabel}>{holding.symbol}</Text>
+              <Text style={styles.metadataValue}>
+                {formatPortfolioMoney(holding.proposed_amount, reportV3.baseline.plan_currency)} · {formatRatioPercent(Number(holding.target_allocation))}
+              </Text>
+            </View>
+          ))}
+          <Text style={styles.cardText}>
+            Target weights come from proposed amounts. Estimated shares are for display only and do not affect this analysis.
+          </Text>
+        </Card>
+      ) : reportV2 ? (
+        <Card style={styles.snapshotCard}>
+          <View style={styles.rowBetween}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.overline}>SAVED PORTFOLIO VALUATION</Text>
+              <Text style={styles.snapshotValue}>
+                {formatPortfolioMoney(
+                  reportV2.valuation.total_current_value,
+                  reportV2.valuation.valuation_currency
+                )}
+              </Text>
+            </View>
+            <Tag label={reportV2.valuation.valuation_currency} tone="primary" />
+          </View>
+          <Text style={styles.cardText}>
+            Captured {reportV2.valuation.requested_date} using prices from {reportV2.valuation.oldest_price_as_of} to {reportV2.valuation.newest_price_as_of}. This saved context is not revalued.
+          </Text>
+          {reportV2.valuation.fx ? (
+            <Text style={styles.cardText}>
+              USD/THB {formatPortfolioQuantity(reportV2.valuation.fx.rate)} as of {reportV2.valuation.fx.as_of}
+            </Text>
+          ) : null}
+        </Card>
+      ) : (
+        <Card style={styles.legacyCard}>
+          <Text style={styles.overline}>SAVED LEGACY ALLOCATION</Text>
+          <Text style={styles.cardText}>
+            This older report uses the portfolio's saved allocation rather than current holding values.
+          </Text>
+        </Card>
+      )}
 
       <View style={styles.metricGrid}>
         <WebKpiCard
@@ -57,15 +148,19 @@ export function AnalysisResults({
           icon="trending-up-outline"
           label="Cumulative Return"
           value={formatRatioPercent(metrics.cumulative_return)}
-          meta="Saved period"
+          meta={monetary ? 'Saved period · Tap for amount' : 'Saved period'}
           tone={metrics.cumulative_return < 0 ? 'danger' : 'success'}
+          onPress={monetary ? () => setSelectedMetric('cumulative') : undefined}
+          accessibilityHint={monetary ? 'Shows the percentage and estimated money amount' : undefined}
         />
         <WebKpiCard
           icon="analytics-outline"
           label="Annualized Return"
           value={formatRatioPercent(metrics.annualized_return)}
-          meta="Backend result"
+          meta={monetary ? 'Historical equivalent · Tap for amount' : 'Saved analysis'}
           tone={metrics.annualized_return < 0 ? 'danger' : 'success'}
+          onPress={monetary ? () => setSelectedMetric('annualized') : undefined}
+          accessibilityHint={monetary ? 'Shows the percentage and estimated annual money amount' : undefined}
         />
         <WebKpiCard
           icon="pulse-outline"
@@ -87,17 +182,43 @@ export function AnalysisResults({
           value={formatRatioPercent(drawdown.max_drawdown)}
           meta={`${drawdown.peak_date ?? 'N/A'} → ${drawdown.trough_date ?? 'N/A'}`}
           tone="danger"
+          onPress={monetary?.maximum_drawdown_amount !== null && monetary?.maximum_drawdown_amount !== undefined
+            ? () => setSelectedMetric('drawdown')
+            : undefined}
+          accessibilityHint={monetary?.maximum_drawdown_amount !== null && monetary?.maximum_drawdown_amount !== undefined
+            ? 'Shows the percentage and estimated peak-to-trough money amount'
+            : undefined}
         />
       </View>
 
       <SectionHeader title="Portfolio Return Series" />
       <Card style={styles.sectionCard}>
         <Text style={styles.cardText}>
-          Ordered periodic returns supplied by the backend. No benchmark or cumulative series is generated on-device.
+          Historical periodic returns for the selected analysis period.
         </Text>
-        <PortfolioReturnsChart points={analysis.portfolio_returns} />
+        <View style={styles.returnRangeTabs} accessibilityRole="tablist">
+          {RETURN_VIEW_RANGES.map((range) => {
+            const selected = range === returnViewRange;
+            return (
+              <Pressable
+                key={range}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+                onPress={() => setReturnViewRange(range)}
+                style={({ pressed }) => [
+                  styles.returnRangeButton,
+                  selected && styles.returnRangeButtonActive,
+                  pressed && styles.returnRangeButtonPressed
+                ]}
+              >
+                <Text style={[styles.returnRangeText, selected && styles.returnRangeTextActive]}>{range}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <PortfolioReturnsChart points={visibleReturns} />
         <Text style={styles.observationCount}>
-          {analysis.portfolio_returns.length} return observations
+          Showing {visibleReturns.length} of {analysis.portfolio_returns.length} return observations
         </Text>
       </Card>
 
@@ -134,14 +255,71 @@ export function AnalysisResults({
         ))}
       </View>
 
-      <SectionHeader title="Individual Asset Metrics" />
+      <SectionHeader title={reportV2 ? 'Per-Asset Valuation and Risk' : reportV3 ? 'Planned Asset Risk' : 'Individual Asset Metrics'} />
       <View style={styles.list}>
-        {analysis.asset_metrics.map((asset) => (
-          <Card key={asset.symbol} style={styles.sectionCard}>
+        {reportV2 ? reportV2.holdings.map((holding) => (
+          <Pressable
+            key={holding.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${holding.symbol} risk details`}
+            disabled={!onOpenAsset}
+            onPress={() => onOpenAsset?.(holding.symbol)}
+            style={({ pressed }) => pressed && styles.assetCardPressed}
+          >
+          <Card style={styles.sectionCard}>
+            <View style={styles.rowBetween}>
+              <Text style={styles.assetSymbol}>{holding.symbol}</Text>
+              <View style={styles.assetActionRow}>
+                <Tag label={formatCurrentAllocation(holding.current_allocation)} tone="primary" />
+                {onOpenAsset ? <Ionicons name="chevron-forward" size={19} color={colors.primary} /> : null}
+              </View>
+            </View>
+            {holding.asset_metrics.risk_classification ? (
+              <View style={styles.assetRiskRow}>
+                <RiskBadge level={holding.asset_metrics.risk_classification.risk_level} />
+                <Text style={styles.cardText}>{holding.asset_metrics.risk_classification.risk_score.toFixed(1)}/100</Text>
+              </View>
+            ) : null}
+            <Text style={styles.cardText}>
+              {formatPortfolioQuantity(holding.shares)} owned{holding.invested_amount && holding.invested_currency
+                ? ` · invested ${holding.invested_currency} ${formatPortfolioQuantity(holding.invested_amount)}`
+                : ''}{holding.purchase_date ? ` · purchased ${holding.purchase_date}` : ''}
+            </Text>
+            <View style={styles.dataGrid}>
+              <Metric label="Saved current value" value={formatPortfolioMoney(holding.current_value, reportV2.valuation.valuation_currency)} />
+              <Metric label="USD asset price" value={formatPortfolioMoney(holding.asset_price, 'USD')} />
+              <Metric label="Price date" value={holding.price_as_of} />
+              <Metric label="Cumulative return" value={formatRatioPercent(holding.asset_metrics.cumulative_return)} />
+              <Metric label="Annualized return" value={formatRatioPercent(holding.asset_metrics.annualized_return)} />
+              <Metric label="Asset volatility" value={formatRatioPercent(holding.asset_metrics.annualized_volatility)} />
+              <Metric label="Max drawdown" value={formatRatioPercent(holding.asset_metrics.max_drawdown)} />
+              <Metric label="Risk contribution" value={formatRatioPercent(holding.risk_driver.percentage_volatility_contribution)} />
+            </View>
+          </Card>
+          </Pressable>
+        )) : analysis.asset_metrics.map((asset) => (
+          <Pressable
+            key={asset.symbol}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${asset.symbol} risk details`}
+            disabled={!onOpenAsset}
+            onPress={() => onOpenAsset?.(asset.symbol)}
+            style={({ pressed }) => pressed && styles.assetCardPressed}
+          >
+          <Card style={styles.sectionCard}>
             <View style={styles.rowBetween}>
               <Text style={styles.assetSymbol}>{asset.symbol}</Text>
-              <Tag label={formatRatioPercent(asset.weight)} tone="primary" />
+              <View style={styles.assetActionRow}>
+                <Tag label={formatRatioPercent(asset.weight)} tone="primary" />
+                {onOpenAsset ? <Ionicons name="chevron-forward" size={19} color={colors.primary} /> : null}
+              </View>
             </View>
+            {asset.risk_classification ? (
+              <View style={styles.assetRiskRow}>
+                <RiskBadge level={asset.risk_classification.risk_level} />
+                <Text style={styles.cardText}>{asset.risk_classification.risk_score.toFixed(1)}/100</Text>
+              </View>
+            ) : null}
             <View style={styles.dataGrid}>
               <Metric label="Cumulative return" value={formatRatioPercent(asset.cumulative_return)} />
               <Metric label="Annualized return" value={formatRatioPercent(asset.annualized_return)} />
@@ -150,6 +328,7 @@ export function AnalysisResults({
               <Metric label="Sharpe ratio" value={formatAnalysisNumber(asset.sharpe_ratio)} />
             </View>
           </Card>
+          </Pressable>
         ))}
       </View>
 
@@ -188,8 +367,12 @@ export function AnalysisResults({
       </Card>
 
       <Text style={styles.education}>
-        Historical analytics are educational, not investment recommendations. Every financial metric above comes from Aura's backend report.
+        Historical analytics are educational, not investment recommendations. These metrics reflect the saved Aura analysis.
       </Text>
+      <MetricAmountSheet
+        content={reportMetricAmountContent(selectedMetric, report)}
+        onClose={() => setSelectedMetric(null)}
+      />
     </View>
   );
 }
@@ -215,6 +398,10 @@ function Metadata({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   results: { gap: spacing.md, marginTop: spacing.xl },
   summaryCard: { gap: spacing.sm, backgroundColor: colors.summaryBackground },
+  snapshotCard: { gap: spacing.md, backgroundColor: colors.cyanBackground },
+  plannedCard: { gap: spacing.md, backgroundColor: colors.summaryBackground, borderColor: colors.primary },
+  legacyCard: { gap: spacing.sm, backgroundColor: colors.warningBackground },
+  snapshotValue: { color: colors.text, fontSize: 24, fontWeight: '900', marginTop: spacing.xs },
   summaryHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   overline: { color: colors.primary, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   summaryTitle: { color: colors.text, fontSize: 19, fontWeight: '900', marginTop: 4 },
@@ -231,8 +418,27 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.text, fontSize: 15, fontWeight: '900', flex: 1 },
   cardText: { color: colors.textSecondary, fontSize: 11, lineHeight: 17 },
   observationCount: { color: colors.muted, fontSize: 10, textAlign: 'center' },
+  returnRangeTabs: { flexDirection: 'row', gap: spacing.xs },
+  returnRangeButton: {
+    flex: 1,
+    minHeight: 34,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 9,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  returnRangeButtonActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.selectedBackground
+  },
+  returnRangeButtonPressed: { opacity: 0.78 },
+  returnRangeText: { color: colors.textSecondary, fontSize: 10, fontWeight: '800' },
+  returnRangeTextActive: { color: colors.primary },
   rowBetween: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: spacing.md
@@ -240,13 +446,17 @@ const styles = StyleSheet.create({
   driverCard: { gap: spacing.md },
   driverTitle: { color: colors.text, fontSize: 16, fontWeight: '900' },
   assetSymbol: { color: colors.primary, fontSize: 18, fontWeight: '900' },
+  assetActionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  assetRiskRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  assetCardPressed: { opacity: 0.78, transform: [{ scale: 0.995 }] },
   scoreValue: { color: colors.primary, fontSize: 22, fontWeight: '900' },
   dataGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  metricItem: { width: '47%', gap: 3 },
+  metricItem: { flexGrow: 1, flexBasis: 132, gap: 3 },
   metricLabel: { color: colors.muted, fontSize: 9, lineHeight: 13 },
   metricValue: { color: colors.text, fontSize: 12, fontWeight: '900' },
   metadataRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     gap: spacing.md,
     paddingVertical: spacing.xs

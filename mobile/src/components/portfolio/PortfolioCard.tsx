@@ -1,26 +1,39 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { PortfolioSummaryResponse } from '../../types/portfolio';
+import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { colors, spacing } from '../../theme/theme';
 
 export function PortfolioCard({
   portfolio,
   active,
-  onPress
+  onPress,
+  onOpenReport
 }: {
   portfolio: PortfolioSummaryResponse;
   active: boolean;
   onPress: () => void;
+  onOpenReport?: () => void;
 }) {
   return (
-    <Pressable onPress={onPress}>
-      <Card style={[styles.card, active && styles.activeCard]}>
+    <Card style={[styles.card, active && styles.activeCard]}>
+      <Pressable
+        accessibilityLabel={`Open ${portfolio.name} portfolio${active ? ', active' : ''}`}
+        accessibilityRole="button"
+        accessibilityState={{ selected: active }}
+        onPress={onPress}
+        style={styles.details}
+      >
         <View style={styles.top}>
           <View style={styles.main}>
             <Text style={styles.name}>{portfolio.name}</Text>
             <Text style={styles.meta}>
-              Updated {new Date(portfolio.updated_at).toLocaleDateString()}
+              {portfolio.portfolio_type === 'PLANNED'
+                ? `Planned in ${portfolio.plan_currency}`
+                : portfolio.portfolio_type === 'LEGACY'
+                  ? 'Legacy allocation'
+                  : 'Current holdings'} · Updated {new Date(portfolio.updated_at).toLocaleDateString()}
             </Text>
           </View>
           {active ? <Text style={styles.activeLabel}>ACTIVE</Text> : null}
@@ -28,13 +41,21 @@ export function PortfolioCard({
         <Text style={styles.created}>
           Created {new Date(portfolio.created_at).toLocaleDateString()}
         </Text>
-      </Card>
-    </Pressable>
+      </Pressable>
+      {onOpenReport ? (
+        <Button
+          title="View Latest Report"
+          variant="secondary"
+          onPress={onOpenReport}
+        />
+      ) : null}
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   card: { gap: spacing.md },
+  details: { minHeight: 56, gap: spacing.md, justifyContent: 'center' },
   activeCard: { borderColor: colors.primary },
   top: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
   main: { flex: 1 },
