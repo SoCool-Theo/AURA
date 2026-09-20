@@ -32,6 +32,7 @@ AUTHENTICATION_REVISION = "2b6e5d4a9c81"
 SIMULATION_REVISION = "7c1e2f4a6b90"
 REAL_HOLDING_REVISION = "d4a6f8c2e1b7"
 PLANNED_PORTFOLIO_REVISION = "e5b7c9d2a4f1"
+QUANTITY_ONLY_HOLDING_REVISION = "f2c8e9a1b3d4"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -65,6 +66,12 @@ def _real_holding_revision() -> Script:
 
 def _planned_portfolio_revision() -> Script:
     revision = _script_directory().get_revision(PLANNED_PORTFOLIO_REVISION)
+    assert revision is not None
+    return revision
+
+
+def _quantity_only_holding_revision() -> Script:
+    revision = _script_directory().get_revision(QUANTITY_ONLY_HOLDING_REVISION)
     assert revision is not None
     return revision
 
@@ -229,6 +236,35 @@ def _captured_upgrade() -> tuple[
                 name=create_call.args[0],
             )
         )
+
+    quantity_only_revision = _quantity_only_holding_revision().module
+    with (
+        patch.object(
+            quantity_only_revision.op,
+            "drop_constraint",
+        ) as drop_constraint,
+        patch.object(
+            quantity_only_revision.op,
+            "create_check_constraint",
+        ) as create_check_constraint,
+    ):
+        quantity_only_revision.upgrade()
+
+    for drop_call in drop_constraint.call_args_list:
+        table = metadata.tables[drop_call.args[1]]
+        existing = next(
+            constraint
+            for constraint in table.constraints
+            if constraint.name == drop_call.args[0]
+        )
+        table.constraints.remove(existing)
+    for create_call in create_check_constraint.call_args_list:
+        metadata.tables[create_call.args[1]].append_constraint(
+            sa.CheckConstraint(
+                create_call.args[2],
+                name=create_call.args[0],
+            )
+        )
     return metadata, indexes
 
 
@@ -283,28 +319,31 @@ def _model_indexes() -> set[tuple[str, str, tuple[str, ...], bool]]:
     }
 
 
-def test_revisions_form_a_single_planned_portfolio_head() -> None:
+def test_revisions_form_a_single_quantity_only_holdings_head() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
+        QUANTITY_ONLY_HOLDING_REVISION,
         PLANNED_PORTFOLIO_REVISION,
         REAL_HOLDING_REVISION,
         SIMULATION_REVISION,
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert script.get_current_head() == PLANNED_PORTFOLIO_REVISION
-    assert revisions[0].down_revision == REAL_HOLDING_REVISION
-    assert revisions[0].module.down_revision == REAL_HOLDING_REVISION
-    assert revisions[1].down_revision == SIMULATION_REVISION
-    assert revisions[1].module.down_revision == SIMULATION_REVISION
-    assert revisions[2].down_revision == AUTHENTICATION_REVISION
-    assert revisions[2].module.down_revision == AUTHENTICATION_REVISION
-    assert revisions[3].down_revision == INITIAL_REVISION
-    assert revisions[3].module.down_revision == INITIAL_REVISION
-    assert revisions[4].down_revision is None
-    assert revisions[4].module.down_revision is None
+    assert script.get_current_head() == QUANTITY_ONLY_HOLDING_REVISION
+    assert revisions[0].down_revision == PLANNED_PORTFOLIO_REVISION
+    assert revisions[0].module.down_revision == PLANNED_PORTFOLIO_REVISION
+    assert revisions[1].down_revision == REAL_HOLDING_REVISION
+    assert revisions[1].module.down_revision == REAL_HOLDING_REVISION
+    assert revisions[2].down_revision == SIMULATION_REVISION
+    assert revisions[2].module.down_revision == SIMULATION_REVISION
+    assert revisions[3].down_revision == AUTHENTICATION_REVISION
+    assert revisions[3].module.down_revision == AUTHENTICATION_REVISION
+    assert revisions[4].down_revision == INITIAL_REVISION
+    assert revisions[4].module.down_revision == INITIAL_REVISION
+    assert revisions[5].down_revision is None
+    assert revisions[5].module.down_revision is None
     assert all(callable(revision.module.upgrade) for revision in revisions)
     assert all(callable(revision.module.downgrade) for revision in revisions)
 
