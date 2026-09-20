@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '../../../components/ui/Icon';
 import styles from '../PortfolioIntegration.module.css';
-import { supportedAssetSymbols } from '../supportedAssetSymbols';
+import { supportedAssets } from '../supportedAssetSymbols';
 
 type AssetSymbolFieldProps = {
   ariaLabel: string;
@@ -81,7 +81,7 @@ export function AssetSymbolField({
         aria-haspopup="dialog"
         disabled={disabled}
         onClick={showSupportedAssets}
-        title={`Choose from Aura's ${supportedAssetSymbols.length} supported assets`}
+        title={`Choose from Aura's ${supportedAssets.length} supported assets`}
       >
         <Icon name="chevron-down" size={18} />
       </button>
@@ -102,7 +102,7 @@ export function AssetSymbolField({
             <header className={styles.assetPickerHeader}>
               <div>
                 <h2 id={titleId}>Choose asset symbol</h2>
-                <p>Aura’s {supportedAssetSymbols.length} currently supported market-data symbols</p>
+                <p>Aura’s {supportedAssets.length} currently supported market-data symbols</p>
               </div>
               <button
                 ref={closeButtonRef}
@@ -113,17 +113,21 @@ export function AssetSymbolField({
               >×</button>
             </header>
             <div className={styles.assetPickerOptions} role="radiogroup" aria-label="Supported asset symbols">
-              {supportedAssetSymbols.map(symbol => {
-                const selected = symbol === normalizedValue;
+              {supportedAssets.map(asset => {
+                const selected = asset.symbol === normalizedValue;
                 return <button
                   type="button"
                   className={`${styles.assetPickerOption} ${selected ? styles.assetPickerOptionSelected : ''}`}
                   aria-checked={selected}
-                  key={symbol}
-                  onClick={() => chooseSymbol(symbol)}
+                  aria-label={`${asset.symbol}, ${asset.name}`}
+                  key={asset.symbol}
+                  onClick={() => chooseSymbol(asset.symbol)}
                   role="radio"
                 >
-                  <span>{symbol}</span>
+                  <span className={styles.assetPickerOptionCopy}>
+                    <strong>{asset.symbol}</strong>
+                    <small>— {asset.name}</small>
+                  </span>
                   {selected && <span aria-hidden="true">✓</span>}
                 </button>;
               })}

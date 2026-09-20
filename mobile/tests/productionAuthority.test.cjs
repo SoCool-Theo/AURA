@@ -301,6 +301,9 @@ test('financial presentation preserves signs/nulls and allocation preserves save
   assert.equal(portfolioFormatting.formatSignedPortfolioMoney('820', 'USD'), '+$820.00');
   assert.equal(portfolioFormatting.formatSignedPortfolioMoney('-2380', 'USD'), '−$2,380.00');
   assert.equal(portfolioFormatting.formatSignedPortfolioMoney('0', 'THB'), '฿0.00');
+  assert.equal(portfolioFormatting.formatPortfolioQuantity('10.125'), '10.13');
+  assert.equal(portfolioFormatting.formatPortfolioQuantity('10'), '10.00');
+  assert.equal(portfolioFormatting.formatHoldingDecimalInput('1000.000000000000'), '1000.00');
   const points = [{ date: '2026-02-01', return: -0.2 }, { date: '2026-04-01', return: 0.1 }];
   const filtered = dashboard.filterDashboardReturns(points, '1M');
   assert.equal(filtered.length, 1);
@@ -558,7 +561,9 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   const history = read('src/screens/simulations/SimulationResultScreen.tsx');
 
   assert.match(create, /A Planned Portfolio/);
+  assert.match(create, /<HoldingDecimalInput/);
   assert.match(create, /Proposed Amount/);
+  assert.match(editor, /<HoldingDecimalInput/);
   assert.match(editor, /replacePlannedHoldings/);
   assert.match(detail, /getPlannedPreview/);
   assert.match(detail, /Estimated shares are display-only/);
@@ -577,6 +582,24 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(simulation, /Saved planned allocation/);
   assert.match(history, /isSimulationHistoryV3/);
   assert.ok(!/proposedAmount\s*\/|proposed_amount\s*\//.test(`${create}\n${editor}\n${detail}`));
+});
+
+test('mobile asset picker shows full names while preserving symbol values', () => {
+  const catalog = load('src/portfolio/supportedAssetSymbols.ts');
+  const field = fs.readFileSync(
+    path.join(root, 'src/components/portfolio/AssetSymbolField.tsx'),
+    'utf8'
+  );
+
+  assert.equal(catalog.supportedAssets.length, 17);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(catalog.supportedAssetSymbols)),
+    JSON.parse(JSON.stringify(catalog.supportedAssets.map(asset => asset.symbol)))
+  );
+  assert.ok(catalog.supportedAssets.every(asset => asset.symbol && asset.name));
+  assert.match(field, /supportedAssets\.map/);
+  assert.match(field, /asset\.name/);
+  assert.match(field, /chooseSymbol\(asset\.symbol\)/);
 });
 
 test('Home report-backed return cards reuse saved monetary metric details', () => {
@@ -864,4 +887,41 @@ test('mobile current-value failures explain the data refresh and retry valuation
   assert.match(errors, /New analysis is unavailable until market data is refreshed/);
   assert.match(reportErrors, /Analysis will be available after the market data refresh completes/);
   assert.match(errorState, /compactAction: \{ flexGrow: 0, flexBasis: 'auto', alignSelf: 'flex-start' \}/);
+});
+
+test('mobile asset-risk detail is report-backed, navigable, and never recalculates risk', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const results = read('src/components/analytics/AnalysisResults.tsx');
+  const reportDetail = read('src/screens/reports/ReportDetailScreen.tsx');
+  const analysis = read('src/screens/analytics/PortfolioAnalysisScreen.tsx');
+  const detail = read('src/screens/reports/AssetRiskDetailScreen.tsx');
+  const navigator = read('src/navigation/MainTabNavigator.tsx');
+  const metricDetails = read('src/report/reportMetricDetails.ts');
+  const reportTypes = read('src/types/report.ts');
+  const dashboard = read('src/screens/dashboard/DashboardScreen.tsx');
+
+  assert.match(results, /onOpenAsset/);
+  assert.match(results, /onPress=\{\(\) => onOpenAsset\?\.\(asset\.symbol\)\}/);
+  assert.match(reportDetail, /navigation\.navigate\('AssetRiskDetail'/);
+  assert.match(analysis, /navigation\.navigate\('AssetRiskDetail'/);
+  assert.match(dashboard, /screen: 'AssetRiskDetail'/);
+  assert.match(dashboard, /params: \{ portfolioId: report\.portfolio_id, reportId: report\.id, assetSymbol \}/);
+  assert.match(dashboard, /onPress=\{\(\) => openAssetRisk\(driver\.symbol\)\}/);
+  assert.match(dashboard, /Open \$\{driver\.symbol\} asset risk details/);
+  assert.match(navigator, /name="AssetRiskDetail"/);
+  assert.match(detail, /getReport\(portfolioId, reportId/);
+  assert.match(detail, /asset\.risk_classification/);
+  assert.match(detail, /report\.analysis\.asset_returns/);
+  assert.match(detail, /filterReturnPoints\(series\?\.points \?\? \[\], range\)/);
+  assert.match(reportTypes, /asset_monetary_metrics\?: PortfolioReportAssetMonetaryMetrics\[\]/);
+  assert.match(detail, /assetReportMonetaryMetrics\(report, assetSymbol\)/);
+  assert.match(detail, /setSelectedMetric\('cumulative'\)/);
+  assert.match(detail, /setSelectedMetric\('annualized'\)/);
+  assert.match(detail, /setSelectedMetric\('drawdown'\)/);
+  assert.match(detail, /<MetricAmountSheet/);
+  assert.match(metricDetails, /monetary\.cumulative_return_amount/);
+  assert.match(metricDetails, /monetary\.annualized_return_amount/);
+  assert.match(metricDetails, /monetary\.maximum_drawdown_amount/);
+  assert.doesNotMatch(metricDetails, /reference_amount\s*\*/);
+  assert.doesNotMatch(detail, /Math\.(sqrt|pow)|annualized_volatility\s*[*/+-]|max_drawdown\s*[*/+-]/);
 });

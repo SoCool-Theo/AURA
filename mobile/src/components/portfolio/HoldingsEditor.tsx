@@ -32,10 +32,11 @@ import {
   type PortfolioRealHoldingInput
 } from '../../types/portfolio';
 import { AssetSymbolField } from './AssetSymbolField';
+import { HoldingDecimalInput } from './HoldingDecimalInput';
+import { PurchaseDateField } from './PurchaseDateField';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { FormErrorSummary, ScreenErrorState } from '../ui/ErrorState';
-import { Input } from '../ui/Input';
 import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
 import { LoadingState } from '../ui/LoadingState';
 
@@ -270,26 +271,26 @@ export function HoldingsEditor({
               </View>
 
               {holdingMode === 'planned' && 'proposedAmount' in row ? (
-                <Input
+                <HoldingDecimalInput
                   label={`Proposed Amount (${planCurrency ?? 'USD'})`}
                   value={row.proposedAmount}
-                  onChangeText={(proposedAmount) => patchRow(row.id, { proposedAmount })}
-                  keyboardType="decimal-pad"
+                  onValueChange={(proposedAmount) => patchRow(row.id, { proposedAmount })}
                   placeholder="4000.00"
                   editable={!saving}
                   error={fieldIssue(index, 'proposed_amount')}
                 />
               ) : 'shares' in row ? (
-                <Input
-                  label="Quantity Owned"
-                  value={row.shares}
-                  onChangeText={(shares) => patchRow(row.id, { shares })}
-                  keyboardType="decimal-pad"
-                  placeholder="10.5"
-                  editable={!saving}
-                  error={fieldIssue(index, 'shares')}
-                />
-              ) : null}
+              <HoldingDecimalInput
+                label="Quantity Owned"
+                value={row.shares}
+                onValueChange={(shares) =>
+                  patchRow(row.id, { shares })
+                }
+                placeholder="10.5"
+                editable={!saving}
+                error={fieldIssue(index, 'shares')}
+              />
+            ) : null}
             </Card>
           ))}
         </View>

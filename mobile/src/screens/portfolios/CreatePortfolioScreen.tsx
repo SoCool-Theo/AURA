@@ -10,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { apiValidationIssues } from '../../api/apiErrorPresentation';
 import { AssetSymbolField } from '../../components/portfolio/AssetSymbolField';
+import { HoldingDecimalInput } from '../../components/portfolio/HoldingDecimalInput';
+import { PurchaseDateField } from '../../components/portfolio/PurchaseDateField';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { FormErrorSummary } from '../../components/ui/ErrorState';
@@ -312,21 +314,23 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
               </View>
 
               {mode === 'PLANNED' && 'proposedAmount' in row ? (
-                <Input
+                <HoldingDecimalInput
                   label={`Proposed Amount (${planCurrency})`}
                   value={row.proposedAmount}
-                  onChangeText={(proposedAmount) => patchRow(row.id, { proposedAmount })}
-                  keyboardType="decimal-pad"
+                  onValueChange={(proposedAmount) =>
+                    patchRow(row.id, { proposedAmount })
+                  }
                   placeholder="4000.00"
                   editable={!saving}
                   error={fieldIssue(index, 'proposed_amount')}
                 />
               ) : 'shares' in row ? (
-                <Input
+                <HoldingDecimalInput
                   label="Quantity Owned"
                   value={row.shares}
-                  onChangeText={(shares) => patchRow(row.id, { shares })}
-                  keyboardType="decimal-pad"
+                  onValueChange={(shares) =>
+                    patchRow(row.id, { shares })
+                  }
                   placeholder="10.5"
                   editable={!saving}
                   error={fieldIssue(index, 'shares')}

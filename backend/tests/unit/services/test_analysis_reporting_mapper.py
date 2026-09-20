@@ -22,6 +22,7 @@ from backend.app.services.analysis_reporting_mapper import (
     PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION,
     PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
     PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+    analysis_to_asset_report_monetary_metrics,
     analysis_to_report_monetary_metrics,
     analysis_record_to_report_response,
     analysis_record_to_report_summary,
@@ -140,6 +141,46 @@ def test_report_monetary_metrics_use_saved_reference_and_exact_drawdown_path(
     assert metrics.maximum_drawdown_amount == Decimal("-10.200000")
 
 
+def test_asset_report_monetary_metrics_use_each_saved_reference_and_path(
+) -> None:
+    metrics = analysis_to_asset_report_monetary_metrics(
+        _valid_response(),
+        currency="USD",
+        basis="saved-current-value",
+        reference_amounts={
+            "AAPL": Decimal("1000"),
+            "MSFT": Decimal("2000"),
+            "BND": Decimal("3000"),
+        },
+    )
+
+    assert [metric.symbol for metric in metrics] == ["AAPL", "MSFT", "BND"]
+    assert metrics[0].currency == "USD"
+    assert metrics[0].basis == "saved-current-value"
+    assert metrics[0].reference_amount == Decimal("1000")
+    assert metrics[0].cumulative_return_amount == Decimal("80.00")
+    assert metrics[0].annualized_return_amount == Decimal("240.00")
+    assert metrics[0].maximum_drawdown_amount == Decimal("-20.60000")
+    assert metrics[1].reference_amount == Decimal("2000")
+    assert metrics[1].cumulative_return_amount == Decimal("120.00")
+    assert metrics[1].annualized_return_amount == Decimal("360.00")
+    assert metrics[1].maximum_drawdown_amount is None
+
+
+def test_asset_report_monetary_metrics_require_complete_reference_symbols(
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match="reference symbols must match analysis assets",
+    ):
+        analysis_to_asset_report_monetary_metrics(
+            _valid_response(),
+            currency="USD",
+            basis="saved-current-value",
+            reference_amounts={"AAPL": Decimal("1000")},
+        )
+
+
 def test_planned_enriched_result_maps_to_complete_json_safe_v3_snapshot() -> None:
     preparation = _planned_preparation()
     analysis = _real_analysis_response()
@@ -185,6 +226,20 @@ def test_v3_record_restores_frozen_plan_without_recalculation_or_mutation() -> N
     assert result.monetary_metrics is not None
     assert result.monetary_metrics.basis == "planned-proposed-amount"
     assert result.monetary_metrics.reference_amount == Decimal("1000")
+    assert [
+        metric.symbol for metric in result.asset_monetary_metrics
+    ] == ["BND", "AAPL"]
+    assert [
+        metric.reference_amount for metric in result.asset_monetary_metrics
+    ] == [Decimal("400"), Decimal("600")]
+    assert all(
+        metric.basis == "planned-proposed-amount"
+        for metric in result.asset_monetary_metrics
+    )
+    assert all(
+        metric.maximum_drawdown_amount is None
+        for metric in result.asset_monetary_metrics
+    )
     assert analysis.result_snapshot == frozen_snapshot
 
 
@@ -295,6 +350,23 @@ def test_v2_record_maps_snapshot_without_revaluation_or_mutation() -> None:
     assert result.monetary_metrics.reference_amount == Decimal(
         "10000.000000000000"
     )
+    assert [
+        metric.symbol for metric in result.asset_monetary_metrics
+    ] == ["BND", "AAPL"]
+    assert [
+        metric.reference_amount for metric in result.asset_monetary_metrics
+    ] == [
+        Decimal("4000.000000000000"),
+        Decimal("6000.000000000000"),
+    ]
+    assert all(
+        metric.basis == "saved-current-value"
+        for metric in result.asset_monetary_metrics
+    )
+    assert all(
+        metric.maximum_drawdown_amount is None
+        for metric in result.asset_monetary_metrics
+    )
     assert analysis.result_snapshot == frozen_snapshot
 
 
@@ -323,6 +395,56 @@ def test_analysis_response_serializes_to_json_safe_snapshot_and_round_trips(
     assert isinstance(serialized, str)
     assert round_tripped == response
     assert snapshot == response.model_dump(mode="json")
+
+
+def test_snapshot_freezes_asset_risk_and_historical_series() -> None:
+    data = _valid_analysis_data()
+    asset_metrics = data["asset_metrics"]
+    portfolio_returns = data["portfolio_returns"]
+    assert isinstance(asset_metrics, list)
+    assert isinstance(portfolio_returns, list)
+
+    for metric in asset_metrics:
+        metric["risk_classification"] = {
+            "risk_score": 50.0,
+            "risk_level": "High",
+            "volatility_points": 2,
+            "drawdown_points": 1,
+            "metrics_used": ["volatility", "maximum_drawdown"],
+            "reasons": ["Elevated historical volatility"],
+        }
+    data["asset_returns"] = [
+        {
+            "symbol": metric["symbol"],
+            "points": [
+                {
+                    "date": point["date"],
+                    "asset_return": 0.01,
+                }
+                for point in portfolio_returns
+            ],
+        }
+        for metric in asset_metrics
+    ]
+    response = PortfolioAnalysisResponse.model_validate(data)
+
+    snapshot = analysis_response_to_snapshot(response)
+
+    assert snapshot["asset_metrics"][0]["risk_classification"] == {
+        "risk_score": 50.0,
+        "risk_level": "High",
+        "volatility_points": 2,
+        "drawdown_points": 1,
+        "metrics_used": ["volatility", "maximum_drawdown"],
+        "reasons": ["Elevated historical volatility"],
+    }
+    assert [series["symbol"] for series in snapshot["asset_returns"]] == [
+        metric["symbol"] for metric in asset_metrics
+    ]
+    assert snapshot["asset_returns"][0]["points"] == [
+        {"date": point["date"], "asset_return": 0.01}
+        for point in portfolio_returns
+    ]
 
 
 def test_snapshot_serialization_does_not_mutate_source_response() -> None:

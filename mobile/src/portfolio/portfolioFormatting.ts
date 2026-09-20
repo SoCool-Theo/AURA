@@ -37,7 +37,17 @@ export function formatSignedPortfolioMoney(
 export function formatPortfolioQuantity(value: DecimalString): string {
   const parsed = finiteDecimal(value);
   if (parsed === null) return value;
-  return parsed.toLocaleString(undefined, { maximumFractionDigits: 12 });
+  return parsed.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+export function formatHoldingDecimalInput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : value;
 }
 
 export function formatCurrentAllocation(value: DecimalString): string {

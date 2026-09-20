@@ -5,10 +5,12 @@ import {
 } from '../../../api/portfoliosApi';
 import { FormErrorSummary } from '../../../components/ui/ApiErrorState';
 import { Card } from '../../../components/ui/Card';
+import { Icon } from '../../../components/ui/Icon';
 import {
   isPlannedPortfolioHolding,
   isRealPortfolioHolding,
   portfolioHoldingMode,
+  type PortfolioCurrency,
   type PortfolioHoldingMode,
   type PortfolioPlannedHoldingInput,
   type PortfolioRealHoldingInput,
@@ -26,6 +28,7 @@ import {
   validateRealHoldingDrafts,
 } from '../portfolioValidation';
 import { AssetSymbolField } from './AssetSymbolField';
+import { HoldingDecimalInput } from './HoldingDecimalInput';
 
 type EditableHolding = RealHoldingDraft | PlannedHoldingDraft;
 
@@ -171,9 +174,29 @@ export function PortfolioHoldingsEditor({
                 <td>{index + 1}</td>
                 <td><AssetSymbolField ariaLabel={`Holding ${index + 1} symbol`} id={`edit-holding-${holding.id}`} value={holding.symbol} onChange={symbol => updateHolding(holding.id, { symbol })} disabled={saving} /></td>
                 {planned && 'proposedAmount' in holding ? (
-                  <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} proposed amount`} inputMode="decimal" value={holding.proposedAmount} onChange={event => updateHolding(holding.id, { proposedAmount: event.target.value })} placeholder="4000.00" disabled={saving} /></td>
+                  <td>
+                    <HoldingDecimalInput
+                      aria-label={`${holding.symbol || `Holding ${index + 1}`} proposed amount`}
+                      value={holding.proposedAmount}
+                      onValueChange={(proposedAmount) =>
+                        updateHolding(holding.id, { proposedAmount })
+                      }
+                      placeholder="4000.00"
+                      disabled={saving}
+                    />
+                  </td>
                 ) : 'shares' in holding ? (
-                  <td><input aria-label={`${holding.symbol || `Holding ${index + 1}`} quantity owned`} inputMode="decimal" value={holding.shares} onChange={event => updateHolding(holding.id, { shares: event.target.value })} placeholder="10.5" disabled={saving} /></td>
+                  <td>
+                    <HoldingDecimalInput
+                      aria-label={`${holding.symbol || `Holding ${index + 1}`} quantity owned`}
+                      value={holding.shares}
+                      onValueChange={(shares) =>
+                        updateHolding(holding.id, { shares })
+                      }
+                      placeholder="10.5"
+                      disabled={saving}
+                    />
+                  </td>
                 ) : null}
                 <td><div className={styles.orderActions}>
                   <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={saving || index === 0}>↑</button>

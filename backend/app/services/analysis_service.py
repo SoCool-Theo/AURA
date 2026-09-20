@@ -114,6 +114,36 @@ def _map_analysis_response(
             ),
             "max_drawdown": float(row["max_drawdown"]),
             "sharpe_ratio": _optional_nan_float(row["sharpe_ratio"]),
+            "risk_classification": {
+                "risk_score": float(
+                    result.asset_risk_classifications[
+                        str(symbol)
+                    ].risk_score
+                ),
+                "risk_level": result.asset_risk_classifications[
+                    str(symbol)
+                ].risk_level,
+                "volatility_points": int(
+                    result.asset_risk_classifications[
+                        str(symbol)
+                    ].volatility_points
+                ),
+                "drawdown_points": int(
+                    result.asset_risk_classifications[
+                        str(symbol)
+                    ].drawdown_points
+                ),
+                "metrics_used": list(
+                    result.asset_risk_classifications[
+                        str(symbol)
+                    ].metrics_used
+                ),
+                "reasons": list(
+                    result.asset_risk_classifications[
+                        str(symbol)
+                    ].reasons
+                ),
+            },
         }
         for symbol, row in result.asset_metrics.iterrows()
     ]
@@ -135,6 +165,19 @@ def _map_analysis_response(
             "portfolio_return": float(value),
         }
         for timestamp, value in result.portfolio_returns.items()
+    ]
+    asset_returns = [
+        {
+            "symbol": str(symbol),
+            "points": [
+                {
+                    "date": timestamp.date(),
+                    "asset_return": float(value),
+                }
+                for timestamp, value in result.asset_returns[symbol].items()
+            ],
+        }
+        for symbol in result.asset_returns.columns
     ]
 
     return PortfolioAnalysisResponse.model_validate(
@@ -250,6 +293,7 @@ def _map_analysis_response(
             },
             "correlation_pairs": correlation_pairs,
             "portfolio_returns": portfolio_returns,
+            "asset_returns": asset_returns,
         }
     )
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Icon } from '../../../components/ui/Icon';
+import { go, replace } from '../../../app/routes';
 import {
   isPortfolioReportV2,
   isPortfolioReportV3,
@@ -56,6 +57,11 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
   const diversification = analysis.diversification;
   const concentration = analysis.concentration;
   const visibleReturns = visibleReturnPoints(analysis.portfolio_returns, returnViewRange);
+
+  function openAssetDetail(symbol: string) {
+    replace(`reports/${report.portfolio_id}/${report.id}/assets`);
+    go(`asset/${report.portfolio_id}/${report.id}/${encodeURIComponent(symbol)}`);
+  }
 
   return (
     <div className={styles.results}>
@@ -120,15 +126,21 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
 
       <RiskDriverTable riskDrivers={analysis.risk_drivers} />
 
-      <Card className={styles.section}>
+      <section id="per-asset-analysis" className={`card ${styles.section}`} style={{ scrollMarginTop: 18 }}>
         <div className={styles.sectionHeading}>
           <div><h2>{reportV2 ? 'Per-Asset Valuation and Risk' : reportV3 ? 'Planned Asset Risk' : 'Individual Asset Metrics'}</h2><p>Values for the ordered holdings captured by this saved analysis.</p></div>
           <span className={styles.badge}>{analysis.asset_metrics.length} assets</span>
         </div>
         <div className={styles.assetGrid}>
-          {analysis.asset_metrics.map(asset => <AssetAnalysisCard key={asset.symbol} asset={asset} />)}
+          {analysis.asset_metrics.map(asset => (
+            <AssetAnalysisCard
+              key={asset.symbol}
+              asset={asset}
+              onOpen={() => openAssetDetail(asset.symbol)}
+            />
+          ))}
         </div>
-      </Card>
+      </section>
 
       <CorrelationHeatmap matrix={analysis.correlation_matrix} pairs={analysis.correlation_pairs} />
 

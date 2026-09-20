@@ -418,7 +418,14 @@ export function PortfolioAnalysisScreen({
                 })}
               />
             </Card>
-            <AnalysisResults report={report} />
+            <AnalysisResults
+              report={report}
+              onOpenAsset={(assetSymbol) => navigation.navigate('AssetRiskDetail', {
+                portfolioId: report.portfolio_id,
+                reportId: report.id,
+                assetSymbol
+              })}
+            />
           </>
         ) : null}
       </KeyboardAwareScrollView>

@@ -397,11 +397,200 @@
   color: var(--purple-light);
 }
 
+.assetPickerOptionCopy {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+}
+
+.assetPickerOptionCopy strong {
+  min-width: 62px;
+  color: inherit;
+  font-size: 13px;
+}
+
+.assetPickerOptionCopy small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .assetPickerNote {
   margin: 13px 1px 0;
   color: var(--text-muted);
   font-size: 10px;
   line-height: 1.5;
+}
+
+.actionDialogOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1250;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.actionDialogBackdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(0, 0, 0, .7);
+  backdrop-filter: blur(3px);
+  cursor: pointer;
+}
+
+.actionDialog {
+  position: relative;
+  width: min(460px, 100%);
+  box-sizing: border-box;
+  padding: 21px;
+  border: 1px solid var(--border-control);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(53, 215, 192, .045), transparent 38%),
+    var(--bg-card);
+  box-shadow: 0 26px 75px rgba(0, 0, 0, .55);
+}
+
+.actionDialogDanger {
+  border-color: rgba(255, 107, 122, .34);
+  background:
+    linear-gradient(135deg, rgba(255, 89, 100, .065), transparent 38%),
+    var(--bg-card);
+}
+
+.actionDialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.actionDialogHeader h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 19px;
+}
+
+.actionDialogHeader p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.actionDialogClose {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border: 1px solid var(--border-divider);
+  border-radius: 10px;
+  background: var(--control-bg);
+  color: var(--text-primary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.actionDialogClose:hover {
+  border-color: var(--border-hover);
+  background: var(--control-hover);
+}
+
+.actionDialogField {
+  display: block;
+  margin-top: 22px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.actionDialogField input {
+  width: 100%;
+  min-height: 50px;
+  box-sizing: border-box;
+  margin-top: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--border-control);
+  border-radius: 12px;
+  background: var(--control-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.actionDialogField input:focus {
+  border-color: var(--purple-primary);
+  box-shadow: 0 0 0 3px rgba(53, 215, 192, .1);
+}
+
+.deleteConfirmation {
+  margin-top: 21px;
+  padding: 15px;
+  border: 1px solid rgba(255, 107, 122, .28);
+  border-radius: 12px;
+  background: rgba(44, 23, 30, .82);
+}
+
+.deleteConfirmation strong,
+.deleteConfirmation span {
+  display: block;
+}
+
+.deleteConfirmation strong {
+  color: var(--text-primary);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.deleteConfirmation span {
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.actionDialogError {
+  margin-top: 14px;
+}
+
+.actionDialogActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+  margin-top: 22px;
+}
+
+.actionDialogActions button {
+  min-height: 46px;
+}
+
+.deleteConfirmButton {
+  border: 1px solid rgba(255, 107, 122, .34);
+  border-radius: 8px;
+  background: rgba(44, 23, 30, .88);
+  color: var(--red-bright);
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.deleteConfirmButton:hover {
+  border-color: var(--red-bright);
+  background: rgba(202, 79, 71, .18);
+}
+
+.actionDialog button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
 }
 
 @media (max-width: 560px) {
@@ -417,6 +606,16 @@
 
   .assetPickerOptions {
     max-height: 52vh;
+  }
+
+  .actionDialogOverlay {
+    align-items: end;
+    padding: 0;
+  }
+
+  .actionDialog {
+    width: 100%;
+    border-radius: 20px 20px 0 0;
   }
 }
 
@@ -440,6 +639,16 @@
 .dateField input {
   padding-right: 38px;
   color-scheme: dark;
+}
+
+.dateField input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 42px;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .dateField svg {
@@ -498,9 +707,137 @@
   overflow-wrap: anywhere;
 }
 
+.allocationCard {
+  padding: 20px 22px 18px;
+  background:
+    linear-gradient(135deg, rgba(53, 215, 192, 0.06), transparent 42%),
+    linear-gradient(145deg, rgba(16, 26, 44, 0.96), rgba(10, 21, 38, 0.96));
+}
+
+.allocationCard :global(.portfolio-allocation-heading) {
+  margin-bottom: 14px;
+}
+
+.allocationCard :global(.portfolio-allocation-heading > span) {
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.allocationCard :global(.portfolio-card-allocation) {
+  height: 10px;
+  overflow: hidden;
+  display: flex;
+  border-radius: 999px;
+  background: var(--border-divider);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.allocationCard :global(.holding-chips) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 15px 0 0;
+}
+
+.allocationCard :global(.holding-chips > span) {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-divider);
+  border-radius: 8px;
+  background: rgba(7, 22, 43, 0.72);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.allocationCard :global(.holding-chips i) {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 999px;
+}
+
+.allocationCard :global(.holding-chips b) {
+  color: var(--text-primary);
+}
+
+.allocationCard :global(.holding-chips em) {
+  color: var(--text-muted);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.recordCard {
+  background:
+    linear-gradient(135deg, rgba(53, 215, 192, 0.045), transparent 40%),
+    linear-gradient(145deg, rgba(16, 26, 44, 0.96), rgba(10, 21, 38, 0.96));
+}
+
+.recordGrid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 18px 22px 22px;
+}
+
+.recordGrid > div {
+  position: relative;
+  min-height: 92px;
+  grid-column: span 2;
+  padding: 18px 19px;
+  overflow: hidden;
+  background: linear-gradient(145deg, var(--control-bg), rgba(11, 31, 57, 0.84));
+}
+
+.recordGrid > div:nth-child(n + 4) {
+  grid-column: span 3;
+}
+
+.recordGrid > div::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 18px;
+  width: 34px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--purple-primary), var(--purple-bright));
+}
+
+.recordGrid small {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.recordGrid strong {
+  margin-top: 10px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+  .recordGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recordGrid > div,
+  .recordGrid > div:nth-child(n + 4) {
+    grid-column: auto;
+  }
+
+  .recordGrid > div:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 700px) {
   .metadataGrid {
     grid-template-columns: 1fr;
+  }
+
+  .recordGrid {
+    padding: 14px;
   }
 
   .holdingTable {

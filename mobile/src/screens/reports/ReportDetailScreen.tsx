@@ -171,7 +171,14 @@ export function ReportDetailScreen({
           />
         ) : null}
 
-        <AnalysisResults report={report} />
+        <AnalysisResults
+          report={report}
+          onOpenAsset={(assetSymbol) => navigation.navigate('AssetRiskDetail', {
+            portfolioId,
+            reportId,
+            assetSymbol
+          })}
+        />
 
         <Card style={styles.assistantCard}>
           <Text style={styles.assistantTitle}>Need help understanding the results?</Text>

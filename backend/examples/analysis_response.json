@@ -96,7 +96,20 @@
       "annualized_return": 0.24,
       "annualized_volatility": 0.22,
       "max_drawdown": -0.02,
-      "sharpe_ratio": 0.9
+      "sharpe_ratio": 0.9,
+      "risk_classification": {
+        "risk_score": 33.33333333333333,
+        "risk_level": "Moderate",
+        "volatility_points": 2,
+        "drawdown_points": 0,
+        "metrics_used": [
+          "volatility",
+          "maximum_drawdown"
+        ],
+        "reasons": [
+          "Elevated historical volatility"
+        ]
+      }
     },
     {
       "symbol": "MSFT",
@@ -105,7 +118,20 @@
       "annualized_return": 0.18,
       "annualized_volatility": 0.19,
       "max_drawdown": -0.03,
-      "sharpe_ratio": 0.7
+      "sharpe_ratio": 0.7,
+      "risk_classification": {
+        "risk_score": 16.666666666666664,
+        "risk_level": "Low",
+        "volatility_points": 1,
+        "drawdown_points": 0,
+        "metrics_used": [
+          "volatility",
+          "maximum_drawdown"
+        ],
+        "reasons": [
+          "No major risk flags under Aura's current asset thresholds"
+        ]
+      }
     },
     {
       "symbol": "BND",
@@ -114,7 +140,20 @@
       "annualized_return": 0.04,
       "annualized_volatility": 0.08,
       "max_drawdown": -0.01,
-      "sharpe_ratio": null
+      "sharpe_ratio": null,
+      "risk_classification": {
+        "risk_score": 0.0,
+        "risk_level": "Low",
+        "volatility_points": 0,
+        "drawdown_points": 0,
+        "metrics_used": [
+          "volatility",
+          "maximum_drawdown"
+        ],
+        "reasons": [
+          "No major risk flags under Aura's current asset thresholds"
+        ]
+      }
     }
   ],
   "correlation_matrix": {
@@ -170,6 +209,59 @@
     {
       "date": "2026-01-06",
       "portfolio_return": 0.03
+    }
+  ],
+  "asset_returns": [
+    {
+      "symbol": "AAPL",
+      "points": [
+        {
+          "date": "2026-01-03",
+          "asset_return": 0.03
+        },
+        {
+          "date": "2026-01-05",
+          "asset_return": -0.02
+        },
+        {
+          "date": "2026-01-06",
+          "asset_return": 0.04
+        }
+      ]
+    },
+    {
+      "symbol": "MSFT",
+      "points": [
+        {
+          "date": "2026-01-03",
+          "asset_return": 0.02
+        },
+        {
+          "date": "2026-01-05",
+          "asset_return": -0.01
+        },
+        {
+          "date": "2026-01-06",
+          "asset_return": 0.03
+        }
+      ]
+    },
+    {
+      "symbol": "BND",
+      "points": [
+        {
+          "date": "2026-01-03",
+          "asset_return": 0.005
+        },
+        {
+          "date": "2026-01-05",
+          "asset_return": -0.002
+        },
+        {
+          "date": "2026-01-06",
+          "asset_return": 0.007
+        }
+      ]
     }
   ]
 }

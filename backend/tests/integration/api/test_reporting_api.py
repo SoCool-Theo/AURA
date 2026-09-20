@@ -457,6 +457,10 @@ def test_get_detail_returns_saved_v2_without_write(
     assert response.status_code == 200
     assert response.json() == report.model_dump(mode="json")
     PortfolioReportV2Response.model_validate(response.json())
+    assert [
+        metric["symbol"]
+        for metric in response.json()["asset_monetary_metrics"]
+    ] == ["BND", "AAPL"]
     api_harness.service.get_report.assert_called_once_with(
         user_id=OWNER_ID,
         portfolio_id=PORTFOLIO_ID,

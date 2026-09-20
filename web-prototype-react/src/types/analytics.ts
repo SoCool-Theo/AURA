@@ -76,6 +76,16 @@ export type AssetMetrics = {
   annualized_volatility: number;
   max_drawdown: number;
   sharpe_ratio: number | null;
+  risk_classification?: AssetRiskClassification | null;
+};
+
+export type AssetRiskClassification = {
+  risk_score: number;
+  risk_level: RiskLevel;
+  volatility_points: number;
+  drawdown_points: number;
+  metrics_used: Array<'volatility' | 'maximum_drawdown'>;
+  reasons: string[];
 };
 
 export type CorrelationMatrixResponse = {
@@ -109,6 +119,16 @@ export type PortfolioReturnPoint = {
   portfolio_return: number;
 };
 
+export type AssetReturnPoint = {
+  date: IsoDate;
+  asset_return: number;
+};
+
+export type AssetReturnSeries = {
+  symbol: string;
+  points: AssetReturnPoint[];
+};
+
 export type PortfolioAnalysisResponse = AnalysisPeriod & {
   portfolio_name: string;
   metadata: AnalysisMetadata;
@@ -122,6 +142,7 @@ export type PortfolioAnalysisResponse = AnalysisPeriod & {
   correlation_matrix: CorrelationMatrixResponse;
   correlation_pairs: CorrelationPair[];
   portfolio_returns: PortfolioReturnPoint[];
+  asset_returns?: AssetReturnSeries[];
 };
 
 // Legacy correlation-grid shape used by the untouched prototype mock.

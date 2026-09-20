@@ -64,6 +64,12 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
       screen: 'ReportDetail', params: { portfolioId: report.portfolio_id, reportId: report.id }
     });
   };
+  const openAssetRisk = (assetSymbol: string) => {
+    if (report) navigation.navigate('MoreTab', {
+      screen: 'AssetRiskDetail',
+      params: { portfolioId: report.portfolio_id, reportId: report.id, assetSymbol }
+    });
+  };
 
   if (listStatus === 'error' && !portfolios.length) {
     return (
@@ -276,13 +282,21 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                     <SectionHeader title="Top Risk Drivers" action="View report" onPress={openReport} />
                     <Card>
                       {analysis.risk_drivers.entries.slice(0, 3).map((driver) => (
-                        <View key={driver.symbol} style={styles.row}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open ${driver.symbol} asset risk details`}
+                          accessibilityHint="Shows this asset's saved risk metrics and historical graph"
+                          key={driver.symbol}
+                          onPress={() => openAssetRisk(driver.symbol)}
+                          style={({ pressed }) => [styles.row, styles.driverRow, pressed && styles.pressed]}
+                        >
                           <Text style={styles.symbol}>{driver.rank}. {driver.symbol}</Text>
                           <View style={styles.contribution}>
                             <Text style={styles.weight}>{dashboardPercent(driver.percentage_volatility_contribution)}</Text>
                             <Text style={styles.body}>Volatility contribution</Text>
                           </View>
-                        </View>
+                          <Text aria-hidden style={styles.driverChevron}>›</Text>
+                        </Pressable>
                       ))}
                     </Card>
                   </>
@@ -346,6 +360,9 @@ const styles = StyleSheet.create({
   ranges: { flexDirection: 'row', gap: spacing.xs },
   range: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  driverRow: { minHeight: 64, borderBottomWidth: 1, borderBottomColor: colors.border },
+  driverChevron: { color: colors.primary, fontSize: 24, lineHeight: 26 },
+  pressed: { opacity: 0.72 },
   symbol: { color: colors.text, fontWeight: '800', flex: 1 },
   weight: { color: colors.text, fontWeight: '900' },
   contribution: { alignItems: 'flex-end' },

@@ -1,4 +1,3 @@
-import type { PortfolioReturnPoint } from '../types/analytics';
 import { formatRatioPercent } from '../report/reportFormatting';
 
 export type ReturnViewRange = '1M' | '3M' | '6M' | '1Y' | 'ALL';
@@ -11,10 +10,10 @@ export function dashboardPercent(value: number | null | undefined): string {
 }
 
 // Viewport filtering only. Report metrics and returned observations are unchanged.
-export function filterReturnPoints(
-  points: PortfolioReturnPoint[],
+export function filterReturnPoints<T extends { date: string }>(
+  points: T[],
   range: ReturnViewRange
-): PortfolioReturnPoint[] {
+): T[] {
   if (!points.length || range === 'ALL') return points;
   const latest = points.reduce((date, point) => point.date > date ? point.date : date, points[0].date);
   const end = new Date(`${latest}T00:00:00Z`);

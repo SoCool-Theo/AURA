@@ -1841,3 +1841,118 @@ The checked React source is ready for authenticated API acceptance testing.
 This is not a production-deployment claim: fresh Supabase deployment,
 environment-specific authenticated browser E2E, and plan-to-current conversion
 remain separate follow-on work.
+
+### Completed backend per-asset risk and historical-series contract
+
+- Each analyzed asset now receives a deterministic educational risk score and
+  `Low`/`Moderate`/`High`/`Very High` level derived equally from Aura's existing
+  annualized-volatility and maximum-drawdown point thresholds. Portfolio-only
+  concentration and diversification components are deliberately excluded.
+- `PortfolioAnalysisResponse` now exposes ordered dated return observations for
+  every asset. Symbols and dates are validated against `asset_metrics` and the
+  portfolio return series, so clients can render directly comparable graphs.
+- New V2 current and V3 planned report snapshots automatically freeze the
+  per-asset classifications and return series through the existing immutable
+  analysis payload. Older V1/V2/V3 snapshots without these additive fields
+  remain readable without market-data queries or recomputation.
+- No database migration or dependency change was required.
+
+### Per-asset backend verification
+
+- Focused analytics, schema, mapping, and service suite: 365 passed.
+- Focused reporting, example, and composition suite: 115 passed.
+- Complete backend unit suite: 2,356 passed.
+- Reporting and agent API integration suite: 70 passed with 54 existing short
+  JWT test-key warnings.
+- Python compilation completed successfully for `backend/app` and
+  `backend/tests`.
+- Web and mobile now expose report-backed asset-risk detail pages from every
+  per-asset analysis card. Each page shows the saved backend risk
+  classification, historical asset return graph with 1M/3M/6M/1Y/ALL views,
+  portfolio-impact contribution, saved holding or planned-position context,
+  and the existing educational limitation.
+- Direct web report/asset routes and both mobile navigation stacks preserve the
+  originating immutable report. Older reports remain readable and clearly
+  explain when their snapshots predate asset risk or return-series fields.
+- Neither client recalculates risk, volatility, drawdown, or historical return
+  data; both format the additive backend report contract only.
+
+### Per-asset client verification
+
+- Web production TypeScript/Vite build completed successfully.
+- Mobile TypeScript compilation completed with no errors.
+- Web production-authority suite: 18 passed, including a regression guard for
+  asset navigation and backend-only risk authority.
+- Mobile production-authority suite: 30 passed, including the equivalent
+  report-backed asset-detail guard in both navigation stacks.
+- Git whitespace validation completed with no errors.
+
+### Completed backend per-asset monetary metrics
+
+- V2 current and V3 planned report detail responses now include ordered
+  `asset_monetary_metrics` derived only from the immutable saved report.
+- Each asset exposes its saved currency/reference amount plus cumulative-return,
+  annualized-return, and exact peak-to-trough maximum-drawdown amounts. V2 uses
+  saved current value; V3 uses proposed amount.
+- Exact drawdown money is reconstructed from the saved dated asset return path
+  and verified against the saved asset drawdown percentage. Older snapshots
+  without a verifiable path return `null` for non-zero drawdown money rather
+  than using misleading percentage multiplication.
+- The field is response-only: no snapshot mutation, live market-data request,
+  database migration, or dependency change was required. Client presentation
+  remains a separate follow-on step.
+
+### Per-asset monetary backend verification
+
+- Focused reporting schema, mapper, service, and API suite: 129 passed.
+- Complete backend unit suite: 2,360 passed.
+- Reporting and agent API integration suite: 70 passed with 54 existing short
+  JWT test-key warnings.
+- Python compilation completed successfully for `backend/app` and
+  `backend/tests`; Git whitespace validation completed with no errors.
+
+### Completed per-asset monetary metric details in both clients
+
+- The web and mobile asset-risk detail pages now make cumulative return,
+  annualized return, and maximum drawdown selectable when the immutable report
+  includes the corresponding per-asset monetary context.
+- Web opens the existing accessible metric dialog; mobile opens the existing
+  accessible bottom sheet. Both show the saved percentage, signed USD/THB
+  amount, saved asset reference amount, and whether that basis is a current
+  saved value or a planned proposed amount.
+- Exact maximum-drawdown money is shown only when the backend supplies it.
+  Older reports and unverifiable non-zero drawdowns stay percentage-only rather
+  than displaying a locally estimated or misleading amount.
+- Both clients treat `asset_monetary_metrics` as an additive optional report
+  field and only format backend decimal strings; neither client multiplies a
+  reference amount by a return or drawdown percentage.
+
+### Per-asset monetary client verification
+
+- Web production TypeScript/Vite build completed successfully.
+- Mobile TypeScript compilation completed with no errors.
+- Web production-authority suite: 19 passed, including guards for optional
+  legacy compatibility and backend-only per-asset monetary authority.
+- Mobile production-authority suite: 30 passed with the equivalent asset-detail
+  monetary interaction and no-client-calculation guards.
+- Git whitespace validation completed with no errors.
+
+### Completed dashboard risk-driver asset links
+
+- Every displayed Top Risk Drivers entry on the web and mobile home pages is
+  now an accessible control that opens that asset's risk-detail page.
+- Navigation carries the exact portfolio ID, immutable latest report ID, and
+  asset symbol shown on the dashboard, so the detail page remains grounded in
+  the same saved analysis rather than loading unrelated or live data.
+- Web risk-driver asset rows align directly beneath their section header rather
+  than being vertically centered inside a taller dashboard card.
+- Web and mobile production-authority suites remain green at 19 and 30 tests;
+  both TypeScript checks and the web production Vite build pass.
+
+### Completed dashboard AI explanation action
+
+- The web home-page AI Explanation card now includes a prominent Ask Aura
+  button and a compact context panel instead of leaving most of the card empty.
+- When a latest report exists, the action grounds Aura in that exact immutable
+  report. Otherwise it opens the selected portfolio context without inventing
+  saved analysis results.

@@ -80,6 +80,9 @@ test('current, planned, and legacy allocation displays consume their authoritati
     holdings: [{ symbol: 'NVDA', target_allocation: '0.4' }],
   })), [{ symbol: 'NVDA', weight: 0.4 }]);
   assert.deepEqual(plain(portfolioUi.resolvedPortfolioAllocation(legacy, null, null)), [{ symbol: 'BND', weight: 1 }]);
+  assert.equal(portfolioUi.formatPortfolioQuantity('10.125'), '10.13');
+  assert.equal(portfolioUi.formatPortfolioQuantity('10'), '10.00');
+  assert.equal(portfolioUi.formatHoldingDecimalInput('1000.000000000000'), '1000.00');
 });
 
 test('simulation editors initialize from backend current and planned weights in saved order', () => {
@@ -162,11 +165,15 @@ test('saved report and simulation links preserve exact Ask Aura context', () => 
   const read = file => fs.readFileSync(path.join(root, file), 'utf8');
   const report = read('src/pages/reports/ReportDetailPage.tsx');
   const simulation = read('src/pages/simulations/SimulationHistoryDetailPage.tsx');
+  const dashboardAi = read('src/pages/dashboard/components/AiInsight.tsx');
   const assistant = read('src/pages/assistant/AssistantPage.tsx');
   const app = read('src/app/App.tsx');
 
   assert.match(report, /assistant\/\$\{report\.portfolio_id\}\/report\/\$\{report\.id\}/);
   assert.match(simulation, /assistant\/\$\{portfolioId\}\/simulation\/\$\{simulationId\}/);
+  assert.match(dashboardAi, /assistant\/\$\{report\.portfolio_id\}\/report\/\$\{report\.id\}/);
+  assert.match(dashboardAi, /assistant\/\$\{portfolioId\}/);
+  assert.match(dashboardAi, /Ask Aura<\/button>/);
   assert.match(assistant, /report_id: savedContext\.id/);
   assert.match(assistant, /simulation_id: savedContext\.id/);
   assert.match(assistant, /setLoadError\('Portfolio not found\.'\)/);
@@ -341,6 +348,42 @@ test('web dashboard exposes mobile-style visible portfolio choices', () => {
   assert.match(styles, /\.dashboard-portfolio-option\.active\{/);
 });
 
+test('web portfolio cards and dashboard visuals use balanced formatted layouts', () => {
+  class ApiError extends Error {}
+  const dashboardUi = load('src/pages/dashboard/dashboardUi.ts', {
+    '../../api/apiClient': { ApiError },
+  });
+  const styles = fs.readFileSync(path.join(root, 'src/styles.css'), 'utf8');
+  const dashboardStyles = fs.readFileSync(
+    path.join(root, 'src/pages/dashboard/DashboardIntegration.module.css'),
+    'utf8',
+  );
+  const riskDrivers = fs.readFileSync(
+    path.join(root, 'src/pages/dashboard/components/RiskDrivers.tsx'),
+    'utf8',
+  );
+  const dashboard = fs.readFileSync(
+    path.join(root, 'src/pages/dashboard/DashboardPage.tsx'),
+    'utf8',
+  );
+
+  const ticks = dashboardUi.portfolioReturnAxisTicks(-0.026, 0.023);
+  const labels = ticks.map(tick => dashboardUi.formatPortfolioReturnTick(tick, 0.049));
+  assert.equal(ticks.length, 5);
+  assert.ok(ticks.includes(0));
+  assert.equal(new Set(labels).size, labels.length);
+  assert.equal(dashboardUi.formatPortfolioReturnTick(-0.0004, 0.05), '0.0%');
+  assert.match(styles, /\.portfolios-page \.portfolio-card\{[^}]*display:flex[^}]*justify-content:center/);
+  assert.match(styles, /\.portfolios-page \.portfolio-card-actions\{[^}]*margin-top:0/);
+  assert.match(riskDrivers, /styles\.driverTrack/);
+  assert.match(riskDrivers, /Math\.min\(100, Math\.abs/);
+  assert.match(riskDrivers, /go\(`asset\/\$\{portfolioId\}\/\$\{reportId\}\/\$\{encodeURIComponent\(driver\.symbol\)\}`\)/);
+  assert.match(riskDrivers, /aria-label=\{`Open \$\{driver\.symbol\} asset risk details`\}/);
+  assert.match(dashboard, /reportId=\{report\?\.id \?\? null\}/);
+  assert.match(dashboardStyles, /dashboard-risk-list[\s\S]*justify-content: flex-start/);
+  assert.match(dashboardStyles, /\.driverTrack/);
+});
+
 test('web holding forms expose the complete mobile-supported asset catalog', () => {
   const read = file => fs.readFileSync(path.join(root, file), 'utf8');
   const catalog = load('src/pages/portfolios/supportedAssetSymbols.ts');
@@ -348,13 +391,20 @@ test('web holding forms expose the complete mobile-supported asset catalog', () 
   const field = read('src/pages/portfolios/components/AssetSymbolField.tsx');
   const create = read('src/pages/portfolios/PortfolioCreateFlow.tsx');
   const editor = read('src/pages/portfolios/components/PortfolioHoldingsEditor.tsx');
+  const decimalInput = read('src/pages/portfolios/components/HoldingDecimalInput.tsx');
+  const detail = read('src/pages/portfolios/PortfolioDetailView.tsx');
+  const allocation = read('src/components/portfolio/AllocationLegend.tsx');
 
+  assert.deepEqual(plain(catalog.supportedAssets), plain(mobileCatalog.supportedAssets));
   assert.deepEqual(plain(catalog.supportedAssetSymbols), plain(mobileCatalog.supportedAssetSymbols));
   assert.equal(catalog.supportedAssetSymbols.length, 17);
+  assert.ok(catalog.supportedAssets.every(asset => asset.symbol && asset.name));
   assert.ok(!catalog.supportedAssetSymbols.includes('THB=X'));
   assert.match(field, /role="dialog"/);
   assert.match(field, /createPortal/);
-  assert.match(field, /supportedAssetSymbols\.map/);
+  assert.match(field, /supportedAssets\.map/);
+  assert.match(field, /asset\.name/);
+  assert.match(field, /chooseSymbol\(asset\.symbol\)/);
   assert.match(field, /role="radiogroup"/);
   assert.match(field, /role="radio"/);
   assert.match(field, /event\.target\.value\.toUpperCase\(\)/);
@@ -363,6 +413,80 @@ test('web holding forms expose the complete mobile-supported asset catalog', () 
   assert.match(styles, /\.assetPickerOptions[\s\S]*?overflow-y: auto/);
   assert.match(create, /<AssetSymbolField/);
   assert.match(editor, /<AssetSymbolField/);
+  assert.match(create, /<HoldingDecimalInput/);
+  assert.match(editor, /<HoldingDecimalInput/);
+  assert.match(decimalInput, /TWO_DECIMAL_INPUT/);
+  assert.match(detail, /styles\.allocationCard/);
+  assert.match(detail, /styles\.recordGrid/);
+  assert.match(allocation, /toFixed\(2\)/);
+  assert.match(styles, /\.allocationCard/);
+  assert.match(styles, /\.recordGrid > div:nth-child\(n \+ 4\)/);
+});
+
+test('web portfolio actions use accessible Aura dialogs and one purchase-date icon', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const detail = read('src/pages/portfolios/PortfolioDetailView.tsx');
+  const dialog = read('src/pages/portfolios/components/PortfolioActionDialog.tsx');
+  const styles = read('src/pages/portfolios/PortfolioIntegration.module.css');
+
+  assert.doesNotMatch(detail, /\bprompt\s*\(/);
+  assert.doesNotMatch(detail, /\bconfirm\s*\(/);
+  assert.match(detail, /openActionDialog\('rename'\)/);
+  assert.match(detail, /openActionDialog\('duplicate'\)/);
+  assert.match(detail, /openActionDialog\('delete'\)/);
+  assert.match(dialog, /createPortal/);
+  assert.match(dialog, /role="dialog"/);
+  assert.match(dialog, /aria-modal="true"/);
+  assert.match(dialog, /event\.key === 'Escape'/);
+  assert.match(dialog, /event\.key !== 'Tab'/);
+  assert.match(styles, /\.dateField input::\-webkit-calendar-picker-indicator[\s\S]*?opacity: 0/);
+  assert.match(styles, /\.dateField svg[\s\S]*?color: var\(--purple-light\)/);
+});
+
+test('web portfolio detail exposes the newest saved report only after analysis exists', () => {
+  const detail = fs.readFileSync(
+    path.join(root, 'src/pages/portfolios/PortfolioDetailView.tsx'),
+    'utf8',
+  );
+
+  assert.match(detail, /listPortfolioReports\(portfolioId/);
+  assert.match(detail, /setLatestReport\(response\.reports\[0\] \?\? null\)/);
+  assert.match(detail, /\{latestReport && <button[\s\S]*?>View Latest Report<\/button>\}/);
+  assert.match(detail, /go\(`reports\/\$\{portfolio\.id\}\/\$\{latestReport\.id\}`\)/);
+});
+
+test('web asset-risk detail is report-backed, navigable, and never recalculates risk', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const results = read('src/pages/analytics/components/AnalysisResults.tsx');
+  const card = read('src/pages/analytics/components/AssetAnalysisCard.tsx');
+  const detail = read('src/pages/reports/AssetRiskDetailPage.tsx');
+  const metricDetails = read('src/pages/analytics/reportMetricDetails.ts');
+  const reportTypes = read('src/types/report.ts');
+  const reportDetail = read('src/pages/reports/ReportDetailPage.tsx');
+  const app = read('src/app/App.tsx');
+
+  assert.match(results, /replace\(`reports\/\$\{report\.portfolio_id\}\/\$\{report\.id\}\/assets`\)/);
+  assert.match(results, /go\(`asset\/\$\{report\.portfolio_id\}\/\$\{report\.id\}\/\$\{encodeURIComponent\(symbol\)\}`\)/);
+  assert.match(card, /onClick=\{onOpen\}/);
+  assert.match(app, /case 'asset':/);
+  assert.match(app, /focusAssetSection=\{route\.contextId === 'assets'\}/);
+  assert.match(detail, /go\(`reports\/\$\{portfolioId\}\/\$\{reportId\}\/assets`\)/);
+  assert.match(reportDetail, /getElementById\('per-asset-analysis'\)\?\.scrollIntoView/);
+  assert.match(detail, /getPortfolioReport\(portfolioId, reportId/);
+  assert.match(detail, /asset\.risk_classification/);
+  assert.match(detail, /report\.analysis\.asset_returns/);
+  assert.match(detail, /visibleReturnPoints\(series\?\.points \?\? \[\], range\)/);
+  assert.match(reportTypes, /asset_monetary_metrics\?: PortfolioReportAssetMonetaryMetrics\[\]/);
+  assert.match(detail, /assetReportMonetaryMetrics\(report, symbol\)/);
+  assert.match(detail, /setSelectedMetric\('cumulative'\)/);
+  assert.match(detail, /setSelectedMetric\('annualized'\)/);
+  assert.match(detail, /setSelectedMetric\('drawdown'\)/);
+  assert.match(detail, /<MetricAmountDialog/);
+  assert.match(metricDetails, /monetary\.cumulative_return_amount/);
+  assert.match(metricDetails, /monetary\.annualized_return_amount/);
+  assert.match(metricDetails, /monetary\.maximum_drawdown_amount/);
+  assert.doesNotMatch(metricDetails, /reference_amount\s*\*/);
+  assert.doesNotMatch(detail, /Math\.(sqrt|pow)|annualized_volatility\s*[*/+-]|max_drawdown\s*[*/+-]/);
 });
 
 test('production web source has no direct market, database, or LLM provider authority', () => {
