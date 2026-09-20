@@ -143,6 +143,10 @@ immutable snapshot. Per-asset references are the V2 saved current value or V3
 proposed amount. Exact drawdown money uses each dated asset return path; it is
 `null` when an older snapshot lacks a verifiable path. These response-only
 fields do not trigger revaluation, mutate saved JSONB, or require a migration.
+For planned V3 reports, portfolio-level monetary context also includes
+`estimated_ending_value`: the saved proposed total plus the saved historical
+cumulative-return amount. Clients display this backend-derived value and do
+not calculate it locally.
 
 ## Simulations and immutable history
 

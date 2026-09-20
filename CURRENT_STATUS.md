@@ -1956,3 +1956,19 @@ remain separate follow-on work.
 - When a latest report exists, the action grounds Aura in that exact immutable
   report. Otherwise it opens the selected portfolio context without inventing
   saved analysis results.
+
+### Completed planned estimated ending value
+
+- Planned V3 report responses now include a backend-derived
+  `estimated_ending_value`, calculated from the immutable proposed total and
+  saved historical cumulative-return amount. It does not use current prices,
+  estimated shares, or client-side financial calculations.
+- Web and mobile planned report results show the beginner-facing label
+  **Estimated Value at End of Period** as a clickable metric. Its detail view
+  explains the saved proposed amount, historical change, selected period, and
+  the non-forecast limitation.
+- The field is response-only and backward-compatible; no report snapshot,
+  database migration, or dependency change was required.
+- Reporting regression suite: 131 passed. Web production-authority suite: 19
+  passed. Mobile production-authority suite: 30 passed. Mobile TypeScript and
+  the web production build completed successfully.

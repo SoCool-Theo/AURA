@@ -26,6 +26,7 @@ export type PortfolioReportMonetaryMetrics = {
   cumulative_return_amount: DecimalString;
   annualized_return_amount: DecimalString;
   maximum_drawdown_amount: DecimalString | null;
+  estimated_ending_value?: DecimalString | null;
 };
 
 export type PortfolioReportAssetMonetaryMetrics = {

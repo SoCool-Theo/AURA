@@ -49,6 +49,23 @@ class PortfolioReportMonetaryMetrics(AuraBaseModel):
     cumulative_return_amount: _FiniteMonetaryDecimal
     annualized_return_amount: _FiniteMonetaryDecimal
     maximum_drawdown_amount: _NonPositiveMonetaryDecimal | None
+    estimated_ending_value: _PositiveValuationDecimal | None = None
+
+    @model_validator(mode="after")
+    def validate_estimated_ending_value(self) -> Self:
+        if self.estimated_ending_value is None:
+            return self
+        if self.basis != "planned-proposed-amount":
+            raise ValueError(
+                "estimated ending value is available only for planned reports"
+            )
+        expected_value = self.reference_amount + self.cumulative_return_amount
+        if self.estimated_ending_value != expected_value:
+            raise ValueError(
+                "estimated ending value must equal reference amount plus "
+                "cumulative return amount"
+            )
+        return self
 
 
 class PortfolioReportAssetMonetaryMetrics(AuraBaseModel):

@@ -262,11 +262,16 @@ test('web return metrics expose saved money equivalents with side chevrons', () 
   assert.match(dashboard, /name="chevron-right"/);
   assert.match(analysis, /setSelectedMetric\('annualized'\)/);
   assert.match(analysis, /setSelectedMetric\('drawdown'\)/);
+  assert.match(analysis, /setSelectedMetric\('endingValue'\)/);
+  assert.match(analysis, /Estimated Value at End of Period/);
+  assert.match(analysis, /monetary\.estimated_ending_value/);
   assert.match(analysis, /name="chevron-right"/);
   assert.match(reportPage, /<AnalysisResults report=\{report\} \/>/);
   assert.match(icons, /case 'chevron-right'/);
   assert.match(reportDetails, /monetary\.annualized_return_amount/);
   assert.match(reportDetails, /monetary\.maximum_drawdown_amount/);
+  assert.match(reportDetails, /monetary\.estimated_ending_value/);
+  assert.match(reportDetails, /not a prediction of future value/);
   assert.match(reportDetails, /monetary\.reference_amount/);
   assert.doesNotMatch(reportDetails, /reference_amount\s*\*/);
 });

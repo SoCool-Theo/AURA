@@ -51,14 +51,15 @@ def analysis_to_report_monetary_metrics(
     reference_amount: Decimal,
 ) -> PortfolioReportMonetaryMetrics:
     """Derive stable currency equivalents from one frozen analysis path."""
+    cumulative_return_amount = (
+        reference_amount
+        * Decimal(str(analysis.portfolio_metrics.cumulative_return))
+    )
     return PortfolioReportMonetaryMetrics(
         currency=currency,
         basis=basis,
         reference_amount=reference_amount,
-        cumulative_return_amount=(
-            reference_amount
-            * Decimal(str(analysis.portfolio_metrics.cumulative_return))
-        ),
+        cumulative_return_amount=cumulative_return_amount,
         annualized_return_amount=(
             reference_amount
             * Decimal(str(analysis.portfolio_metrics.annualized_return))
@@ -66,6 +67,11 @@ def analysis_to_report_monetary_metrics(
         maximum_drawdown_amount=_maximum_drawdown_amount(
             analysis,
             reference_amount,
+        ),
+        estimated_ending_value=(
+            reference_amount + cumulative_return_amount
+            if basis == "planned-proposed-amount"
+            else None
         ),
     )
 

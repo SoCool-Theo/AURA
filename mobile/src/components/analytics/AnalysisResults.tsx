@@ -137,6 +137,17 @@ export function AnalysisResults({
       )}
 
       <View style={styles.metricGrid}>
+        {reportV3 && monetary?.estimated_ending_value != null ? (
+          <WebKpiCard
+            icon="wallet-outline"
+            label="Estimated Value at End of Period"
+            value={formatPortfolioMoney(monetary.estimated_ending_value, monetary.currency)}
+            meta="Historical estimate · Tap to understand"
+            tone={metrics.cumulative_return < 0 ? 'danger' : 'success'}
+            onPress={() => setSelectedMetric('endingValue')}
+            accessibilityHint="Explains the estimated value and historical change"
+          />
+        ) : null}
         <WebKpiCard
           icon="speedometer-outline"
           label="Risk Score"

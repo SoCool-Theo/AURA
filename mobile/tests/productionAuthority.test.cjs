@@ -571,6 +571,9 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(analysis, /Estimated shares are for display only/);
   assert.match(analysis, /MetricAmountSheet/);
   assert.match(analysis, /Tap for amount/);
+  assert.match(analysis, /setSelectedMetric\('endingValue'\)/);
+  assert.match(analysis, /Estimated Value at End of Period/);
+  assert.match(analysis, /monetary\.estimated_ending_value/);
   assert.match(analysis, /RETURN_VIEW_RANGES\.map/);
   assert.match(analysis, /setReturnViewRange\(range\)/);
   assert.match(analysis, /accessibilityRole="tab"/);
@@ -578,6 +581,8 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(metricDetails, /cumulative_return_amount/);
   assert.match(metricDetails, /annualized_return_amount/);
   assert.match(metricDetails, /maximum_drawdown_amount/);
+  assert.match(metricDetails, /estimated_ending_value/);
+  assert.match(metricDetails, /not a prediction of future value/);
   assert.ok(!/reference_amount\s*\*/.test(`${analysis}\n${metricDetails}`));
   assert.match(simulation, /Saved planned allocation/);
   assert.match(history, /isSimulationHistoryV3/);

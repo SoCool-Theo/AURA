@@ -139,6 +139,20 @@ def test_report_monetary_metrics_use_saved_reference_and_exact_drawdown_path(
     assert metrics.cumulative_return_amount == Decimal("40.094000")
     assert metrics.annualized_return_amount == Decimal("200.0")
     assert metrics.maximum_drawdown_amount == Decimal("-10.200000")
+    assert metrics.estimated_ending_value is None
+
+
+def test_planned_report_monetary_metrics_include_estimated_ending_value(
+) -> None:
+    metrics = analysis_to_report_monetary_metrics(
+        _valid_response(),
+        currency="USD",
+        basis="planned-proposed-amount",
+        reference_amount=Decimal("1000"),
+    )
+
+    assert metrics.cumulative_return_amount == Decimal("40.094000")
+    assert metrics.estimated_ending_value == Decimal("1040.094000")
 
 
 def test_asset_report_monetary_metrics_use_each_saved_reference_and_path(
@@ -226,6 +240,7 @@ def test_v3_record_restores_frozen_plan_without_recalculation_or_mutation() -> N
     assert result.monetary_metrics is not None
     assert result.monetary_metrics.basis == "planned-proposed-amount"
     assert result.monetary_metrics.reference_amount == Decimal("1000")
+    assert result.monetary_metrics.estimated_ending_value == Decimal("1071.000")
     assert [
         metric.symbol for metric in result.asset_monetary_metrics
     ] == ["BND", "AAPL"]
