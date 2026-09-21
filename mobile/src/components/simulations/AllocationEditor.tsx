@@ -2,7 +2,10 @@ import React from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { PortfolioResponse } from '../../types/portfolio';
-import type { AllocationInputs } from '../../simulation/simulationValidation';
+import {
+  isAllocationPercentInput,
+  type AllocationInputs
+} from '../../simulation/simulationValidation';
 import { Card } from '../ui/Card';
 import { colors, spacing } from '../../theme/theme';
 
@@ -41,7 +44,11 @@ export function AllocationEditor({
                 accessibilityState={{ disabled }}
                 editable={!disabled}
                 value={inputs[holding.symbol] ?? ''}
-                onChangeText={(value) => onChange(holding.symbol, value)}
+                onChangeText={(value) => {
+                  if (isAllocationPercentInput(value)) {
+                    onChange(holding.symbol, value);
+                  }
+                }}
                 keyboardType="decimal-pad"
                 style={styles.input}
                 placeholder="0"

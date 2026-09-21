@@ -508,7 +508,27 @@ test('real holding contracts preserve precision, order, modes, and valuation all
     { symbol: 'MSFT', current_allocation: '0.625' },
     { symbol: 'AAPL', current_allocation: '0.375' }
   ] });
-  assert.deepEqual(JSON.parse(JSON.stringify(inputs)), { MSFT: '62.5', AAPL: '37.5' });
+  assert.deepEqual(JSON.parse(JSON.stringify(inputs)), { MSFT: '62.50', AAPL: '37.50' });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(simulation.allocationInputsFromValuation({ holdings: [
+      { symbol: 'AAPL', current_allocation: '0.3333333333' },
+      { symbol: 'MSFT', current_allocation: '0.3333333333' },
+      { symbol: 'NVDA', current_allocation: '0.3333333334' }
+    ] }))),
+    { AAPL: '33.33', MSFT: '33.33', NVDA: '33.34' }
+  );
+  assert.equal(simulation.isAllocationPercentInput('12.23'), true);
+  assert.equal(simulation.isAllocationPercentInput('12.234'), false);
+  const roundedThirds = { AAPL: '33.33', MSFT: '33.33', NVDA: '33.34' };
+  const roundedPortfolio = {
+    holdings: [
+      { symbol: 'AAPL' },
+      { symbol: 'MSFT' },
+      { symbol: 'NVDA' }
+    ]
+  };
+  assert.equal(simulation.validateModifiedAllocation(roundedPortfolio, roundedThirds).error, null);
+  assert.deepEqual(roundedThirds, { AAPL: '33.33', MSFT: '33.33', NVDA: '33.34' });
 });
 
 test('portfolio input warnings identify, reveal, and focus the first invalid mobile field', () => {
@@ -590,7 +610,7 @@ test('planned mobile contracts preserve amount authority and consume backend tar
   };
   assert.deepEqual(
     JSON.parse(JSON.stringify(simulation.allocationInputsFromPlannedAllocation(allocation))),
-    { AAPL: '40', NVDA: '60' }
+    { AAPL: '40.00', NVDA: '60.00' }
   );
 
   await portfoliosApi.create({ name: 'Plan', portfolio_type: 'PLANNED', plan_currency: 'USD' });
@@ -769,6 +789,16 @@ test('mobile Analytics exposes an explicit back action in both navigation stacks
   assert.match(navigation, /navigation\.canGoBack\(\) \? navigation\.goBack\(\)/);
 });
 
+test('Portfolio detail exposes a back action when opened directly from Home', () => {
+  const navigation = fs.readFileSync(
+    path.join(root, 'src/navigation/MainTabNavigator.tsx'),
+    'utf8'
+  );
+
+  assert.match(navigation, /PortfolioStack\.Screen[\s\S]*name="PortfolioDetail"[\s\S]*label="Back from Portfolio"/);
+  assert.match(navigation, /navigation\.canGoBack\(\)[\s\S]*navigation\.goBack\(\)[\s\S]*navigation\.getParent\(\)\?\.navigate\('Home'\)/);
+});
+
 test('real holding API clients send explicit currency and real holding payloads', async () => {
   const calls = [];
   const request = async (path, options = {}) => {
@@ -847,6 +877,8 @@ test('valuation, report V2, and simulation V2 pages preserve backend authority',
   assert.match(reportDetail, /Later[\s\S]*portfolio or market changes do not alter them/);
   assert.match(allocation, /allocationInputsFromValuation/);
   assert.match(combined, /allocationInputsFromValuation/);
+  assert.match(allocation, /<AllocationEditor/);
+  assert.match(combined, /<AllocationEditor/);
   assert.match(simulationDetail, /isSimulationHistoryV2/);
   assert.ok(!/getPortfolioValuation/.test(`${analysis}\n${reportDetail}\n${simulationDetail}`));
 });
@@ -860,7 +892,14 @@ test('AI client uses the authenticated backend contract and rejects malformed su
   }
   const portfolioId = 'e6518442-58cb-408f-ae3f-bf47fb00b555';
   const reportId = '10000000-0000-0000-0000-000000000001';
-  const request = { portfolio_id: portfolioId, message: 'Why is this risky?' };
+  const request = {
+    portfolio_id: portfolioId,
+    message: 'Why is this risky?',
+    history: [
+      { role: 'user', content: 'What is my portfolio?' },
+      { role: 'assistant', content: 'Your portfolio contains saved holdings.' }
+    ]
+  };
   let response = {
     answer: 'The saved report shows historical concentration risk.',
     sources: [
@@ -927,12 +966,62 @@ test('AI errors remain truthful and retryable without exposing provider details'
 test('mobile Assistant has no direct provider access or synthetic conversation authority', () => {
   const api = fs.readFileSync(path.join(root, 'src/api/agentApi.ts'), 'utf8');
   const screen = fs.readFileSync(path.join(root, 'src/screens/assistant/AssistantScreen.tsx'), 'utf8');
+  const answerContent = fs.readFileSync(path.join(root, 'src/components/assistant/AnswerContent.tsx'), 'utf8');
+  const answerFormatting = load('src/agent/answerFormatting.ts');
 
   assert.match(api, /apiRequest/);
   assert.match(api, /\/api\/agent\/explain/);
   assert.match(screen, /usePortfolios/);
   assert.match(screen, /AbortController/);
   assert.match(screen, /newest saved report/);
+  assert.match(screen, /messages\.slice\(-8\)/);
+  assert.match(screen, /history/);
+  assert.match(screen, /Start a conversation/);
+  assert.match(screen, /FOLLOW-UP IDEAS/);
+  assert.match(screen, /item\.id === latestAssistantMessageId && !sending/);
+  assert.match(screen, /style=\{styles\.assistantMessageColumn\}/);
+  assert.doesNotMatch(screen, /followUpsExpanded|See more|See less/);
+  assert.match(screen, /accessibilityLabel="Hide message composer"/);
+  assert.match(screen, /accessibilityLabel="Show message composer"/);
+  assert.match(screen, /name="chevron-down"/);
+  assert.match(screen, /name="chevron-up"/);
+  assert.match(screen, /Grounding details/);
+  assert.match(screen, /title="New chat"/);
+  assert.match(screen, /style=\{styles\.userBubble\}/);
+  assert.match(screen, /style=\{styles\.assistantBubble\}/);
+  assert.match(screen, /<Card style=\{styles\.composerCard\}>/);
+  assert.doesNotMatch(screen, /<View style=\{styles\.composerCard\}>/);
+  assert.match(screen, /footer=\{composer\}/);
+  assert.match(screen, /style=\{\[styles\.composerDock, composerHidden && styles\.composerDockHidden\]\}/);
+  const composerDockStyle = screen.match(/composerDock:\s*\{([\s\S]*?)\n\s*\},\n\s*composerDockHidden:/)?.[1] ?? '';
+  assert.doesNotMatch(composerDockStyle, /backgroundColor|borderTop/);
+  assert.match(composerDockStyle, /position: 'absolute'/);
+  assert.match(screen, /paddingBottom: composerHeight \+ spacing\.lg/);
+  assert.match(screen, /setComposerHeight\(nativeEvent\.layout\.height\)/);
+  assert.doesNotMatch(screen, /shadowOpacity: 0\.24|elevation: 10/);
+  assert.match(screen, /<AnswerContent answer=\{item\.content\}/);
+  assert.match(answerContent, /formatAgentAnswer/);
+  const formatted = answerFormatting.formatAgentAnswer(
+    '## Main risk\n\nYour **largest holding** matters.\n\n- Concentration\n2. Drawdown'
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(formatted)), [
+    { type: 'heading', parts: [{ text: 'Main risk', bold: false }] },
+    {
+      type: 'paragraph',
+      parts: [
+        { text: 'Your ', bold: false },
+        { text: 'largest holding', bold: true },
+        { text: ' matters.', bold: false }
+      ]
+    },
+    {
+      type: 'bullets',
+      items: [
+        [{ text: 'Concentration', bold: false }],
+        [{ text: 'Drawdown', bold: false }]
+      ]
+    }
+  ]);
   assert.ok(!/OPENAI_API_KEY|GROQ_API_KEY|api\.openai|api\.groq/i.test(`${api}\n${screen}`));
   assert.ok(!/AsyncStorage|SecureStore|conversationHistory|chatHistory/.test(screen));
 });
