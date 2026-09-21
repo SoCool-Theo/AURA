@@ -88,6 +88,15 @@ def test_system_instructions_require_concise_beginner_friendly_response_style() 
         assert required in prompt
 
 
+def test_system_instructions_use_chat_history_only_for_follow_up_context() -> None:
+    prompt = " ".join(build_system_instructions().casefold().split())
+
+    assert "conversation_history" in prompt
+    assert "not an authoritative source of portfolio facts" in prompt
+    assert "freshly supplied aura grounding context always wins" in prompt
+    assert "follow-up references" in prompt
+
+
 def test_system_instructions_prevent_misleading_current_price_and_volatility_language() -> None:
     prompt = " ".join(build_system_instructions().casefold().split())
 

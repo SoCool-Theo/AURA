@@ -76,6 +76,10 @@ class AuraAgent:
             system_instructions=build_system_instructions(),
             user_message=request.message,
             grounded_context=grounded_context,
+            conversation_history=[
+                {"role": item.role, "content": item.content}
+                for item in request.history
+            ],
         )
         provider_response = self.provider.generate(provider_request)
         output_decision = validate_provider_output(

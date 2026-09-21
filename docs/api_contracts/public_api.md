@@ -198,7 +198,19 @@ V3 detail is also restored without prices, FX, valuation, or recomputation.
 
 ## AI contract and grounding
 
-The public AI request and response shapes are unchanged. Grounding selects:
+`POST /api/agent/explain` accepts the required `portfolio_id` and `message`,
+the existing optional `report_id` and `simulation_id`, and an optional
+`history` list for follow-up questions. History contains at most eight messages
+(four completed turns), must alternate `user` then `assistant`, and is supplied
+again by the client with each request. Aura does not persist chat history in the
+backend or database. The web client keeps the current conversation only in
+memory, clears it when the user changes portfolios or starts a new chat, and
+sends only the latest four completed turns.
+
+Conversation history is untrusted conversational context, not a source of
+portfolio facts or calculations. Fresh backend grounding always takes
+precedence if prior chat text conflicts with the selected live portfolio or
+immutable saved snapshot. Grounding selects:
 
 - live legacy portfolio: saved weights;
 - live real portfolio: current USD valuation and dynamic allocation;

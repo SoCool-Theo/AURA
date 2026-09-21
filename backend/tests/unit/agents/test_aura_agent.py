@@ -126,12 +126,31 @@ def test_allowed_request_uses_latest_report_and_one_provider_call() -> None:
     request = provider.requests[0]
     assert request.system_instructions == build_system_instructions()
     assert request.user_message == "Why is NVDA my biggest risk driver?"
+    assert request.conversation_history == []
     assert request.grounded_context["simulation"] is None
     assert request.grounded_context["portfolio"] == tools.portfolio
     assert tools.portfolio_resolution_flags == [True]
     assert [source.type for source in response.sources] == ["portfolio", "report"]
     assert [source.id for source in response.sources] == [_PORTFOLIO_ID, _REPORT_ID]
     assert response.limitations == [HISTORICAL_LIMITATION]
+
+
+def test_follow_up_history_is_forwarded_separately_from_grounding() -> None:
+    tools = FakeTools()
+    provider = FakeProvider()
+    history = [
+        {"role": "user", "content": "What is my portfolio?"},
+        {"role": "assistant", "content": "It is concentrated in NVDA."},
+    ]
+
+    AuraAgent(tools=tools, provider=provider).explain(
+        _request(message="Why does that matter?", history=history)
+    )
+
+    provider_request = provider.requests[0]
+    assert provider_request.user_message == "Why does that matter?"
+    assert provider_request.conversation_history == history
+    assert "conversation_history" not in provider_request.grounded_context
 
 
 def test_specific_report_and_simulation_are_the_only_requested_context() -> None:
