@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
@@ -166,10 +166,30 @@ def evaluate_candidate(
     plan: ChronologicalEvaluationPlan,
     target_type: ForecastTargetType,
     candidate: ForecastCandidate,
+    fold_purposes: Collection[FoldPurpose] | None = None,
 ) -> tuple[ForecastEvaluationResult, ...]:
-    """Evaluate one candidate under identical purged chronological folds."""
+    """Evaluate one candidate under identical purged chronological folds.
+
+    ``fold_purposes`` permits a caller to execute only explicitly approved
+    periods. The default preserves Phase 3 behavior and evaluates every fold.
+    """
+    approved_purposes = (
+        None if fold_purposes is None else frozenset(fold_purposes)
+    )
+    if approved_purposes is not None and not approved_purposes:
+        raise ValueError("fold_purposes cannot be empty")
+    if approved_purposes is not None and not all(
+        isinstance(purpose, FoldPurpose) for purpose in approved_purposes
+    ):
+        raise TypeError("fold_purposes must contain FoldPurpose values")
+
     results: list[ForecastEvaluationResult] = []
     for fold in plan.folds:
+        if (
+            approved_purposes is not None
+            and fold.purpose not in approved_purposes
+        ):
+            continue
         fold_slice = slice_dataset_for_fold(
             dataset,
             fold,
