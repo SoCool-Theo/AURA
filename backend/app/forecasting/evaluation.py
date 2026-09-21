@@ -97,6 +97,7 @@ class ForecastEvaluationResult:
     directional_evaluated_count: int | None
     return_mape: SafeMapeResult | None
     warning: str | None
+    negative_prediction_clipped_count: int | None = None
 
     def __post_init__(self) -> None:
         for value in (self.mae, self.rmse, self.directional_accuracy):
@@ -109,6 +110,28 @@ class ForecastEvaluationResult:
         ):
             if type(count) is not int or count < 0:
                 raise ValueError("evaluation counts must be non-negative integers")
+        if self.target_type is ForecastTargetType.VOLATILITY:
+            if (
+                type(self.negative_prediction_clipped_count) is not int
+                or self.negative_prediction_clipped_count < 0
+                or self.negative_prediction_clipped_count
+                > self.evaluated_observation_count
+            ):
+                raise ValueError(
+                    "volatility results require a valid clipped count"
+                )
+            if (
+                self.directional_accuracy is not None
+                or self.directional_evaluated_count is not None
+                or self.return_mape is not None
+            ):
+                raise ValueError(
+                    "volatility results cannot expose return-only metrics"
+                )
+        elif self.negative_prediction_clipped_count is not None:
+            raise ValueError(
+                "return results cannot expose volatility clipping metadata"
+            )
 
 
 def target_value(
@@ -157,6 +180,9 @@ def _unavailable_result(
         directional_evaluated_count=None,
         return_mape=None,
         warning=warning,
+        negative_prediction_clipped_count=(
+            0 if target_type is ForecastTargetType.VOLATILITY else None
+        ),
     )
 
 
@@ -231,6 +257,15 @@ def evaluate_candidate(
             )
             continue
 
+        if (
+            target_type is ForecastTargetType.VOLATILITY
+            and any(
+                target_value(row, target_type) < 0.0
+                for row in fold_slice.training_rows
+            )
+        ):
+            raise ValueError("volatility targets must be non-negative")
+
         prediction = candidate.predict(
             training_rows=fold_slice.training_rows,
             evaluation_rows=fold_slice.evaluation_rows,
@@ -254,17 +289,33 @@ def evaluate_candidate(
         if not all(math.isfinite(value) for value in prediction.values):
             raise ValueError("candidate predictions must be finite")
 
+        raw_predictions = prediction.values
+        negative_prediction_clipped_count: int | None = None
+        predictions = raw_predictions
+        if target_type is ForecastTargetType.VOLATILITY:
+            negative_prediction_clipped_count = sum(
+                value < 0.0 for value in raw_predictions
+            )
+            predictions = tuple(max(value, 0.0) for value in raw_predictions)
+            if not all(math.isfinite(value) for value in predictions):
+                raise ValueError("candidate predictions must be finite")
+
         actual = tuple(
             target_value(row, target_type)
             for row in fold_slice.evaluation_rows
         )
+        if (
+            target_type is ForecastTargetType.VOLATILITY
+            and any(value < 0.0 for value in actual)
+        ):
+            raise ValueError("volatility targets must be non-negative")
         directional_result = (
-            directional_accuracy(actual, prediction.values)
+            directional_accuracy(actual, predictions)
             if target_type is ForecastTargetType.RETURN
             else None
         )
         mape_result = (
-            safe_return_mape(actual, prediction.values)
+            safe_return_mape(actual, predictions)
             if target_type is ForecastTargetType.RETURN
             else None
         )
@@ -282,8 +333,8 @@ def evaluate_candidate(
                 candidate_training_value_count=prediction.training_value_count,
                 evaluated_observation_count=evaluation_count,
                 prediction_available=True,
-                mae=mean_absolute_error(actual, prediction.values),
-                rmse=root_mean_squared_error(actual, prediction.values),
+                mae=mean_absolute_error(actual, predictions),
+                rmse=root_mean_squared_error(actual, predictions),
                 directional_accuracy=(
                     None if directional_result is None else directional_result.value
                 ),
@@ -294,6 +345,9 @@ def evaluate_candidate(
                 ),
                 return_mape=mape_result,
                 warning=prediction.warning,
+                negative_prediction_clipped_count=(
+                    negative_prediction_clipped_count
+                ),
             )
         )
     return tuple(results)

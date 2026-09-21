@@ -9,11 +9,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import backend.scripts.evaluate_forecasting_return_models as script
-from backend.app.forecasting.selection import CANDIDATE_SIMPLICITY_ORDER
+import backend.scripts.evaluate_forecasting_volatility_models as script
 from backend.app.forecasting.models import (
-    ARIMA_CANDIDATE_ID,
     ARIMA_FIT_CONVERGENCE_WARNING,
+    VOLATILITY_ARIMA_CANDIDATE_ID,
+)
+from backend.app.forecasting.selection import (
+    VOLATILITY_CANDIDATE_SIMPLICITY_ORDER,
 )
 
 
@@ -33,7 +35,7 @@ def _synthetic_history(count: int = 1):
 def _result(candidate_id: str, fold, mae: float = 0.1):
     return script.ForecastEvaluationResult(
         symbol="AAPL",
-        target_type=script.ForecastTargetType.RETURN,
+        target_type=script.ForecastTargetType.VOLATILITY,
         candidate_id=candidate_id,
         fold_id=fold.fold_id,
         fold_purpose=fold.purpose,
@@ -46,15 +48,16 @@ def _result(candidate_id: str, fold, mae: float = 0.1):
         prediction_available=True,
         mae=mae,
         rmse=mae,
-        directional_accuracy=0.5,
-        directional_evaluated_count=20,
+        directional_accuracy=None,
+        directional_evaluated_count=None,
         return_mape=None,
         warning=None,
+        negative_prediction_clipped_count=1,
     )
 
 
-def _empty_report() -> script.ReturnModelEvaluationReport:
-    return script.ReturnModelEvaluationReport(
+def _empty_report() -> script.VolatilityModelEvaluationReport:
+    return script.VolatilityModelEvaluationReport(
         evaluation_cutoff=date(2026, 9, 17),
         evaluation_end_exclusive=date(2026, 9, 18),
         requested_symbols=("AAPL",),
@@ -63,13 +66,13 @@ def _empty_report() -> script.ReturnModelEvaluationReport:
         selection_fold_ids=tuple(
             f"selection-{index:02d}" for index in range(1, 6)
         ),
-        candidate_ids=CANDIDATE_SIMPLICITY_ORDER,
+        candidate_ids=VOLATILITY_CANDIDATE_SIMPLICITY_ORDER,
         results=(),
         selection_summaries=(),
     )
 
 
-def test_script_orchestration_executes_selection_folds_only_without_fitting() -> None:
+def test_script_executes_only_five_selection_folds_without_fitting() -> None:
     history = _synthetic_history()
     seen_purposes: list[tuple[script.FoldPurpose, ...]] = []
 
@@ -81,7 +84,7 @@ def test_script_orchestration_executes_selection_folds_only_without_fitting() ->
         candidate,
         fold_purposes,
     ):
-        assert target_type is script.ForecastTargetType.RETURN
+        assert target_type is script.ForecastTargetType.VOLATILITY
         seen_purposes.append(tuple(fold_purposes))
         return tuple(
             _result(candidate.candidate_id, fold)
@@ -104,7 +107,7 @@ def test_script_orchestration_executes_selection_folds_only_without_fitting() ->
         )
 
     assert first == second
-    assert first.candidate_ids == CANDIDATE_SIMPLICITY_ORDER
+    assert first.candidate_ids == VOLATILITY_CANDIDATE_SIMPLICITY_ORDER
     assert len(first.selection_fold_ids) == 5
     assert len(first.results) == 25
     assert all(
@@ -114,7 +117,7 @@ def test_script_orchestration_executes_selection_folds_only_without_fitting() ->
     assert seen_purposes == [(script.FoldPurpose.SELECTION,)] * 10
 
 
-def test_persisted_script_path_is_read_only_and_uses_user_assets() -> None:
+def test_persisted_path_is_read_only_and_uses_user_assets() -> None:
     engine = MagicMock()
     session = MagicMock()
     session_factory = MagicMock()
@@ -144,7 +147,7 @@ def test_persisted_script_path_is_read_only_and_uses_user_assets() -> None:
             return_value=expected,
         ) as evaluate,
     ):
-        result = script.run_persisted_return_model_evaluation(
+        result = script.run_persisted_volatility_model_evaluation(
             evaluation_cutoff=date(2026, 9, 17)
         )
 
@@ -164,19 +167,7 @@ def test_persisted_script_path_is_read_only_and_uses_user_assets() -> None:
     engine.dispose.assert_called_once_with()
 
 
-def test_report_json_is_strict_and_deterministic() -> None:
-    report = _empty_report()
-    payload = script.report_json(report)
-
-    assert payload == script.report_json(report)
-    decoded = json.loads(payload)
-    assert decoded["evaluation_cutoff"] == "2026-09-17"
-    assert decoded["selection_fold_ids"] == list(report.selection_fold_ids)
-    assert "NaN" not in payload
-    assert "Infinity" not in payload
-
-
-def test_report_json_preserves_arima_convergence_warning_metadata() -> None:
+def test_report_json_is_strict_deterministic_and_preserves_metadata() -> None:
     fold = SimpleNamespace(
         fold_id="selection-01",
         purpose=script.FoldPurpose.SELECTION,
@@ -185,7 +176,7 @@ def test_report_json_preserves_arima_convergence_warning_metadata() -> None:
         origin_end=date(2023, 9, 18),
     )
     result = replace(
-        _result(ARIMA_CANDIDATE_ID, fold),
+        _result(VOLATILITY_ARIMA_CANDIDATE_ID, fold),
         warning=ARIMA_FIT_CONVERGENCE_WARNING,
     )
     report = replace(
@@ -195,25 +186,28 @@ def test_report_json_preserves_arima_convergence_warning_metadata() -> None:
         results=(result,),
     )
 
-    decoded = json.loads(script.report_json(report))
+    payload = script.report_json(report)
+    decoded = json.loads(payload)
 
-    assert decoded["results"][0]["prediction_available"] is True
-    assert "negative_prediction_clipped_count" not in decoded["results"][0]
+    assert payload == script.report_json(report)
+    assert decoded["results"][0]["negative_prediction_clipped_count"] == 1
+    assert decoded["results"][0]["directional_accuracy"] is None
+    assert decoded["results"][0]["return_mape"] is None
     assert (
         decoded["results"][0]["warning"]
         == ARIMA_FIT_CONVERGENCE_WARNING
     )
+    assert "NaN" not in payload
+    assert "Infinity" not in payload
 
 
-def test_main_writes_selected_output_without_database_or_model_execution(
-    tmp_path: Path,
-) -> None:
-    output = tmp_path / "selection.json"
+def test_main_writes_selected_output_without_real_evaluation(tmp_path: Path) -> None:
+    output = tmp_path / "volatility-selection.json"
     report = _empty_report()
 
     with patch.object(
         script,
-        "run_persisted_return_model_evaluation",
+        "run_persisted_volatility_model_evaluation",
         return_value=report,
     ) as run:
         script.main(

@@ -60,18 +60,26 @@ from .models import (
     LINEAR_REGRESSION_CANDIDATE_ID,
     RANDOM_FOREST_CANDIDATE_ID,
     RANDOM_FOREST_PARAMETERS,
+    VOLATILITY_ARIMA_CANDIDATE_ID,
+    VOLATILITY_LINEAR_REGRESSION_CANDIDATE_ID,
+    VOLATILITY_RANDOM_FOREST_CANDIDATE_ID,
     ArimaCandidate,
     ForecastModelInputError,
     LinearRegressionCandidate,
     RandomForestCandidate,
+    VolatilityArimaCandidate,
+    VolatilityLinearRegressionCandidate,
+    VolatilityRandomForestCandidate,
 )
 from .selection import (
     CANDIDATE_SIMPLICITY_ORDER,
     MINIMUM_COMPLEX_MODEL_IMPROVEMENT_PERCENT,
     PRACTICAL_TIE_PERCENT,
+    VOLATILITY_CANDIDATE_SIMPLICITY_ORDER,
     CandidateSelectionStatistics,
     SymbolSelectionSummary,
     summarize_symbol_selection,
+    summarize_volatility_selection,
 )
 
 __all__ = [
@@ -90,6 +98,10 @@ __all__ = [
     "PRACTICAL_TIE_PERCENT",
     "RANDOM_FOREST_CANDIDATE_ID",
     "RANDOM_FOREST_PARAMETERS",
+    "VOLATILITY_ARIMA_CANDIDATE_ID",
+    "VOLATILITY_CANDIDATE_SIMPLICITY_ORDER",
+    "VOLATILITY_LINEAR_REGRESSION_CANDIDATE_ID",
+    "VOLATILITY_RANDOM_FOREST_CANDIDATE_ID",
     "TARGET_SET_VERSION",
     "RETURN_MAPE_MINIMUM_ABSOLUTE_ACTUAL",
     "AssetPriceHistory",
@@ -117,6 +129,9 @@ __all__ = [
     "RandomForestCandidate",
     "SafeMapeResult",
     "SymbolSelectionSummary",
+    "VolatilityArimaCandidate",
+    "VolatilityLinearRegressionCandidate",
+    "VolatilityRandomForestCandidate",
     "build_chronological_plan",
     "build_feature_rows",
     "build_forecast_dataset",
@@ -129,4 +144,5 @@ __all__ = [
     "safe_return_mape",
     "slice_dataset_for_fold",
     "summarize_symbol_selection",
+    "summarize_volatility_selection",
 ]

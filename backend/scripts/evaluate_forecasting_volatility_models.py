@@ -1,6 +1,6 @@
-"""Manual read-only selection-fold evaluation for Aura return candidates.
+"""Manual read-only selection-fold evaluation for volatility candidates.
 
-This command is the only Phase 4 entry point that performs estimator fitting.
+This command is the only Phase 5 entry point that performs estimator fitting.
 It must be run manually by the user. It reads persisted local PostgreSQL market
 data, never fetches provider data, and never writes database or model artifacts.
 """
@@ -44,13 +44,13 @@ from app.forecasting.evaluation import (
     evaluate_candidate,
 )
 from app.forecasting.models import (
-    ArimaCandidate,
-    LinearRegressionCandidate,
-    RandomForestCandidate,
+    VolatilityArimaCandidate,
+    VolatilityLinearRegressionCandidate,
+    VolatilityRandomForestCandidate,
 )
 from app.forecasting.selection import (
     SymbolSelectionSummary,
-    summarize_symbol_selection,
+    summarize_volatility_selection,
 )
 from app.forecasting.splits import (
     EvaluationPlanConfig,
@@ -61,8 +61,8 @@ from app.services.market_data_service import MarketDataService
 
 
 @dataclass(frozen=True, slots=True)
-class ReturnModelEvaluationReport:
-    """Deterministic selection-only candidate results and policy summaries."""
+class VolatilityModelEvaluationReport:
+    """Deterministic selection-only volatility results and summaries."""
 
     evaluation_cutoff: date
     evaluation_end_exclusive: date
@@ -84,13 +84,13 @@ def _parse_date(value: str) -> date:
         ) from error
 
 
-def _return_candidates() -> tuple[ForecastCandidate, ...]:
+def _volatility_candidates() -> tuple[ForecastCandidate, ...]:
     return (
         HistoricalMeanBaseline(),
         MovingAverageBaseline(),
-        LinearRegressionCandidate(),
-        ArimaCandidate(),
-        RandomForestCandidate(),
+        VolatilityLinearRegressionCandidate(),
+        VolatilityArimaCandidate(),
+        VolatilityRandomForestCandidate(),
     )
 
 
@@ -99,11 +99,11 @@ def evaluate_histories(
     *,
     evaluation_cutoff: date,
     candidates: Sequence[ForecastCandidate] | None = None,
-) -> ReturnModelEvaluationReport:
-    """Evaluate return candidates on selection folds only.
+) -> VolatilityModelEvaluationReport:
+    """Evaluate volatility candidates on the five selection folds only.
 
     Passing candidates is an internal test seam. The command-line path always
-    uses the fixed five approved Phase 4 candidates.
+    uses the five fixed approved Phase 5 candidates.
     """
     if type(evaluation_cutoff) is not date:
         raise TypeError("evaluation_cutoff must be a date")
@@ -119,7 +119,7 @@ def evaluate_histories(
         if fold.purpose is FoldPurpose.SELECTION
     )
     approved_candidates = tuple(
-        _return_candidates() if candidates is None else candidates
+        _volatility_candidates() if candidates is None else candidates
     )
     candidate_ids = tuple(
         candidate.candidate_id for candidate in approved_candidates
@@ -138,7 +138,7 @@ def evaluate_histories(
                 evaluate_candidate(
                     dataset=dataset,
                     plan=plan,
-                    target_type=ForecastTargetType.RETURN,
+                    target_type=ForecastTargetType.VOLATILITY,
                     candidate=candidate,
                     fold_purposes=(FoldPurpose.SELECTION,),
                 )
@@ -146,7 +146,7 @@ def evaluate_histories(
         ordered_symbol_results = tuple(symbol_results)
         results.extend(ordered_symbol_results)
         summaries.append(
-            summarize_symbol_selection(
+            summarize_volatility_selection(
                 symbol=history.symbol,
                 results=ordered_symbol_results,
                 expected_selection_fold_ids=selection_fold_ids,
@@ -155,7 +155,7 @@ def evaluate_histories(
 
     evaluated_symbols = tuple(history.symbol for history in ordered_histories)
     evaluated_set = set(evaluated_symbols)
-    return ReturnModelEvaluationReport(
+    return VolatilityModelEvaluationReport(
         evaluation_cutoff=evaluation_cutoff,
         evaluation_end_exclusive=evaluation_end_exclusive,
         requested_symbols=USER_ASSET_SYMBOLS,
@@ -170,10 +170,10 @@ def evaluate_histories(
     )
 
 
-def run_persisted_return_model_evaluation(
+def run_persisted_volatility_model_evaluation(
     *,
     evaluation_cutoff: date,
-) -> ReturnModelEvaluationReport:
+) -> VolatilityModelEvaluationReport:
     """Read persisted market data and run the user-triggered comparison."""
     if type(evaluation_cutoff) is not date:
         raise TypeError("evaluation_cutoff must be a date")
@@ -197,7 +197,6 @@ def run_persisted_return_model_evaluation(
 
 def _result_dict(result: ForecastEvaluationResult) -> dict[str, object]:
     payload = asdict(result)
-    payload.pop("negative_prediction_clipped_count", None)
     for key in (
         "training_cutoff",
         "evaluation_origin_start",
@@ -207,7 +206,7 @@ def _result_dict(result: ForecastEvaluationResult) -> dict[str, object]:
     return payload
 
 
-def report_json(report: ReturnModelEvaluationReport) -> str:
+def report_json(report: VolatilityModelEvaluationReport) -> str:
     """Return strict deterministic JSON without NaN or Infinity."""
     payload = {
         "evaluation_cutoff": report.evaluation_cutoff.isoformat(),
@@ -231,22 +230,27 @@ def report_json(report: ReturnModelEvaluationReport) -> str:
 
 
 def _print_summary(
-    report: ReturnModelEvaluationReport,
+    report: VolatilityModelEvaluationReport,
     output_path: Path,
 ) -> None:
     available = sum(result.prediction_available for result in report.results)
     unavailable = len(report.results) - available
+    clipped = sum(
+        result.negative_prediction_clipped_count or 0
+        for result in report.results
+    )
     baseline_leaders = sum(
         summary.baseline_remains_leading
         for summary in report.selection_summaries
     )
-    print("Aura return-model selection evaluation completed.")
-    print("-------------------------------------------------")
+    print("Aura volatility-model selection evaluation completed.")
+    print("-----------------------------------------------------")
     print(f"Evaluation cutoff: {report.evaluation_cutoff.isoformat()}")
     print(f"Symbols evaluated: {len(report.evaluated_symbols)}")
     print(f"Selection folds: {len(report.selection_fold_ids)}")
     print(f"Available candidate-fold results: {available}")
     print(f"Unavailable candidate-fold results: {unavailable}")
+    print(f"Negative predictions clipped: {clipped}")
     print(f"Symbols retaining a baseline lead: {baseline_leaders}")
     print(f"JSON report: {output_path}")
     if report.missing_symbols:
@@ -256,7 +260,7 @@ def _print_summary(
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Read persisted Aura market data and compare approved return "
+            "Read persisted Aura market data and compare approved volatility "
             "candidates on selection folds only."
         )
     )
@@ -278,7 +282,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
     try:
-        report = run_persisted_return_model_evaluation(
+        report = run_persisted_volatility_model_evaluation(
             evaluation_cutoff=args.evaluation_cutoff,
         )
         args.output.write_text(report_json(report), encoding="utf-8")
@@ -290,7 +294,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         RuntimeError,
     ) as error:
         raise SystemExit(
-            f"Aura return-model evaluation failed: {error}"
+            f"Aura volatility-model evaluation failed: {error}"
         ) from error
     _print_summary(report, args.output)
 

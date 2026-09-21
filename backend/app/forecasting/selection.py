@@ -1,4 +1,4 @@
-"""Selection-fold-only comparison policy for Phase 4 return candidates."""
+"""Selection-fold-only comparison policy for forecast candidates."""
 
 from __future__ import annotations
 
@@ -11,6 +11,9 @@ from .models import (
     ARIMA_CANDIDATE_ID,
     LINEAR_REGRESSION_CANDIDATE_ID,
     RANDOM_FOREST_CANDIDATE_ID,
+    VOLATILITY_ARIMA_CANDIDATE_ID,
+    VOLATILITY_LINEAR_REGRESSION_CANDIDATE_ID,
+    VOLATILITY_RANDOM_FOREST_CANDIDATE_ID,
 )
 from .splits import FoldPurpose
 
@@ -25,6 +28,13 @@ CANDIDATE_SIMPLICITY_ORDER: tuple[str, ...] = (
     LINEAR_REGRESSION_CANDIDATE_ID,
     ARIMA_CANDIDATE_ID,
     RANDOM_FOREST_CANDIDATE_ID,
+)
+VOLATILITY_CANDIDATE_SIMPLICITY_ORDER: tuple[str, ...] = (
+    HISTORICAL_AVERAGE_CANDIDATE_ID,
+    MOVING_AVERAGE_CANDIDATE_ID,
+    VOLATILITY_LINEAR_REGRESSION_CANDIDATE_ID,
+    VOLATILITY_ARIMA_CANDIDATE_ID,
+    VOLATILITY_RANDOM_FOREST_CANDIDATE_ID,
 )
 BASELINE_CANDIDATE_IDS = frozenset(CANDIDATE_SIMPLICITY_ORDER[:2])
 COMPLEX_CANDIDATE_IDS = frozenset(CANDIDATE_SIMPLICITY_ORDER[2:])
@@ -72,6 +82,7 @@ def _available_mean(
     results: tuple[ForecastEvaluationResult, ...],
     *,
     expected_fold_ids: tuple[str, ...],
+    include_available_warnings: bool = False,
 ) -> tuple[float | None, int, str | None]:
     by_fold: dict[str, ForecastEvaluationResult] = {}
     for result in results:
@@ -93,6 +104,9 @@ def _available_mean(
         for fold_id in expected_fold_ids
         if fold_id in by_fold and not by_fold[fold_id].prediction_available
     )
+    result_warnings = tuple(
+        sorted({result.warning for result in results if result.warning})
+    )
     if missing or unavailable or len(results) != len(expected_fold_ids):
         details: list[str] = []
         if missing:
@@ -106,6 +120,8 @@ def _available_mean(
         )
         if unexpected:
             details.append(f"unexpected folds: {', '.join(unexpected)}")
+        if include_available_warnings and result_warnings:
+            details.append(f"warnings: {', '.join(result_warnings)}")
         return None, len(available), "; ".join(details)
     values = tuple(result.mae for result in available)
     if len(values) != len(expected_fold_ids) or any(
@@ -115,17 +131,24 @@ def _available_mean(
     mean = math.fsum(value for value in values if value is not None) / len(values)
     if not math.isfinite(mean):
         raise ValueError("mean selection MAE must be finite")
-    return mean, len(available), None
+    warning = (
+        "; ".join(result_warnings)
+        if include_available_warnings and result_warnings
+        else None
+    )
+    return mean, len(available), warning
 
 
 def _simpler_or_lower(
     candidates: tuple[tuple[str, float], ...],
+    *,
+    simplicity_order: tuple[str, ...] = CANDIDATE_SIMPLICITY_ORDER,
 ) -> tuple[str, float]:
     if not candidates:
         raise ValueError("at least one candidate is required")
     simplicity = {
         candidate_id: index
-        for index, candidate_id in enumerate(CANDIDATE_SIMPLICITY_ORDER)
+        for index, candidate_id in enumerate(simplicity_order)
     }
     selected = candidates[0]
     for candidate in candidates[1:]:
@@ -137,11 +160,14 @@ def _simpler_or_lower(
     return selected
 
 
-def summarize_symbol_selection(
+def _summarize_symbol_selection(
     *,
     symbol: str,
     results: tuple[ForecastEvaluationResult, ...],
     expected_selection_fold_ids: tuple[str, ...],
+    target_type: ForecastTargetType,
+    candidate_order: tuple[str, ...],
+    include_available_warnings: bool,
 ) -> SymbolSelectionSummary:
     """Apply the approved 5% improvement and 1% practical-tie policy."""
     if not symbol:
@@ -152,7 +178,7 @@ def summarize_symbol_selection(
         raise ValueError("expected selection fold identifiers must be unique")
     if any(
         result.symbol != symbol
-        or result.target_type is not ForecastTargetType.RETURN
+        or result.target_type is not target_type
         or result.fold_purpose is not FoldPurpose.SELECTION
         for result in results
     ):
@@ -160,7 +186,7 @@ def summarize_symbol_selection(
             "selection summaries accept only matching return selection results"
         )
 
-    grouped = {candidate_id: [] for candidate_id in CANDIDATE_SIMPLICITY_ORDER}
+    grouped = {candidate_id: [] for candidate_id in candidate_order}
     for result in results:
         if result.candidate_id not in grouped:
             raise ValueError(
@@ -169,16 +195,20 @@ def summarize_symbol_selection(
         grouped[result.candidate_id].append(result)
 
     aggregates: dict[str, tuple[float | None, int, str | None]] = {}
-    for candidate_id in CANDIDATE_SIMPLICITY_ORDER:
+    for candidate_id in candidate_order:
         aggregates[candidate_id] = _available_mean(
             tuple(grouped[candidate_id]),
             expected_fold_ids=expected_selection_fold_ids,
+            include_available_warnings=include_available_warnings,
         )
+
+    baseline_candidate_ids = frozenset(candidate_order[:2])
+    complex_candidate_ids = frozenset(candidate_order[2:])
 
     baseline_options = tuple(
         (candidate_id, aggregates[candidate_id][0])
-        for candidate_id in CANDIDATE_SIMPLICITY_ORDER
-        if candidate_id in BASELINE_CANDIDATE_IDS
+        for candidate_id in candidate_order
+        if candidate_id in baseline_candidate_ids
         and aggregates[candidate_id][0] is not None
     )
     if not baseline_options:
@@ -193,7 +223,7 @@ def summarize_symbol_selection(
                 practical_tie_with_best_baseline=None,
                 warning=aggregates[candidate_id][2],
             )
-            for candidate_id in CANDIDATE_SIMPLICITY_ORDER
+            for candidate_id in candidate_order
         )
         return SymbolSelectionSummary(
             symbol=symbol,
@@ -210,18 +240,19 @@ def summarize_symbol_selection(
             (candidate_id, mean)
             for candidate_id, mean in baseline_options
             if mean is not None
-        )
+        ),
+        simplicity_order=candidate_order,
     )
     statistics_list: list[CandidateSelectionStatistics] = []
     qualifying: list[tuple[str, float]] = []
-    for candidate_id in CANDIDATE_SIMPLICITY_ORDER:
+    for candidate_id in candidate_order:
         mean, available_count, warning = aggregates[candidate_id]
         improvement: float | None = None
         clears = False
         tie: bool | None = None
         if mean is not None:
             tie = _is_practical_tie(mean, best_baseline_mae)
-            if candidate_id in COMPLEX_CANDIDATE_IDS:
+            if candidate_id in complex_candidate_ids:
                 improvement = (
                     None
                     if best_baseline_mae == 0.0
@@ -251,13 +282,50 @@ def summarize_symbol_selection(
 
     leading_id = best_baseline_id
     if qualifying:
-        leading_id, _ = _simpler_or_lower(tuple(qualifying))
+        leading_id, _ = _simpler_or_lower(
+            tuple(qualifying),
+            simplicity_order=candidate_order,
+        )
     return SymbolSelectionSummary(
         symbol=symbol,
         best_baseline_id=best_baseline_id,
         best_baseline_mean_selection_mae=best_baseline_mae,
         leading_selection_candidate_id=leading_id,
-        baseline_remains_leading=leading_id in BASELINE_CANDIDATE_IDS,
+        baseline_remains_leading=leading_id in baseline_candidate_ids,
         candidate_statistics=tuple(statistics_list),
         warning=None,
+    )
+
+
+def summarize_symbol_selection(
+    *,
+    symbol: str,
+    results: tuple[ForecastEvaluationResult, ...],
+    expected_selection_fold_ids: tuple[str, ...],
+) -> SymbolSelectionSummary:
+    """Apply the approved Phase 4 return-selection policy unchanged."""
+    return _summarize_symbol_selection(
+        symbol=symbol,
+        results=results,
+        expected_selection_fold_ids=expected_selection_fold_ids,
+        target_type=ForecastTargetType.RETURN,
+        candidate_order=CANDIDATE_SIMPLICITY_ORDER,
+        include_available_warnings=False,
+    )
+
+
+def summarize_volatility_selection(
+    *,
+    symbol: str,
+    results: tuple[ForecastEvaluationResult, ...],
+    expected_selection_fold_ids: tuple[str, ...],
+) -> SymbolSelectionSummary:
+    """Apply the approved policy to volatility selection folds only."""
+    return _summarize_symbol_selection(
+        symbol=symbol,
+        results=results,
+        expected_selection_fold_ids=expected_selection_fold_ids,
+        target_type=ForecastTargetType.VOLATILITY,
+        candidate_order=VOLATILITY_CANDIDATE_SIMPLICITY_ORDER,
+        include_available_warnings=True,
     )

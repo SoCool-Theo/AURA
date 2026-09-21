@@ -1,4 +1,4 @@
-"""Shared validation and feature extraction for return-model candidates."""
+"""Shared validation and feature extraction for forecast-model candidates."""
 
 from __future__ import annotations
 
@@ -25,6 +25,15 @@ def require_return_target(target_type: ForecastTargetType) -> None:
         )
 
 
+def require_volatility_target(target_type: ForecastTargetType) -> None:
+    """Reject target types unsupported by the Phase 5 candidates."""
+    if target_type is not ForecastTargetType.VOLATILITY:
+        raise ForecastModelInputError(
+            "Phase 5 volatility candidates support only "
+            "realized_volatility_30d"
+        )
+
+
 def _feature_vector(row: ForecastDatasetRow) -> tuple[float, ...]:
     values = tuple(float(getattr(row.features, name)) for name in FEATURE_NAMES)
     if len(values) != len(FEATURE_NAMES) or not all(
@@ -36,11 +45,12 @@ def _feature_vector(row: ForecastDatasetRow) -> tuple[float, ...]:
     return values
 
 
-def supervised_fold_arrays(
+def _supervised_fold_arrays(
     *,
     training_rows: Sequence[ForecastDatasetRow],
     evaluation_rows: Sequence[ForecastDatasetRow],
     information_cutoff: date,
+    target_type: ForecastTargetType,
 ) -> tuple[
     tuple[tuple[float, ...], ...],
     tuple[float, ...],
@@ -83,14 +93,64 @@ def supervised_fold_arrays(
 
     training_features = tuple(_feature_vector(row) for row in training_rows)
     training_targets = tuple(
-        float(row.target.return_30d) for row in training_rows
+        float(
+            row.target.return_30d
+            if target_type is ForecastTargetType.RETURN
+            else row.target.realized_volatility_30d
+        )
+        for row in training_rows
     )
     if not all(math.isfinite(value) for value in training_targets):
         raise ForecastModelInputError("model training targets must be finite")
+    if (
+        target_type is ForecastTargetType.VOLATILITY
+        and any(value < 0.0 for value in training_targets)
+    ):
+        raise ForecastModelInputError(
+            "volatility model training targets must be non-negative"
+        )
     evaluation_features = tuple(
         _feature_vector(row) for row in evaluation_rows
     )
     return training_features, training_targets, evaluation_features
+
+
+def supervised_fold_arrays(
+    *,
+    training_rows: Sequence[ForecastDatasetRow],
+    evaluation_rows: Sequence[ForecastDatasetRow],
+    information_cutoff: date,
+) -> tuple[
+    tuple[tuple[float, ...], ...],
+    tuple[float, ...],
+    tuple[tuple[float, ...], ...],
+]:
+    """Build Phase 4 return arrays without changing the existing contract."""
+    return _supervised_fold_arrays(
+        training_rows=training_rows,
+        evaluation_rows=evaluation_rows,
+        information_cutoff=information_cutoff,
+        target_type=ForecastTargetType.RETURN,
+    )
+
+
+def supervised_volatility_fold_arrays(
+    *,
+    training_rows: Sequence[ForecastDatasetRow],
+    evaluation_rows: Sequence[ForecastDatasetRow],
+    information_cutoff: date,
+) -> tuple[
+    tuple[tuple[float, ...], ...],
+    tuple[float, ...],
+    tuple[tuple[float, ...], ...],
+]:
+    """Build ordered volatility training arrays and evaluation features."""
+    return _supervised_fold_arrays(
+        training_rows=training_rows,
+        evaluation_rows=evaluation_rows,
+        information_cutoff=information_cutoff,
+        target_type=ForecastTargetType.VOLATILITY,
+    )
 
 
 def chronological_return_targets(
@@ -121,6 +181,43 @@ def chronological_return_targets(
     values = tuple(float(row.target.return_30d) for row in ordered)
     if not all(math.isfinite(value) for value in values):
         raise ForecastModelInputError("ARIMA training targets must be finite")
+    return values
+
+
+def chronological_volatility_targets(
+    *,
+    training_rows: Sequence[ForecastDatasetRow],
+    information_cutoff: date,
+) -> tuple[float, ...]:
+    """Return purged volatility labels ordered by endpoint then origin."""
+    if type(information_cutoff) is not date:
+        raise ForecastModelInputError("information_cutoff must be a date")
+    if not training_rows:
+        raise ForecastModelInputError("ARIMA training rows cannot be empty")
+    if any(
+        row.target.endpoint_date >= information_cutoff for row in training_rows
+    ):
+        raise ForecastModelInputError(
+            "training target endpoints must be before the information cutoff"
+        )
+    ordered = tuple(
+        sorted(
+            training_rows,
+            key=lambda row: (
+                row.target.endpoint_date,
+                row.features.origin_date,
+            ),
+        )
+    )
+    values = tuple(
+        float(row.target.realized_volatility_30d) for row in ordered
+    )
+    if not all(math.isfinite(value) for value in values):
+        raise ForecastModelInputError("ARIMA training targets must be finite")
+    if any(value < 0.0 for value in values):
+        raise ForecastModelInputError(
+            "ARIMA volatility training targets must be non-negative"
+        )
     return values
 
 
