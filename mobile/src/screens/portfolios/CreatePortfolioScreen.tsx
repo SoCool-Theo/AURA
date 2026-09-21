@@ -415,7 +415,7 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
                   onValueChange={(shares) =>
                     patchRow(row.id, { shares })
                   }
-                  placeholder="10.5"
+                  placeholder="10.50"
                   editable={!saving}
                   error={visibleFieldError(
                     `create-${row.id}-shares`,

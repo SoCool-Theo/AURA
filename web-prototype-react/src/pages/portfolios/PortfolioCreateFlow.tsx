@@ -307,7 +307,7 @@ export function PortfolioCreateFlow() {
                           onValueChange={(shares) =>
                             updateHolding(holding.id, { shares })
                           }
-                          placeholder="10.5"
+                          placeholder="10.50"
                           disabled={saving}
                           error={inputWarning?.elementId === `create-holding-${holding.id}-shares` ? inputWarning.message : null}
                         />

@@ -466,12 +466,12 @@ test('real holding contracts preserve precision, order, modes, and valuation all
   const simulation = load('src/simulation/simulationValidation.ts');
 
   const result = validation.validateRealHoldingDrafts([
-    { id: 'first', symbol: ' msft ', shares: '10.125' },
+    { id: 'first', symbol: ' msft ', shares: '10.12' },
     { id: 'second', symbol: 'AAPL', shares: '4.5' }
   ]);
   assert.equal(result.error, null);
   assert.deepEqual(JSON.parse(JSON.stringify(result.holdings)), [
-    { symbol: 'MSFT', shares: '10.125' },
+    { symbol: 'MSFT', shares: '10.12' },
     { symbol: 'AAPL', shares: '4.5' }
   ]);
   assert.match(
@@ -511,6 +511,7 @@ test('portfolio input warnings identify, reveal, and focus the first invalid mob
   const create = read('src/screens/portfolios/CreatePortfolioScreen.tsx');
   const editor = read('src/components/portfolio/HoldingsEditor.tsx');
   const input = read('src/components/ui/Input.tsx');
+  const validation = load('src/portfolio/portfolioValidation.ts');
 
   assert.match(warning, /Alert\.alert\(/);
   assert.match(warning, /text: 'Show me'/);
@@ -520,6 +521,13 @@ test('portfolio input warnings identify, reveal, and focus the first invalid mob
   assert.match(editor, /presentInputWarning\(localHoldingInputWarning/);
   assert.match(create, /fieldRefs\.current\.get\(fieldKey\)\?\.focus\(\)/);
   assert.match(input, /forwardRef<TextInput, InputProps>/);
+  assert.match(create, /placeholder="10\.50"/);
+  assert.match(editor, /placeholder="10\.50"/);
+  assert.match(validation.validateRealHoldingDrafts([{
+    id: 'one',
+    symbol: 'AAPL',
+    shares: '10.125'
+  }]).error, /up to 2 decimal places/);
 });
 
 test('planned mobile contracts preserve amount authority and consume backend target weights', async () => {

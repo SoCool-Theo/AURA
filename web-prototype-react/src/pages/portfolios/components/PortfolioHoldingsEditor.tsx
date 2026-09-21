@@ -224,7 +224,7 @@ export function PortfolioHoldingsEditor({
                       onValueChange={(shares) =>
                         updateHolding(holding.id, { shares })
                       }
-                      placeholder="10.5"
+                      placeholder="10.50"
                       disabled={saving}
                       error={inputWarning?.elementId === `edit-holding-${holding.id}-shares` ? inputWarning.message : null}
                     />

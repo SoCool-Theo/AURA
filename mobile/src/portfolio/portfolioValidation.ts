@@ -81,14 +81,17 @@ export function plannedHoldingToDraft(
   });
 }
 
-function positiveDecimal(value: string): string | null {
+function positiveDecimal(
+  value: string,
+  maximumDecimalDigits = 12
+): string | null {
   const normalized = value.trim();
   const match = /^(\d+)(?:\.(\d+))?$/.exec(normalized);
   if (!match || !/[1-9]/.test(normalized)) return null;
 
   const integerDigits = match[1].replace(/^0+/, '').length || 1;
   const decimalDigits = match[2]?.length ?? 0;
-  if (integerDigits > 16 || decimalDigits > 12) return null;
+  if (integerDigits > 16 || decimalDigits > maximumDecimalDigits) return null;
   return normalized;
 }
 
@@ -120,10 +123,10 @@ export function validateRealHoldingDrafts(
       );
     }
 
-    const shares = positiveDecimal(draft.shares);
+    const shares = positiveDecimal(draft.shares, 2);
     if (!shares) {
       return invalidHolding(
-        `${symbol} needs a positive quantity owned with up to 12 decimal places.`,
+        `${symbol} needs a positive quantity owned with up to 2 decimal places.`,
         'shares',
         index
       );

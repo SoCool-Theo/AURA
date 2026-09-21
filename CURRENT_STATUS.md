@@ -2025,3 +2025,14 @@ remain separate follow-on work.
   39 passed; complete backend unit suite: 2,389 passed. Web
   production-authority suite: 20 passed and production build completed. Mobile
   TypeScript compilation completed.
+
+### Completed symbol-warning layout and share precision
+
+- Web asset-symbol controls keep the picker button aligned to the input when an
+  inline validation warning is shown; the warning no longer stretches the
+  button below the input.
+- Web and mobile current-share inputs now use `10.50` guidance and enforce a
+  maximum of two decimal places in local validation before submission.
+- Web production-authority suite: 20 passed and production build completed.
+  Mobile production-authority suite: 31 passed and TypeScript compilation
+  completed.

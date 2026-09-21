@@ -72,6 +72,13 @@ test('current and planned holding validation preserves facts and never creates w
     field: 'shares',
     message: invalid.error,
   });
+
+  const excessSharePrecision = validation.validateRealHoldingDrafts([{
+    id: 4,
+    symbol: 'AAPL',
+    shares: '10.125',
+  }]);
+  assert.match(excessSharePrecision.error, /up to 2 decimal places/);
 });
 
 test('portfolio input warnings identify, reveal, and focus the first invalid web field', () => {
@@ -80,6 +87,7 @@ test('portfolio input warnings identify, reveal, and focus the first invalid web
   const create = read('src/pages/portfolios/PortfolioCreateFlow.tsx');
   const editor = read('src/pages/portfolios/components/PortfolioHoldingsEditor.tsx');
   const symbol = read('src/pages/portfolios/components/AssetSymbolField.tsx');
+  const styles = read('src/pages/portfolios/PortfolioIntegration.module.css');
 
   assert.match(warning, /window\.alert\(`Check your information/);
   assert.match(warning, /scrollIntoView\(\{ behavior: 'smooth', block: 'center' \}\)/);
@@ -88,6 +96,13 @@ test('portfolio input warnings identify, reveal, and focus the first invalid web
   assert.match(create, /presentInputWarning\(localHoldingInputWarning/);
   assert.match(editor, /presentInputWarning\(localHoldingInputWarning/);
   assert.match(symbol, /aria-invalid=\{Boolean\(error\)\}/);
+  assert.match(create, /placeholder="10\.50"/);
+  assert.match(editor, /placeholder="10\.50"/);
+  const pickerButtonStyles = styles.match(
+    /\.assetSymbolPickerButton\s*\{[\s\S]*?\}/,
+  )?.[0] ?? '';
+  assert.match(pickerButtonStyles, /height:\s*34px/);
+  assert.doesNotMatch(pickerButtonStyles, /bottom:/);
 });
 
 test('current, planned, and legacy allocation displays consume their authoritative source', () => {
