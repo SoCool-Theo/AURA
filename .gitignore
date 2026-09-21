@@ -86,4 +86,7 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 
+# Offline forecasting model artifacts and run state
+backend/artifacts/forecasting/
+
 mobile/.expo/
