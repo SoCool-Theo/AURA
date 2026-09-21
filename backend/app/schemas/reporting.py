@@ -1,5 +1,7 @@
 """Pydantic contracts for persisted portfolio-analysis reports."""
 
+from __future__ import annotations
+
 from datetime import date
 from decimal import Decimal
 import math
@@ -186,6 +188,9 @@ class PortfolioReportV3Snapshot(AuraBaseModel):
     schema_version: Literal["portfolio-analysis-response-v3"]
     analysis: PortfolioAnalysisResponse
     baseline: PlannedPortfolioBaselineContext
+    currency_conversion: PortfolioReportV3CurrencyConversionContext | None = (
+        None
+    )
 
     @model_validator(mode="after")
     def validate_analysis_baseline(self) -> Self:
@@ -213,6 +218,57 @@ class PortfolioReportV3Snapshot(AuraBaseModel):
         return self
 
 
+class PortfolioReportV3CurrencyConversionContext(AuraBaseModel):
+    """Frozen USD/THB rate available for saved-report display only."""
+
+    requested_date: date
+    fx: PortfolioValuationFxResponse
+
+    @model_validator(mode="after")
+    def validate_fx_date(self) -> Self:
+        if self.fx.as_of > self.requested_date:
+            raise ValueError("FX observation date must not be after requested_date")
+        return self
+
+
+class PortfolioReportV3CurrencyHolding(AuraBaseModel):
+    """One backend-converted planned amount for display."""
+
+    symbol: AssetSymbol
+    proposed_amount: _PositiveValuationDecimal
+
+
+class PortfolioReportV3CurrencyView(AuraBaseModel):
+    """One complete backend-owned currency view of a planned report."""
+
+    currency: Literal["USD", "THB"]
+    total_proposed_amount: _PositiveValuationDecimal
+    holdings: Annotated[
+        list[PortfolioReportV3CurrencyHolding],
+        Field(min_length=1),
+    ]
+    monetary_metrics: PortfolioReportMonetaryMetrics
+    asset_monetary_metrics: Annotated[
+        list[PortfolioReportAssetMonetaryMetrics],
+        Field(min_length=1),
+    ]
+
+    @model_validator(mode="after")
+    def validate_currency_view(self) -> Self:
+        if self.monetary_metrics.currency != self.currency:
+            raise ValueError("portfolio monetary currency must match view")
+        if any(
+            metric.currency != self.currency
+            for metric in self.asset_monetary_metrics
+        ):
+            raise ValueError("asset monetary currency must match view")
+        if {holding.symbol for holding in self.holdings} != {
+            metric.symbol for metric in self.asset_monetary_metrics
+        }:
+            raise ValueError("currency-view holdings and assets must match")
+        return self
+
+
 class PortfolioReportV3Response(PortfolioReportV3Snapshot):
     """Persisted V3 envelope and immutable planned-portfolio snapshot."""
 
@@ -223,6 +279,9 @@ class PortfolioReportV3Response(PortfolioReportV3Snapshot):
     asset_monetary_metrics: list[
         PortfolioReportAssetMonetaryMetrics
     ] = Field(default_factory=list)
+    currency_views: list[PortfolioReportV3CurrencyView] = Field(
+        default_factory=list
+    )
 
     @model_validator(mode="after")
     def validate_asset_monetary_metrics(self) -> Self:
@@ -260,6 +319,26 @@ class PortfolioReportV3Response(PortfolioReportV3Snapshot):
                 raise ValueError(
                     "asset monetary reference must match proposed amount"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_currency_views(self) -> Self:
+        if not self.currency_views:
+            return self
+        currencies = [view.currency for view in self.currency_views]
+        if len(currencies) != len(set(currencies)):
+            raise ValueError("planned report currency views must be unique")
+        if currencies[0] != self.baseline.plan_currency:
+            raise ValueError("first currency view must match plan currency")
+        expected_symbols = [
+            holding.symbol for holding in self.baseline.holdings
+        ]
+        if any(
+            [holding.symbol for holding in view.holdings]
+            != expected_symbols
+            for view in self.currency_views
+        ):
+            raise ValueError("currency-view holdings must match the plan")
         return self
 
 

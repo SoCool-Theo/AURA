@@ -74,8 +74,24 @@ export type PortfolioReportV3Response = PortfolioReportEnvelope & {
   schema_version: 'portfolio-analysis-response-v3';
   analysis: PortfolioAnalysisResponse;
   baseline: PlannedPortfolioBaselineContext;
+  currency_conversion?: {
+    requested_date: IsoDate;
+    fx: PortfolioValuationFxResponse;
+  } | null;
   monetary_metrics?: PortfolioReportMonetaryMetrics | null;
   asset_monetary_metrics?: PortfolioReportAssetMonetaryMetrics[];
+  currency_views?: PortfolioReportV3CurrencyView[];
+};
+
+export type PortfolioReportV3CurrencyView = {
+  currency: PortfolioCurrency;
+  total_proposed_amount: DecimalString;
+  holdings: Array<{
+    symbol: string;
+    proposed_amount: DecimalString;
+  }>;
+  monetary_metrics: PortfolioReportMonetaryMetrics;
+  asset_monetary_metrics: PortfolioReportAssetMonetaryMetrics[];
 };
 
 export type PortfolioReportResponse =

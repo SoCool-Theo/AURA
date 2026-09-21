@@ -138,9 +138,11 @@ portfolio.
 
 V3 freezes plan currency, ordered proposed amounts, exact backend-derived target
 weights, complete analytics including per-asset risk classifications and dated
-per-asset returns, and the hypothetical/non-forecast notice. Planned analysis
-does not require current prices or FX, and estimated shares are not saved in
-the report.
+per-asset returns, the hypothetical/non-forecast notice, and an optional
+best-effort USD/THB display-conversion observation. Planned analysis does not
+require current prices or FX, and estimated shares are not saved in the report.
+If FX is unavailable, report creation still succeeds with the original plan
+currency only.
 
 V2 and V3 report detail responses derive both portfolio-level
 `monetary_metrics` and ordered per-asset `asset_monetary_metrics` from the
@@ -155,7 +157,10 @@ fields do not trigger revaluation, mutate saved JSONB, or require a migration.
 For planned V3 reports, portfolio-level monetary context also includes
 `estimated_ending_value`: the saved proposed total plus the saved historical
 cumulative-return amount. Clients display this backend-derived value and do
-not calculate it locally.
+not calculate it locally. V3 detail also returns ordered `currency_views`.
+When frozen FX is present these contain complete USD and THB proposed amounts,
+portfolio monetary metrics, and per-asset monetary metrics. Opening history
+derives both views from the immutable snapshot without a live FX request.
 
 ## Simulations and immutable history
 

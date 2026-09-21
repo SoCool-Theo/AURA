@@ -339,7 +339,9 @@ valuation currency/date, price dates, USD/display totals, optional FX, holding
 facts, prices, values, dynamic allocations, complete analytics, per-asset
 metrics, and risk contribution/rank. V3 freezes the plan currency, ordered
 proposed amounts, exact backend target weights, complete analytics, and the
-hypothetical/non-forecast limitation. It does not store estimated shares.
+hypothetical/non-forecast limitation. Report V3 can additionally freeze one
+best-effort USD/THB observation for display-only currency views; missing FX
+never blocks planned analysis. It does not store estimated shares.
 
 Simulation history supports the existing V1 formats and these V2 formats:
 
@@ -359,7 +361,8 @@ as the modified allocation. For planned simulations, the original allocation
 is the target allocation resolved from proposed amounts; modified percentages
 remain separate hypothetical input. V2 and V3 history freeze their baseline at
 creation. Opening a saved report or simulation restores the JSONB snapshot and
-never revalues or reruns it.
+never revalues or reruns it. Planned report currency switching uses only an FX
+observation frozen at creation and never queries live FX on retrieval.
 
 AI grounding follows the same source boundary: live legacy portfolios use
 saved weights, live current portfolios use current USD valuation, and live

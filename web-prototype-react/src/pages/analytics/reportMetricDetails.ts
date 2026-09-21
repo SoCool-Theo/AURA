@@ -38,8 +38,11 @@ export function assetReportMonetaryMetrics(
 export function reportMetricAmountContent(
   key: ReportMonetaryMetricKey | null,
   report: PortfolioReportResponse | null | undefined,
+  monetaryOverride?: PortfolioReportMonetaryMetrics | null,
 ): MetricAmountDialogContent | null {
-  const monetary = reportMonetaryMetrics(report);
+  const monetary = monetaryOverride === undefined
+    ? reportMonetaryMetrics(report)
+    : monetaryOverride;
   if (!key || !report || !monetary) return null;
 
   const metrics = report.analysis.portfolio_metrics;

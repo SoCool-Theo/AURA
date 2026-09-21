@@ -31,7 +31,10 @@ from backend.app.services.analysis_reporting_service import (
     ReportNotFoundError,
 )
 from backend.app.services.analysis_service import AnalysisService
-from backend.app.services.market_data_service import MarketDataUnavailableError
+from backend.app.services.market_data_service import (
+    MarketDataService,
+    MarketDataUnavailableError,
+)
 from backend.app.services.portfolio_analysis_preparation_service import (
     PortfolioAnalysisPreparationService,
 )
@@ -342,6 +345,15 @@ def test_planned_creation_orchestrates_once_and_persists_v3() -> None:
     )
     preparation_service = MagicMock(spec=PortfolioAnalysisPreparationService)
     service._preparation_service = preparation_service
+    market_data_service = MagicMock(spec=MarketDataService)
+    service._market_data_service = market_data_service
+    market_data_service.get_latest_usd_thb_fx_observation.return_value = (
+        MagicMock(
+            symbol="THB=X",
+            adjusted_close=Decimal("32.50"),
+            date=date(2026, 9, 11),
+        )
+    )
     portfolio = _portfolio()
     preparation = _planned_preparation()
     response = _real_analysis_response()
@@ -388,7 +400,17 @@ def test_planned_creation_orchestrates_once_and_persists_v3() -> None:
         preparation.analysis_request
     )
     composer.assert_called_once_with(preparation, response)
-    snapshot_mapper.assert_called_once_with(enriched)
+    conversion = snapshot_mapper.call_args.kwargs["currency_conversion"]
+    assert conversion is not None
+    assert conversion.requested_date == date(2026, 9, 12)
+    assert conversion.fx.rate == Decimal("32.50")
+    snapshot_mapper.assert_called_once_with(
+        enriched,
+        currency_conversion=conversion,
+    )
+    market_data_service.get_latest_usd_thb_fx_observation.assert_called_once_with(
+        date(2026, 9, 12)
+    )
     repository.save_snapshot.assert_called_once_with(
         portfolio_id=portfolio.id,
         start_date=response.start_date,
@@ -418,6 +440,24 @@ def test_planned_creation_maps_analysis_failure_without_persisting() -> None:
         )
 
     repository.save_snapshot.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_planned_currency_conversion_is_optional_when_fx_is_unavailable(
+) -> None:
+    service, session, _, _, _ = _service_with_dependencies()
+    market_data_service = MagicMock(spec=MarketDataService)
+    service._market_data_service = market_data_service
+    market_data_service.get_latest_usd_thb_fx_observation.side_effect = (
+        MarketDataUnavailableError("FX unavailable")
+    )
+
+    result = service._planned_currency_conversion(date(2026, 9, 12))
+
+    assert result is None
+    market_data_service.get_latest_usd_thb_fx_observation.assert_called_once_with(
+        date(2026, 9, 12)
+    )
     _assert_session_lifecycle_untouched(session)
 
 

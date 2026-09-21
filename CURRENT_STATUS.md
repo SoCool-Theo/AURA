@@ -2009,3 +2009,19 @@ remain separate follow-on work.
 - Web production-authority suite: 20 passed and the production build completed.
   Mobile production-authority suite: 31 passed and TypeScript compilation
   completed.
+
+### Completed planned report USD/THB display switch
+
+- New planned V3 reports capture a best-effort USD/THB observation with its
+  requested date and observation date. Missing or stale FX does not block
+  planned analysis or saving the report.
+- Report detail derives complete backend-owned USD and THB views for the saved
+  proposed total, holding amounts, estimated ending value, and other monetary
+  metric explanations. Percentage, allocation, and risk results do not change.
+- Web and mobile show an accessible USD/THB selector on the saved planned
+  allocation card when the snapshot contains frozen FX. Older reports without
+  FX remain readable in their original plan currency.
+- Focused reporting backend suite: 96 passed; reporting API integration suite:
+  39 passed; complete backend unit suite: 2,389 passed. Web
+  production-authority suite: 20 passed and production build completed. Mobile
+  TypeScript compilation completed.

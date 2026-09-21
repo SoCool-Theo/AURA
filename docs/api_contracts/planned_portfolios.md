@@ -201,6 +201,11 @@ Estimated-share context is optional. If a saved result displays it, the exact
 price and FX context used must be frozen in that snapshot. Opening history never
 recalculates weights, estimates, or analytics.
 
+Report V3 may also freeze a best-effort USD/THB observation solely for display
+conversion. Its absence never blocks planned analysis or report persistence.
+When present, report detail derives complete USD and THB amount views from that
+saved rate; reopening the report does not fetch live FX.
+
 For every simulation mode, the original baseline is resolved consistently:
 
 - `CURRENT`: current dynamic allocation at execution;

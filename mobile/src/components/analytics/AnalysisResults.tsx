@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -49,7 +49,10 @@ export function AnalysisResults({
   const analysis = report.analysis;
   const reportV2 = isPortfolioReportV2(report) ? report : null;
   const reportV3 = isPortfolioReportV3(report) ? report : null;
-  const monetary = reportMonetaryMetrics(report);
+  const defaultMonetary = reportMonetaryMetrics(report);
+  const [selectedPlanCurrency, setSelectedPlanCurrency] = useState(
+    reportV3?.baseline.plan_currency ?? 'USD'
+  );
   const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
   const [returnViewRange, setReturnViewRange] = useState<ReturnViewRange>('1Y');
   const metrics = analysis.portfolio_metrics;
@@ -62,6 +65,16 @@ export function AnalysisResults({
     : 'Cumulative Return';
   const risk = analysis.risk_classification;
   const visibleReturns = filterReturnPoints(analysis.portfolio_returns, returnViewRange);
+  const currencyView = reportV3?.currency_views?.find(
+    (view) => view.currency === selectedPlanCurrency
+  );
+  const monetary = currencyView?.monetary_metrics ?? defaultMonetary;
+  const plannedCurrency = currencyView?.currency
+    ?? reportV3?.baseline.plan_currency;
+
+  useEffect(() => {
+    if (reportV3) setSelectedPlanCurrency(reportV3.baseline.plan_currency);
+  }, [reportV3?.id, reportV3?.baseline.plan_currency]);
 
   return (
     <View style={styles.results}>
@@ -88,25 +101,61 @@ export function AnalysisResults({
               <Text style={styles.overline}>SAVED PLANNED ALLOCATION</Text>
               <Text style={styles.snapshotValue}>
                 {formatPortfolioMoney(
-                  reportV3.baseline.total_proposed_amount,
-                  reportV3.baseline.plan_currency
+                  currencyView?.total_proposed_amount ?? reportV3.baseline.total_proposed_amount,
+                  plannedCurrency ?? reportV3.baseline.plan_currency
                 )}
               </Text>
             </View>
-            <Tag label={reportV3.baseline.plan_currency} tone="primary" />
+            {reportV3.currency_views && reportV3.currency_views.length > 1 ? (
+              <View style={styles.currencyToggle} accessibilityRole="radiogroup">
+                {reportV3.currency_views.map((view) => {
+                  const selected = view.currency === plannedCurrency;
+                  return (
+                    <Pressable
+                      key={view.currency}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Show amounts in ${view.currency}`}
+                      onPress={() => setSelectedPlanCurrency(view.currency)}
+                      style={({ pressed }) => [
+                        styles.currencyButton,
+                        selected && styles.currencyButtonActive,
+                        pressed && styles.currencyButtonPressed
+                      ]}
+                    >
+                      <Text style={[
+                        styles.currencyButtonText,
+                        selected && styles.currencyButtonTextActive
+                      ]}>{view.currency}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : <Tag label={reportV3.baseline.plan_currency} tone="primary" />}
           </View>
           <Text style={styles.cardText}>{reportV3.baseline.hypothetical_notice}</Text>
-          {reportV3.baseline.holdings.map((holding) => (
-            <View key={holding.id} style={styles.metadataRow}>
+          {reportV3.baseline.holdings.map((holding) => {
+            const displayedHolding = currencyView?.holdings.find(
+              (item) => item.symbol === holding.symbol
+            );
+            return <View key={holding.id} style={styles.metadataRow}>
               <Text style={styles.metadataLabel}>{holding.symbol}</Text>
               <Text style={styles.metadataValue}>
-                {formatPortfolioMoney(holding.proposed_amount, reportV3.baseline.plan_currency)} · {formatRatioPercent(Number(holding.target_allocation))}
+                {formatPortfolioMoney(
+                  displayedHolding?.proposed_amount ?? holding.proposed_amount,
+                  plannedCurrency ?? reportV3.baseline.plan_currency
+                )} · {formatRatioPercent(Number(holding.target_allocation))}
               </Text>
-            </View>
-          ))}
+            </View>;
+          })}
           <Text style={styles.cardText}>
             Target weights come from proposed amounts. Estimated shares are for display only and do not affect this analysis.
           </Text>
+          {reportV3.currency_conversion && reportV3.currency_views && reportV3.currency_views.length > 1 ? (
+            <Text style={styles.cardText}>
+              USD/THB {formatPortfolioQuantity(reportV3.currency_conversion.fx.rate)} as of {reportV3.currency_conversion.fx.as_of}. Changing currency changes displayed amounts only, not the analysis.
+            </Text>
+          ) : null}
         </Card>
       ) : reportV2 ? (
         <Card style={styles.snapshotCard}>
@@ -398,7 +447,7 @@ export function AnalysisResults({
         Historical analytics are educational, not investment recommendations. These metrics reflect the saved Aura analysis.
       </Text>
       <MetricAmountSheet
-        content={reportMetricAmountContent(selectedMetric, report)}
+        content={reportMetricAmountContent(selectedMetric, report, monetary)}
         onClose={() => setSelectedMetric(null)}
       />
     </View>
@@ -430,6 +479,26 @@ const styles = StyleSheet.create({
   plannedCard: { gap: spacing.md, backgroundColor: colors.summaryBackground, borderColor: colors.primary },
   legacyCard: { gap: spacing.sm, backgroundColor: colors.warningBackground },
   snapshotValue: { color: colors.text, fontSize: 24, fontWeight: '900', marginTop: spacing.xs },
+  currencyToggle: {
+    flexDirection: 'row',
+    padding: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 9,
+    backgroundColor: colors.surfaceAlt
+  },
+  currencyButton: {
+    minWidth: 48,
+    minHeight: 30,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  currencyButtonActive: { backgroundColor: colors.selectedBackground },
+  currencyButtonPressed: { opacity: 0.75 },
+  currencyButtonText: { color: colors.muted, fontSize: 10, fontWeight: '900' },
+  currencyButtonTextActive: { color: colors.primary },
   summaryHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   overline: { color: colors.primary, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   summaryTitle: { color: colors.text, fontSize: 19, fontWeight: '900', marginTop: 4 },

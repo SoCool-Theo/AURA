@@ -16,8 +16,10 @@ from backend.app.schemas.reporting import (
     PortfolioReportV2Response,
     PortfolioReportV2Snapshot,
     PortfolioReportV3Response,
+    PortfolioReportV3CurrencyConversionContext,
     PortfolioReportV3Snapshot,
 )
+from backend.app.schemas.portfolio import PortfolioValuationFxResponse
 from backend.app.services.analysis_reporting_mapper import (
     PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION,
     PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
@@ -395,6 +397,95 @@ def test_v2_record_maps_snapshot_without_revaluation_or_mutation() -> None:
         for metric in result.asset_monetary_metrics
     )
     assert analysis.result_snapshot == frozen_snapshot
+
+
+def test_v3_record_derives_usd_and_thb_views_from_frozen_fx() -> None:
+    enriched = compose_portfolio_analysis(
+        _planned_preparation(),
+        _real_analysis_response(),
+    )
+    snapshot = enriched_analysis_to_v3_snapshot(
+        enriched,
+        currency_conversion=PortfolioReportV3CurrencyConversionContext(
+            requested_date=date(2026, 9, 12),
+            fx=PortfolioValuationFxResponse(
+                pair="USD/THB",
+                provider_symbol="THB=X",
+                rate=Decimal("32.50"),
+                as_of=date(2026, 9, 11),
+            ),
+        ),
+    )
+    analysis = _analysis_record(
+        result_snapshot=snapshot,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+        start_date=date(2022, 1, 1),
+        end_date=date(2022, 12, 31),
+    )
+
+    result = analysis_record_to_report_response(analysis)
+
+    assert isinstance(result, PortfolioReportV3Response)
+    assert [view.currency for view in result.currency_views] == ["USD", "THB"]
+    usd_view, thb_view = result.currency_views
+    assert usd_view.total_proposed_amount == Decimal("1000")
+    assert thb_view.total_proposed_amount == Decimal("32500.00")
+    assert [
+        holding.proposed_amount for holding in thb_view.holdings
+    ] == [Decimal("19500.00"), Decimal("13000.00")]
+    assert thb_view.monetary_metrics.reference_amount == Decimal("32500.00")
+    assert thb_view.monetary_metrics.estimated_ending_value == Decimal(
+        "34807.50000"
+    )
+    assert all(
+        metric.currency == "THB"
+        for metric in thb_view.asset_monetary_metrics
+    )
+    assert analysis.result_snapshot == snapshot
+
+
+def test_thb_v3_record_derives_usd_view_by_dividing_frozen_fx() -> None:
+    preparation = _planned_preparation()
+    assert preparation.planned_allocation is not None
+    thb_preparation = replace(
+        preparation,
+        planned_allocation=replace(
+            preparation.planned_allocation,
+            plan_currency="THB",
+        ),
+    )
+    enriched = compose_portfolio_analysis(
+        thb_preparation,
+        _real_analysis_response(),
+    )
+    snapshot = enriched_analysis_to_v3_snapshot(
+        enriched,
+        currency_conversion=PortfolioReportV3CurrencyConversionContext(
+            requested_date=date(2026, 9, 12),
+            fx=PortfolioValuationFxResponse(
+                pair="USD/THB",
+                provider_symbol="THB=X",
+                rate=Decimal("40"),
+                as_of=date(2026, 9, 11),
+            ),
+        ),
+    )
+    analysis = _analysis_record(
+        result_snapshot=snapshot,
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+        start_date=date(2022, 1, 1),
+        end_date=date(2022, 12, 31),
+    )
+
+    result = analysis_record_to_report_response(analysis)
+
+    assert isinstance(result, PortfolioReportV3Response)
+    assert [view.currency for view in result.currency_views] == ["THB", "USD"]
+    usd_view = result.currency_views[1]
+    assert usd_view.total_proposed_amount == Decimal("25")
+    assert [
+        holding.proposed_amount for holding in usd_view.holdings
+    ] == [Decimal("15"), Decimal("10")]
 
 
 def test_legacy_v2_snapshot_does_not_infer_historical_amount_from_today_value(

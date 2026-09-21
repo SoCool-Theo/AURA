@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 from ..database.models import Analysis
 from ..database.repositories import AnalysisRepository
 from ..schemas.common import AnalysisPeriod
+from ..schemas.portfolio import PortfolioValuationFxResponse
 from ..schemas.reporting import (
     PortfolioReportDetailResponse,
     PortfolioReportListResponse,
+    PortfolioReportV3CurrencyConversionContext,
 )
 from .analysis_reporting_mapper import (
     PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION,
@@ -23,6 +25,7 @@ from .analysis_reporting_mapper import (
     enriched_analysis_to_v3_snapshot,
 )
 from .analysis_service import AnalysisService
+from .market_data_service import MarketDataService, MarketDataUnavailableError
 from .portfolio_analysis_composition import compose_portfolio_analysis
 from .portfolio_analysis_preparation_service import (
     PortfolioAnalysisBaselineKind,
@@ -48,7 +51,30 @@ class AnalysisReportingService:
         self._portfolio_service = PortfolioService(session)
         self._preparation_service = PortfolioAnalysisPreparationService(session)
         self._analysis_service = AnalysisService(session)
+        self._market_data_service = MarketDataService(session)
         self._repository = AnalysisRepository(session)
+
+    def _planned_currency_conversion(
+        self,
+        requested_date: date,
+    ) -> PortfolioReportV3CurrencyConversionContext | None:
+        """Capture optional FX without making planned analysis depend on it."""
+        try:
+            observation = (
+                self._market_data_service
+                .get_latest_usd_thb_fx_observation(requested_date)
+            )
+        except (MarketDataUnavailableError, ValueError, IndexError):
+            return None
+        return PortfolioReportV3CurrencyConversionContext(
+            requested_date=requested_date,
+            fx=PortfolioValuationFxResponse(
+                pair="USD/THB",
+                provider_symbol=observation.symbol,
+                rate=observation.adjusted_close,
+                as_of=observation.date,
+            ),
+        )
 
     def create_report(
         self,
@@ -99,7 +125,12 @@ class AnalysisReportingService:
         elif preparation.baseline_kind is PortfolioAnalysisBaselineKind.PLANNED:
             enriched = compose_portfolio_analysis(preparation, response)
             schema_version = PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION
-            snapshot = enriched_analysis_to_v3_snapshot(enriched)
+            snapshot = enriched_analysis_to_v3_snapshot(
+                enriched,
+                currency_conversion=self._planned_currency_conversion(
+                    selected_valuation_date
+                ),
+            )
         else:
             enriched = compose_portfolio_analysis(preparation, response)
             schema_version = PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION

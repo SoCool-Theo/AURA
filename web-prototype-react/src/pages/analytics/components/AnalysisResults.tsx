@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Icon } from '../../../components/ui/Icon';
 import { go, replace } from '../../../app/routes';
@@ -49,7 +49,10 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
   const analysis = report.analysis;
   const reportV2 = isPortfolioReportV2(report) ? report : null;
   const reportV3 = isPortfolioReportV3(report) ? report : null;
-  const monetary = reportMonetaryMetrics(report);
+  const defaultMonetary = reportMonetaryMetrics(report);
+  const [selectedPlanCurrency, setSelectedPlanCurrency] = useState(
+    reportV3?.baseline.plan_currency ?? 'USD',
+  );
   const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
   const [returnViewRange, setReturnViewRange] = useState<ReturnViewRange>('1Y');
   const metrics = analysis.portfolio_metrics;
@@ -61,6 +64,16 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
     ? 'Historical Portfolio Return'
     : 'Cumulative Return';
   const visibleReturns = visibleReturnPoints(analysis.portfolio_returns, returnViewRange);
+  const currencyView = reportV3?.currency_views?.find(
+    view => view.currency === selectedPlanCurrency,
+  );
+  const monetary = currencyView?.monetary_metrics ?? defaultMonetary;
+  const plannedCurrency = currencyView?.currency
+    ?? reportV3?.baseline.plan_currency;
+
+  useEffect(() => {
+    if (reportV3) setSelectedPlanCurrency(reportV3.baseline.plan_currency);
+  }, [reportV3?.id, reportV3?.baseline.plan_currency]);
 
   function openAssetDetail(symbol: string) {
     replace(`reports/${report.portfolio_id}/${report.id}/assets`);
@@ -76,21 +89,47 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
           <div className={styles.sectionHeading}>
             <div>
               <small className={styles.contextEyebrow}>SAVED PLANNED ALLOCATION</small>
-              <h2>{formatPortfolioMoney(reportV3.baseline.total_proposed_amount, reportV3.baseline.plan_currency)}</h2>
+              <h2>{formatPortfolioMoney(
+                currencyView?.total_proposed_amount ?? reportV3.baseline.total_proposed_amount,
+                plannedCurrency ?? reportV3.baseline.plan_currency,
+              )}</h2>
               <p>{reportV3.baseline.hypothetical_notice}</p>
             </div>
-            <span className={styles.badge}>{reportV3.baseline.plan_currency}</span>
+            {reportV3.currency_views && reportV3.currency_views.length > 1 ? (
+              <div className={styles.currencyToggle} role="group" aria-label="Planned report display currency">
+                {reportV3.currency_views.map(view => (
+                  <button
+                    type="button"
+                    key={view.currency}
+                    className={view.currency === plannedCurrency ? styles.activeCurrency : ''}
+                    aria-pressed={view.currency === plannedCurrency}
+                    onClick={() => setSelectedPlanCurrency(view.currency)}
+                  >
+                    {view.currency}
+                  </button>
+                ))}
+              </div>
+            ) : <span className={styles.badge}>{reportV3.baseline.plan_currency}</span>}
           </div>
           <div className={styles.contextHoldings}>
-            {reportV3.baseline.holdings.map(holding => (
-              <div key={holding.id}>
+            {reportV3.baseline.holdings.map(holding => {
+              const displayedHolding = currencyView?.holdings.find(
+                item => item.symbol === holding.symbol,
+              );
+              return <div key={holding.id}>
                 <strong>{holding.symbol}</strong>
-                <span>{formatPortfolioMoney(holding.proposed_amount, reportV3.baseline.plan_currency)}</span>
+                <span>{formatPortfolioMoney(
+                  displayedHolding?.proposed_amount ?? holding.proposed_amount,
+                  plannedCurrency ?? reportV3.baseline.plan_currency,
+                )}</span>
                 <b>{formatPortfolioAllocation(holding.target_allocation)}</b>
-              </div>
-            ))}
+              </div>;
+            })}
           </div>
           <p className={styles.contextNote}>Target allocation comes from proposed amounts. Estimated shares do not control this analysis.</p>
+          {reportV3.currency_conversion && reportV3.currency_views && reportV3.currency_views.length > 1 && (
+            <p className={styles.contextNote}>USD/THB {formatPortfolioQuantity(reportV3.currency_conversion.fx.rate)} as of {reportV3.currency_conversion.fx.as_of}. Changing currency changes displayed amounts only, not the analysis.</p>
+          )}
         </Card>
       ) : reportV2 ? (
         <Card className={styles.snapshotContext}>
@@ -193,7 +232,7 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
 
       <p className={styles.education}>Historical analytics and money equivalents are educational. They are not actual profit or loss, forecasts, or investment recommendations.</p>
       <MetricAmountDialog
-        content={reportMetricAmountContent(selectedMetric, report)}
+        content={reportMetricAmountContent(selectedMetric, report, monetary)}
         onClose={() => setSelectedMetric(null)}
       />
     </div>
