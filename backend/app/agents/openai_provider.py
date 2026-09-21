@@ -50,6 +50,7 @@ class OpenAIProvider:
         input_data = json.dumps(
             {
                 "aura_grounding_context": request.grounded_context,
+                "conversation_history": request.conversation_history,
                 "user_question": request.user_message,
             },
             ensure_ascii=False,

@@ -66,6 +66,54 @@ def test_provider_request_accepts_json_safe_grounded_context() -> None:
     assert request.grounded_context == context
 
 
+def test_provider_request_preserves_bounded_conversation_history_separately() -> None:
+    history = [
+        {"role": "user", "content": "What is my portfolio?"},
+        {"role": "assistant", "content": "It is concentrated in TLT."},
+    ]
+    request = ProviderRequest(
+        system_instructions="Explain only verified Aura data.",
+        user_message="Why does that matter?",
+        grounded_context={"portfolio": {"id": "portfolio-1"}},
+        conversation_history=history,
+    )
+
+    history[0]["content"] = "mutated"
+    received = request.conversation_history
+    received[1]["content"] = "mutated again"
+
+    assert request.conversation_history == [
+        {"role": "user", "content": "What is my portfolio?"},
+        {"role": "assistant", "content": "It is concentrated in TLT."},
+    ]
+
+
+@pytest.mark.parametrize(
+    "history",
+    [
+        [{"role": "user", "content": "unfinished"}],
+        [
+            {"role": "assistant", "content": "wrong first role"},
+            {"role": "user", "content": "wrong second role"},
+        ],
+        [
+            {"role": "user", "content": "q"},
+            {"role": "assistant", "content": "a"},
+        ] * 5,
+    ],
+)
+def test_provider_request_rejects_invalid_conversation_history(
+    history: list[dict[str, str]],
+) -> None:
+    with pytest.raises(TypeError, match="conversation_history"):
+        ProviderRequest(
+            system_instructions="Explain only verified Aura data.",
+            user_message="Follow up",
+            grounded_context={"portfolio": {"id": "portfolio-1"}},
+            conversation_history=history,
+        )
+
+
 def test_provider_request_copies_context_without_mutating_caller_data() -> None:
     context = {"portfolio": {"holdings": [{"weight": 0.0}]}}
     request = _request(context)

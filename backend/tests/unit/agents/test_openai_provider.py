@@ -117,6 +117,7 @@ def test_responses_api_maps_only_grounded_data_and_preserves_financial_values() 
     input_data = json.loads(arguments["input"])
     assert input_data == {
         "aura_grounding_context": request.grounded_context,
+        "conversation_history": [],
         "user_question": request.user_message,
     }
     context = input_data["aura_grounding_context"]

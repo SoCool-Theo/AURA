@@ -18,6 +18,7 @@ JSONValue: TypeAlias = (
     | dict[str, "JSONValue"]
 )
 JSONContext: TypeAlias = dict[str, JSONValue]
+ConversationHistory: TypeAlias = list[dict[str, str]]
 
 _FORBIDDEN_CONTEXT_KEYS = frozenset(
     {
@@ -94,6 +95,30 @@ def _validate_json_value(value: object) -> None:
     raise TypeError("grounded_context must contain only JSON-safe values")
 
 
+def _validated_history(history: object) -> ConversationHistory:
+    if history is None:
+        return []
+    if not isinstance(history, list):
+        raise TypeError("conversation_history must be a list")
+    if len(history) > 8:
+        raise TypeError("conversation_history exceeds the maximum length")
+    if len(history) % 2 != 0:
+        raise TypeError("conversation_history must contain completed turns")
+    validated: ConversationHistory = []
+    for index, item in enumerate(history):
+        if not isinstance(item, dict) or set(item) != {"role", "content"}:
+            raise TypeError("conversation_history entries must contain role and content")
+        role = item.get("role")
+        content = item.get("content")
+        expected_role = "user" if index % 2 == 0 else "assistant"
+        if role != expected_role:
+            raise TypeError("conversation_history must alternate user and assistant")
+        if not isinstance(content, str) or not content.strip():
+            raise TypeError("conversation_history content must be non-empty text")
+        validated.append({"role": role, "content": content})
+    return deepcopy(validated)
+
+
 def _validated_context(context: object) -> JSONContext:
     if not isinstance(context, dict):
         raise TypeError("grounded_context must be a JSON object")
@@ -113,6 +138,7 @@ class ProviderRequest:
     system_instructions: str
     user_message: str
     _grounded_context: JSONContext = field(repr=False)
+    _conversation_history: ConversationHistory = field(repr=False)
 
     def __init__(
         self,
@@ -120,6 +146,7 @@ class ProviderRequest:
         system_instructions: str,
         user_message: str,
         grounded_context: JSONContext,
+        conversation_history: ConversationHistory | None = None,
     ) -> None:
         object.__setattr__(
             self,
@@ -132,11 +159,21 @@ class ProviderRequest:
             "_grounded_context",
             _validated_context(grounded_context),
         )
+        object.__setattr__(
+            self,
+            "_conversation_history",
+            _validated_history(conversation_history),
+        )
 
     @property
     def grounded_context(self) -> JSONContext:
         """Return an independent JSON-safe copy for a provider adapter."""
         return deepcopy(self._grounded_context)
+
+    @property
+    def conversation_history(self) -> ConversationHistory:
+        """Return bounded prior chat text without treating it as grounding."""
+        return deepcopy(self._conversation_history)
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +198,7 @@ class LLMProvider(Protocol):
 
 
 __all__ = [
+    "ConversationHistory",
     "JSONContext",
     "JSONValue",
     "LLMProvider",

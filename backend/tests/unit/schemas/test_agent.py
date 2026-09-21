@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 import backend.app.schemas as schemas_package
 from backend.app.schemas.agent import (
+    AgentConversationMessage,
     AgentExplainRequest,
     AgentExplainResponse,
     AgentSourceReference,
@@ -47,6 +48,63 @@ def test_request_accepts_valid_minimum_payload() -> None:
     assert request.message == "Why is this portfolio risky?"
     assert request.report_id is None
     assert request.simulation_id is None
+    assert request.history == []
+
+
+def test_request_accepts_completed_conversation_history() -> None:
+    data = _valid_request_data()
+    data["history"] = [
+        {"role": "user", "content": "What is my portfolio?"},
+        {"role": "assistant", "content": "Your portfolio is concentrated in TLT."},
+    ]
+
+    request = AgentExplainRequest.model_validate(data)
+
+    assert request.history == [
+        AgentConversationMessage(role="user", content="What is my portfolio?"),
+        AgentConversationMessage(
+            role="assistant",
+            content="Your portfolio is concentrated in TLT.",
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    "history",
+    [
+        [{"role": "user", "content": "First question"}],
+        [
+            {"role": "assistant", "content": "Wrong first role"},
+            {"role": "user", "content": "Wrong second role"},
+        ],
+        [
+            {"role": "user", "content": "Question one"},
+            {"role": "user", "content": "Question two"},
+        ],
+    ],
+)
+def test_request_rejects_incomplete_or_misordered_history(
+    history: list[dict[str, str]],
+) -> None:
+    data = _valid_request_data()
+    data["history"] = history
+
+    with pytest.raises(ValidationError, match="history must"):
+        AgentExplainRequest.model_validate(data)
+
+
+def test_request_limits_history_to_four_completed_turns() -> None:
+    data = _valid_request_data()
+    data["history"] = [
+        {
+            "role": "user" if index % 2 == 0 else "assistant",
+            "content": f"message {index}",
+        }
+        for index in range(10)
+    ]
+
+    with pytest.raises(ValidationError):
+        AgentExplainRequest.model_validate(data)
 
 
 @pytest.mark.parametrize(
