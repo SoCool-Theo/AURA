@@ -7,6 +7,10 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const root = path.resolve(__dirname, '..');
+const supportedAssetSymbols = [
+  'AAPL', 'MSFT', 'TSLA', 'NVDA', 'AMZN', 'GOOGL', 'META', 'SPY', 'QQQ',
+  'DIA', 'VTI', 'GLD', 'SLV', 'BND', 'TLT', 'BTC-USD', 'ETH-USD'
+];
 
 function load(file, mocks = {}, globals = {}) {
   const module = { exports: {} };
@@ -461,7 +465,9 @@ test('Welcome uses the two-card preview and unboxed feature icons', () => {
 });
 
 test('real holding contracts preserve precision, order, modes, and valuation allocations', () => {
-  const validation = load('src/portfolio/portfolioValidation.ts');
+  const validation = load('src/portfolio/portfolioValidation.ts', {
+    './supportedAssetSymbols': { supportedAssetSymbols }
+  });
   const portfolioTypes = load('src/types/portfolio.ts');
   const simulation = load('src/simulation/simulationValidation.ts');
 
@@ -510,17 +516,24 @@ test('portfolio input warnings identify, reveal, and focus the first invalid mob
   const warning = read('src/portfolio/portfolioInputWarning.ts');
   const create = read('src/screens/portfolios/CreatePortfolioScreen.tsx');
   const editor = read('src/components/portfolio/HoldingsEditor.tsx');
+  const dialog = read('src/components/portfolio/PortfolioInputWarningDialog.tsx');
   const input = read('src/components/ui/Input.tsx');
-  const validation = load('src/portfolio/portfolioValidation.ts');
+  const validation = load('src/portfolio/portfolioValidation.ts', {
+    './supportedAssetSymbols': { supportedAssetSymbols }
+  });
 
-  assert.match(warning, /Alert\.alert\(/);
-  assert.match(warning, /text: 'Show me'/);
+  assert.doesNotMatch(warning, /Alert\.alert\(/);
   assert.match(warning, /revealField\(warning\.fieldKey\)/);
   assert.match(warning, /apiValidationIssues\(error\)/);
   assert.match(create, /presentInputWarning\(localHoldingInputWarning/);
   assert.match(editor, /presentInputWarning\(localHoldingInputWarning/);
   assert.match(create, /fieldRefs\.current\.get\(fieldKey\)\?\.focus\(\)/);
   assert.match(input, /forwardRef<TextInput, InputProps>/);
+  assert.match(dialog, /<Modal/);
+  assert.match(dialog, /Check your information/);
+  assert.match(dialog, /Show input/);
+  assert.match(create, /<PortfolioInputWarningDialog/);
+  assert.match(editor, /<PortfolioInputWarningDialog/);
   assert.match(create, /placeholder="10\.50"/);
   assert.match(editor, /placeholder="10\.50"/);
   assert.match(validation.validateRealHoldingDrafts([{
@@ -528,10 +541,17 @@ test('portfolio input warnings identify, reveal, and focus the first invalid mob
     symbol: 'AAPL',
     shares: '10.125'
   }]).error, /up to 2 decimal places/);
+  assert.match(validation.validateRealHoldingDrafts([{
+    id: 'two',
+    symbol: 'ASDF',
+    shares: '10.50'
+  }]).error, /ASDF is not supported/);
 });
 
 test('planned mobile contracts preserve amount authority and consume backend target weights', async () => {
-  const validation = load('src/portfolio/portfolioValidation.ts');
+  const validation = load('src/portfolio/portfolioValidation.ts', {
+    './supportedAssetSymbols': { supportedAssetSymbols }
+  });
   const simulation = load('src/simulation/simulationValidation.ts');
   const calls = [];
   const { portfoliosApi } = load('src/api/portfoliosApi.ts', {
@@ -554,6 +574,9 @@ test('planned mobile contracts preserve amount authority and consume backend tar
   assert.match(validation.validatePlannedHoldingDrafts([
     { id: 'a', symbol: 'AAPL', proposedAmount: '0' }
   ]).error, /positive proposed amount/i);
+  assert.match(validation.validatePlannedHoldingDrafts([
+    { id: 'a', symbol: 'ASDF', proposedAmount: '1000.00' }
+  ]).error, /ASDF is not supported/);
 
   const allocation = {
     portfolio_id: portfolioId,

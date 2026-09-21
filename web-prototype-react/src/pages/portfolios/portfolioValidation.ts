@@ -5,6 +5,9 @@ import type {
   PortfolioRealHoldingResponse,
   PortfolioRealHoldingInput,
 } from '../../types/portfolio';
+import { supportedAssetSymbols } from './supportedAssetSymbols';
+
+const supportedSymbolSet = new Set<string>(supportedAssetSymbols);
 
 export type RealHoldingDraft = {
   id: number;
@@ -96,6 +99,12 @@ function normalizedUniqueSymbol(
   const symbol = value.trim().toUpperCase();
   if (!symbol) {
     return { symbol: null, error: `Holding ${index + 1} needs a symbol.` };
+  }
+  if (!supportedSymbolSet.has(symbol)) {
+    return {
+      symbol: null,
+      error: `${symbol} is not supported. Choose one of Aura's ${supportedAssetSymbols.length} available assets.`,
+    };
   }
   if (seenSymbols.has(symbol)) {
     return {

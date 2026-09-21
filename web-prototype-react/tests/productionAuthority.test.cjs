@@ -6,6 +6,10 @@ const vm = require('node:vm');
 const ts = require('typescript');
 
 const root = path.resolve(__dirname, '..');
+const supportedAssetSymbols = [
+  'AAPL', 'MSFT', 'TSLA', 'NVDA', 'AMZN', 'GOOGL', 'META', 'SPY', 'QQQ',
+  'DIA', 'VTI', 'GLD', 'SLV', 'BND', 'TLT', 'BTC-USD', 'ETH-USD',
+];
 
 function load(file, mocks = {}, globals = {}) {
   const module = { exports: {} };
@@ -38,7 +42,9 @@ function plain(value) {
 }
 
 test('current and planned holding validation preserves facts and never creates weights', () => {
-  const validation = load('src/pages/portfolios/portfolioValidation.ts');
+  const validation = load('src/pages/portfolios/portfolioValidation.ts', {
+    './supportedAssetSymbols': { supportedAssetSymbols },
+  });
   const current = validation.validateRealHoldingDrafts([{
     id: 1,
     symbol: ' aapl ',
@@ -79,6 +85,21 @@ test('current and planned holding validation preserves facts and never creates w
     shares: '10.125',
   }]);
   assert.match(excessSharePrecision.error, /up to 2 decimal places/);
+  const unsupported = validation.validateRealHoldingDrafts([{
+    id: 5,
+    symbol: 'ASDF',
+    shares: '10.50',
+  }]);
+  assert.deepEqual(plain(unsupported.issue), {
+    index: 0,
+    field: 'symbol',
+    message: `ASDF is not supported. Choose one of Aura's 17 available assets.`,
+  });
+  assert.match(validation.validatePlannedHoldingDrafts([{
+    id: 6,
+    symbol: 'ASDF',
+    proposedAmount: '1000.00',
+  }]).error, /ASDF is not supported/);
 });
 
 test('portfolio input warnings identify, reveal, and focus the first invalid web field', () => {
@@ -87,15 +108,22 @@ test('portfolio input warnings identify, reveal, and focus the first invalid web
   const create = read('src/pages/portfolios/PortfolioCreateFlow.tsx');
   const editor = read('src/pages/portfolios/components/PortfolioHoldingsEditor.tsx');
   const symbol = read('src/pages/portfolios/components/AssetSymbolField.tsx');
+  const dialog = read('src/pages/portfolios/components/PortfolioInputWarningDialog.tsx');
   const styles = read('src/pages/portfolios/PortfolioIntegration.module.css');
 
-  assert.match(warning, /window\.alert\(`Check your information/);
+  assert.doesNotMatch(warning, /window\.alert/);
   assert.match(warning, /scrollIntoView\(\{ behavior: 'smooth', block: 'center' \}\)/);
   assert.match(warning, /element\.focus\(\{ preventScroll: true \}\)/);
   assert.match(warning, /apiValidationIssues\(error\)/);
   assert.match(create, /presentInputWarning\(localHoldingInputWarning/);
   assert.match(editor, /presentInputWarning\(localHoldingInputWarning/);
   assert.match(symbol, /aria-invalid=\{Boolean\(error\)\}/);
+  assert.match(dialog, /createPortal/);
+  assert.match(dialog, /role="alertdialog"/);
+  assert.match(dialog, /Check your information/);
+  assert.match(dialog, /Show input/);
+  assert.match(create, /<PortfolioInputWarningDialog/);
+  assert.match(editor, /<PortfolioInputWarningDialog/);
   assert.match(create, /placeholder="10\.50"/);
   assert.match(editor, /placeholder="10\.50"/);
   const pickerButtonStyles = styles.match(

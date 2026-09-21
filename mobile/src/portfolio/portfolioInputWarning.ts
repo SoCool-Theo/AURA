@@ -1,5 +1,3 @@
-import { Alert } from 'react-native';
-
 import { apiValidationIssues } from '../api/apiErrorPresentation';
 import type { HoldingValidationIssue } from './portfolioValidation';
 
@@ -57,12 +55,5 @@ export function showPortfolioInputWarning(
   warning: PortfolioInputWarning,
   revealField: (fieldKey: string) => void
 ): void {
-  Alert.alert(
-    'Check your information',
-    warning.message,
-    [{
-      text: 'Show me',
-      onPress: () => setTimeout(() => revealField(warning.fieldKey), 120)
-    }]
-  );
+  setTimeout(() => revealField(warning.fieldKey), 120);
 }

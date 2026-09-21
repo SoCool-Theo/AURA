@@ -2026,13 +2026,19 @@ remain separate follow-on work.
   production-authority suite: 20 passed and production build completed. Mobile
   TypeScript compilation completed.
 
-### Completed symbol-warning layout and share precision
+### Completed portfolio input warning presentation and validation
 
 - Web asset-symbol controls keep the picker button aligned to the input when an
   inline validation warning is shown; the warning no longer stretches the
   button below the input.
 - Web and mobile current-share inputs now use `10.50` guidance and enforce a
   maximum of two decimal places in local validation before submission.
+- Current and planned holding forms validate typed symbols against Aura's exact
+  17-asset catalog before starting portfolio creation or replacement. Unsupported
+  entries such as `ASDF` are identified as symbol-field errors.
+- Web browser alerts and mobile native alerts were replaced with centered,
+  theme-aware Aura warning dialogs. Choosing **Show input** closes the dialog,
+  preserves the inline warning, and reveals/focuses the exact invalid field.
 - Web production-authority suite: 20 passed and production build completed.
   Mobile production-authority suite: 31 passed and TypeScript compilation
   completed.

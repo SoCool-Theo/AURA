@@ -54,7 +54,6 @@ export function apiPortfolioInputWarning(
 export function showPortfolioInputWarning(
   warning: PortfolioInputWarning,
 ): void {
-  window.alert(`Check your information\n\n${warning.message}`);
   window.setTimeout(() => {
     const element = document.getElementById(warning.elementId);
     if (!(element instanceof HTMLElement)) return;

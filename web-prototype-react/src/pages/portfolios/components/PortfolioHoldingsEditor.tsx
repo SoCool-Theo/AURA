@@ -29,10 +29,10 @@ import {
 } from '../portfolioValidation';
 import { AssetSymbolField } from './AssetSymbolField';
 import { HoldingDecimalInput } from './HoldingDecimalInput';
+import { PortfolioInputWarningDialog } from './PortfolioInputWarningDialog';
 import {
   apiPortfolioInputWarning,
   localHoldingInputWarning,
-  showPortfolioInputWarning,
   type PortfolioInputWarning,
 } from '../portfolioInputWarning';
 
@@ -100,7 +100,6 @@ export function PortfolioHoldingsEditor({
 
   function presentInputWarning(warning: PortfolioInputWarning) {
     setInputWarning(warning);
-    showPortfolioInputWarning(warning);
   }
 
   useEffect(() => {
@@ -160,6 +159,7 @@ export function PortfolioHoldingsEditor({
 
   return (
     <div className="detail-tab-panel">
+      <PortfolioInputWarningDialog warning={inputWarning} />
       <Card className="detail-section-card">
         <div className="detail-section-header">
           <div>

@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { apiValidationIssues } from '../../api/apiErrorPresentation';
 import { AssetSymbolField } from '../../components/portfolio/AssetSymbolField';
 import { HoldingDecimalInput } from '../../components/portfolio/HoldingDecimalInput';
+import { PortfolioInputWarningDialog } from '../../components/portfolio/PortfolioInputWarningDialog';
 import { PurchaseDateField } from '../../components/portfolio/PurchaseDateField';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -34,7 +35,6 @@ import {
 import {
   apiPortfolioInputWarning,
   localHoldingInputWarning,
-  showPortfolioInputWarning,
   type PortfolioInputWarning
 } from '../../portfolio/portfolioInputWarning';
 import { usePortfolios } from '../../portfolio/usePortfolios';
@@ -101,7 +101,6 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
 
   function presentInputWarning(warning: PortfolioInputWarning) {
     setInputWarning(warning);
-    showPortfolioInputWarning(warning, revealField);
   }
 
   function fieldRef(fieldKey: string) {
@@ -218,7 +217,12 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
   );
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <>
+      <PortfolioInputWarningDialog
+        warning={inputWarning}
+        revealField={revealField}
+      />
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
       <KeyboardAwareScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -482,7 +486,8 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
           />
         </View>
       </KeyboardAwareScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 }
 

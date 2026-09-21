@@ -1,6 +1,6 @@
-// Keep this presentation-only suggestion list aligned with the backend
+// Keep this client-side validation and picker catalog aligned with the backend
 // USER_ASSET_SYMBOLS and the mobile supportedAssets list.
-// Manual symbol entry remains valid.
+// Manual entry is validated against this exact supported catalog.
 export const supportedAssets = [
   { symbol: 'AAPL', name: 'Apple Inc.' },
   { symbol: 'MSFT', name: 'Microsoft Corporation' },

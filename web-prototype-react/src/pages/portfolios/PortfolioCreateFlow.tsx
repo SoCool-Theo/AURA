@@ -25,10 +25,10 @@ import {
 } from './portfolioValidation';
 import { AssetSymbolField } from './components/AssetSymbolField';
 import { HoldingDecimalInput } from './components/HoldingDecimalInput';
+import { PortfolioInputWarningDialog } from './components/PortfolioInputWarningDialog';
 import {
   apiPortfolioInputWarning,
   localHoldingInputWarning,
-  showPortfolioInputWarning,
   type PortfolioInputWarning,
 } from './portfolioInputWarning';
 
@@ -63,7 +63,6 @@ export function PortfolioCreateFlow() {
 
   function presentInputWarning(warning: PortfolioInputWarning) {
     setInputWarning(warning);
-    showPortfolioInputWarning(warning);
   }
 
   function addHolding() {
@@ -176,6 +175,7 @@ export function PortfolioCreateFlow() {
 
   return (
     <div className="page create-page">
+      <PortfolioInputWarningDialog warning={inputWarning} />
       <button className="create-back-link" onClick={() => go('portfolios')} disabled={saving}>← Back to Portfolios</button>
       <section className="create-header">
         <div>

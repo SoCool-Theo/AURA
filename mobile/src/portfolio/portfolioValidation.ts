@@ -4,6 +4,9 @@ import type {
   PortfolioRealHoldingInput,
   PortfolioRealHoldingResponse
 } from '../types/portfolio';
+import { supportedAssetSymbols } from './supportedAssetSymbols';
+
+const supportedSymbolSet = new Set<string>(supportedAssetSymbols);
 
 export type RealHoldingDraft = {
   id: string;
@@ -115,6 +118,13 @@ export function validateRealHoldingDrafts(
         index
       );
     }
+    if (!supportedSymbolSet.has(symbol)) {
+      return invalidHolding(
+        `${symbol} is not supported. Choose one of Aura's ${supportedAssetSymbols.length} available assets.`,
+        'symbol',
+        index
+      );
+    }
     if (seenSymbols.has(symbol)) {
       return invalidHolding(
         `${symbol} appears more than once. Holding symbols must be unique.`,
@@ -158,6 +168,13 @@ export function validatePlannedHoldingDrafts(
     if (!symbol) {
       return invalidHolding(
         `Holding ${index + 1} needs a symbol.`,
+        'symbol',
+        index
+      );
+    }
+    if (!supportedSymbolSet.has(symbol)) {
+      return invalidHolding(
+        `${symbol} is not supported. Choose one of Aura's ${supportedAssetSymbols.length} available assets.`,
         'symbol',
         index
       );

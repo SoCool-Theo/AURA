@@ -14,7 +14,6 @@ import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import {
   apiPortfolioInputWarning,
   localHoldingInputWarning,
-  showPortfolioInputWarning,
   type PortfolioInputWarning
 } from '../../portfolio/portfolioInputWarning';
 import {
@@ -40,6 +39,7 @@ import {
 } from '../../types/portfolio';
 import { AssetSymbolField } from './AssetSymbolField';
 import { HoldingDecimalInput } from './HoldingDecimalInput';
+import { PortfolioInputWarningDialog } from './PortfolioInputWarningDialog';
 import { PurchaseDateField } from './PurchaseDateField';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -110,7 +110,6 @@ export function HoldingsEditor({
 
   function presentInputWarning(warning: PortfolioInputWarning) {
     setInputWarning(warning);
-    showPortfolioInputWarning(warning, revealField);
   }
 
   function fieldRef(fieldKey: string) {
@@ -249,7 +248,12 @@ export function HoldingsEditor({
   );
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <>
+      <PortfolioInputWarningDialog
+        warning={inputWarning}
+        revealField={revealField}
+      />
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
       <KeyboardAwareScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -419,7 +423,8 @@ export function HoldingsEditor({
           style={{ marginTop: spacing.xl }}
         />
       </KeyboardAwareScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 }
 
