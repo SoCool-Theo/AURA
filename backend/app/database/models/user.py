@@ -14,6 +14,7 @@ from ..base import Base
 
 if TYPE_CHECKING:
     from .portfolio import Portfolio
+    from .watchlist import WatchlistItem
 
 
 class User(Base):
@@ -49,6 +50,11 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     portfolios: Mapped[list[Portfolio]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    watchlist_items: Mapped[list[WatchlistItem]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,

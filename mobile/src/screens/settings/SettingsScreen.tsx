@@ -73,7 +73,7 @@ export function SettingsScreen() {
   function showAbout() {
     Alert.alert(
       'About Aura',
-      'Aura provides portfolio risk analytics, historical simulations, and AI explanations grounded in your saved results. Live quotes and Watchlist are unavailable.'
+      'Aura provides portfolio risk analytics, historical simulations, saved-asset Watchlists, and AI explanations grounded in your saved results. Watchlist prices are latest saved market observations, not live quotes.'
     );
   }
 

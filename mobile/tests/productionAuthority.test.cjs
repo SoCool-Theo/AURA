@@ -691,6 +691,69 @@ test('planned mobile contracts preserve amount authority and consume backend tar
   assert.equal(calls[3].path, `/api/portfolios/${portfolioId}/planned-preview`);
 });
 
+test('mobile Watchlist uses the authenticated backend contract and backend metrics', async () => {
+  const calls = [];
+  const { watchlistApi } = load('src/api/watchlistApi.ts', {
+    './apiClient': { apiRequest: async (requestPath, options = {}) => {
+      calls.push({ path: requestPath, options });
+      return requestPath === '/api/watchlist' && options.method === 'POST'
+        ? { symbol: options.body.symbol }
+        : { items: [] };
+    } }
+  });
+
+  await watchlistApi.list();
+  await watchlistApi.add('ETH-USD');
+  await watchlistApi.remove('ETH-USD');
+
+  assert.equal(calls[0].path, '/api/watchlist');
+  assert.equal(calls[1].path, '/api/watchlist');
+  assert.equal(calls[1].options.method, 'POST');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[1].options.body)), { symbol: 'ETH-USD' });
+  assert.equal(calls[2].path, '/api/watchlist/ETH-USD');
+  assert.equal(calls[2].options.method, 'DELETE');
+  assert.equal(calls[2].options.responseMode, 'none');
+
+  class ApiError extends Error {
+    constructor(options) {
+      super(options.message ?? 'Request failed');
+      Object.assign(this, options);
+    }
+  }
+  const ui = load('src/watchlist/watchlistUi.ts', {
+    '../api/apiClient': { ApiError }
+  });
+  assert.equal(ui.formatWatchlistPrice(null), '—');
+  assert.equal(ui.formatWatchlistPercent(null), '—');
+  assert.equal(ui.formatWatchlistPercent(-1.236), '-1.24%');
+  assert.match(ui.watchlistErrorMessage(new ApiError({ status: 404 }), 'remove'), /no longer in/i);
+  assert.match(ui.watchlistErrorMessage(new ApiError({ status: 409 }), 'add'), /already in/i);
+  assert.doesNotMatch(ui.watchlistErrorMessage(new ApiError({ status: 500, message: 'database secret' }), 'remove'), /database|secret/i);
+});
+
+test('mobile Watchlist stays under More and has no mock or local-storage authority', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const screen = read('src/screens/watchlist/WatchlistScreen.tsx');
+  const navigator = read('src/navigation/MainTabNavigator.tsx');
+  const more = read('src/screens/settings/MoreScreen.tsx');
+
+  assert.match(screen, /watchlistApi\.list/);
+  assert.match(screen, /watchlistApi\.add/);
+  assert.match(screen, /watchlistApi\.remove/);
+  assert.match(screen, /supportedAssets\.filter/);
+  assert.match(screen, /Loading your Watchlist/);
+  assert.match(screen, /Your Watchlist is empty/);
+  assert.match(screen, /latest_price/);
+  assert.match(screen, /latest_price_date/);
+  assert.match(screen, /daily_change_percent/);
+  assert.match(screen, /ytd_change_percent/);
+  assert.match(navigator, /MoreStack\.Screen name="Watchlist"/);
+  assert.match(more, /Follow supported assets/);
+  assert.ok(!/Watchlist.*Unavailable|coming later/i.test(`${screen}\n${more}`));
+  assert.ok(!/AsyncStorage|SecureStore|watchlistCatalog|watchlist\.mock/i.test(screen));
+  assert.ok(!/fetch\(['"]https?:|OPENAI_API_KEY|ALPHA_VANTAGE|YAHOO/i.test(screen));
+});
+
 test('planned mobile presentation keeps estimates display-only and supports V3 history', () => {
   const read = file => fs.readFileSync(path.join(root, file), 'utf8');
   const create = read('src/screens/portfolios/CreatePortfolioScreen.tsx');
@@ -1058,7 +1121,7 @@ test('mobile Assistant has no direct provider access or synthetic conversation a
   assert.doesNotMatch(screen, /<View style=\{styles\.composerCard\}>/);
   assert.match(screen, /footer=\{composer\}/);
   assert.match(screen, /style=\{\[styles\.composerDock, composerHidden && styles\.composerDockHidden\]\}/);
-  const composerDockStyle = screen.match(/composerDock:\s*\{([\s\S]*?)\n\s*\},\n\s*composerDockHidden:/)?.[1] ?? '';
+  const composerDockStyle = screen.match(/composerDock:\s*\{([\s\S]*?)\r?\n\s*\},\r?\n\s*composerDockHidden:/)?.[1] ?? '';
   assert.doesNotMatch(composerDockStyle, /backgroundColor|borderTop/);
   assert.match(composerDockStyle, /position: 'absolute'/);
   assert.match(screen, /paddingBottom: composerHeight \+ spacing\.lg/);

@@ -257,6 +257,74 @@ test('portfolio API sends typed payloads and uses planned allocation endpoints',
   assert.equal(calls[3].path, `/api/portfolios/${id}/planned-preview`);
 });
 
+test('web Watchlist uses the authenticated backend contract and backend metrics', async () => {
+  const calls = [];
+  const api = load('src/api/watchlistApi.ts', {
+    './apiClient': {
+      apiRequest: async (requestPath, options = {}) => {
+        calls.push({ path: requestPath, options });
+        return requestPath === '/api/watchlist' && options.method === 'POST'
+          ? { symbol: options.body.symbol }
+          : { items: [] };
+      },
+    },
+  });
+
+  await api.listWatchlist();
+  await api.addWatchlistItem('BTC-USD');
+  await api.deleteWatchlistItem('BTC-USD');
+
+  assert.equal(calls[0].path, '/api/watchlist');
+  assert.equal(calls[1].path, '/api/watchlist');
+  assert.equal(calls[1].options.method, 'POST');
+  assert.deepEqual(plain(calls[1].options.body), { symbol: 'BTC-USD' });
+  assert.equal(calls[2].path, '/api/watchlist/BTC-USD');
+  assert.equal(calls[2].options.method, 'DELETE');
+
+  class ApiError extends Error {
+    constructor(options) {
+      super(options.message ?? 'Request failed');
+      Object.assign(this, options);
+    }
+  }
+  const ui = load('src/pages/watchlist/watchlistUi.ts', {
+    '../../api/apiClient': { ApiError },
+  });
+  assert.equal(ui.formatWatchlistPrice(null), '—');
+  assert.equal(ui.formatWatchlistPercent(null), '—');
+  assert.equal(ui.formatWatchlistPercent(2.345), '+2.35%');
+  assert.match(ui.watchlistErrorMessage(new ApiError({ status: 409 }), 'add'), /already in/i);
+  assert.match(ui.watchlistErrorMessage(new ApiError({ status: 422 }), 'add'), /supported assets/i);
+  assert.doesNotMatch(ui.watchlistErrorMessage(new ApiError({ status: 500, message: 'database secret' }), 'add'), /database|secret/i);
+});
+
+test('web Watchlist has real states, supported-asset search, and no mock authority', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const page = read('src/pages/watchlist/WatchlistPage.tsx');
+  const table = read('src/pages/watchlist/components/WatchlistTable.tsx');
+  const toolbar = read('src/pages/watchlist/components/WatchlistToolbar.tsx');
+
+  assert.match(page, /listWatchlist/);
+  assert.match(page, /addWatchlistItem/);
+  assert.match(page, /deleteWatchlistItem/);
+  assert.match(page, /supportedAssets\.filter/);
+  assert.match(page, /Loading your Watchlist/);
+  assert.match(table, /Your watchlist is empty/);
+  assert.match(table, /latest_price/);
+  assert.match(table, /latest_price_date/);
+  assert.match(table, /daily_change_percent/);
+  assert.match(table, /ytd_change_percent/);
+  assert.match(toolbar, /Updated dates are shown per asset/);
+  assert.match(page, /setViewMode/);
+  assert.match(toolbar, /onViewChange\('list'\)/);
+  assert.match(toolbar, /onViewChange\('grid'\)/);
+  assert.match(toolbar, /aria-pressed/);
+  assert.match(table, /viewMode === 'list'/);
+  assert.match(table, /watchlist-grid-card/);
+  assert.ok(!/watchlistSeed|watchlist\.mock|market cap|spark/i.test(`${page}\n${table}`));
+  assert.ok(!/fetch\(['"]https?:|OPENAI_API_KEY|ALPHA_VANTAGE|YAHOO/i.test(`${page}\n${table}`));
+});
+
 test('error presentation distinguishes required statuses and sanitizes server failures', () => {
   class ApiError extends Error {
     constructor(options) {

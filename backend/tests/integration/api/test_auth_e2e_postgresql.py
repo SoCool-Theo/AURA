@@ -42,6 +42,7 @@ APPLICATION_TABLES = {
     "market_data",
     "portfolios",
     "users",
+    "watchlist_items",
 }
 JWT_SECRET = "phase-7-e2e-test-only-jwt-secret-value"
 PASSWORD = "phase-7-valid-password"

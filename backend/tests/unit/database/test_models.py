@@ -15,7 +15,14 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable
 from sqlalchemy.types import Uuid
 
-from backend.app.database import Base, Holding, Portfolio, PortfolioType, User
+from backend.app.database import (
+    Base,
+    Holding,
+    Portfolio,
+    PortfolioType,
+    User,
+    WatchlistItem,
+)
 
 
 EXPECTED_TABLES = {
@@ -25,6 +32,7 @@ EXPECTED_TABLES = {
     "portfolios",
     "holdings",
     "market_data",
+    "watchlist_items",
 }
 
 
@@ -35,13 +43,14 @@ def test_models_use_existing_aura_base_and_expected_tables() -> None:
     assert User.__tablename__ == "users"
     assert Portfolio.__tablename__ == "portfolios"
     assert Holding.__tablename__ == "holdings"
+    assert WatchlistItem.__tablename__ == "watchlist_items"
     assert set(Base.metadata.tables) == EXPECTED_TABLES
 
 
 def test_primary_keys_are_application_generated_python_uuids() -> None:
     generated_values: list[UUID] = []
 
-    for model in (User, Portfolio, Holding):
+    for model in (User, Portfolio, Holding, WatchlistItem):
         id_column = model.__table__.c.id
         assert id_column.primary_key is True
         assert id_column.nullable is False
@@ -81,6 +90,9 @@ def test_required_model_columns_are_not_nullable() -> None:
         "updated_at",
     ):
         assert Holding.__table__.c[column_name].nullable is False
+
+    for column_name in ("id", "user_id", "symbol", "created_at"):
+        assert WatchlistItem.__table__.c[column_name].nullable is False
 
     for column_name in (
         "invested_amount",
@@ -147,6 +159,9 @@ def test_foreign_keys_target_owners_and_cascade_on_delete() -> None:
     holding_portfolio_fk = next(
         iter(Holding.__table__.c.portfolio_id.foreign_keys)
     )
+    watchlist_user_fk = next(
+        iter(WatchlistItem.__table__.c.user_id.foreign_keys)
+    )
 
     assert portfolio_user_fk.target_fullname == "users.id"
     assert portfolio_user_fk.ondelete == "CASCADE"
@@ -154,6 +169,8 @@ def test_foreign_keys_target_owners_and_cascade_on_delete() -> None:
     assert portfolio_source_fk.ondelete == "SET NULL"
     assert holding_portfolio_fk.target_fullname == "portfolios.id"
     assert holding_portfolio_fk.ondelete == "CASCADE"
+    assert watchlist_user_fk.target_fullname == "users.id"
+    assert watchlist_user_fk.ondelete == "CASCADE"
 
 
 def test_ownership_relationships_mirror_delete_semantics() -> None:
@@ -161,6 +178,8 @@ def test_ownership_relationships_mirror_delete_semantics() -> None:
     portfolio_user = inspect(Portfolio).relationships.user
     portfolio_holdings = inspect(Portfolio).relationships.holdings
     holding_portfolio = inspect(Holding).relationships.portfolio
+    user_watchlist_items = inspect(User).relationships.watchlist_items
+    watchlist_user = inspect(WatchlistItem).relationships.user
 
     assert user_portfolios.back_populates == "user"
     assert portfolio_user.back_populates == "portfolios"
@@ -172,6 +191,10 @@ def test_ownership_relationships_mirror_delete_semantics() -> None:
     assert "delete-orphan" in portfolio_holdings.cascade
     assert portfolio_holdings.passive_deletes is True
     assert list(portfolio_holdings.order_by) == [Holding.__table__.c.position]
+    assert user_watchlist_items.back_populates == "user"
+    assert watchlist_user.back_populates == "watchlist_items"
+    assert "delete-orphan" in user_watchlist_items.cascade
+    assert user_watchlist_items.passive_deletes is True
 
 
 def test_relationships_link_owned_objects_without_database_access() -> None:
@@ -185,10 +208,13 @@ def test_relationships_link_owned_objects_without_database_access() -> None:
 
     user.portfolios.append(portfolio)
     portfolio.holdings.append(holding)
+    watchlist_item = WatchlistItem(symbol="MSFT")
+    user.watchlist_items.append(watchlist_item)
 
     assert portfolio.user is user
     assert holding.portfolio is portfolio
     assert holding.symbol == "AAPL"
+    assert watchlist_item.user is user
 
 
 def test_portfolio_type_and_plan_context_match_approved_contract() -> None:
@@ -341,6 +367,29 @@ def test_holding_has_approved_composite_unique_constraints() -> None:
     }
 
 
+def test_watchlist_has_owner_symbol_uniqueness_and_no_derived_columns() -> None:
+    unique_columns = {
+        tuple(column.name for column in constraint.columns)
+        for constraint in WatchlistItem.__table__.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+
+    assert unique_columns == {("user_id", "symbol")}
+    assert tuple(WatchlistItem.__table__.c.keys()) == (
+        "id",
+        "user_id",
+        "symbol",
+        "created_at",
+    )
+    assert not {
+        "latest_price",
+        "daily_change_percent",
+        "ytd_change_percent",
+        "shares",
+        "allocation",
+    } & set(WatchlistItem.__table__.c.keys())
+
+
 def test_holding_persists_inputs_but_not_derived_financial_values() -> None:
     column_names = set(Holding.__table__.c.keys())
 
@@ -412,3 +461,7 @@ def test_models_compile_as_postgresql_ddl_without_connecting() -> None:
     )
     assert "ON DELETE CASCADE" in ddl_by_table["portfolios"]
     assert "ON DELETE CASCADE" in ddl_by_table["holdings"]
+    assert "CONSTRAINT uq_watchlist_items_user_symbol UNIQUE" in (
+        ddl_by_table["watchlist_items"]
+    )
+    assert "ON DELETE CASCADE" in ddl_by_table["watchlist_items"]

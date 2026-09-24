@@ -1273,8 +1273,8 @@ the grounded AI Assistant. The Backend AI Agent and React web AI integration
 are complete and merged into `develop`. Mobile AI integration is complete and
 pushed on `feat/mobile-web-parity`.
 
-Future or optional gaps include Watchlist persistence, customer quote/live
-market-data APIs, asset search/catalogue support, shares and invested amounts,
+Future or optional gaps include customer quote/live market-data APIs, global
+asset search/catalogue support, shares and invested amounts,
 live portfolio valuation, editable profiles, password management, global
 Search, Notifications, support/contact APIs, report export/share/delete
 actions, and user-level report/simulation history optimization.
@@ -2042,3 +2042,57 @@ remain separate follow-on work.
 - Web production-authority suite: 20 passed and production build completed.
   Mobile production-authority suite: 31 passed and TypeScript compilation
   completed.
+
+### Completed Watchlist Backend V1
+
+- Added authenticated observation-only Watchlist CRUD at `GET/POST
+  /api/watchlist` and `DELETE /api/watchlist/{symbol}`. Ownership always comes
+  from the Bearer-authenticated user; request bodies cannot supply `user_id`.
+- Added reversible migration `a8d3f1c6b2e7` and the `watchlist_items` model with
+  UUID identity, user cascade ownership, deterministic creation ordering, and
+  database-enforced `UNIQUE(user_id, symbol)`.
+- Reused Aura's canonical 17-symbol user-asset registry. Symbols are normalized
+  before service validation; duplicate normalized entries return a sanitized
+  conflict and non-owned or missing deletes share one private not-found result.
+- Watchlist responses derive latest available price, previous-available daily
+  change, and first-available-observation YTD change from persisted PostgreSQL
+  `adjusted_close` rows. One focused query returns at most the three required
+  observations per symbol; no provider call, fill, fabricated price, or market
+  data mutation occurs.
+- Watchlist storage contains no holdings, quantities, invested amounts,
+  allocations, prices, returns, or risk metrics and has no portfolio-analysis,
+  simulation, reporting, or AI-agent effect.
+- Complete focused Watchlist suite: 45 passed, including 2 guarded live
+  PostgreSQL tests covering authenticated CRUD, enrichment, ownership
+  isolation, uniqueness, user cascade, fresh-session persistence, cleanup,
+  and preservation of the existing 95,488 market-data rows. Backend database
+  regression suite: 196 passed. Complete unit and non-live API integration
+  suite: 2,892 passed. Python compilation, dependency consistency, and Git
+  whitespace checks pass.
+- The populated local test database was upgraded additively from
+  `d4a6f8c2e1b7` through the current `a8d3f1c6b2e7` head without changing
+  existing row counts. A live Watchlist-only downgrade to `f2c8e9a1b3d4` and
+  upgrade back to head also passed while preserving all existing market data.
+- Web and mobile Watchlist integration was completed in the following frontend
+  task without changing the backend contract.
+
+### Completed Watchlist Frontend Integration V1
+
+- Added typed web and mobile clients for authenticated `GET/POST
+  /api/watchlist` and `DELETE /api/watchlist/{symbol}` through each platform's
+  shared API client and centralized Bearer-session handling.
+- Replaced both deferred Watchlist screens with real loading, empty, populated,
+  retryable error, add, duplicate/unsupported, and remove states. Null market
+  values render as an em dash, and the UI labels prices as latest saved data
+  rather than live quotes.
+- Reused each client's canonical 17-asset catalogue for local picker/search
+  labels and exclusion of already-added assets. The clients do not calculate
+  daily or YTD returns, call market-data providers, or persist a second local
+  Watchlist authority.
+- Preserved the existing web protected route and the mobile `More` stack route;
+  no additional bottom tab or navigation architecture was introduced.
+- Removed obsolete Watchlist mock datasets and the unused web summary component
+  that derived client-side aggregate movement values.
+- Web production-authority suite: 23 passed; TypeScript/Vite production build
+  passed. Mobile production-authority suite: 35 passed; TypeScript checking and
+  Expo public-config validation passed.

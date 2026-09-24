@@ -34,6 +34,7 @@ APPLICATION_TABLES = {
     "market_data",
     "portfolios",
     "users",
+    "watchlist_items",
 }
 JWT_SECRET = "phase-5-live-postgresql-secret-value"
 PASSWORD = "live-auth-password"

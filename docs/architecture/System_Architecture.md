@@ -685,10 +685,10 @@ This is a target architecture. It does not imply that refresh tokens, OAuth, MFA
 | AI Assistant | Provides grounded educational explanations through the backend AI Agent. |
 | Reports | Lists and displays saved immutable portfolio-analysis reports. |
 | Settings | Handles frontend profile and application settings. |
-| Watchlist | Optional or later market watchlist functionality. |
+| Watchlist | Presents the authenticated observation-only Watchlist API, including add/remove actions and persisted latest/daily/YTD market context. |
 | Learn | Optional or later educational content functionality. |
 
-Watchlist and Learn may exist as routes or frontend features without appearing in the current primary top navigation.
+Watchlist and Learn may exist as routes or frontend features without appearing in the current primary top navigation. Watchlist is integrated on the protected web route and in the mobile `More` stack without adding another bottom tab.
 
 ## Dashboard Design Boundary
 
@@ -962,9 +962,9 @@ Learn
 Watchlist
 ```
 
-Navigation placement does not claim that every listed screen or its backend
-functionality is currently implemented. The AI interface is integrated; optional
-features such as Watchlist and Notifications remain deferred.
+Navigation placement does not claim that every listed screen is integrated.
+The AI interface and authenticated Watchlist backend and clients are
+implemented; Notifications remain deferred.
 
 ## Mobile Environment Configuration
 

@@ -22,6 +22,7 @@ EXPECTED_TABLES = {
     "portfolios",
     "holdings",
     "market_data",
+    "watchlist_items",
 }
 
 
