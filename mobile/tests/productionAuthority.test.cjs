@@ -529,6 +529,71 @@ test('real holding contracts preserve precision, order, modes, and valuation all
   };
   assert.equal(simulation.validateModifiedAllocation(roundedPortfolio, roundedThirds).error, null);
   assert.deepEqual(roundedThirds, { AAPL: '33.33', MSFT: '33.33', NVDA: '33.34' });
+
+  const initialAllocation = { AAPL: '40.00', MSFT: '35.00', NVDA: '25.00' };
+  const rebalanced = simulation.rebalanceAllocationInputs(
+    initialAllocation,
+    ['AAPL', 'MSFT'],
+    'AAPL',
+    '50'
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(rebalanced)), {
+    AAPL: '50',
+    MSFT: '25.00',
+    NVDA: '25.00'
+  });
+  assert.equal(Object.values(rebalanced).reduce((total, value) => total + Number(value), 0), 100);
+  assert.deepEqual(initialAllocation, { AAPL: '40.00', MSFT: '35.00', NVDA: '25.00' });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(simulation.rebalanceAllocationInputs(
+      rebalanced,
+      ['AAPL', 'MSFT'],
+      'AAPL',
+      '20.00'
+    ))),
+    { AAPL: '20.00', MSFT: '55.00', NVDA: '25.00' }
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(simulation.rebalanceAllocationInputs(
+      { AAPL: '100.00', MSFT: '0.00', NVDA: '0.00' },
+      ['AAPL', 'MSFT'],
+      'AAPL',
+      '40.00'
+    ))),
+    { AAPL: '40.00', MSFT: '60.00', NVDA: '0.00' }
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(simulation.rebalanceAllocationInputs(
+      { AAPL: '39.95', MSFT: '54.31', GOOG: '5.74' },
+      ['MSFT', 'GOOG'],
+      'MSFT',
+      '55.00'
+    ))),
+    { AAPL: '39.95', MSFT: '55.00', GOOG: '5.05' }
+  );
+  assert.match(
+    simulation.validateModifiedAllocation(roundedPortfolio, {
+      AAPL: '33.333',
+      MSFT: '33.333',
+      NVDA: '33.334'
+    }).error,
+    /needs a weight/
+  );
+});
+
+test('allocation and combined mobile screens use the two-target allocation editor', () => {
+  const allocation = fs.readFileSync(path.join(root, 'src/screens/simulations/AllocationChangeScreen.tsx'), 'utf8');
+  const combined = fs.readFileSync(path.join(root, 'src/screens/simulations/CombinedSimulationScreen.tsx'), 'utf8');
+  const editor = fs.readFileSync(path.join(root, 'src/components/simulations/AllocationEditor.tsx'), 'utf8');
+  assert.match(allocation, /rebalanceAllocationInputs/);
+  assert.match(combined, /rebalanceAllocationInputs/);
+  assert.match(editor, /percent\.toFixed\(2\)/);
+  assert.match(editor, /onBlur/);
+  assert.match(editor, /Select exactly two assets/);
+  assert.match(editor, /accessibilityRole="checkbox"/);
+  assert.match(editor, /editable=\{!disabled && selected && selectedSymbols\.length === 2\}/);
+  assert.match(editor, /onPress=\{\(\) => toggleTarget\(holding\.symbol\)\}/);
+  assert.match(editor, /onPressIn=\{\(event\) => event\.stopPropagation\(\)\}/);
 });
 
 test('portfolio input warnings identify, reveal, and focus the first invalid mobile field', () => {

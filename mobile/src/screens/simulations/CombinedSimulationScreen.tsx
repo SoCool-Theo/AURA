@@ -23,6 +23,7 @@ import {
   allocationInputsFromPlannedAllocation,
   allocationInputsFromValuation,
   allocationTotal,
+  rebalanceAllocationInputs,
   validateModifiedAllocation,
   type AllocationInputs
 } from '../../simulation/simulationValidation';
@@ -155,7 +156,7 @@ export function CombinedSimulationScreen({ route }: { route: any }) {
               <>
                 <Text style={styles.section}>Modified allocation</Text>
                 <Text style={styles.state}>{holdingMode === 'real' ? 'Initialized from the current USD allocation.' : holdingMode === 'planned' ? 'Initialized from the target allocation for this hypothetical plan.' : 'Initialized from the saved legacy allocation.'}</Text>
-                <AllocationEditor disabled={running} portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value) => setWeights((current) => ({ ...current, [symbol]: value }))} />
+                <AllocationEditor disabled={running} portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value, selectedSymbols) => setWeights((current) => rebalanceAllocationInputs(current, selectedSymbols, symbol, value))} />
                 {runError ? <FormErrorSummary error={runFailure} message={runError} /> : null}
                 <Button title={running ? 'Running…' : 'Run combined simulation'} onPress={() => void run()} disabled={running || !scenarioId || scenarioStatus !== 'ready'} style={{ marginTop: spacing.xl }} />
                 {result ? <SimulationResults result={result} /> : null}

@@ -24,6 +24,7 @@ import {
   allocationTotal,
   defaultSimulationPeriod,
   isValidIsoDate,
+  rebalanceAllocationInputs,
   validateModifiedAllocation,
   type AllocationInputs
 } from '../../simulation/simulationValidation';
@@ -163,7 +164,7 @@ export function AllocationChangeScreen({ route }: { route: any }) {
                       ? 'Initialized from the target allocation for this hypothetical plan.'
                     : 'Initialized from the saved legacy allocation.'}
                 </Text>
-                <AllocationEditor disabled={running} portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value) => setWeights((current) => ({ ...current, [symbol]: value }))} />
+                <AllocationEditor disabled={running} portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value, selectedSymbols) => setWeights((current) => rebalanceAllocationInputs(current, selectedSymbols, symbol, value))} />
                 {runError ? <FormErrorSummary error={runFailure} message={runError} /> : null}
                 <Button title={running ? 'Running…' : 'Compare allocation'} onPress={() => void run()} disabled={running} style={{ marginTop: spacing.xl }} />
                 {result ? <SimulationResults result={result} /> : null}

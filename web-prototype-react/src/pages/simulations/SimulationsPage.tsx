@@ -21,6 +21,7 @@ import {
   allocationInputsFromPlannedAllocation,
   allocationInputsFromPortfolio,
   allocationInputsFromValuation,
+  rebalanceAllocationInputs,
   validateModifiedAllocation,
 } from './simulationUi';
 
@@ -109,7 +110,7 @@ export function SimulationsPage({ portfolioId }: Props) {
       <strong>{portfolio.portfolio_type === 'PLANNED' ? 'Hypothetical planned allocation' : portfolio.portfolio_type === 'CURRENT' ? 'Current portfolio baseline' : 'Legacy saved allocation'}</strong>
       <span>{portfolio.portfolio_type === 'PLANNED' ? 'Results describe how the proposed allocation would have behaved historically. They are not a forecast or an investment recommendation.' : portfolio.portfolio_type === 'CURRENT' ? 'The original allocation is derived from the current value of the saved shares.' : 'The original allocation uses the portfolio’s saved compatibility weights.'}</span>
     </div>}
-    {mode !== 'historical-scenario' && portfolio && <AllocationEditor mode={mode} portfolio={portfolio} allocation={allocation} totalAllocation={totalAllocation} disabled={running} onReset={resetAllocation} onChange={(symbol, value) => { setAllocation(current => ({ ...current, [symbol]: value })); clearOutput(); }} />}
+    {mode !== 'historical-scenario' && portfolio && <AllocationEditor mode={mode} portfolio={portfolio} allocation={allocation} totalAllocation={totalAllocation} disabled={running} onReset={resetAllocation} onChange={(symbol, value, selectedSymbols) => { setAllocation(current => rebalanceAllocationInputs(current, selectedSymbols, symbol, value)); clearOutput(); }} />}
     {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to run this simulation." />}
     {loading && <Card className={styles.state}><h2>Loading simulation setup</h2><p role="status">Retrieving your portfolios and Aura’s historical scenario catalogue.</p></Card>}
     {!loading && !loadError && !portfolios.length && <Card className={styles.state}><h2>No portfolios to simulate</h2><p>Create a portfolio and save its complete allocation first.</p><button className="primary-btn" onClick={() => go('create')}>Create Portfolio</button></Card>}

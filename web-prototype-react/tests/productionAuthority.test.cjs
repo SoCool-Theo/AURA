@@ -163,11 +163,49 @@ test('simulation editors initialize from backend current and planned weights in 
   assert.deepEqual(plain(simulation.allocationInputsFromValuation({ holdings: [
     { symbol: 'MSFT', current_allocation: '0.625' },
     { symbol: 'AAPL', current_allocation: '0.375' },
-  ] })), { MSFT: '62.5', AAPL: '37.5' });
+  ] })), { MSFT: '62.50', AAPL: '37.50' });
   assert.deepEqual(plain(simulation.allocationInputsFromPlannedAllocation({ holdings: [
     { symbol: 'AAPL', target_allocation: '0.4' },
     { symbol: 'NVDA', target_allocation: '0.6' },
-  ] })), { AAPL: '40', NVDA: '60' });
+  ] })), { AAPL: '40.00', NVDA: '60.00' });
+  assert.deepEqual(plain(simulation.allocationInputsFromValuation({ holdings: [
+    { symbol: 'AAPL', current_allocation: '0.3333333333' },
+    { symbol: 'MSFT', current_allocation: '0.3333333333' },
+    { symbol: 'NVDA', current_allocation: '0.3333333334' },
+  ] })), { AAPL: '33.33', MSFT: '33.33', NVDA: '33.34' });
+
+  const initial = { AAPL: '40.00', MSFT: '35.00', NVDA: '25.00' };
+  const rebalanced = simulation.rebalanceAllocationInputs(
+    initial,
+    ['AAPL', 'MSFT'],
+    'AAPL',
+    '50',
+  );
+  assert.deepEqual(plain(rebalanced), {
+    AAPL: '50',
+    MSFT: '25.00',
+    NVDA: '25.00',
+  });
+  assert.equal(Object.values(rebalanced).reduce((total, value) => total + Number(value), 0), 100);
+  assert.deepEqual(initial, { AAPL: '40.00', MSFT: '35.00', NVDA: '25.00' });
+  assert.deepEqual(plain(simulation.rebalanceAllocationInputs(
+    rebalanced,
+    ['AAPL', 'MSFT'],
+    'AAPL',
+    '20.00',
+  )), { AAPL: '20.00', MSFT: '55.00', NVDA: '25.00' });
+  assert.deepEqual(plain(simulation.rebalanceAllocationInputs(
+    { AAPL: '100.00', MSFT: '0.00', NVDA: '0.00' },
+    ['AAPL', 'MSFT'],
+    'AAPL',
+    '40.00',
+  )), { AAPL: '40.00', MSFT: '60.00', NVDA: '0.00' });
+  assert.deepEqual(plain(simulation.rebalanceAllocationInputs(
+    { AAPL: '39.95', MSFT: '54.31', GOOG: '5.74' },
+    ['MSFT', 'GOOG'],
+    'MSFT',
+    '55.00',
+  )), { AAPL: '39.95', MSFT: '55.00', GOOG: '5.05' });
 
   const portfolio = { holdings: [{ symbol: 'BND' }, { symbol: 'AAPL' }] };
   const result = simulation.validateModifiedAllocation(portfolio, { AAPL: '75', BND: '25' });
@@ -176,6 +214,25 @@ test('simulation editors initialize from backend current and planned weights in 
     { symbol: 'BND', weight: 0.25 },
     { symbol: 'AAPL', weight: 0.75 },
   ]);
+  assert.match(
+    simulation.validateModifiedAllocation(portfolio, { AAPL: '75.001', BND: '24.999' }).error,
+    /needs an allocation/,
+  );
+});
+
+test('allocation and combined web modes use the two-target allocation editor', () => {
+  const page = fs.readFileSync(path.join(root, 'src/pages/simulations/SimulationsPage.tsx'), 'utf8');
+  const editor = fs.readFileSync(path.join(root, 'src/pages/simulations/components/AllocationEditor.tsx'), 'utf8');
+  assert.match(page, /rebalanceAllocationInputs/);
+  assert.match(page, /mode !== 'historical-scenario'/);
+  assert.match(editor, /step="0\.01"/);
+  assert.match(editor, /percent\.toFixed\(2\)/);
+  assert.match(editor, /Select exactly two assets/);
+  assert.match(editor, /selectedSymbols\.length >= 2/);
+  assert.match(editor, /disabled=\{disabled \|\| !selected/);
+  assert.match(editor, /role="checkbox"/);
+  assert.match(editor, /onClick=\{\(\) => \{ if \(!selectionDisabled\) toggleTarget/);
+  assert.match(editor, /onClick=\{event => event\.stopPropagation\(\)\}/);
 });
 
 test('portfolio API sends typed payloads and uses planned allocation endpoints', async () => {

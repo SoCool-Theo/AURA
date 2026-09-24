@@ -11,6 +11,8 @@ export type AllocationValidationResult =
   | { allocation: PortfolioAllocationInput[]; error: null }
   | { allocation: null; error: string };
 
+const TOTAL_ALLOCATION_BASIS_POINTS = 10_000;
+
 function allocationInputsFromRatios(
   entries: Array<{ symbol: string; ratio: number | null }>
 ): AllocationInputs {
@@ -59,6 +61,56 @@ function allocationInputsFromRatios(
 
 export function isAllocationPercentInput(value: string): boolean {
   return /^\d{0,3}(?:\.\d{0,2})?$/.test(value);
+}
+
+function parsedBasisPoints(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed || !isAllocationPercentInput(trimmed)) return null;
+  const percent = Number(trimmed);
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) return null;
+  return Math.round(percent * 100);
+}
+
+export function rebalanceAllocationInputs(
+  inputs: AllocationInputs,
+  selectedSymbols: readonly string[],
+  changedSymbol: string,
+  value: string
+): AllocationInputs {
+  const next = { ...inputs, [changedSymbol]: value };
+  const changedBasisPoints = parsedBasisPoints(value);
+  if (
+    changedBasisPoints === null
+    || selectedSymbols.length !== 2
+    || !selectedSymbols.includes(changedSymbol)
+  ) {
+    return next;
+  }
+
+  const pairedSymbol = selectedSymbols.find((symbol) => symbol !== changedSymbol)!;
+  const unselectedSymbols = Object.keys(inputs).filter(
+    (symbol) => !selectedSymbols.includes(symbol)
+  );
+  let unselectedTotalBasisPoints = 0;
+  for (const symbol of unselectedSymbols) {
+    const basisPoints = parsedBasisPoints(inputs[symbol] ?? '');
+    if (basisPoints === null) return next;
+    unselectedTotalBasisPoints += basisPoints;
+  }
+  const pairBasisPoints = (
+    TOTAL_ALLOCATION_BASIS_POINTS - unselectedTotalBasisPoints
+  );
+  if (pairBasisPoints < 0) {
+    return next;
+  }
+  const finalChangedBasisPoints = Math.min(changedBasisPoints, pairBasisPoints);
+  if (finalChangedBasisPoints !== changedBasisPoints) {
+    next[changedSymbol] = (finalChangedBasisPoints / 100).toFixed(2);
+  }
+  next[pairedSymbol] = (
+    (pairBasisPoints - finalChangedBasisPoints) / 100
+  ).toFixed(2);
+  return next;
 }
 
 export function allocationInputsFromPortfolio(
@@ -115,6 +167,7 @@ export function validateModifiedAllocation(
     const percent = Number(rawValue);
     if (
       !rawValue
+      || !isAllocationPercentInput(rawValue)
       || !Number.isFinite(percent)
       || percent < 0
       || percent > 100
