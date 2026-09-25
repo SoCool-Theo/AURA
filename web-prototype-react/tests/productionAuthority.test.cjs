@@ -882,3 +882,38 @@ test('production web source has no direct market, database, or LLM provider auth
   assert.ok(!/proposedAmount\s*\/|proposed_amount\s*\//.test(`${create}\n${editor}\n${detail}`));
   assert.match(detail, /Estimated shares are display-only/);
 });
+
+test('web settings use the authenticated Backend Profile V1 contract', async () => {
+  const calls = [];
+  const auth = load('src/api/authApi.ts', {
+    './apiClient': {
+      apiRequest: async (requestPath, options = {}) => {
+        calls.push({ path: requestPath, options });
+        return requestPath.endsWith('/password') ? undefined : { id: 'user' };
+      },
+    },
+  });
+  await auth.updateCurrentUserProfile({ display_name: 'Aura User' });
+  await auth.changeCurrentUserPassword({
+    current_password: 'current-pass',
+    new_password: 'different-pass',
+  });
+  assert.equal(calls[0].path, '/api/auth/me');
+  assert.equal(calls[0].options.method, 'PATCH');
+  assert.deepEqual(plain(calls[0].options.body), { display_name: 'Aura User' });
+  assert.equal(calls[1].path, '/api/auth/me/password');
+  assert.equal(calls[1].options.method, 'PUT');
+
+  const settings = fs.readFileSync(path.join(root, 'src/pages/settings/SettingsPage.tsx'), 'utf8');
+  const context = fs.readFileSync(path.join(root, 'src/auth/AuthContext.tsx'), 'utf8');
+  const types = fs.readFileSync(path.join(root, 'src/types/auth.ts'), 'utf8');
+  assert.match(settings, /updateCurrentUserProfile\(request\)/);
+  assert.match(settings, /changeCurrentUserPassword/);
+  assert.match(settings, /request\.current_password = profile\.currentPassword/);
+  assert.match(settings, /emailChanged &&/);
+  assert.match(settings, /setCurrentUser\(updatedUser\)/);
+  assert.doesNotMatch(settings, /usePersistedState|localStorage/);
+  assert.match(context, /setCurrentUser: setUser/);
+  assert.match(types, /preferred_language: PreferredLanguage/);
+  assert.match(types, /timezone: ProfileTimezone/);
+});

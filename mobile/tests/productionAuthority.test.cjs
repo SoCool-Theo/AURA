@@ -1315,3 +1315,39 @@ test('mobile asset-risk detail is report-backed, navigable, and never recalculat
   assert.doesNotMatch(metricDetails, /reference_amount\s*\*/);
   assert.doesNotMatch(detail, /Math\.(sqrt|pow)|annualized_volatility\s*[*/+-]|max_drawdown\s*[*/+-]/);
 });
+
+test('mobile settings use the authenticated Backend Profile V1 contract', async () => {
+  const calls = [];
+  const { authApi } = load('src/api/authApi.ts', {
+    './apiClient': {
+      apiRequest: async (requestPath, options = {}) => {
+        calls.push({ path: requestPath, options });
+        return requestPath.endsWith('/password') ? undefined : { id: 'user' };
+      }
+    }
+  });
+  await authApi.updateProfile({ display_name: 'Aura User' });
+  await authApi.changePassword({
+    current_password: 'current-pass',
+    new_password: 'different-pass'
+  });
+  assert.equal(calls[0].path, '/api/auth/me');
+  assert.equal(calls[0].options.method, 'PATCH');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].options.body)), { display_name: 'Aura User' });
+  assert.equal(calls[1].path, '/api/auth/me/password');
+  assert.equal(calls[1].options.method, 'PUT');
+  assert.equal(calls[1].options.responseMode, 'none');
+
+  const settings = fs.readFileSync(path.join(root, 'src/screens/settings/SettingsScreen.tsx'), 'utf8');
+  const context = fs.readFileSync(path.join(root, 'src/auth/AuthProvider.tsx'), 'utf8');
+  const types = fs.readFileSync(path.join(root, 'src/types/auth.ts'), 'utf8');
+  assert.match(settings, /authApi\.updateProfile\(request\)/);
+  assert.match(settings, /authApi\.changePassword/);
+  assert.match(settings, /request\.current_password = profileDraft\.currentPassword/);
+  assert.match(settings, /emailChanged \?/);
+  assert.match(settings, /setCurrentUser\(updatedUser\)/);
+  assert.doesNotMatch(settings, /setDisplayName|stored only on this device/);
+  assert.match(context, /setCurrentUser: setUser/);
+  assert.match(types, /preferred_language: PreferredLanguage/);
+  assert.match(types, /timezone: ProfileTimezone/);
+});

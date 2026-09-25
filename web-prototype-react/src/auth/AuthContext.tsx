@@ -34,6 +34,7 @@ export type AuthContextValue = {
   register: (
     request: RegistrationRequest,
   ) => Promise<AuthenticatedUserResponse>;
+  setCurrentUser: (user: AuthenticatedUserResponse) => void;
   logout: () => void;
   retrySessionRestore: () => Promise<void>;
 };
@@ -149,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionError,
     login,
     register,
+    setCurrentUser: setUser,
     logout,
     retrySessionRestore: restoreSession,
   }), [

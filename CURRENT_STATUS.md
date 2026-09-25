@@ -2157,3 +2157,23 @@ remain separate follow-on work.
   API-contract regression suite: 101 passed. Isolated live PostgreSQL migration
   and authentication lifecycle suite: 2 passed, including persistence and
   downgrade cleanup. Python compilation passed.
+
+### Completed Account Profile Frontend Integration V1
+
+- Web and mobile Settings now read display name, email, optional phone number,
+  preferred language, and timezone from the authenticated backend user instead
+  of treating browser or device storage as profile authority.
+- Both clients submit typed partial updates through `PATCH /api/auth/me`, only
+  send changed fields, require the current password when the email changes, and
+  immediately synchronize the returned user into shared authentication state.
+- Both clients provide a separate current-password-verified password form using
+  `PUT /api/auth/me/password`, including minimum-length, difference, and
+  confirmation checks before submission.
+- Backend validation, incorrect-password, duplicate-email, network, and server
+  failures have themed inline presentation without exposing credentials or
+  backend internals. Successful changes receive visible confirmation.
+- Profile photos and notification controls remain visibly unavailable because
+  Backend Profile V1 does not provide storage or delivery contracts for them.
+- Web production-authority suite: 30 passed and the production build completed.
+  Mobile production-authority suite: 40 passed and TypeScript compilation
+  completed successfully.

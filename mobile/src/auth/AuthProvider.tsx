@@ -33,6 +33,7 @@ type AuthContextValue = {
   register: (
     request: RegistrationRequest
   ) => Promise<AuthenticatedUserResponse>;
+  setCurrentUser: (user: AuthenticatedUserResponse) => void;
   signOut: () => Promise<void>;
   retrySessionRestore: () => Promise<void>;
 };
@@ -217,6 +218,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     sessionExpired,
     signIn,
     register,
+    setCurrentUser: setUser,
     signOut,
     retrySessionRestore: restoreSession
   }), [
