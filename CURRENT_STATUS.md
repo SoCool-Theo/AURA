@@ -2136,3 +2136,24 @@ remain separate follow-on work.
   fresh conversation.
 - Mobile production-authority suite: 39 passed. TypeScript compilation
   completed successfully.
+
+### Completed Backend Account Profile V1
+
+- Extended the authenticated `GET /api/auth/me` response with nullable display
+  name and phone number plus persisted language and timezone preferences.
+- Added authenticated `PATCH /api/auth/me` for partial profile updates. Email
+  changes require the current password, normalized duplicate emails return a
+  sanitized conflict, and ownership always comes from the Bearer session.
+- Added authenticated `PUT /api/auth/me/password` for current-password-verified
+  password replacement. Passwords remain one-way hashed and are never returned.
+- Added reversible migration `b9e4d2f7c1a6` with additive profile columns,
+  safe defaults for existing users, and database constraints matching the V1
+  language, timezone, and field-length contract.
+- Kept transaction ownership at the API boundary: repositories flush but do
+  not commit, while each successful mutation commits exactly once.
+- Profile photos, notification delivery/preferences, session revocation, and
+  password-reset email flows remain outside Backend Profile V1.
+- Focused profile/auth suite: 74 passed. Expanded auth, migration, model, and
+  API-contract regression suite: 101 passed. Isolated live PostgreSQL migration
+  and authentication lifecycle suite: 2 passed, including persistence and
+  downgrade cleanup. Python compilation passed.
