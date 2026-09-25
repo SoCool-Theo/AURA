@@ -1,3 +1,6 @@
+import type { PortfolioAnalysisResponse } from '../types/analytics';
+import type { HistoricalScenarioTrajectoryPoint } from '../types/simulation';
+
 export function formatSimulationPercent(
   value: number,
   fractionDigits = 2
@@ -15,6 +18,19 @@ export function formatSimulationNumber(
 export function formatSimulationTimestamp(value: string): string {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+export function savedAnalysisTrajectory(
+  analysis: PortfolioAnalysisResponse
+): HistoricalScenarioTrajectoryPoint[] {
+  let normalizedValue = 1;
+  return [
+    { date: analysis.start_date, normalized_value: normalizedValue },
+    ...analysis.portfolio_returns.map((point) => {
+      normalizedValue *= 1 + point.portfolio_return;
+      return { date: point.date, normalized_value: normalizedValue };
+    })
+  ];
 }
 
 export function simulationTypeLabel(value: string): string {

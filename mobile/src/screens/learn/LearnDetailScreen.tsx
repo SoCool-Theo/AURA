@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
@@ -57,6 +57,19 @@ export function LearnDetailScreen({ route }: { route: any }) {
           ))}
         </View>
 
+        {lesson.video ? (
+          <View style={styles.videoSection}>
+            <Text style={styles.videoLabel}>RELATED VIDEO</Text>
+            <Text style={styles.videoTitle}>{lesson.video.title}</Text>
+            <Button
+              title="Watch on YouTube"
+              variant="secondary"
+              accessibilityHint="Opens this educational video in YouTube"
+              onPress={() => void Linking.openURL(lesson.video!.url)}
+            />
+          </View>
+        ) : null}
+
         <Card style={styles.noteCard}>
           <View style={styles.noteTop}>
             <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
@@ -94,6 +107,9 @@ const styles = StyleSheet.create({
   summary: { color: colors.text, fontSize: 16, fontWeight: '800', lineHeight: 23 },
   body: { gap: spacing.lg, marginTop: spacing.xl },
   paragraph: { color: colors.textSecondary, fontSize: 15, lineHeight: 23 },
+  videoSection: { gap: spacing.sm, marginTop: spacing.xl },
+  videoLabel: { color: colors.primary, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  videoTitle: { color: colors.text, fontSize: 14, fontWeight: '800', lineHeight: 21 },
   noteCard: { marginTop: spacing.xl, gap: spacing.sm },
   noteTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   noteTitle: { color: colors.text, fontWeight: '900' },

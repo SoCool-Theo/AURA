@@ -6,6 +6,7 @@ import {
 import { go } from '../../app/routes';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Icon } from '../../components/ui/Icon';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import {
   isPortfolioReportV2,
   isPortfolioReportV3,
@@ -28,6 +29,7 @@ export function ReportDetailPage({ portfolioId, reportId, focusAssetSection = fa
   const [actionError, setActionError] = useState<unknown>(null);
   const [deleting, setDeleting] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const deletingRef = useRef(false);
 
   useEffect(() => {
@@ -59,10 +61,6 @@ export function ReportDetailPage({ portfolioId, reportId, focusAssetSection = fa
 
   async function remove() {
     if (deletingRef.current || !report) return;
-    if (!confirm(
-      `Delete the saved analysis report for ${report.analysis.portfolio_name}? This cannot be undone.`,
-    )) return;
-
     deletingRef.current = true;
     setDeleting(true);
     setActionError(null);
@@ -100,7 +98,7 @@ export function ReportDetailPage({ portfolioId, reportId, focusAssetSection = fa
         <div className={styles.headerActions} aria-label="Report actions">
           <button
             className={styles.deleteButton}
-            onClick={() => void remove()}
+            onClick={() => { setActionError(null); setDeleteOpen(true); }}
             disabled={deleting}
           >
             {deleting ? 'Deleting…' : 'Delete Report'}
@@ -119,6 +117,17 @@ export function ReportDetailPage({ portfolioId, reportId, focusAssetSection = fa
         </div>
         <button className="primary-btn" onClick={() => go(`assistant/${report.portfolio_id}/report/${report.id}`)}><Icon name="assistant" size={17} /> Ask Aura</button>
       </section>
+      {deleteOpen && <ConfirmationDialog
+        title="Delete report?"
+        description="This permanently removes the saved analysis snapshot and cannot be undone."
+        subjectLabel="Saved report"
+        subject={`${report.analysis.portfolio_name} · ${report.id}`}
+        confirmLabel="Delete Report"
+        busy={deleting}
+        error={actionError}
+        onCancel={() => { if (!deleting) { setDeleteOpen(false); setActionError(null); } }}
+        onConfirm={() => void remove()}
+      />}
     </div>
   );
 }

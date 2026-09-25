@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SimulationResults } from '../../components/simulations/SimulationResults';
+import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
@@ -106,7 +107,18 @@ export function SimulationResultScreen({ route, navigation }: { route: any; navi
         <SimulationResults
           result={toRunResult(detail)}
           baseline={detailV3?.baseline ?? detailV2?.baseline}
+          immutable
         />
+        <Card style={styles.assistantCard}>
+          <Text style={styles.assistantTitle}>Ask Aura about this saved simulation</Text>
+          <Text style={styles.assistantText}>
+            Aura will explain this exact immutable simulation snapshot, even if the portfolio changes later.
+          </Text>
+          <Button
+            title="Open AI Assistant"
+            onPress={() => navigation.getParent()?.navigate('AI', { portfolioId, simulationId })}
+          />
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -120,6 +132,9 @@ const styles = StyleSheet.create({
   metadata: { gap: spacing.xs },
   metaLabel: { color: colors.muted, fontSize: 9, fontWeight: '900', marginTop: spacing.sm },
   metaValue: { color: colors.textSecondary, fontSize: 11 },
+  assistantCard: { gap: spacing.md, marginTop: spacing.lg },
+  assistantTitle: { color: colors.text, fontSize: 16, fontWeight: '900' },
+  assistantText: { color: colors.textSecondary, fontSize: 12, lineHeight: 19 },
   center: { flex: 1, justifyContent: 'center', padding: spacing.xl },
   errorCard: { gap: spacing.md, borderColor: colors.dangerBorder },
   errorTitle: { color: colors.danger, fontWeight: '900', fontSize: 16 },

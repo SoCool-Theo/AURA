@@ -15,6 +15,8 @@ import {
   portfolioErrorMessage,
   portfolioValuationErrorMessage
 } from '../../portfolio/portfolioErrors';
+import { reportErrorMessage } from '../../report/reportErrors';
+import { useReports } from '../../report/useReports';
 import { simulationErrorMessage } from '../../simulation/simulationErrors';
 import type { SimulationRunResult } from '../../simulation/SimulationProvider';
 import {
@@ -32,10 +34,12 @@ import { useSimulationPortfolio } from '../../simulation/useSimulationPortfolio'
 import { useSimulations } from '../../simulation/useSimulations';
 import { colors, spacing, typography } from '../../theme/theme';
 import { portfolioHoldingMode } from '../../types/portfolio';
+import type { PortfolioReportResponse } from '../../types/report';
 
-export function AllocationChangeScreen({ route }: { route: any }) {
+export function AllocationChangeScreen({ route, navigation }: { route: any; navigation: any }) {
   const portfolioState = useSimulationPortfolio(route.params?.portfolioId);
   const { runAllocation } = useSimulations();
+  const { getPortfolioReportHistory, getReport } = useReports();
   const initialPeriod = useRef(defaultSimulationPeriod()).current;
   const [startDate, setStartDate] = useState(initialPeriod.start);
   const [endDate, setEndDate] = useState(initialPeriod.end);
@@ -45,6 +49,14 @@ export function AllocationChangeScreen({ route }: { route: any }) {
   const [runFailure, setRunFailure] = useState<unknown>(null);
   const [result, setResult] = useState<SimulationRunResult | null>(null);
   const runningRef = useRef(false);
+  const latestAnalysisRequestRef = useRef(0);
+  const [latestAnalysis, setLatestAnalysis] = useState<PortfolioReportResponse | null>(null);
+  const [latestAnalysisStatus, setLatestAnalysisStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [latestAnalysisError, setLatestAnalysisError] = useState<unknown>(null);
+
+  const selectedPortfolioSummary = portfolioState.portfolios.find(
+    (item) => item.id === portfolioState.selectedPortfolioId
+  );
 
   useEffect(() => {
     if (portfolioState.portfolio) {
@@ -63,6 +75,40 @@ export function AllocationChangeScreen({ route }: { route: any }) {
       setRunFailure(null);
     }
   }, [portfolioState.plannedAllocation, portfolioState.portfolio, portfolioState.valuation]);
+
+  useEffect(() => {
+    const requestId = latestAnalysisRequestRef.current + 1;
+    latestAnalysisRequestRef.current = requestId;
+    setLatestAnalysis(null);
+    setLatestAnalysisError(null);
+    if (!selectedPortfolioSummary) {
+      setLatestAnalysisStatus('idle');
+      return;
+    }
+
+    setLatestAnalysisStatus('loading');
+    void getPortfolioReportHistory(selectedPortfolioSummary)
+      .then(async (history) => {
+        const newest = history[0];
+        if (!newest) return null;
+        return getReport(selectedPortfolioSummary.id, newest.id);
+      })
+      .then((report) => {
+        if (latestAnalysisRequestRef.current !== requestId) return;
+        setLatestAnalysis(report);
+        setLatestAnalysisStatus('ready');
+      })
+      .catch((error: unknown) => {
+        if (latestAnalysisRequestRef.current !== requestId) return;
+        setLatestAnalysisError(error);
+        setLatestAnalysisStatus('error');
+      });
+    return () => {
+      if (latestAnalysisRequestRef.current === requestId) {
+        latestAnalysisRequestRef.current += 1;
+      }
+    };
+  }, [getPortfolioReportHistory, getReport, selectedPortfolioSummary]);
 
   async function run() {
     const portfolio = portfolioState.portfolio;
@@ -167,7 +213,21 @@ export function AllocationChangeScreen({ route }: { route: any }) {
                 <AllocationEditor disabled={running} portfolio={portfolioState.portfolio} inputs={weights} total={allocationTotal(weights)} onChange={(symbol, value, selectedSymbols) => setWeights((current) => rebalanceAllocationInputs(current, selectedSymbols, symbol, value))} />
                 {runError ? <FormErrorSummary error={runFailure} message={runError} /> : null}
                 <Button title={running ? 'Running…' : 'Compare allocation'} onPress={() => void run()} disabled={running} style={{ marginTop: spacing.xl }} />
-                {result ? <SimulationResults result={result} /> : null}
+                {result ? <SimulationResults
+                  result={result}
+                  latestAnalysis={latestAnalysis}
+                  latestAnalysisStatus={latestAnalysisStatus}
+                  latestAnalysisError={latestAnalysisError
+                    ? reportErrorMessage(latestAnalysisError, 'Latest analysis details could not be loaded.')
+                    : null}
+                  onViewLatestAnalysis={latestAnalysis ? () => navigation.getParent()?.navigate('MoreTab', {
+                    screen: 'ReportDetail',
+                    params: {
+                      portfolioId: latestAnalysis.portfolio_id,
+                      reportId: latestAnalysis.id
+                    }
+                  }) : undefined}
+                /> : null}
               </>
             ) : null}
           </>

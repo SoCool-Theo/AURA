@@ -1,11 +1,16 @@
 import { ApiError } from '../../api/apiClient';
+import type { PortfolioAnalysisResponse } from '../../types/analytics';
 import type {
   PortfolioHoldingInput,
   PortfolioPlannedAllocationResponse,
   PortfolioResponse,
   PortfolioValuationResponse,
 } from '../../types/portfolio';
-import type { SimulationHistoryDetailResponse, SimulationRunResult } from '../../types/simulation';
+import type {
+  HistoricalScenarioTrajectoryPoint,
+  SimulationHistoryDetailResponse,
+  SimulationRunResult,
+} from '../../types/simulation';
 
 export type SimulationAllocationInputs = Record<string, string>;
 
@@ -189,6 +194,19 @@ export function formatTimestamp(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+export function savedAnalysisTrajectory(
+  analysis: PortfolioAnalysisResponse,
+): HistoricalScenarioTrajectoryPoint[] {
+  let normalizedValue = 1;
+  return [
+    { date: analysis.start_date, normalized_value: normalizedValue },
+    ...analysis.portfolio_returns.map(point => {
+      normalizedValue *= 1 + point.portfolio_return;
+      return { date: point.date, normalized_value: normalizedValue };
+    }),
+  ];
 }
 
 export function simulationTypeLabel(value: string): string {

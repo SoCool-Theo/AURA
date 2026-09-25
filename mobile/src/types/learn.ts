@@ -5,4 +5,8 @@ export type LearnLesson = {
   readMinutes: number;
   summary: string;
   body: string[];
+  video?: {
+    title: string;
+    url: string;
+  };
 };

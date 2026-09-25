@@ -16,6 +16,7 @@ import { PortfolioInputWarningDialog } from '../../components/portfolio/Portfoli
 import { PurchaseDateField } from '../../components/portfolio/PurchaseDateField';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { FormErrorSummary } from '../../components/ui/ErrorState';
 import { Input } from '../../components/ui/Input';
 import { KeyboardAwareScrollView } from '../../components/ui/KeyboardAwareScrollView';
@@ -61,6 +62,7 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [partialPortfolioId, setPartialPortfolioId] = useState<string | null>(null);
   const [inputWarning, setInputWarning] = useState<PortfolioInputWarning | null>(null);
+  const [holdingToRemove, setHoldingToRemove] = useState<HoldingDraft | null>(null);
   const submittingRef = useRef(false);
   const fieldRefs = useRef(new Map<string, TextInput>());
 
@@ -364,12 +366,7 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
                   <Pressable
                     accessibilityLabel={`Remove holding ${index + 1}`}
                     accessibilityRole="button"
-                    onPress={() => {
-                      clearFormError();
-                      setRows((current) => (
-                        current.filter((item) => item.id !== row.id)
-                      ));
-                    }}
+                    onPress={() => setHoldingToRemove(row)}
                     disabled={saving}
                     style={styles.iconButton}
                   >
@@ -487,6 +484,22 @@ export function CreatePortfolioScreen({ navigation }: { navigation: any }) {
         </View>
       </KeyboardAwareScrollView>
       </SafeAreaView>
+      <ConfirmationDialog
+        visible={holdingToRemove !== null}
+        title="Remove holding?"
+        description="This removes the holding from the portfolio draft. Create the portfolio to apply the remaining holdings."
+        subjectLabel="Holding"
+        subject={holdingToRemove?.symbol || 'Unnamed holding'}
+        confirmLabel="Remove Holding"
+        busy={false}
+        onCancel={() => setHoldingToRemove(null)}
+        onConfirm={() => {
+          if (!holdingToRemove) return;
+          clearFormError();
+          setRows((current) => current.filter((item) => item.id !== holdingToRemove.id));
+          setHoldingToRemove(null);
+        }}
+      />
     </>
   );
 }

@@ -311,7 +311,20 @@ def test_live_complete_authentication_to_report_workflow(
     )
     assert registration_input == original_registration_input
     assert registered["email"] == "phase.seven@example.com"
-    assert set(registered) == {"id", "email", "created_at", "updated_at"}
+    assert set(registered) == {
+        "id",
+        "email",
+        "display_name",
+        "phone_number",
+        "preferred_language",
+        "timezone",
+        "created_at",
+        "updated_at",
+    }
+    assert registered["display_name"] is None
+    assert registered["phone_number"] is None
+    assert registered["preferred_language"] == "en"
+    assert registered["timezone"] == "Asia/Bangkok"
     assert "password" not in registered
     assert "password_hash" not in registered
     user_id = UUID(str(registered["id"]))

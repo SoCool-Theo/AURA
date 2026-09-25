@@ -2096,3 +2096,43 @@ remain separate follow-on work.
 - Web production-authority suite: 23 passed; TypeScript/Vite production build
   passed. Mobile production-authority suite: 35 passed; TypeScript checking and
   Expo public-config validation passed.
+
+### Completed latest-analysis simulation references
+
+- Web and mobile historical-scenario results now use the selected portfolio's
+  newest saved analysis as the visible reference instead of a synthetic flat
+  no-movement baseline.
+- Web and mobile allocation-change results also show the newest saved analysis,
+  its period, backend metrics, and exact report-detail action as additional
+  context. The authoritative original-versus-modified calculation remains the
+  backend comparison over one common requested period.
+- New combined-simulation results directly compare the newest saved portfolio
+  analysis with the modified portfolio under the selected historical scenario
+  in a metric table and a selectable two-line normalized chart on both clients.
+  The backend's period-matched original-versus-modified scenario comparison is
+  still shown separately and remains authoritative for simulation deltas.
+- The comparison identifies the saved report time and analysis period, exposes
+  an exact report-detail action, and handles loading, missing-report, and
+  retrieval-error states without invalidating the scenario result.
+- Reference metrics come directly from the immutable saved analysis. Its chart
+  path is a display-only normalized reconstruction of the saved backend return
+  observations; scenario metrics and trajectory remain backend-owned.
+- Trajectory charts on both clients show each selected line with its own date
+  and normalized-value labels. The all-lines view omits x-axis dates when the
+  compared periods may differ and retains shared normalized-value labels.
+- Web production-authority suite: 29 passed and the production build completed.
+  Mobile production-authority suite: 38 passed and TypeScript compilation
+  completed.
+
+### Completed mobile saved-simulation AI grounding
+
+- Mobile saved-simulation detail now exposes an **Open AI Assistant** action
+  that carries both the owning portfolio ID and the exact saved simulation ID.
+- The Assistant preserves that immutable simulation context across the chat,
+  sends `simulation_id` with every explanation request, shows simulation-
+  specific starter questions, and clearly labels the selected snapshot.
+- Users can explicitly switch back to live portfolio context. Changing the
+  selected portfolio also clears the saved-simulation context and starts a
+  fresh conversation.
+- Mobile production-authority suite: 39 passed. TypeScript compilation
+  completed successfully.

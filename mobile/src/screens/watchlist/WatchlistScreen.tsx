@@ -2,7 +2,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -15,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { watchlistApi } from '../../api/watchlistApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
@@ -40,6 +40,7 @@ export function WatchlistScreen() {
   const [addingSymbol, setAddingSymbol] = useState<string | null>(null);
   const [removingSymbol, setRemovingSymbol] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [symbolToRemove, setSymbolToRemove] = useState<string | null>(null);
 
   useFocusEffect(useCallback(() => {
     const controller = new AbortController();
@@ -98,6 +99,7 @@ export function WatchlistScreen() {
     try {
       await watchlistApi.remove(symbol);
       setItems((current) => current.filter((item) => item.symbol !== symbol));
+      setSymbolToRemove(null);
     } catch (error) {
       setActionError(watchlistErrorMessage(error, 'remove'));
     } finally {
@@ -106,14 +108,9 @@ export function WatchlistScreen() {
   }
 
   function confirmRemove(symbol: string) {
-    Alert.alert(
-      `Remove ${symbol}?`,
-      'This removes the asset from your Watchlist.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => void remove(symbol) }
-      ]
-    );
+    if (removingSymbol) return;
+    setActionError(null);
+    setSymbolToRemove(symbol);
   }
 
   if (loading && !items.length) return <LoadingState message="Loading your Watchlist…" />;
@@ -247,6 +244,18 @@ export function WatchlistScreen() {
 
         <Text style={styles.note}>Prices are latest saved observations, not live quotes. Change metrics come from Aura’s backend.</Text>
       </ScrollView>
+      <ConfirmationDialog
+        visible={symbolToRemove !== null}
+        title={symbolToRemove ? `Remove ${symbolToRemove}?` : 'Remove asset?'}
+        description="This removes the asset from your Watchlist. You can add it again later."
+        subjectLabel="Watchlist asset"
+        subject={symbolToRemove ?? ''}
+        confirmLabel="Remove Asset"
+        busy={Boolean(symbolToRemove && removingSymbol === symbolToRemove)}
+        errorMessage={symbolToRemove ? actionError : null}
+        onCancel={() => { if (!removingSymbol) { setSymbolToRemove(null); setActionError(null); } }}
+        onConfirm={() => { if (symbolToRemove) void remove(symbolToRemove); }}
+      />
     </SafeAreaView>
   );
 }

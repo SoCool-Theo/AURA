@@ -1,0 +1,75 @@
+.collapsedComposer {
+  position: sticky;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.questionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.questionHeader > label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.questionHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.characterCount {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.hideComposerButton,
+.showComposerButton {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-control);
+  background: var(--control-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+
+.hideComposerButton {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+.showComposerButton {
+  width: 46px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  color: var(--purple-light);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .22);
+}
+
+.hideComposerButton:hover,
+.hideComposerButton:focus-visible,
+.showComposerButton:hover,
+.showComposerButton:focus-visible {
+  border-color: var(--purple-primary);
+  background: var(--control-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+@media (max-width: 680px) {
+  .collapsedComposer {
+    bottom: 6px;
+  }
+}

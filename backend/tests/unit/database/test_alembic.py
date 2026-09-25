@@ -22,6 +22,7 @@ REAL_HOLDING_REVISION = "d4a6f8c2e1b7"
 PLANNED_PORTFOLIO_REVISION = "e5b7c9d2a4f1"
 QUANTITY_ONLY_HOLDING_REVISION = "f2c8e9a1b3d4"
 WATCHLIST_REVISION = "a8d3f1c6b2e7"
+PROFILE_REVISION = "b9e4d2f7c1a6"
 
 
 def _alembic_config() -> Config:
@@ -82,7 +83,7 @@ def test_alembic_configuration_loads_without_connecting(
     script = ScriptDirectory.from_config(config)
 
     assert script.dir == str(ALEMBIC_DIRECTORY)
-    assert len(list(script.walk_revisions())) == 7
+    assert len(list(script.walk_revisions())) == 8
 
 
 def test_offline_migration_operation_does_not_connect(
@@ -107,10 +108,11 @@ def test_quantity_only_revision_extends_planned_portfolios() -> None:
         if path.name != "__init__.py"
     ]
 
-    assert len(revision_files) == 7
+    assert len(revision_files) == 8
     script = ScriptDirectory.from_config(_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        PROFILE_REVISION,
         WATCHLIST_REVISION,
         QUANTITY_ONLY_HOLDING_REVISION,
         PLANNED_PORTFOLIO_REVISION,
@@ -119,11 +121,12 @@ def test_quantity_only_revision_extends_planned_portfolios() -> None:
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert revisions[0].down_revision == QUANTITY_ONLY_HOLDING_REVISION
-    assert revisions[1].down_revision == PLANNED_PORTFOLIO_REVISION
-    assert revisions[2].down_revision == REAL_HOLDING_REVISION
-    assert revisions[3].down_revision == SIMULATION_REVISION
-    assert revisions[4].down_revision == AUTHENTICATION_REVISION
-    assert revisions[5].down_revision == INITIAL_REVISION
-    assert revisions[6].down_revision is None
-    assert script.get_current_head() == WATCHLIST_REVISION
+    assert revisions[0].down_revision == WATCHLIST_REVISION
+    assert revisions[1].down_revision == QUANTITY_ONLY_HOLDING_REVISION
+    assert revisions[2].down_revision == PLANNED_PORTFOLIO_REVISION
+    assert revisions[3].down_revision == REAL_HOLDING_REVISION
+    assert revisions[4].down_revision == SIMULATION_REVISION
+    assert revisions[5].down_revision == AUTHENTICATION_REVISION
+    assert revisions[6].down_revision == INITIAL_REVISION
+    assert revisions[7].down_revision is None
+    assert script.get_current_head() == PROFILE_REVISION

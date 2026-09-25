@@ -223,6 +223,7 @@ test('simulation editors initialize from backend current and planned weights in 
 test('allocation and combined web modes use the two-target allocation editor', () => {
   const page = fs.readFileSync(path.join(root, 'src/pages/simulations/SimulationsPage.tsx'), 'utf8');
   const editor = fs.readFileSync(path.join(root, 'src/pages/simulations/components/AllocationEditor.tsx'), 'utf8');
+  const results = fs.readFileSync(path.join(root, 'src/pages/simulations/components/SimulationResults.tsx'), 'utf8');
   assert.match(page, /rebalanceAllocationInputs/);
   assert.match(page, /mode !== 'historical-scenario'/);
   assert.match(editor, /step="0\.01"/);
@@ -233,6 +234,55 @@ test('allocation and combined web modes use the two-target allocation editor', (
   assert.match(editor, /role="checkbox"/);
   assert.match(editor, /onClick=\{\(\) => \{ if \(!selectionDisabled\) toggleTarget/);
   assert.match(editor, /onClick=\{event => event\.stopPropagation\(\)\}/);
+  assert.match(results, /Latest Saved Portfolio Analysis/);
+  assert.match(results, /result\.type === 'allocation'/);
+  assert.match(results, /backend original and modified results over the same requested period/);
+  assert.match(results, /View latest analysis details/);
+  assert.match(results, /Latest Portfolio Analysis vs New Combined Simulation/);
+  assert.match(results, /metrics=\{response\.modified\.metrics\}/);
+  assert.match(results, /combined=\{response\.modified\.trajectory\}/);
+  assert.match(results, /label: 'New combined result'/);
+});
+
+test('web historical scenarios compare the latest saved analysis with the event result', () => {
+  const page = fs.readFileSync(path.join(root, 'src/pages/simulations/SimulationsPage.tsx'), 'utf8');
+  const results = fs.readFileSync(path.join(root, 'src/pages/simulations/components/SimulationResults.tsx'), 'utf8');
+
+  assert.match(page, /setOriginalAllocation\(savedAllocation\)/);
+  assert.match(page, /listPortfolioReports\(selectedPortfolioId/);
+  assert.match(page, /getPortfolioReport\(selectedPortfolioId, newest\.id/);
+  assert.match(page, /latestAnalysis=\{latestAnalysis\}/);
+  assert.match(results, /Latest Portfolio Analysis vs Historical Scenario/);
+  assert.match(results, /reference\.portfolio_metrics\.cumulative_return/);
+  assert.match(results, /reference\.max_drawdown\.max_drawdown/);
+  assert.match(results, /View latest analysis details/);
+  assert.match(results, /Allocation used by this scenario run/);
+  assert.match(results, /savedAnalysisTrajectory\(latestAnalysis\.analysis\)/);
+  assert.doesNotMatch(results, /no-movement comparison line/);
+  assert.doesNotMatch(results, /normalized_ending_value\s*[-+*/]/);
+});
+
+test('web reconstructs a normalized display path from saved backend return observations', () => {
+  class ApiError extends Error {}
+  const simulation = load('src/pages/simulations/simulationUi.ts', {
+    '../../api/apiClient': { ApiError },
+  });
+  const analysis = {
+    start_date: '2026-01-01',
+    portfolio_returns: [
+      { date: '2026-01-02', portfolio_return: 0.1 },
+      { date: '2026-01-03', portfolio_return: -0.1 },
+    ],
+  };
+  assert.deepEqual(plain(simulation.savedAnalysisTrajectory(analysis)), [
+    { date: '2026-01-01', normalized_value: 1 },
+    { date: '2026-01-02', normalized_value: 1.1 },
+    { date: '2026-01-03', normalized_value: 0.9900000000000001 },
+  ]);
+  assert.deepEqual(analysis.portfolio_returns, [
+    { date: '2026-01-02', portfolio_return: 0.1 },
+    { date: '2026-01-03', portfolio_return: -0.1 },
+  ]);
 });
 
 test('portfolio API sends typed payloads and uses planned allocation endpoints', async () => {
@@ -375,6 +425,24 @@ test('saved report and simulation links preserve exact Ask Aura context', () => 
   assert.match(app, /route\.reportId === 'report'/);
   assert.match(app, /route\.reportId === 'simulation'/);
   assert.match(report, /className="primary-btn".*Run New Analysis<\/button>/);
+});
+
+test('web Assistant composer collapses and restores like the mobile composer', () => {
+  const assistant = fs.readFileSync(path.join(root, 'src/pages/assistant/AssistantPage.tsx'), 'utf8');
+  const icons = fs.readFileSync(path.join(root, 'src/components/ui/Icon.tsx'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'src/pages/assistant/AssistantComposer.module.css'), 'utf8');
+
+  assert.match(assistant, /const \[composerHidden, setComposerHidden\] = useState\(false\)/);
+  assert.match(assistant, /aria-label="Hide message composer"/);
+  assert.match(assistant, /setComposerHidden\(true\)/);
+  assert.match(assistant, /aria-label="Show message composer"/);
+  assert.match(assistant, /setComposerHidden\(false\)/);
+  assert.match(assistant, /name="chevron-down"/);
+  assert.match(assistant, /name="chevron-up"/);
+  assert.match(icons, /case 'chevron-up'/);
+  assert.match(styles, /\.collapsedComposer/);
+  assert.match(styles, /\.hideComposerButton/);
+  assert.match(styles, /\.showComposerButton/);
 });
 
 test('web theme uses the mobile palette while preserving gradients and dark action text', () => {
@@ -692,6 +760,101 @@ test('web asset-risk detail is report-backed, navigable, and never recalculates 
   assert.match(metricDetails, /monetary\.maximum_drawdown_amount/);
   assert.doesNotMatch(metricDetails, /reference_amount\s*\*/);
   assert.doesNotMatch(detail, /Math\.(sqrt|pow)|annualized_volatility\s*[*/+-]|max_drawdown\s*[*/+-]/);
+});
+
+test('web destructive actions and portfolio naming use Aura-themed dialogs', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const confirmation = read('src/components/ui/ConfirmationDialog.tsx');
+  const portfolios = read('src/pages/portfolios/PortfoliosPage.tsx');
+  const portfolioDialog = read('src/pages/portfolios/components/PortfolioActionDialog.tsx');
+  const reports = read('src/pages/reports/ReportsPage.tsx');
+  const reportDetail = read('src/pages/reports/ReportDetailPage.tsx');
+  const watchlist = read('src/pages/watchlist/WatchlistPage.tsx');
+  const create = read('src/pages/portfolios/PortfolioCreateFlow.tsx');
+  const editor = read('src/pages/portfolios/components/PortfolioHoldingsEditor.tsx');
+
+  assert.match(confirmation, /role="dialog"/);
+  assert.match(confirmation, /aria-modal="true"/);
+  assert.match(confirmation, /createPortal/);
+  assert.match(portfolios, /<PortfolioActionDialog/);
+  assert.match(portfolios, /openActionDialog\('rename'/);
+  assert.match(portfolios, /openActionDialog\('duplicate'/);
+  assert.match(portfolios, /openActionDialog\('delete'/);
+  assert.match(portfolioDialog, /actionDialogOverlay/);
+  assert.match(reports, /<ConfirmationDialog/);
+  assert.match(reportDetail, /<ConfirmationDialog/);
+  assert.match(watchlist, /<ConfirmationDialog/);
+  assert.match(create, /<ConfirmationDialog/);
+  assert.match(editor, /<ConfirmationDialog/);
+  assert.doesNotMatch(`${portfolios}\n${reports}\n${reportDetail}\n${watchlist}`, /\b(?:prompt|confirm)\s*\(/);
+});
+
+test('web and mobile Learn surfaces share nine example-based lessons and scoped videos', () => {
+  const webLearn = fs.readFileSync(path.join(root, 'src/pages/learn/LearnPage.tsx'), 'utf8');
+  const webDialog = fs.readFileSync(path.join(root, 'src/pages/learn/components/LessonDialog.tsx'), 'utf8');
+  const mobileLearn = fs.readFileSync(path.join(root, '../mobile/src/mocks/learn.mock.ts'), 'utf8');
+  const mobileDetail = fs.readFileSync(path.join(root, '../mobile/src/screens/learn/LearnDetailScreen.tsx'), 'utf8');
+  const mobileLibrary = fs.readFileSync(path.join(root, '../mobile/src/screens/learn/LearnScreen.tsx'), 'utf8');
+  const lessonIds = [
+    'risk-score',
+    'volatility',
+    'drawdown',
+    'sharpe',
+    'diversification',
+    'historical-scenario',
+    'allocation-change',
+    'combined',
+    'ai-explanation',
+  ];
+
+  for (const lessonId of lessonIds) {
+    assert.match(webLearn, new RegExp(`id: '${lessonId}'`));
+    assert.match(mobileLearn, new RegExp(`id: '${lessonId}'`));
+  }
+  assert.equal((webLearn.match(/Example:/g) ?? []).length, 9);
+  assert.equal((mobileLearn.match(/Example:/g) ?? []).length, 9);
+  assert.equal((webLearn.match(/youtube\.com\/watch/g) ?? []).length, 5);
+  assert.equal((mobileLearn.match(/youtube\.com\/watch/g) ?? []).length, 5);
+  assert.doesNotMatch(webLearn.slice(webLearn.indexOf("id: 'historical-scenario'")), /youtube\.com\/watch/);
+  assert.doesNotMatch(mobileLearn.slice(mobileLearn.indexOf("id: 'historical-scenario'")), /youtube\.com\/watch/);
+  assert.doesNotMatch(webLearn, /\balert\s*\(/);
+  assert.match(webDialog, /role="dialog"/);
+  assert.match(webDialog, /aria-modal="true"/);
+  assert.match(webDialog, /event\.key === 'Escape'/);
+  assert.match(webDialog, /target="_blank" rel="noreferrer"/);
+  assert.match(mobileDetail, /Linking\.openURL\(lesson\.video!\.url\)/);
+  assert.match(webLearn, /Open AI Assistant/);
+  assert.match(mobileLibrary, /Ask Aura about your results/);
+  assert.match(mobileLibrary, /navigation\.getParent\(\)\?\.navigate\('AI'\)/);
+  assert.match(mobileLibrary, /not financial or investment advice/);
+  const webLibrary = fs.readFileSync(path.join(root, 'src/pages/learn/components/LessonLibrary.tsx'), 'utf8');
+  assert.match(webLibrary, /placeholder="Search lessons by topic or concept…"/);
+  assert.match(webLibrary, /lesson\.title,[\s\S]*lesson\.topic,[\s\S]*lesson\.text,[\s\S]*\.\.\.lesson\.body/);
+  assert.match(webLibrary, /filteredLessons\.length === 0/);
+  assert.match(webLibrary, /Clear search/);
+});
+
+test('historical scenario results compare the latest analysis and use selection-aware axes', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const results = read('src/pages/simulations/components/SimulationResults.tsx');
+  const chart = read('src/pages/simulations/components/SimulationTrajectoryChart.tsx');
+  const mobileResults = read('../mobile/src/components/simulations/SimulationResults.tsx');
+  const mobileChart = read('../mobile/src/components/charts/SimulationTrajectoryChart.tsx');
+
+  assert.match(results, /Latest Portfolio Analysis vs Historical Scenario/);
+  assert.match(results, /savedAnalysisTrajectory\(latestAnalysis\.analysis\)/);
+  assert.match(results, /label: 'Historical scenario'/);
+  assert.match(chart, /All lines/);
+  assert.match(chart, /aria-label="Choose trajectory lines"/);
+  assert.match(chart, /setSelectedSeries\(item\.label\)/);
+  assert.match(chart, /selectedSeries === 'all' \? null/);
+  assert.match(chart, />Date<\/text>/);
+  assert.match(mobileResults, /Latest portfolio analysis vs historical scenario/);
+  assert.match(mobileResults, /savedAnalysisTrajectory\(latestAnalysis\.analysis\)/);
+  assert.match(mobileChart, /accessibilityLabel="Choose trajectory lines"/);
+  assert.match(mobileChart, /accessibilityRole="radio"/);
+  assert.match(mobileChart, /selectedSeries === 'all' \? null/);
+  assert.match(mobileChart, />Date<\/SvgText>/);
 });
 
 test('production web source has no direct market, database, or LLM provider authority', () => {

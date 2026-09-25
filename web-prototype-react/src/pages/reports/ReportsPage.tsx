@@ -8,6 +8,7 @@ import { go } from '../../app/routes';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import type { PortfolioSummaryResponse } from '../../types/portfolio';
 import type { PortfolioReportHistoryItem } from '../../types/report';
 import { ReportFilters } from './components/ReportFilters';
@@ -28,6 +29,7 @@ export function ReportsPage() {
   const [deletingReportIds, setDeletingReportIds] = useState<Set<string>>(
     new Set(),
   );
+  const [reportToDelete, setReportToDelete] = useState<PortfolioReportHistoryItem | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -78,16 +80,13 @@ export function ReportsPage() {
 
   async function remove(report: PortfolioReportHistoryItem) {
     if (deletingReportIdsRef.current.has(report.id)) return;
-    if (!confirm(
-      `Delete the saved analysis report for ${report.portfolio_name}? This cannot be undone.`,
-    )) return;
-
     deletingReportIdsRef.current.add(report.id);
     setDeletingReportIds(new Set(deletingReportIdsRef.current));
     setActionError(null);
     try {
       await deletePortfolioReport(report.portfolio_id, report.id);
       setReports(previous => previous.filter(item => item.id !== report.id));
+      setReportToDelete(null);
     } catch (requestError) {
       setActionError(requestError);
     } finally {
@@ -136,7 +135,7 @@ export function ReportsPage() {
           onOpen={report => go(`reports/${report.portfolio_id}/${report.id}`)}
           onCreateAnalysis={() => go('analytics')}
           onResetFilters={resetFilters}
-          onDelete={report => void remove(report)}
+          onDelete={report => { setActionError(null); setReportToDelete(report); }}
           deletingReportIds={deletingReportIds}
         />}
 
@@ -149,6 +148,17 @@ export function ReportsPage() {
         <Icon name="shield" size={16} />
         <p>Deletion permanently removes the saved report. Export, sharing, and download generation remain unavailable.</p>
       </div>
+      {reportToDelete && <ConfirmationDialog
+        title="Delete report?"
+        description="This permanently removes the saved analysis snapshot and cannot be undone."
+        subjectLabel="Saved report"
+        subject={`${reportToDelete.portfolio_name} · ${reportToDelete.id}`}
+        confirmLabel="Delete Report"
+        busy={deletingReportIds.has(reportToDelete.id)}
+        error={actionError}
+        onCancel={() => { if (!deletingReportIds.has(reportToDelete.id)) { setReportToDelete(null); setActionError(null); } }}
+        onConfirm={() => void remove(reportToDelete)}
+      />}
     </div>
   );
 }

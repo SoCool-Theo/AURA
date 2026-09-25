@@ -10,6 +10,7 @@ import { Icon } from '../../components/ui/Icon';
 import type { AgentConversationMessage, AgentExplainResponse, AgentSourceReference } from '../../types/agent';
 import type { PortfolioSummaryResponse } from '../../types/portfolio';
 import styles from './AssistantPage.module.css';
+import composerStyles from './AssistantComposer.module.css';
 import { AnswerContent } from './components/AnswerContent';
 
 function sourceLabel(source: AgentSourceReference): string {
@@ -72,6 +73,7 @@ export function AssistantPage({
   );
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [composerHidden, setComposerHidden] = useState(false);
   const [loadingPortfolios, setLoadingPortfolios] = useState(true);
   const [sending, setSending] = useState(false);
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -292,12 +294,39 @@ export function AssistantPage({
 
     {Boolean(submitError) && <InlineErrorCard error={submitError} resourceName="Assistant context" fallbackMessage="Aura could not prepare this explanation." onRetry={() => void submit()} />}
 
-    {!loadingPortfolios && portfolios.length > 0 && <Card className={styles.composerCard}>
+    {!loadingPortfolios && portfolios.length > 0 && composerHidden && <div className={composerStyles.collapsedComposer}>
+      <button
+        type="button"
+        className={composerStyles.showComposerButton}
+        aria-label="Show message composer"
+        onClick={() => setComposerHidden(false)}
+      >
+        <Icon name="chevron-up" size={22} />
+      </button>
+    </div>}
+
+    {!loadingPortfolios && portfolios.length > 0 && !composerHidden && <Card className={styles.composerCard}>
       {messages.length > 0 && !sending && <div className={styles.followUpSuggestions}>
         <small>FOLLOW-UP IDEAS</small>
         <div className={styles.followUpChips}>{FOLLOW_UP_QUESTIONS.map(question => <button type="button" key={question} className={styles.followUpChip} onClick={() => chooseExampleQuestion(question)}>{question}</button>)}</div>
       </div>}
-      <label className={styles.field}><span>Your question</span><textarea ref={textareaRef} value={message} onChange={event => { setMessage(event.target.value); setSubmitError(null); }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void submit(); } }} placeholder={portfolioMode === 'PLANNED' ? 'Ask about this proposed allocation…' : 'Ask about this portfolio…'} maxLength={4000} disabled={sending || !portfolioId} /></label>
+      <div className={styles.field}>
+        <div className={composerStyles.questionHeader}>
+          <label htmlFor="aura-question">Your question</label>
+          <div className={composerStyles.questionHeaderActions}>
+            <span className={composerStyles.characterCount}>{message.length}/4000</span>
+            <button
+              type="button"
+              className={composerStyles.hideComposerButton}
+              aria-label="Hide message composer"
+              onClick={() => setComposerHidden(true)}
+            >
+              <Icon name="chevron-down" size={20} />
+            </button>
+          </div>
+        </div>
+        <textarea id="aura-question" ref={textareaRef} value={message} onChange={event => { setMessage(event.target.value); setSubmitError(null); }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void submit(); } }} placeholder={portfolioMode === 'PLANNED' ? 'Ask about this proposed allocation…' : 'Ask about this portfolio…'} maxLength={4000} disabled={sending || !portfolioId} />
+      </div>
       <div className={styles.actionRow}>
         <div className={styles.composerHints}><small>Enter to send · Shift+Enter for a new line</small>{messages.length > 0 && <button type="button" className={styles.newChatButton} onClick={startNewChat} disabled={sending}>New chat</button>}</div>
         <button type="button" className="primary-btn" onClick={() => void submit()} disabled={sending || !portfolioId || !message.trim()}><Icon name="spark" size={17} /> {sending ? 'Asking Aura…' : 'Send'}</button>

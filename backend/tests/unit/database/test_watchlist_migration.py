@@ -10,6 +10,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_CONFIG_PATH = BACKEND_ROOT / "alembic.ini"
 REVISION = "a8d3f1c6b2e7"
 PREVIOUS_REVISION = "f2c8e9a1b3d4"
+CURRENT_HEAD = "b9e4d2f7c1a6"
 
 
 def _revision_module():  # type: ignore[no-untyped-def]
@@ -25,7 +26,7 @@ def test_watchlist_revision_extends_current_head() -> None:
 
     assert revision is not None
     assert revision.down_revision == PREVIOUS_REVISION
-    assert script.get_current_head() == REVISION
+    assert script.get_current_head() == CURRENT_HEAD
 
 
 def test_watchlist_upgrade_creates_exact_reversible_table_contract() -> None:

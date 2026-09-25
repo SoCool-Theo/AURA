@@ -7,6 +7,7 @@ import {
 import { go } from '../../app/routes';
 import { FormErrorSummary } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { Icon } from '../../components/ui/Icon';
 import type {
   PortfolioCurrency,
@@ -48,6 +49,7 @@ export function PortfolioCreateFlow() {
   const [createdPortfolio, setCreatedPortfolio] = useState<PortfolioResponse | null>(null);
   const [saving, setSaving] = useState(false);
   const [inputWarning, setInputWarning] = useState<PortfolioInputWarning | null>(null);
+  const [holdingToRemove, setHoldingToRemove] = useState<DraftHolding | null>(null);
 
   function inputIds() {
     return {
@@ -92,6 +94,14 @@ export function PortfolioCreateFlow() {
     const next = [...holdings];
     [next[index], next[destination]] = [next[destination], next[index]];
     setHoldings(next);
+  }
+
+  function removeHolding() {
+    if (!holdingToRemove || saving) return;
+    setHoldings(previous => previous.filter(item => item.id !== holdingToRemove.id));
+    setError(null);
+    setInputWarning(null);
+    setHoldingToRemove(null);
   }
 
   function selectMode(nextMode: CreateMode) {
@@ -316,7 +326,7 @@ export function PortfolioCreateFlow() {
                     <td><div className={styles.orderActions}>
                       <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={saving || index === 0}>↑</button>
                       <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={saving || index === holdings.length - 1}>↓</button>
-                      <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => { setHoldings(previous => previous.filter(item => item.id !== holding.id)); setError(null); setInputWarning(null); }} disabled={saving}>×</button>
+                      <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => setHoldingToRemove(holding)} disabled={saving}>×</button>
                     </div></td>
                   </tr>
                 ))}</tbody>
@@ -359,6 +369,16 @@ export function PortfolioCreateFlow() {
           </Card>
         </aside>
       </div>
+      {holdingToRemove && <ConfirmationDialog
+        title="Remove holding?"
+        description="This removes the holding from the portfolio draft. Save or create the portfolio to apply the remaining holdings."
+        subjectLabel="Holding"
+        subject={holdingToRemove.symbol || 'Unnamed holding'}
+        confirmLabel="Remove Holding"
+        busy={false}
+        onCancel={() => setHoldingToRemove(null)}
+        onConfirm={removeHolding}
+      />}
     </div>
   );
 }

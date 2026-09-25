@@ -128,7 +128,7 @@ def test_user_credentials_are_nullable_text_and_support_legacy_construction(
     assert credential_user.password_hash == "$argon2id$test-hash"
 
 
-def test_user_credential_constraints_match_persistence_contract() -> None:
+def test_user_account_constraints_match_persistence_contract() -> None:
     check_constraints = {
         constraint.name: str(constraint.sqltext)
         for constraint in User.__table__.constraints
@@ -146,7 +146,19 @@ def test_user_credential_constraints_match_persistence_contract() -> None:
         "ck_users_credentials_complete": (
             "(email IS NULL AND password_hash IS NULL) OR "
             "(email IS NOT NULL AND password_hash IS NOT NULL)"
-        )
+        ),
+        "ck_users_display_name_length": (
+            "display_name IS NULL OR length(display_name) BETWEEN 1 AND 100"
+        ),
+        "ck_users_phone_number_length": (
+            "phone_number IS NULL OR length(phone_number) BETWEEN 4 AND 32"
+        ),
+        "ck_users_preferred_language": (
+            "preferred_language IN ('en', 'th')"
+        ),
+        "ck_users_timezone": (
+            "timezone IN ('Asia/Bangkok', 'Asia/Yangon')"
+        ),
     }
     assert unique_constraints == {"uq_users_email": ("email",)}
 

@@ -11,18 +11,18 @@ export function LearningPath() {
       <div className="learning-path-steps">
         <div className="active">
           <span>1</span>
-          <div><strong>Risk Foundations</strong><small>Score, volatility, and drawdown</small></div>
-          <b>3 lessons</b>
+          <div><strong>Risk Foundations</strong><small>Score, volatility, drawdown, and Sharpe ratio</small></div>
+          <b>4 lessons</b>
         </div>
         <div>
           <span>2</span>
-          <div><strong>Portfolio Relationships</strong><small>Return, correlation, diversification</small></div>
-          <b>2 lessons</b>
+          <div><strong>Portfolio Relationships</strong><small>Weights, concentration, and diversification</small></div>
+          <b>1 lesson</b>
         </div>
         <div>
           <span>3</span>
-          <div><strong>Historical Scenarios</strong><small>Understand what-if simulations</small></div>
-          <b>1 lesson</b>
+          <div><strong>Aura Tools</strong><small>Simulations and grounded AI explanations</small></div>
+          <b>4 lessons</b>
         </div>
       </div>
     </Card>

@@ -3,6 +3,7 @@ import { addWatchlistItem, deleteWatchlistItem, listWatchlist } from '../../api/
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import type { WatchlistItemResponse } from '../../types/watchlist';
 import { supportedAssets } from '../portfolios/supportedAssetSymbols';
 import { WatchlistTable } from './components/WatchlistTable';
@@ -21,6 +22,7 @@ export function WatchlistPage() {
   const [addingSymbol, setAddingSymbol] = useState<string | null>(null);
   const [removingSymbol, setRemovingSymbol] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [symbolToRemove, setSymbolToRemove] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -75,6 +77,7 @@ export function WatchlistPage() {
     try {
       await deleteWatchlistItem(symbol);
       setItems(current => current.filter(item => item.symbol !== symbol));
+      setSymbolToRemove(null);
     } catch (error) {
       setActionError(watchlistErrorMessage(error, 'remove'));
     } finally {
@@ -106,9 +109,20 @@ export function WatchlistPage() {
         <Card className="watchlist-library-card">
           <div className="watchlist-library-heading"><div><h2>Tracked assets</h2><p>Latest available prices and backend-calculated changes.</p></div><span className="market-status"><i />Saved market data</span></div>
           {items.length > 0 && <WatchlistToolbar query={query} onQueryChange={setQuery} viewMode={viewMode} onViewChange={setViewMode} />}
-          <WatchlistTable assets={filteredItems} totalAssets={items.length} removingSymbol={removingSymbol} viewMode={viewMode} onRemove={symbol => void remove(symbol)} onAdd={() => setAddOpen(true)} onClearSearch={() => setQuery('')} />
+          <WatchlistTable assets={filteredItems} totalAssets={items.length} removingSymbol={removingSymbol} viewMode={viewMode} onRemove={symbol => { setActionError(null); setSymbolToRemove(symbol); }} onAdd={() => setAddOpen(true)} onClearSearch={() => setQuery('')} />
         </Card>
       </>}
     <div className="watchlist-education-note"><Icon name="time" size={14} /><p>Prices are the latest saved observations, not live quotes. Updated dates show each asset’s market-data date.</p></div>
+    {symbolToRemove && <ConfirmationDialog
+      title={`Remove ${symbolToRemove}?`}
+      description="This removes the asset from your Watchlist. You can add it again later."
+      subjectLabel="Watchlist asset"
+      subject={symbolToRemove}
+      confirmLabel="Remove Asset"
+      busy={removingSymbol === symbolToRemove}
+      error={actionError}
+      onCancel={() => { if (!removingSymbol) { setSymbolToRemove(null); setActionError(null); } }}
+      onConfirm={() => void remove(symbolToRemove)}
+    />}
   </div>;
 }

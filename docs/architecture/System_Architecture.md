@@ -671,6 +671,9 @@ Authenticated API Requests
 - `ProtectedRoute.tsx` prevents unauthenticated access to protected frontend pages.
 - Backend authentication remains authoritative.
 - The frontend must not use `X-User-ID` as authentication.
+- Authenticated profile fields are persisted with the User. Email changes and
+  password replacement require current-password verification; plaintext
+  passwords are never returned or stored.
 
 This is a target architecture. It does not imply that refresh tokens, OAuth, MFA, password reset, logout revocation, or every authentication screen is already implemented.
 

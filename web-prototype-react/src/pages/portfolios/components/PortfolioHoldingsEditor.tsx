@@ -5,6 +5,7 @@ import {
 } from '../../../api/portfoliosApi';
 import { FormErrorSummary } from '../../../components/ui/ApiErrorState';
 import { Card } from '../../../components/ui/Card';
+import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog';
 import { Icon } from '../../../components/ui/Icon';
 import {
   isPlannedPortfolioHolding,
@@ -86,6 +87,7 @@ export function PortfolioHoldingsEditor({
   const [error, setError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
   const [inputWarning, setInputWarning] = useState<PortfolioInputWarning | null>(null);
+  const [holdingToRemove, setHoldingToRemove] = useState<EditableHolding | null>(null);
 
   function inputIds() {
     return {
@@ -233,7 +235,7 @@ export function PortfolioHoldingsEditor({
                 <td><div className={styles.orderActions}>
                   <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={saving || index === 0}>↑</button>
                   <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={saving || index === holdings.length - 1}>↓</button>
-                  <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => { setHoldings(previous => previous.filter(item => item.id !== holding.id)); setError(null); setInputWarning(null); }} disabled={saving}>×</button>
+                  <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => setHoldingToRemove(holding)} disabled={saving}>×</button>
                 </div></td>
               </tr>
             ))}</tbody>
@@ -267,6 +269,21 @@ export function PortfolioHoldingsEditor({
           </div>
         </div>
       </Card>
+      {holdingToRemove && <ConfirmationDialog
+        title="Remove holding?"
+        description="This removes the holding from the draft. The saved portfolio changes only after you save the holdings."
+        subjectLabel="Holding"
+        subject={holdingToRemove.symbol || 'Unnamed holding'}
+        confirmLabel="Remove Holding"
+        busy={false}
+        onCancel={() => setHoldingToRemove(null)}
+        onConfirm={() => {
+          setHoldings(previous => previous.filter(item => item.id !== holdingToRemove.id));
+          setError(null);
+          setInputWarning(null);
+          setHoldingToRemove(null);
+        }}
+      />}
     </div>
   );
 }

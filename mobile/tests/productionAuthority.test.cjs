@@ -585,6 +585,7 @@ test('allocation and combined mobile screens use the two-target allocation edito
   const allocation = fs.readFileSync(path.join(root, 'src/screens/simulations/AllocationChangeScreen.tsx'), 'utf8');
   const combined = fs.readFileSync(path.join(root, 'src/screens/simulations/CombinedSimulationScreen.tsx'), 'utf8');
   const editor = fs.readFileSync(path.join(root, 'src/components/simulations/AllocationEditor.tsx'), 'utf8');
+  const results = fs.readFileSync(path.join(root, 'src/components/simulations/SimulationResults.tsx'), 'utf8');
   assert.match(allocation, /rebalanceAllocationInputs/);
   assert.match(combined, /rebalanceAllocationInputs/);
   assert.match(editor, /percent\.toFixed\(2\)/);
@@ -594,6 +595,19 @@ test('allocation and combined mobile screens use the two-target allocation edito
   assert.match(editor, /editable=\{!disabled && selected && selectedSymbols\.length === 2\}/);
   assert.match(editor, /onPress=\{\(\) => toggleTarget\(holding\.symbol\)\}/);
   assert.match(editor, /onPressIn=\{\(event\) => event\.stopPropagation\(\)\}/);
+  assert.match(allocation, /getPortfolioReportHistory\(selectedPortfolioSummary\)/);
+  assert.match(allocation, /getReport\(selectedPortfolioSummary\.id, newest\.id\)/);
+  assert.match(allocation, /screen: 'ReportDetail'/);
+  assert.match(combined, /getPortfolioReportHistory\(selectedPortfolioSummary\)/);
+  assert.match(combined, /getReport\(selectedPortfolioSummary\.id, newest\.id\)/);
+  assert.match(combined, /screen: 'ReportDetail'/);
+  assert.match(results, /Latest saved portfolio analysis/);
+  assert.match(results, /Latest portfolio analysis vs new combined simulation/);
+  assert.match(results, /metrics=\{response\.modified\.metrics\}/);
+  assert.match(results, /points: response\.modified\.trajectory/);
+  assert.match(results, /label: 'New combined result'/);
+  assert.match(results, /backend original and modified results over the same requested period/);
+  assert.match(results, /View latest analysis details/);
 });
 
 test('portfolio input warnings identify, reveal, and focus the first invalid mobile field', () => {
@@ -798,6 +812,75 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.ok(!/proposedAmount\s*\/|proposed_amount\s*\//.test(`${create}\n${editor}\n${detail}`));
 });
 
+test('mobile historical scenarios compare the latest saved analysis with the event result', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const screen = read('src/screens/simulations/HistoricalScenarioScreen.tsx');
+  const results = read('src/components/simulations/SimulationResults.tsx');
+  const chart = read('src/components/charts/SimulationTrajectoryChart.tsx');
+
+  assert.match(screen, /originalAllocation=\{originalAllocation\}/);
+  assert.match(screen, /Number\(holding\.current_allocation\)/);
+  assert.match(screen, /Number\(holding\.target_allocation\)/);
+  assert.match(screen, /getPortfolioReportHistory\(selectedPortfolioSummary\)/);
+  assert.match(screen, /getReport\(selectedPortfolioSummary\.id, newest\.id\)/);
+  assert.match(screen, /screen: 'ReportDetail'/);
+  assert.match(results, /Latest portfolio analysis vs historical scenario/);
+  assert.match(results, /reference\.portfolio_metrics\.cumulative_return/);
+  assert.match(results, /reference\.max_drawdown\.max_drawdown/);
+  assert.match(results, /View latest analysis details/);
+  assert.match(results, /Allocation used by this scenario run/);
+  assert.match(results, /savedAnalysisTrajectory\(latestAnalysis\.analysis\)/);
+  assert.match(chart, /accessibilityLabel="Choose trajectory lines"/);
+  assert.match(chart, /accessibilityRole="radio"/);
+  assert.match(chart, /selectedSeries === 'all' \? null/);
+  assert.match(chart, />Date<\/SvgText>/);
+  assert.doesNotMatch(results, /no-movement comparison line/);
+  assert.doesNotMatch(results, /normalized_ending_value\s*[-+*/]/);
+});
+
+test('mobile reconstructs a normalized display path from saved backend return observations', () => {
+  const simulation = load('src/simulation/simulationFormatting.ts');
+  const analysis = {
+    start_date: '2026-01-01',
+    portfolio_returns: [
+      { date: '2026-01-02', portfolio_return: 0.1 },
+      { date: '2026-01-03', portfolio_return: -0.1 }
+    ]
+  };
+  assert.deepEqual(JSON.parse(JSON.stringify(simulation.savedAnalysisTrajectory(analysis))), [
+    { date: '2026-01-01', normalized_value: 1 },
+    { date: '2026-01-02', normalized_value: 1.1 },
+    { date: '2026-01-03', normalized_value: 0.9900000000000001 }
+  ]);
+  assert.deepEqual(analysis.portfolio_returns, [
+    { date: '2026-01-02', portfolio_return: 0.1 },
+    { date: '2026-01-03', portfolio_return: -0.1 }
+  ]);
+});
+
+test('mobile destructive actions and portfolio naming use Aura-themed dialogs', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const confirmation = read('src/components/ui/ConfirmationDialog.tsx');
+  const portfolio = read('src/screens/portfolios/PortfolioDetailScreen.tsx');
+  const reports = read('src/screens/reports/ReportsScreen.tsx');
+  const reportDetail = read('src/screens/reports/ReportDetailScreen.tsx');
+  const watchlist = read('src/screens/watchlist/WatchlistScreen.tsx');
+  const create = read('src/screens/portfolios/CreatePortfolioScreen.tsx');
+  const editor = read('src/components/portfolio/HoldingsEditor.tsx');
+
+  assert.match(confirmation, /<Modal/);
+  assert.match(confirmation, /colors\.surface/);
+  assert.match(confirmation, /variant="danger"/);
+  assert.match(portfolio, /visible=\{nameAction !== null\}/);
+  assert.match(portfolio, /<ConfirmationDialog/);
+  assert.match(reports, /<ConfirmationDialog/);
+  assert.match(reportDetail, /<ConfirmationDialog/);
+  assert.match(watchlist, /<ConfirmationDialog/);
+  assert.match(create, /<ConfirmationDialog/);
+  assert.match(editor, /<ConfirmationDialog/);
+  assert.doesNotMatch(`${portfolio}\n${reports}\n${reportDetail}\n${watchlist}`, /Alert\.alert/);
+});
+
 test('mobile asset picker shows full names while preserving symbol values', () => {
   const catalog = load('src/portfolio/supportedAssetSymbols.ts');
   const field = fs.readFileSync(
@@ -885,6 +968,30 @@ test('portfolio report entry points preserve newest-report AI grounding', () => 
   assert.match(portfolioCard, /View Latest Report/);
   assert.match(assistant, /requestedPortfolioId/);
   assert.ok(!/navigate\('AI',\s*\{[^}]*reportId/.test(reportDetail));
+});
+
+test('saved simulation opens Assistant with exact immutable simulation grounding', () => {
+  const simulationDetail = fs.readFileSync(
+    path.join(root, 'src/screens/simulations/SimulationResultScreen.tsx'),
+    'utf8'
+  );
+  const assistant = fs.readFileSync(
+    path.join(root, 'src/screens/assistant/AssistantScreen.tsx'),
+    'utf8'
+  );
+  const navigationTypes = fs.readFileSync(
+    path.join(root, 'src/navigation/navigationTypes.ts'),
+    'utf8'
+  );
+
+  assert.match(simulationDetail, /Ask Aura about this saved simulation/);
+  assert.match(simulationDetail, /navigate\('AI', \{ portfolioId, simulationId \}\)/);
+  assert.match(navigationTypes, /AI: \{ portfolioId\?: string; simulationId\?: string \}/);
+  assert.match(assistant, /requestedSimulationId/);
+  assert.match(assistant, /simulation_id: selectedSimulationId/);
+  assert.match(assistant, /IMMUTABLE SIMULATION/);
+  assert.match(assistant, /exact immutable saved simulation/);
+  assert.match(assistant, /Use live portfolio context/);
 });
 
 test('More report detail exposes an accessible back action to Reports', () => {

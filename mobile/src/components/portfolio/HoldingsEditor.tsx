@@ -43,6 +43,7 @@ import { PortfolioInputWarningDialog } from './PortfolioInputWarningDialog';
 import { PurchaseDateField } from './PurchaseDateField';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { ConfirmationDialog } from '../ui/ConfirmationDialog';
 import { FormErrorSummary, ScreenErrorState } from '../ui/ErrorState';
 import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
 import { LoadingState } from '../ui/LoadingState';
@@ -70,6 +71,7 @@ export function HoldingsEditor({
   const [submitError, setSubmitError] = useState<unknown>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [inputWarning, setInputWarning] = useState<PortfolioInputWarning | null>(null);
+  const [holdingToRemove, setHoldingToRemove] = useState<HoldingDraft | null>(null);
   const requestRef = useRef(0);
   const submittingRef = useRef(false);
   const fieldRefs = useRef(new Map<string, TextInput>());
@@ -316,14 +318,7 @@ export function HoldingsEditor({
                     accessibilityLabel={`Remove holding ${index + 1}`}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: saving }}
-                    onPress={() => {
-                      setSubmitError(null);
-                      setSubmitMessage(null);
-                      setInputWarning(null);
-                      setRows((current) => (
-                        current.filter((item) => item.id !== row.id)
-                      ));
-                    }}
+                    onPress={() => setHoldingToRemove(row)}
                     style={styles.iconButton}
                     disabled={saving}
                   >
@@ -424,6 +419,24 @@ export function HoldingsEditor({
         />
       </KeyboardAwareScrollView>
       </SafeAreaView>
+      <ConfirmationDialog
+        visible={holdingToRemove !== null}
+        title="Remove holding?"
+        description="This removes the holding from the draft. The saved portfolio changes only after you save the holdings."
+        subjectLabel="Holding"
+        subject={holdingToRemove?.symbol || 'Unnamed holding'}
+        confirmLabel="Remove Holding"
+        busy={false}
+        onCancel={() => setHoldingToRemove(null)}
+        onConfirm={() => {
+          if (!holdingToRemove) return;
+          setSubmitError(null);
+          setSubmitMessage(null);
+          setInputWarning(null);
+          setRows((current) => current.filter((item) => item.id !== holdingToRemove.id));
+          setHoldingToRemove(null);
+        }}
+      />
     </>
   );
 }

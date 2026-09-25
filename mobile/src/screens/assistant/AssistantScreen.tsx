@@ -47,6 +47,13 @@ const PLANNED_STARTER_QUESTIONS = [
   'Why is this planned allocation concentrated?'
 ] as const;
 
+const SIMULATION_STARTER_QUESTIONS = [
+  'Explain this simulation result simply.',
+  'What caused the biggest change?',
+  'What does this result say about my portfolio risk?',
+  'Summarize the key takeaway from this simulation.'
+] as const;
+
 const FOLLOW_UP_QUESTIONS = [
   'Explain that more simply.',
   'Why does that matter?',
@@ -68,6 +75,7 @@ export function AssistantScreen({ navigation, route }: { navigation: any; route:
     selectPortfolio
   } = usePortfolios();
   const [selectedPortfolioId, setSelectedPortfolioId] = useState('');
+  const [selectedSimulationId, setSelectedSimulationId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [expandedMessageIds, setExpandedMessageIds] = useState<number[]>([]);
@@ -81,6 +89,7 @@ export function AssistantScreen({ navigation, route }: { navigation: any; route:
   const requestVersionRef = useRef(0);
   const requestControllerRef = useRef<AbortController | null>(null);
   const requestedPortfolioId = route.params?.portfolioId as string | undefined;
+  const requestedSimulationId = route.params?.simulationId as string | undefined;
 
   const cancelActiveRequest = useCallback(() => {
     requestVersionRef.current += 1;
@@ -109,15 +118,22 @@ export function AssistantScreen({ navigation, route }: { navigation: any; route:
   useEffect(() => {
     if (listStatus !== 'ready' && !portfolios.length) return;
     if (requestedPortfolioId && portfolios.some((item) => item.id === requestedPortfolioId)) {
-      navigation.setParams({ portfolioId: undefined });
-      if (requestedPortfolioId === selectedPortfolioId) return;
+      navigation.setParams({ portfolioId: undefined, simulationId: undefined });
+      const nextSimulationId = requestedSimulationId ?? null;
+      if (
+        requestedPortfolioId === selectedPortfolioId
+        && nextSimulationId === selectedSimulationId
+      ) return;
       cancelActiveRequest();
       setSelectedPortfolioId(requestedPortfolioId);
+      setSelectedSimulationId(nextSimulationId);
       selectPortfolio(requestedPortfolioId);
       resetConversation();
       return;
     }
-    if (requestedPortfolioId) navigation.setParams({ portfolioId: undefined });
+    if (requestedPortfolioId || requestedSimulationId) {
+      navigation.setParams({ portfolioId: undefined, simulationId: undefined });
+    }
     if (portfolios.some((item) => item.id === selectedPortfolioId)) return;
 
     const nextPortfolioId = (
@@ -126,6 +142,7 @@ export function AssistantScreen({ navigation, route }: { navigation: any; route:
 
     cancelActiveRequest();
     setSelectedPortfolioId(nextPortfolioId);
+    setSelectedSimulationId(null);
     resetConversation();
     if (nextPortfolioId && nextPortfolioId !== activePortfolioId) {
       selectPortfolio(nextPortfolioId);
@@ -137,8 +154,10 @@ export function AssistantScreen({ navigation, route }: { navigation: any; route:
     navigation,
     portfolios,
     requestedPortfolioId,
+    requestedSimulationId,
     resetConversation,
     selectPortfolio,
+    selectedSimulationId,
     selectedPortfolioId
   ]);
 
@@ -146,7 +165,15 @@ export function AssistantScreen({ navigation, route }: { navigation: any; route:
     if (portfolioId === selectedPortfolioId || sendingRef.current) return;
     cancelActiveRequest();
     setSelectedPortfolioId(portfolioId);
+    setSelectedSimulationId(null);
     selectPortfolio(portfolioId);
+    resetConversation();
+  }
+
+  function useLivePortfolioContext() {
+    if (sendingRef.current || !selectedSimulationId) return;
+    cancelActiveRequest();
+    setSelectedSimulationId(null);
     resetConversation();
   }
 
@@ -213,7 +240,12 @@ export function AssistantScreen({ navigation, route }: { navigation: any; route:
 
     try {
       const result = await agentApi.explain(
-        { portfolio_id: selectedPortfolioId, message: normalizedMessage, history },
+        {
+          portfolio_id: selectedPortfolioId,
+          ...(selectedSimulationId ? { simulation_id: selectedSimulationId } : {}),
+          message: normalizedMessage,
+          history
+        },
         { signal: controller.signal }
       );
       if (controller.signal.aborted || requestVersionRef.current !== requestId) return;
@@ -282,11 +314,17 @@ export function AssistantScreen({ navigation, route }: { navigation: any; route:
   const selectedPortfolio = portfolios.find((item) => item.id === selectedPortfolioId);
   const isPlanned = selectedPortfolio?.portfolio_type === 'PLANNED';
   const isLegacy = selectedPortfolio?.portfolio_type === 'LEGACY';
-  const starterQuestions = isPlanned ? PLANNED_STARTER_QUESTIONS : CURRENT_STARTER_QUESTIONS;
-  const contextTitle = isPlanned
+  const starterQuestions = selectedSimulationId
+    ? SIMULATION_STARTER_QUESTIONS
+    : isPlanned ? PLANNED_STARTER_QUESTIONS : CURRENT_STARTER_QUESTIONS;
+  const contextTitle = selectedSimulationId
+    ? 'Saved simulation context'
+    : isPlanned
     ? 'Planned portfolio context'
     : isLegacy ? 'Legacy allocation context' : 'Current portfolio context';
-  const contextDescription = isPlanned
+  const contextDescription = selectedSimulationId
+    ? 'Aura will explain this exact immutable saved simulation. It may also use the portfolio’s newest saved analysis as supporting context.'
+    : isPlanned
     ? 'Aura explains this proposed allocation as hypothetical—not as assets you already own—and uses its newest saved report when available.'
     : isLegacy
       ? 'Aura explains the portfolio’s saved compatibility allocation and its newest saved report when available.'
@@ -407,9 +445,23 @@ export function AssistantScreen({ navigation, route }: { navigation: any; route:
           </View>
           {selectedPortfolio ? (
             <View style={[styles.contextCard, isPlanned && styles.plannedContextCard]}>
-              <Text style={styles.contextEyebrow}>LIVE PORTFOLIO</Text>
+              <Text style={styles.contextEyebrow}>
+                {selectedSimulationId ? 'IMMUTABLE SIMULATION' : 'LIVE PORTFOLIO'}
+              </Text>
               <Text style={styles.contextTitle}>{contextTitle}</Text>
               <Text style={styles.contextDescription}>{contextDescription}</Text>
+              {selectedSimulationId ? (
+                <>
+                  <Text selectable style={styles.contextId}>Simulation ID · {selectedSimulationId}</Text>
+                  <Button
+                    title="Use live portfolio context"
+                    variant="secondary"
+                    disabled={sending}
+                    onPress={useLivePortfolioContext}
+                    style={styles.contextAction}
+                  />
+                </>
+              ) : null}
             </View>
           ) : null}
         </Card>
@@ -564,6 +616,8 @@ const styles = StyleSheet.create({
   contextEyebrow: { color: colors.primary, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   contextTitle: { color: colors.text, fontSize: 13, fontWeight: '900' },
   contextDescription: { color: colors.textSecondary, fontSize: 11, lineHeight: 17 },
+  contextId: { color: colors.muted, fontSize: 9, lineHeight: 15, marginTop: spacing.xs },
+  contextAction: { alignSelf: 'flex-start', minHeight: 40, marginTop: spacing.sm },
   chatSection: { gap: spacing.md },
   emptyChat: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   emptyChatIcon: {
