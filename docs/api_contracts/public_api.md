@@ -57,6 +57,12 @@ nested prediction interval (`return_prediction_interval` and
 percentage string. Return values and bounds are not clamped; volatility values
 and bounds must be non-negative. All model values must be finite.
 
+The horizon is 30 calendar days, not 30 trading observations. Forecast realized
+volatility is non-annualized. Asset intervals are empirical prediction intervals
+using frozen calibration residuals at nominal 80% coverage, not guarantees or
+confidence intervals for a model parameter. This probabilistic outlook is
+separate from Aura's deterministic historical analytics and immutable reports.
+
 Public provenance consists of `market_data_as_of`, `market_data_age_days`,
 `artifact_version`, `return_model_id`, and `volatility_model_id`. The market-data
 date equals the forecast origin, and observations older than four calendar days
@@ -72,6 +78,8 @@ interval application remain internal. No runtime training, recalibration,
 candidate fallback, database persistence, or provider request is performed.
 Calibration residuals, evaluation metrics, filesystem paths, checksums, Git
 hashes, and database configuration are excluded from the public response.
+Training/retraining is an offline, manually initiated, versioned workflow;
+production inference only consumes the configured frozen artifact version.
 
 Unsupported symbols return a sanitized `404`. Stale data, insufficient history,
 missing/corrupt/version-mismatched artifacts, unavailable market data, and invalid

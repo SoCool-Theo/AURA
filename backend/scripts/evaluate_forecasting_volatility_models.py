@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date, timedelta
 import json
 from pathlib import Path
@@ -58,6 +58,11 @@ from app.forecasting.splits import (
     build_chronological_plan,
 )
 from app.services.market_data_service import MarketDataService
+from backend.scripts.forecasting_selection_provenance import (
+    DatabaseEnvironmentError, SelectionDataProvenance, SelectionProvenanceError,
+    add_provenance_arguments, database_url_from_env_file, provenance_payload,
+    validate_expectations, validate_explicit_database_url, verify_selection_records,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +78,7 @@ class VolatilityModelEvaluationReport:
     candidate_ids: tuple[str, ...]
     results: tuple[ForecastEvaluationResult, ...]
     selection_summaries: tuple[SymbolSelectionSummary, ...]
+    data_provenance: SelectionDataProvenance | None = None
 
 
 def _parse_date(value: str) -> date:
@@ -173,24 +179,40 @@ def evaluate_histories(
 def run_persisted_volatility_model_evaluation(
     *,
     evaluation_cutoff: date,
+    database_url: str,
+    expected_market_data_fingerprint: str | None = None,
+    expected_row_count: int | None = None,
 ) -> VolatilityModelEvaluationReport:
     """Read persisted market data and run the user-triggered comparison."""
     if type(evaluation_cutoff) is not date:
         raise TypeError("evaluation_cutoff must be a date")
-    engine = create_database_engine()
+    validate_expectations(expected_market_data_fingerprint, expected_row_count)
+    validate_explicit_database_url(database_url)
+    try:
+        engine = create_database_engine(database_url)
+    except SQLAlchemyError:
+        raise RuntimeError("selected evaluation database is unavailable") from None
     try:
         session_factory = create_session_factory(engine)
         with session_scope(session_factory) as session:
-            records = MarketDataService(session).get_range(
-                USER_ASSET_SYMBOLS,
-                date.min,
-                evaluation_cutoff,
+            records = tuple(
+                MarketDataService(session).get_range(
+                    USER_ASSET_SYMBOLS, date.min, evaluation_cutoff,
+                )
+            )
+            provenance = verify_selection_records(
+                records, evaluation_cutoff=evaluation_cutoff,
+                expected_fingerprint=expected_market_data_fingerprint,
+                expected_row_count=expected_row_count,
             )
             histories = build_price_histories(records)
-        return evaluate_histories(
+        report = evaluate_histories(
             histories,
             evaluation_cutoff=evaluation_cutoff,
         )
+        return replace(report, data_provenance=provenance)
+    except SQLAlchemyError:
+        raise RuntimeError("selected evaluation database is unavailable") from None
     finally:
         engine.dispose()
 
@@ -209,6 +231,9 @@ def _result_dict(result: ForecastEvaluationResult) -> dict[str, object]:
 def report_json(report: VolatilityModelEvaluationReport) -> str:
     """Return strict deterministic JSON without NaN or Infinity."""
     payload = {
+        "data_provenance": provenance_payload(
+            report.data_provenance, evaluation_cutoff=report.evaluation_cutoff,
+        ),
         "evaluation_cutoff": report.evaluation_cutoff.isoformat(),
         "evaluation_end_exclusive": report.evaluation_end_exclusive.isoformat(),
         "requested_symbols": list(report.requested_symbols),
@@ -246,6 +271,8 @@ def _print_summary(
     print("Aura volatility-model selection evaluation completed.")
     print("-----------------------------------------------------")
     print(f"Evaluation cutoff: {report.evaluation_cutoff.isoformat()}")
+    verified = bool(report.data_provenance and report.data_provenance.provenance_verified)
+    print(f"Provenance verified: {verified}")
     print(f"Symbols evaluated: {len(report.evaluated_symbols)}")
     print(f"Selection folds: {len(report.selection_fold_ids)}")
     print(f"Available candidate-fold results: {available}")
@@ -276,26 +303,37 @@ def _build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Path for the strict JSON selection report.",
     )
+    add_provenance_arguments(parser)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
     try:
+        validate_expectations(
+            args.expected_market_data_fingerprint, args.expected_row_count,
+        )
         report = run_persisted_volatility_model_evaluation(
             evaluation_cutoff=args.evaluation_cutoff,
+            database_url=database_url_from_env_file(
+                args.env_file, database_url_key=args.database_url_key,
+            ),
+            expected_market_data_fingerprint=args.expected_market_data_fingerprint,
+            expected_row_count=args.expected_row_count,
         )
         args.output.write_text(report_json(report), encoding="utf-8")
+    except (DatabaseEnvironmentError, SelectionProvenanceError) as error:
+        raise SystemExit(f"Aura volatility-model evaluation failed: {error}") from None
     except (
         OSError,
         SQLAlchemyError,
         TypeError,
         ValueError,
         RuntimeError,
-    ) as error:
+    ):
         raise SystemExit(
-            f"Aura volatility-model evaluation failed: {error}"
-        ) from error
+            "Aura volatility-model evaluation failed: unable to read, evaluate, or write the selected dataset."
+        ) from None
     _print_summary(report, args.output)
 
 

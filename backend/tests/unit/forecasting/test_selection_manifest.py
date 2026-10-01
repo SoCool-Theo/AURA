@@ -183,6 +183,17 @@ def test_freeze_creates_exactly_34_deterministic_ordered_records() -> None:
     ) == first
 
 
+def test_additive_data_provenance_does_not_change_selection_validation():
+    return_report = _report(ForecastTargetType.RETURN)
+    volatility_report = _report(ForecastTargetType.VOLATILITY)
+    before = _freeze(return_report, volatility_report)
+    for report in (return_report, volatility_report):
+        report["data_provenance"] = {"provenance_verified": True,
+            "evaluation_cutoff": "2026-09-17", "symbol_count": 17,
+            "row_count": 69928, "market_data_fingerprint_sha256": "a" * 64}
+    assert _freeze(return_report, volatility_report) == before
+
+
 def test_wrong_cutoff_and_missing_symbol_are_rejected() -> None:
     wrong_cutoff = _report(ForecastTargetType.RETURN)
     wrong_cutoff["evaluation_cutoff"] = "2026-09-16"

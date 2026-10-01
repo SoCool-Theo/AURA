@@ -2262,3 +2262,83 @@ remain separate follow-on work.
   updater changes, AI/client changes, new dependency, commit, push, merge,
   PR, or branch change occurred. Live acceptance and the separate stale-market-
   data operational task remain outstanding; no subsequent phase was started.
+
+### Completed offline selection dataset provenance support
+
+- Both manual return/volatility selection commands now require an explicit
+  environment file and accept `--database-url-key` (default `DATABASE_URL`).
+  They reuse the fingerprint workflow's loader, read only the requested file
+  key without interpolation/fallback, and never serialize connection details.
+- Added a shared offline helper for canonical market-data fingerprinting and
+  paired expected fingerprint/row-count verification. The loaded records are
+  fingerprinted before history adaptation or any candidate evaluation; exactly
+  those records supply the unchanged evaluator. Mismatch/invalid expectations
+  stop without writing a selection report, and existing output is preserved.
+- Reports now include additive actual cutoff, symbol count, row count, hash,
+  and `provenance_verified` metadata. Developer runs without both expectations
+  explicitly remain unverified. The selection-report parser/freezer already
+  tolerates additive metadata and required no production change.
+- Added mocked/synthetic tests for explicit key selection, missing-key and
+  no-fallback behavior, credential-safe failures, gate ordering, mismatches,
+  deterministic report metadata, unchanged numerical/selection results, and
+  freezer compatibility. Targeted suite: 67 passed. Complete forecasting unit
+  suite: 345 passed. Broader forecasting/schema/API suite: 474 passed.
+  Compilation, import/parser checks, `pip check`, whitespace, and scope checks
+  pass; both candidate evaluator functions are unchanged from HEAD.
+- Documented exact user-controlled remediation commands with new report paths
+  that preserve old selection evidence. No real evaluation, database access,
+  fitting, manifest replacement, artifact generation, production inference,
+  API, analytics, client, dependency, migration, or Git history change occurred.
+- The original selection provenance remains insufficient: supporting future
+  verified runs does not retroactively establish the original reports' dataset.
+  Merge readiness remains blocked pending manual verified reports, comparison
+  of their selections, and a separate decision on any versioned artifact work.
+
+### Completed verified selection reconciliation and final readiness audit
+
+- The user manually reproduced selection decisions on the authoritative frozen
+  69,928-row, 17-symbol dataset at cutoff `2026-09-17`, fingerprint
+  `dd8cfbe6963ffad4cb3f64034e834d324c7981426704193c00256c9add504e99`.
+  Both supplied reports record verified provenance. Their byte SHA-256 values
+  and the deterministic symbol-sorted reconciliation are recorded in
+  `docs/development/forecasting-selection-provenance.md`.
+- All 17 return and 17 volatility candidate IDs match both frozen manifests:
+  34/34 matches. This resolves the prior selection-reproduction readiness gate.
+  The original Phase 4/5 run dataset provenance was not independently recorded
+  and is NOT newly proven. The original package `forecast-v1-20260917` remains
+  frozen: it was NOT regenerated; calibration and final-test reports were NOT
+  rerun. Verified reports supplement, rather than replace, the original evidence.
+- Read-only artifact validation passes: 17 symbols, two targets, 34 unique
+  artifacts, all 68 model/metadata checksums, completed final-test marker,
+  feature/target versions, 0.80 interval coverage, authoritative fingerprint,
+  canonical selection manifest hash, and embedded/source evidence consistency.
+- Runtime review and synthetic regressions confirm application-session persisted
+  data plus immutable model prediction only, approved ARIMA stored-calendar step
+  alignment, no runtime training/provider/offline database calls, existing Bearer
+  authentication, ownership isolation, and sanitized failure behavior. Shared
+  modules contain offline helper definitions but request paths never call them.
+- Portfolio composition retains authoritative weights, arithmetic weighted
+  expected return, `D @ R @ D` covariance, square-root quadratic-form volatility,
+  60–252 common-date log returns at the earliest origin, signed contributions,
+  no filling/fallback/dropped assets, and no calibrated portfolio-level interval.
+  API documentation now explicitly distinguishes deterministic historical
+  analytics from 30-calendar-day non-annualized probabilistic forecasting,
+  empirical asset intervals, and offline/versioned retraining. The existing
+  `backend/.env.example` artifact version matches the frozen package unchanged.
+- All 345 forecasting unit tests also pass in a dedicated run. All 3,219 backend
+  unit and non-live API tests pass, including auth, portfolio,
+  valuation, schemas, analytics, reporting, simulation, forecasting, and AI Agent
+  regressions. Compilation, import/OpenAPI (25 paths/32 operations), `pip check`,
+  whitespace, and scope checks pass. The 54 warnings are from the existing short
+  JWT secret in AI test fixtures. Live/PostgreSQL integration tests were excluded.
+- Added narrow root-output ignore rules for forecasting JSON evidence, the
+  Supabase snapshot dump, and artifact backup ZIP. These files and frozen
+  artifacts remain untracked/ignored; no user file was deleted or rewritten.
+- Readiness decision: READY TO MERGE under the requested gates. Stale-data `503`
+  is expected and does not block this decision; production updater restoration
+  and fresh-data live acceptance remain separate operational follow-ups. Trusted
+  immutable artifact deployment remains required; hashes are not authenticity
+  proofs. Changes await user review and explicit commit authorization.
+- No real database connection, ML training/evaluation, calibration/final testing,
+  artifact generation, production code/contract change, dependency addition,
+  commit, push, merge, PR, history rewrite, or branch switch occurred in this audit.

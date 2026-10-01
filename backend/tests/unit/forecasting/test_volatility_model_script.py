@@ -122,7 +122,8 @@ def test_persisted_path_is_read_only_and_uses_user_assets() -> None:
     session = MagicMock()
     session_factory = MagicMock()
     service = MagicMock()
-    service.get_range.return_value = [SimpleNamespace(name="record")]
+    service.get_range.return_value = [SimpleNamespace(symbol="AAPL", date=date(2020, 1, 1),
+        adjusted_close=Decimal("100"), volume=None, source="synthetic")]
     histories = (_synthetic_history(),)
     expected = _empty_report()
 
@@ -148,10 +149,11 @@ def test_persisted_path_is_read_only_and_uses_user_assets() -> None:
         ) as evaluate,
     ):
         result = script.run_persisted_volatility_model_evaluation(
-            evaluation_cutoff=date(2026, 9, 17)
+            evaluation_cutoff=date(2026, 9, 17), database_url="synthetic-url"
         )
 
-    assert result is expected
+    assert replace(result, data_provenance=None) == expected
+    assert result.data_provenance.provenance_verified is False
     service.get_range.assert_called_once_with(
         script.USER_ASSET_SYMBOLS,
         date.min,
@@ -204,6 +206,8 @@ def test_report_json_is_strict_deterministic_and_preserves_metadata() -> None:
 def test_main_writes_selected_output_without_real_evaluation(tmp_path: Path) -> None:
     output = tmp_path / "volatility-selection.json"
     report = _empty_report()
+    env_file = tmp_path / "synthetic.env"
+    env_file.write_text("DATABASE_URL=synthetic-url\n", encoding="utf-8")
 
     with patch.object(
         script,
@@ -214,12 +218,14 @@ def test_main_writes_selected_output_without_real_evaluation(tmp_path: Path) -> 
             [
                 "--evaluation-cutoff",
                 "2026-09-17",
+                "--env-file", str(env_file),
                 "--output",
                 str(output),
             ]
         )
 
-    run.assert_called_once_with(evaluation_cutoff=date(2026, 9, 17))
+    run.assert_called_once_with(evaluation_cutoff=date(2026, 9, 17), database_url="synthetic-url",
+                               expected_market_data_fingerprint=None, expected_row_count=None)
     assert output.read_text(encoding="utf-8") == script.report_json(report)
 
 
