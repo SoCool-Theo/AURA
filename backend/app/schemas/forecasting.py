@@ -1,7 +1,9 @@
 """Public current asset outlook contracts; ratios are numeric decimal values."""
 
 from datetime import date
+import math
 from typing import Annotated, Literal, Self
+from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 
@@ -82,4 +84,59 @@ class AssetOutlookResponse(AuraBaseModel):
     def validate_market_context(self) -> Self:
         if self.market_data_as_of != self.forecast_origin_date:
             raise ValueError("market data date must match the forecast origin")
+        return self
+
+
+PORTFOLIO_FORECAST_LIMITATIONS: tuple[str, ...] = (
+    "Forecasts are probabilistic estimates, not guarantees of future performance.",
+    "Portfolio forecast volatility combines forecast marginal asset volatility with historical correlations.",
+    "Historical correlations may change in future markets.",
+    "This outlook is for educational risk analysis and is not investment advice.",
+    "Component prediction intervals are individually calibrated; no calibrated portfolio prediction interval is provided.",
+)
+
+
+class PortfolioOutlookComponent(AssetOutlookResponse):
+    """Complete asset outlook with authoritative weight and signed contribution."""
+
+    current_weight: Annotated[float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)]
+    forecast_volatility_contribution: _FiniteValue
+    forecast_volatility_contribution_share: _FiniteValue
+
+
+class PortfolioOutlookResponse(AuraBaseModel):
+    """30-day composition, deliberately without a portfolio prediction interval."""
+
+    portfolio_id: UUID
+    portfolio_name: str
+    baseline_kind: Literal["current", "legacy", "planned"]
+    horizon_days: Literal[30]
+    expected_return_30d: _FiniteValue
+    forecast_realized_volatility_30d: _NonNegativeFiniteValue
+    correlation_as_of_date: date
+    correlation_observation_count: Annotated[int, Field(strict=True, ge=60, le=252)]
+    market_data_as_of: date
+    artifact_version: _ArtifactVersion
+    components: Annotated[list[PortfolioOutlookComponent], Field(min_length=1)]
+    limitations: list[str]
+
+    @field_validator("limitations")
+    @classmethod
+    def validate_limitations(cls, value: list[str]) -> list[str]:
+        if tuple(value) != PORTFOLIO_FORECAST_LIMITATIONS:
+            raise ValueError("portfolio limitations must use approved wording")
+        return value
+
+    @model_validator(mode="after")
+    def validate_composition_context(self) -> Self:
+        if len({c.symbol for c in self.components}) != len(self.components):
+            raise ValueError("portfolio components must be unique")
+        if not math.isclose(math.fsum(c.current_weight for c in self.components), 1, rel_tol=0, abs_tol=1e-10):
+            raise ValueError("portfolio weights must sum to one")
+        if self.correlation_as_of_date != min(c.forecast_origin_date for c in self.components):
+            raise ValueError("correlation cutoff must use the earliest origin")
+        if self.market_data_as_of != min(c.market_data_as_of for c in self.components):
+            raise ValueError("portfolio market date must use the oldest component")
+        if any(c.artifact_version != self.artifact_version for c in self.components):
+            raise ValueError("component artifact versions must match")
         return self

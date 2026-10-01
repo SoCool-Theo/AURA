@@ -168,8 +168,8 @@ def test_inference_construction_errors_are_sanitized(api_harness):
 def test_openapi_exposes_only_current_authenticated_asset_outlook():
     schema = app.openapi()
     paths = {path for path in schema["paths"] if path.startswith("/api/forecasting")}
-    assert paths == {"/api/forecasting/assets/{symbol}/outlook"}
-    operation = schema["paths"][next(iter(paths))]
+    assert paths == {"/api/forecasting/assets/{symbol}/outlook", "/api/forecasting/portfolios/{portfolio_id}/outlook"}
+    operation = schema["paths"]["/api/forecasting/assets/{symbol}/outlook"]
     assert set(operation) == {"get"}
     assert operation["get"]["security"] == [{"HTTPBearer": []}]
     assert "requestBody" not in operation["get"]

@@ -2218,3 +2218,47 @@ remain separate follow-on work.
 - Tests use mocked inference and sessions. Frozen model artifacts, internal
   prediction semantics, portfolio composition, persistence, migrations,
   scheduler/updater behavior, AI integration, and client code are unchanged.
+
+### Completed authenticated portfolio forecast composition
+
+- Added owner-scoped `GET /api/forecasting/portfolios/{portfolio_id}/outlook`
+  with existing Bearer authentication, application sessions, and ownership-safe
+  `404` behavior. No caller weight, horizon, scenario, or as-of override is
+  supported; the endpoint is read-only and persists no forecast.
+- Reused the authoritative baseline resolver: current USD valuation weights
+  for CURRENT, saved weights for LEGACY, and existing proposed-amount target
+  weights for PLANNED. The response identifies the baseline kind. Only sum
+  drift within absolute `1e-10` is normalized; invalid/empty/unsupported
+  allocations fail with a sanitized `409` rather than dropping components.
+- Every component reuses frozen asset inference with one server-selected UTC
+  reference date and the four-calendar-day freshness rule. Portfolio expected
+  return is an arithmetic weighted sum, without compounding or annualization.
+- Forecasting-local correlation computes log returns on each asset's stored
+  calendar, intersects return dates, and uses the latest 60–252 common returns
+  on or before the earliest component origin. A single batch historical query
+  supplies correlation data; there is no provider call, filling, external
+  calendar, or change to deterministic historical correlation.
+- Portfolio forecast volatility uses `D @ R @ D` covariance and
+  `sqrt(w.T @ Sigma @ w)`. Signed Euler contributions and shares are preserved;
+  both are zero at zero portfolio volatility. Matrix tolerance is `1e-12` and
+  negative variance roundoff is floored only within `1e-14` squared volatility
+  units. Invalid/non-finite matrices or results fail with a safe `503`.
+- Ordered components preserve their own origins, individual calibrated
+  intervals, model IDs, artifact version, and market-data age. Portfolio
+  market-data-as-of is the oldest component date. No portfolio prediction
+  interval is created; deterministic wording explains correlation uncertainty
+  and the educational/non-advisory scope.
+- Added synthetic composition, response-schema, and authenticated API tests.
+  Updated only the global OpenAPI inventory assertions in existing asset and
+  reporting API tests; reporting behavior and contracts remain unchanged.
+  The public API documentation now records the new endpoint and methodology.
+- Validation: 106 targeted tests and 3,140 tests across the complete backend
+  unit suite plus relevant database-free auth, portfolio, reporting,
+  simulation/history, forecasting, Watchlist, health, and CORS API suites pass.
+  Compilation, import/OpenAPI checks (25 paths/32 operations), `pip check`,
+  and Git whitespace checks pass. All 68 frozen model/metadata files match
+  their manifest checksums.
+- No real database, real model evaluation/training, artifact writes, migrations,
+  updater changes, AI/client changes, new dependency, commit, push, merge,
+  PR, or branch change occurred. Live acceptance and the separate stale-market-
+  data operational task remain outstanding; no subsequent phase was started.
