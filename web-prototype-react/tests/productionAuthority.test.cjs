@@ -957,5 +957,6 @@ test('web session restoration uses the focused Aura loading screen', () => {
   assert.match(styles, /linear-gradient\(180deg, rgba\(11, 22, 40, \.98\), rgba\(7, 17, 31, \.94\)\)/);
   assert.match(styles, /max-width: 1680px/);
   assert.match(styles, /\.secureIcon/);
+  assert.match(styles, /url\('\.\.\/assets\/aura-market-background\.png'\)/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });

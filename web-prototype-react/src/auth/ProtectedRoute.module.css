@@ -60,23 +60,15 @@
   place-items: stretch;
   padding: 0;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 14% 48%, rgba(49, 214, 207, .15), transparent 36%),
-    linear-gradient(145deg, var(--bg-app), #09182a 65%, var(--bg-app));
-}
-
-.loadingBoundary::after {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: 76px 0 0;
-  opacity: .22;
+  background-color: var(--bg-app);
   background-image:
-    linear-gradient(rgba(49, 214, 207, .08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(49, 214, 207, .08) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: linear-gradient(to bottom, transparent, #000 35%, transparent);
-  pointer-events: none;
+    radial-gradient(circle at 12% 52%, rgba(49, 214, 207, .11) 0%, rgba(49, 214, 207, .035) 31%, transparent 48%),
+    linear-gradient(90deg, rgba(7, 17, 31, .16) 0%, rgba(7, 17, 31, .42) 48%, rgba(10, 21, 38, .25) 100%),
+    linear-gradient(180deg, rgba(7, 17, 31, .24) 0%, rgba(10, 21, 38, .62) 100%),
+    url('../assets/aura-market-background.png');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
 }
 
 .loadingHeader {
