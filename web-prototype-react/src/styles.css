@@ -302,6 +302,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .profile-menu strong{max-width:100%;font-size:14px;line-height:1.35;overflow-wrap:anywhere}.profile-menu small{max-width:100%;margin:4px 0 10px;color:var(--text-muted);font-size:13px;line-height:1.35;overflow-wrap:anywhere}
 .profile-menu button{display:block;width:100%;padding:9px 8px;border:0;border-radius:7px;background:transparent;color:var(--text-secondary);text-align:left;font-size:14px}
 .profile-menu button:hover{background:var(--control-hover);color:#fff}
+.profile-menu button.profile-sign-out{color:var(--red-primary)}
 .main-area{margin-left:0;width:100%;min-width:0;padding:30px 32px 48px}
 .page{max-width:1600px;margin:0 auto}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(53,215,192,.4);outline-offset:2px}

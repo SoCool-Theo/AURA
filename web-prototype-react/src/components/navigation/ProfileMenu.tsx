@@ -42,7 +42,7 @@ export function ProfileMenu() {
           <button role="menuitem" onClick={() => openPage('settings')}>Settings</button>
           <button role="menuitem" onClick={() => openPage('watchlist')}>Watchlist</button>
           <button role="menuitem" onClick={() => openPage('learn')}>Learn</button>
-          <button role="menuitem" onClick={signOut}>Sign out</button>
+          <button className="profile-sign-out" role="menuitem" onClick={signOut}>Sign out</button>
         </div>
       )}
     </div>
