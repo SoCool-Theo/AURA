@@ -86,4 +86,11 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 
+# Offline forecasting model artifacts and run state
+backend/artifacts/forecasting/
+# Root-level manual evaluation/provenance outputs and local snapshot backups
+/forecasting-*.json
+/supabase-market-data-*.dump
+/forecast-v*-backup.zip
+
 mobile/.expo/

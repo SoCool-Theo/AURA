@@ -11,6 +11,7 @@ from .portfolio_repository import (
 )
 from .simulation_repository import SimulationRepository
 from .user_repository import UserRepository
+from .watchlist_repository import WatchlistRepository
 
 __all__ = [
     "AnalysisRepository",
@@ -22,4 +23,5 @@ __all__ = [
     "RealHoldingReplacement",
     "SimulationRepository",
     "UserRepository",
+    "WatchlistRepository",
 ]

@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "market_data",
     "analyses",
     "simulations",
+    "watchlist_items",
 }
 
 

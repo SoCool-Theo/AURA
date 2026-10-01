@@ -12,6 +12,7 @@ from backend.app.schemas.analytics import PortfolioAnalysisResponse
 from backend.app.schemas.reporting import (
     PortfolioReportAssetMonetaryMetrics,
     PortfolioReportListResponse,
+    PortfolioReportMonetaryMetrics,
     PortfolioReportResponse,
     PortfolioReportSummary,
     PortfolioReportV2Response,
@@ -176,6 +177,39 @@ def test_report_monetary_metrics_reject_positive_drawdown_amount() -> None:
 
     with pytest.raises(ValidationError, match="less than or equal to 0"):
         PortfolioReportV2Response.model_validate(data)
+
+
+def test_report_monetary_metrics_validate_planned_estimated_ending_value(
+) -> None:
+    valid = PortfolioReportMonetaryMetrics.model_validate(
+        {
+            "currency": "USD",
+            "basis": "planned-proposed-amount",
+            "reference_amount": "1000",
+            "cumulative_return_amount": "125",
+            "annualized_return_amount": "80",
+            "maximum_drawdown_amount": "-50",
+            "estimated_ending_value": "1125",
+        }
+    )
+
+    assert valid.estimated_ending_value == Decimal("1125")
+
+    with pytest.raises(ValidationError, match="must equal reference amount"):
+        PortfolioReportMonetaryMetrics.model_validate(
+            {
+                **valid.model_dump(),
+                "estimated_ending_value": "1200",
+            }
+        )
+
+    with pytest.raises(ValidationError, match="only for planned reports"):
+        PortfolioReportMonetaryMetrics.model_validate(
+            {
+                **valid.model_dump(),
+                "basis": "saved-current-valuation",
+            }
+        )
 
 
 def test_asset_monetary_metrics_reject_positive_drawdown_amount() -> None:

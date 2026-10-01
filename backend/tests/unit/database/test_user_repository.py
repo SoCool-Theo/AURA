@@ -78,6 +78,62 @@ def test_repository_does_not_normalize_email_or_hash_password() -> None:
     assert created.password_hash == "caller-supplied-value"
 
 
+def test_update_profile_applies_only_service_approved_fields_without_commit(
+) -> None:
+    session = MagicMock(spec=Session)
+    user = User(
+        email="old@example.com",
+        password_hash="encoded-password-hash",
+    )
+
+    result = UserRepository(session).update_profile(
+        user,
+        {
+            "display_name": "Aura Investor",
+            "email": "new@example.com",
+            "phone_number": "+66 81 234 5678",
+            "preferred_language": "th",
+            "timezone": "Asia/Yangon",
+        },
+    )
+
+    assert result is user
+    assert user.display_name == "Aura Investor"
+    assert user.email == "new@example.com"
+    assert user.phone_number == "+66 81 234 5678"
+    assert user.preferred_language == "th"
+    assert user.timezone == "Asia/Yangon"
+    session.flush.assert_called_once_with()
+    session.commit.assert_not_called()
+
+
+def test_update_profile_rejects_unapproved_persistence_fields() -> None:
+    session = MagicMock(spec=Session)
+    user = User()
+
+    with pytest.raises(ValueError, match="unsupported User profile fields"):
+        UserRepository(session).update_profile(
+            user,
+            {"password_hash": "not-allowed-through-profile"},
+        )
+
+    session.flush.assert_not_called()
+
+
+def test_update_password_accepts_only_an_encoded_service_value() -> None:
+    session = MagicMock(spec=Session)
+    user = User(password_hash="old-hash")
+
+    UserRepository(session).update_password(
+        user,
+        password_hash="new-encoded-hash",
+    )
+
+    assert user.password_hash == "new-encoded-hash"
+    session.flush.assert_called_once_with()
+    session.commit.assert_not_called()
+
+
 def test_credentialless_legacy_users_remain_unaffected(
     database_session: Session,
 ) -> None:

@@ -21,11 +21,15 @@ type PortfolioReportEnvelope = {
 
 export type PortfolioReportMonetaryMetrics = {
   currency: PortfolioCurrency;
-  basis: 'saved-current-valuation' | 'planned-proposed-amount';
+  basis:
+    | 'fixed-shares-historical-value'
+    | 'saved-current-valuation'
+    | 'planned-proposed-amount';
   reference_amount: DecimalString;
   cumulative_return_amount: DecimalString;
   annualized_return_amount: DecimalString;
   maximum_drawdown_amount: DecimalString | null;
+  estimated_ending_value?: DecimalString | null;
 };
 
 export type PortfolioReportAssetMonetaryMetrics = {
@@ -70,8 +74,24 @@ export type PortfolioReportV3Response = PortfolioReportEnvelope & {
   schema_version: 'portfolio-analysis-response-v3';
   analysis: PortfolioAnalysisResponse;
   baseline: PlannedPortfolioBaselineContext;
+  currency_conversion?: {
+    requested_date: IsoDate;
+    fx: PortfolioValuationFxResponse;
+  } | null;
   monetary_metrics?: PortfolioReportMonetaryMetrics | null;
   asset_monetary_metrics?: PortfolioReportAssetMonetaryMetrics[];
+  currency_views?: PortfolioReportV3CurrencyView[];
+};
+
+export type PortfolioReportV3CurrencyView = {
+  currency: PortfolioCurrency;
+  total_proposed_amount: DecimalString;
+  holdings: Array<{
+    symbol: string;
+    proposed_amount: DecimalString;
+  }>;
+  monetary_metrics: PortfolioReportMonetaryMetrics;
+  asset_monetary_metrics: PortfolioReportAssetMonetaryMetrics[];
 };
 
 export type PortfolioReportResponse =

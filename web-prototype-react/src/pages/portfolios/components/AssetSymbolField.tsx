@@ -7,6 +7,7 @@ import { supportedAssets } from '../supportedAssetSymbols';
 type AssetSymbolFieldProps = {
   ariaLabel: string;
   disabled?: boolean;
+  error?: string | null;
   id: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -16,6 +17,7 @@ type AssetSymbolFieldProps = {
 export function AssetSymbolField({
   ariaLabel,
   disabled = false,
+  error,
   id,
   onChange,
   placeholder = 'e.g. AAPL',
@@ -64,7 +66,10 @@ export function AssetSymbolField({
     <div className={styles.assetSymbolField}>
       <input
         ref={inputRef}
+        id={id}
         aria-label={ariaLabel}
+        aria-describedby={error ? `${id}-error` : undefined}
+        aria-invalid={Boolean(error)}
         autoCapitalize="characters"
         autoComplete="off"
         disabled={disabled}
@@ -85,6 +90,7 @@ export function AssetSymbolField({
       >
         <Icon name="chevron-down" size={18} />
       </button>
+      {error && <small id={`${id}-error`} className={styles.fieldError}>{error}</small>}
       {pickerVisible && createPortal(
         <div className={styles.assetPickerOverlay}>
           <button

@@ -21,6 +21,7 @@ from .returns import (
     calculate_annualized_return,
     calculate_asset_returns,
     calculate_cumulative_return,
+    calculate_fixed_share_portfolio_values,
     calculate_portfolio_returns,
 )
 from .risk_classifier import (
@@ -79,6 +80,7 @@ class PortfolioAnalyticsResult:
     portfolio_returns: pd.Series
     correlation_matrix: pd.DataFrame
     correlation_pairs: pd.DataFrame
+    historical_portfolio_values: pd.Series | None = None
 
 
 def _calculate_asset_sharpe_ratio(
@@ -208,10 +210,22 @@ def analyze_portfolio(
     annual_risk_free_rate: float = 0.0,
     periods_per_year: int = 252,
     concentration_top_n: int = 3,
+    *,
+    share_quantities: Mapping[str, float] | None = None,
 ) -> PortfolioAnalyticsResult:
     """Coordinate all completed analytics for validated portfolio inputs."""
     asset_returns = calculate_asset_returns(prices)
-    portfolio_returns = calculate_portfolio_returns(asset_returns, weights)
+    historical_portfolio_values = None
+    if share_quantities is None:
+        portfolio_returns = calculate_portfolio_returns(asset_returns, weights)
+    else:
+        historical_portfolio_values = calculate_fixed_share_portfolio_values(
+            prices,
+            share_quantities,
+        )
+        portfolio_returns = calculate_asset_returns(
+            historical_portfolio_values.to_frame()
+        )["portfolio_value"].rename("portfolio_return")
     cumulative_return = calculate_cumulative_return(portfolio_returns)
     annualized_return = calculate_annualized_return(
         portfolio_returns,
@@ -288,4 +302,5 @@ def analyze_portfolio(
         portfolio_returns=portfolio_returns,
         correlation_matrix=correlation_matrix,
         correlation_pairs=correlation_pairs,
+        historical_portfolio_values=historical_portfolio_values,
     )

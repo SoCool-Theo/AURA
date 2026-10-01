@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type InputHTMLAttributes } from 'react';
 import { formatHoldingDecimalInput } from '../portfolioUi';
+import styles from '../PortfolioIntegration.module.css';
 
 type HoldingDecimalInputProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
   'onChange' | 'type' | 'value'
 > & {
+  error?: string | null;
   value: string;
   onValueChange: (value: string) => void;
 };
@@ -12,6 +14,7 @@ type HoldingDecimalInputProps = Omit<
 const TWO_DECIMAL_INPUT = /^\d*(?:\.\d{0,2})?$/;
 
 export function HoldingDecimalInput({
+  error,
   value,
   onValueChange,
   onBlur,
@@ -24,9 +27,13 @@ export function HoldingDecimalInput({
     if (!edited.current) setDisplayValue(formatHoldingDecimalInput(value));
   }, [value]);
 
-  return (
+  const errorId = props.id ? `${props.id}-error` : undefined;
+
+  return <>
     <input
       {...props}
+      aria-describedby={error ? errorId : props['aria-describedby']}
+      aria-invalid={Boolean(error)}
       inputMode="decimal"
       value={displayValue}
       onChange={event => {
@@ -44,5 +51,6 @@ export function HoldingDecimalInput({
         onBlur?.(event);
       }}
     />
-  );
+    {error && <small id={errorId} className={styles.fieldError}>{error}</small>}
+  </>;
 }

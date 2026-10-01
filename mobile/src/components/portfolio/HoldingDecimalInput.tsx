@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import type { TextInputProps } from 'react-native';
+import React, { forwardRef, useEffect, useRef, useState } from 'react';
+import type { TextInput, TextInputProps } from 'react-native';
 
 import { formatHoldingDecimalInput } from '../../portfolio/portfolioFormatting';
 import { Input } from '../ui/Input';
@@ -16,13 +16,13 @@ type HoldingDecimalInputProps = Omit<
 
 const TWO_DECIMAL_INPUT = /^\d*(?:\.\d{0,2})?$/;
 
-export function HoldingDecimalInput({
+export const HoldingDecimalInput = forwardRef<TextInput, HoldingDecimalInputProps>(function HoldingDecimalInput({
   label,
   value,
   onValueChange,
   onBlur,
   ...props
-}: HoldingDecimalInputProps) {
+}: HoldingDecimalInputProps, ref) {
   const [displayValue, setDisplayValue] = useState(() => formatHoldingDecimalInput(value));
   const edited = useRef(false);
 
@@ -32,6 +32,7 @@ export function HoldingDecimalInput({
 
   return (
     <Input
+      ref={ref}
       {...props}
       label={label}
       value={displayValue}
@@ -51,4 +52,4 @@ export function HoldingDecimalInput({
       }}
     />
   );
-}
+});

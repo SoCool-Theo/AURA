@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { forwardRef, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -12,7 +12,7 @@ import { colors, spacing } from '../../theme/theme';
 
 type InputProps = TextInputProps & { label?: string; error?: string | null };
 
-export function Input({
+export const Input = forwardRef<TextInput, InputProps>(function Input({
   accessibilityLabel,
   editable,
   error,
@@ -20,7 +20,7 @@ export function Input({
   secureTextEntry,
   style,
   ...props
-}: InputProps) {
+}: InputProps, ref) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const showsPasswordToggle = secureTextEntry === true;
   const accessibilityFieldName = label?.toLowerCase() ?? 'password';
@@ -30,6 +30,7 @@ export function Input({
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <View style={[styles.inputWrapper, error ? styles.errorWrapper : null]}>
         <TextInput
+          ref={ref}
           accessibilityLabel={accessibilityLabel ?? label}
           accessibilityState={{ disabled: editable === false }}
           style={[
@@ -67,7 +68,7 @@ export function Input({
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrapper: { gap: spacing.sm },

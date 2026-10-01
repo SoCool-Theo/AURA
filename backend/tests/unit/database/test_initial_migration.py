@@ -26,6 +26,7 @@ EXPECTED_TABLES = {
     "market_data",
     "analyses",
     "simulations",
+    "watchlist_items",
 }
 INITIAL_REVISION = "9f4c2a7b1d3e"
 AUTHENTICATION_REVISION = "2b6e5d4a9c81"
@@ -33,6 +34,8 @@ SIMULATION_REVISION = "7c1e2f4a6b90"
 REAL_HOLDING_REVISION = "d4a6f8c2e1b7"
 PLANNED_PORTFOLIO_REVISION = "e5b7c9d2a4f1"
 QUANTITY_ONLY_HOLDING_REVISION = "f2c8e9a1b3d4"
+WATCHLIST_REVISION = "a8d3f1c6b2e7"
+PROFILE_REVISION = "b9e4d2f7c1a6"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -72,6 +75,18 @@ def _planned_portfolio_revision() -> Script:
 
 def _quantity_only_holding_revision() -> Script:
     revision = _script_directory().get_revision(QUANTITY_ONLY_HOLDING_REVISION)
+    assert revision is not None
+    return revision
+
+
+def _watchlist_revision() -> Script:
+    revision = _script_directory().get_revision(WATCHLIST_REVISION)
+    assert revision is not None
+    return revision
+
+
+def _profile_revision() -> Script:
+    revision = _script_directory().get_revision(PROFILE_REVISION)
     assert revision is not None
     return revision
 
@@ -242,15 +257,40 @@ def _captured_upgrade() -> tuple[
         patch.object(
             quantity_only_revision.op,
             "drop_constraint",
-        ) as drop_constraint,
+        ) as quantity_drop_constraint,
         patch.object(
             quantity_only_revision.op,
             "create_check_constraint",
-        ) as create_check_constraint,
+        ) as quantity_create_check_constraint,
     ):
         quantity_only_revision.upgrade()
 
-    for drop_call in drop_constraint.call_args_list:
+    watchlist_revision = _watchlist_revision().module
+    with patch.object(watchlist_revision.op, "create_table") as create_table:
+        watchlist_revision.upgrade()
+    for create_call in create_table.call_args_list:
+        sa.Table(create_call.args[0], metadata, *create_call.args[1:])
+
+    profile_revision = _profile_revision().module
+    with (
+        patch.object(profile_revision.op, "add_column") as add_column,
+        patch.object(
+            profile_revision.op,
+            "create_check_constraint",
+        ) as profile_create_check_constraint,
+    ):
+        profile_revision.upgrade()
+    for add_call in add_column.call_args_list:
+        metadata.tables[add_call.args[0]].append_column(add_call.args[1])
+    for create_call in profile_create_check_constraint.call_args_list:
+        metadata.tables[create_call.args[1]].append_constraint(
+            sa.CheckConstraint(
+                create_call.args[2],
+                name=create_call.args[0],
+            )
+        )
+
+    for drop_call in quantity_drop_constraint.call_args_list:
         table = metadata.tables[drop_call.args[1]]
         existing = next(
             constraint
@@ -258,7 +298,7 @@ def _captured_upgrade() -> tuple[
             if constraint.name == drop_call.args[0]
         )
         table.constraints.remove(existing)
-    for create_call in create_check_constraint.call_args_list:
+    for create_call in quantity_create_check_constraint.call_args_list:
         metadata.tables[create_call.args[1]].append_constraint(
             sa.CheckConstraint(
                 create_call.args[2],
@@ -319,11 +359,13 @@ def _model_indexes() -> set[tuple[str, str, tuple[str, ...], bool]]:
     }
 
 
-def test_revisions_form_a_single_quantity_only_holdings_head() -> None:
+def test_revisions_form_a_single_profile_head() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
+        PROFILE_REVISION,
+        WATCHLIST_REVISION,
         QUANTITY_ONLY_HOLDING_REVISION,
         PLANNED_PORTFOLIO_REVISION,
         REAL_HOLDING_REVISION,
@@ -331,19 +373,23 @@ def test_revisions_form_a_single_quantity_only_holdings_head() -> None:
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert script.get_current_head() == QUANTITY_ONLY_HOLDING_REVISION
-    assert revisions[0].down_revision == PLANNED_PORTFOLIO_REVISION
-    assert revisions[0].module.down_revision == PLANNED_PORTFOLIO_REVISION
-    assert revisions[1].down_revision == REAL_HOLDING_REVISION
-    assert revisions[1].module.down_revision == REAL_HOLDING_REVISION
-    assert revisions[2].down_revision == SIMULATION_REVISION
-    assert revisions[2].module.down_revision == SIMULATION_REVISION
-    assert revisions[3].down_revision == AUTHENTICATION_REVISION
-    assert revisions[3].module.down_revision == AUTHENTICATION_REVISION
-    assert revisions[4].down_revision == INITIAL_REVISION
-    assert revisions[4].module.down_revision == INITIAL_REVISION
-    assert revisions[5].down_revision is None
-    assert revisions[5].module.down_revision is None
+    assert script.get_current_head() == PROFILE_REVISION
+    assert revisions[0].down_revision == WATCHLIST_REVISION
+    assert revisions[0].module.down_revision == WATCHLIST_REVISION
+    assert revisions[1].down_revision == QUANTITY_ONLY_HOLDING_REVISION
+    assert revisions[1].module.down_revision == QUANTITY_ONLY_HOLDING_REVISION
+    assert revisions[2].down_revision == PLANNED_PORTFOLIO_REVISION
+    assert revisions[2].module.down_revision == PLANNED_PORTFOLIO_REVISION
+    assert revisions[3].down_revision == REAL_HOLDING_REVISION
+    assert revisions[3].module.down_revision == REAL_HOLDING_REVISION
+    assert revisions[4].down_revision == SIMULATION_REVISION
+    assert revisions[4].module.down_revision == SIMULATION_REVISION
+    assert revisions[5].down_revision == AUTHENTICATION_REVISION
+    assert revisions[5].module.down_revision == AUTHENTICATION_REVISION
+    assert revisions[6].down_revision == INITIAL_REVISION
+    assert revisions[6].module.down_revision == INITIAL_REVISION
+    assert revisions[7].down_revision is None
+    assert revisions[7].module.down_revision is None
     assert all(callable(revision.module.upgrade) for revision in revisions)
     assert all(callable(revision.module.downgrade) for revision in revisions)
 
@@ -431,6 +477,7 @@ def test_uuid_identifiers_have_no_database_generated_defaults() -> None:
         "holdings",
         "analyses",
         "simulations",
+        "watchlist_items",
     ):
         id_column = migration_metadata.tables[table_name].c.id
         assert isinstance(id_column.type, sa.Uuid)

@@ -8,10 +8,13 @@ from app.schemas.auth import (
     AccessTokenResponse,
     AuthenticatedUserResponse,
     LoginRequest,
+    PasswordChangeRequest,
+    ProfileUpdateRequest,
     RegistrationRequest,
 )
 from app.services.auth_service import (
     AuthService,
+    CurrentPasswordMismatchError,
     DuplicateEmailError,
     InvalidCredentialsError,
 )
@@ -26,6 +29,10 @@ def _user_response(user: User) -> AuthenticatedUserResponse:
     return AuthenticatedUserResponse(
         id=user.id,
         email=user.email,
+        display_name=user.display_name,
+        phone_number=user.phone_number,
+        preferred_language=user.preferred_language or "en",
+        timezone=user.timezone or "Asia/Bangkok",
         created_at=user.created_at,
         updated_at=user.updated_at,
     )
@@ -98,3 +105,62 @@ def login(
 def get_me(current_user: CurrentUser) -> AuthenticatedUserResponse:
     """Return the public representation of the authenticated User."""
     return _user_response(current_user)
+
+
+def _current_password_mismatch() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Current password is incorrect",
+    )
+
+
+@router.patch(
+    "/me",
+    response_model=AuthenticatedUserResponse,
+    status_code=status.HTTP_200_OK,
+)
+def update_me(
+    request: ProfileUpdateRequest,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> AuthenticatedUserResponse:
+    """Update the authenticated account profile and commit atomically."""
+    try:
+        user = AuthService(session).update_profile(current_user, request)
+        response = _user_response(user)
+        session.commit()
+    except CurrentPasswordMismatchError as error:
+        raise _current_password_mismatch() from error
+    except DuplicateEmailError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered",
+        ) from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to update profile",
+        ) from error
+    return response
+
+
+@router.put(
+    "/me/password",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def change_password(
+    request: PasswordChangeRequest,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> None:
+    """Replace the authenticated user's password and commit atomically."""
+    try:
+        AuthService(session).change_password(current_user, request)
+        session.commit()
+    except CurrentPasswordMismatchError as error:
+        raise _current_password_mismatch() from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to change password",
+        ) from error

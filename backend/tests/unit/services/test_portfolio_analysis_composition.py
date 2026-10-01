@@ -246,6 +246,10 @@ def _real_preparation() -> PortfolioAnalysisPreparationResult:
         valuation=valuation,
         valuation_as_of=VALUATION_DATE,
         analysis_request=_analysis_request(),
+        current_share_quantities=tuple(
+            (holding.symbol, holding.shares)
+            for holding in valuation.holdings
+        ),
     )
 
 

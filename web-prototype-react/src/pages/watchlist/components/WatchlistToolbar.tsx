@@ -3,9 +3,16 @@ import { Icon } from '../../../components/ui/Icon';
 interface WatchlistToolbarProps {
   query: string;
   onQueryChange: (query: string) => void;
+  viewMode: 'list' | 'grid';
+  onViewChange: (viewMode: 'list' | 'grid') => void;
 }
 
-export function WatchlistToolbar({ query, onQueryChange }: WatchlistToolbarProps) {
+export function WatchlistToolbar({
+  query,
+  onQueryChange,
+  viewMode,
+  onViewChange,
+}: WatchlistToolbarProps) {
   return (
     <div className="watchlist-toolbar">
       <label>
@@ -18,8 +25,11 @@ export function WatchlistToolbar({ query, onQueryChange }: WatchlistToolbarProps
         {query && <button onClick={() => onQueryChange('')} aria-label="Clear search">×</button>}
       </label>
       <div className="watchlist-view-controls">
-        <button className="active"><Icon name="reports" size={15} /> List</button>
-        <span>Last updated May 11, 2026</span>
+        <div role="group" aria-label="Watchlist view">
+          <button type="button" className={viewMode === 'list' ? 'active' : ''} aria-pressed={viewMode === 'list'} onClick={() => onViewChange('list')}><Icon name="reports" size={15} /> List</button>
+          <button type="button" className={viewMode === 'grid' ? 'active' : ''} aria-pressed={viewMode === 'grid'} onClick={() => onViewChange('grid')}><Icon name="assets" size={15} /> Grid</button>
+        </div>
+        <span>Updated dates are shown per asset</span>
       </div>
     </div>
   );

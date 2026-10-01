@@ -269,6 +269,10 @@ def test_real_baseline_calls_one_explicit_usd_valuation_and_keeps_context() -> N
     assert result.baseline_kind is PortfolioAnalysisBaselineKind.REAL
     assert result.valuation is valuation
     assert result.valuation_as_of == VALUATION_DATE
+    assert result.current_share_quantities == (
+        ("AAPL", Decimal("1.000000000000")),
+        ("BND", Decimal("1.000000000000")),
+    )
     assert result.resolved_weights == (
         ResolvedPortfolioAnalysisWeight(
             "AAPL", Decimal("0.6000000000000000000000000000")

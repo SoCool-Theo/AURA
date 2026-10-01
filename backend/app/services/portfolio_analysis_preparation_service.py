@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -35,6 +36,7 @@ class PortfolioAnalysisPreparationResult:
     valuation_as_of: date | None
     analysis_request: PortfolioAnalysisRequest
     planned_allocation: PlannedPortfolioAllocation | None = None
+    current_share_quantities: tuple[tuple[str, Decimal], ...] | None = None
 
 
 def _build_analysis_request(
@@ -98,6 +100,16 @@ class PortfolioAnalysisPreparationService:
             valuation_as_of=resolution.valuation_as_of,
             analysis_request=analysis_request,
             planned_allocation=resolution.planned_allocation,
+            current_share_quantities=(
+                tuple(
+                    (holding.symbol, holding.shares)
+                    for holding in resolution.valuation.holdings
+                )
+                if resolution.baseline_kind
+                is PortfolioAnalysisBaselineKind.CURRENT
+                and resolution.valuation is not None
+                else None
+            ),
         )
 
 

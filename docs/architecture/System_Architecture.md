@@ -290,6 +290,12 @@ LEGACY  -> saved weights
                  analysis composition
 ```
 
+For `CURRENT`, the same valuation also supplies the owned share quantities.
+Those fixed quantities are valued at every aligned historical price date to
+produce the portfolio-value and portfolio-return series. The current dynamic
+weights remain authoritative for concentration, diversification, and risk
+contribution.
+
 Planned analysis therefore does not require current-price or FX availability.
 It still requires sufficient aligned historical price data under the same
 no-fabrication rules as other portfolio modes.
@@ -313,11 +319,12 @@ groups, while explicit user asset selection remains limited to the 17 assets.
 
 ## Analysis, Reporting, Simulation, and AI Composition
 
-For a real portfolio, Aura applies the current dynamic allocation to the
-user-selected historical price period and then reuses the existing fixed-weight,
-periodically rebalanced analytics engine. This is not a historical share-count
-backtest: `purchase_date` does not establish historical ownership and no
-analytics formula changed.
+For a current portfolio, Aura keeps today's owned share quantities fixed and
+values them using aligned prices throughout the user-selected historical
+period. Portfolio cumulative return, annualized return, volatility, Sharpe,
+and maximum drawdown come from that historical portfolio-value series. This is
+not realized profit/loss: `purchase_date`, trades, deposits, withdrawals, and
+other cash flows do not change the reconstructed series.
 
 Individual-asset return, volatility, maximum drawdown, and Sharpe describe the
 asset over the analysis period. Portfolio risk contribution additionally
@@ -332,7 +339,9 @@ valuation currency/date, price dates, USD/display totals, optional FX, holding
 facts, prices, values, dynamic allocations, complete analytics, per-asset
 metrics, and risk contribution/rank. V3 freezes the plan currency, ordered
 proposed amounts, exact backend target weights, complete analytics, and the
-hypothetical/non-forecast limitation. It does not store estimated shares.
+hypothetical/non-forecast limitation. Report V3 can additionally freeze one
+best-effort USD/THB observation for display-only currency views; missing FX
+never blocks planned analysis. It does not store estimated shares.
 
 Simulation history supports the existing V1 formats and these V2 formats:
 
@@ -352,7 +361,8 @@ as the modified allocation. For planned simulations, the original allocation
 is the target allocation resolved from proposed amounts; modified percentages
 remain separate hypothetical input. V2 and V3 history freeze their baseline at
 creation. Opening a saved report or simulation restores the JSONB snapshot and
-never revalues or reruns it.
+never revalues or reruns it. Planned report currency switching uses only an FX
+observation frozen at creation and never queries live FX on retrieval.
 
 AI grounding follows the same source boundary: live legacy portfolios use
 saved weights, live current portfolios use current USD valuation, and live
@@ -661,6 +671,9 @@ Authenticated API Requests
 - `ProtectedRoute.tsx` prevents unauthenticated access to protected frontend pages.
 - Backend authentication remains authoritative.
 - The frontend must not use `X-User-ID` as authentication.
+- Authenticated profile fields are persisted with the User. Email changes and
+  password replacement require current-password verification; plaintext
+  passwords are never returned or stored.
 
 This is a target architecture. It does not imply that refresh tokens, OAuth, MFA, password reset, logout revocation, or every authentication screen is already implemented.
 
@@ -675,10 +688,10 @@ This is a target architecture. It does not imply that refresh tokens, OAuth, MFA
 | AI Assistant | Provides grounded educational explanations through the backend AI Agent. |
 | Reports | Lists and displays saved immutable portfolio-analysis reports. |
 | Settings | Handles frontend profile and application settings. |
-| Watchlist | Optional or later market watchlist functionality. |
+| Watchlist | Presents the authenticated observation-only Watchlist API, including add/remove actions and persisted latest/daily/YTD market context. |
 | Learn | Optional or later educational content functionality. |
 
-Watchlist and Learn may exist as routes or frontend features without appearing in the current primary top navigation.
+Watchlist and Learn may exist as routes or frontend features without appearing in the current primary top navigation. Watchlist is integrated on the protected web route and in the mobile `More` stack without adding another bottom tab.
 
 ## Dashboard Design Boundary
 
@@ -952,9 +965,9 @@ Learn
 Watchlist
 ```
 
-Navigation placement does not claim that every listed screen or its backend
-functionality is currently implemented. The AI interface is integrated; optional
-features such as Watchlist and Notifications remain deferred.
+Navigation placement does not claim that every listed screen is integrated.
+The AI interface and authenticated Watchlist backend and clients are
+implemented; Notifications remain deferred.
 
 ## Mobile Environment Configuration
 

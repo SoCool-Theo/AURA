@@ -12,7 +12,7 @@ import {
   type PortfolioReportResponse
 } from '../types/report';
 
-export type ReportMonetaryMetricKey = 'cumulative' | 'annualized' | 'drawdown';
+export type ReportMonetaryMetricKey = 'endingValue' | 'cumulative' | 'annualized' | 'drawdown';
 
 export function reportMonetaryMetrics(
   report: PortfolioReportResponse | null | undefined
@@ -37,25 +37,51 @@ export function assetReportMonetaryMetrics(
 
 export function reportMetricAmountContent(
   key: ReportMonetaryMetricKey | null,
-  report: PortfolioReportResponse | null | undefined
+  report: PortfolioReportResponse | null | undefined,
+  monetaryOverride?: PortfolioReportMonetaryMetrics | null
 ): MetricAmountSheetContent | null {
-  const monetary = reportMonetaryMetrics(report);
+  const monetary = monetaryOverride === undefined
+    ? reportMonetaryMetrics(report)
+    : monetaryOverride;
   if (!key || !report || !monetary) return null;
 
   const metrics = report.analysis.portfolio_metrics;
   const drawdown = report.analysis.max_drawdown;
   const reference = monetary.basis === 'planned-proposed-amount'
     ? `Based on your hypothetical ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} planned investment.`
-    : `Based on the ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} portfolio valuation saved with this report.`;
+    : monetary.basis === 'fixed-shares-historical-value'
+      ? `Based on the ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} historical value of the same shares at the start of this period.`
+      : `Based on the ${formatPortfolioMoney(monetary.reference_amount, monetary.currency)} portfolio valuation saved with this report.`;
+
+  if (key === 'endingValue') {
+    if (
+      monetary.basis !== 'planned-proposed-amount'
+      || monetary.estimated_ending_value == null
+    ) return null;
+    return {
+      title: 'Estimated Value at End of Period',
+      percentage: formatPortfolioMoney(monetary.estimated_ending_value, monetary.currency),
+      amount: formatSignedPortfolioMoney(monetary.cumulative_return_amount, monetary.currency),
+      amountLabel: 'Estimated change during this historical period',
+      reference,
+      explanation: `This shows how much the planned investment would have been worth at the end of the historical period from ${report.analysis.start_date} to ${report.analysis.end_date}. It is based on past performance and is not a prediction of future value.`,
+      tone: metrics.cumulative_return < 0 ? 'danger' : 'success'
+    };
+  }
 
   if (key === 'cumulative') {
+    const isFixedShareHistory = monetary.basis === 'fixed-shares-historical-value';
     return {
-      title: 'Cumulative Return',
+      title: isFixedShareHistory ? 'Historical Portfolio Return' : 'Cumulative Return',
       percentage: formatRatioPercent(metrics.cumulative_return),
       amount: formatSignedPortfolioMoney(monetary.cumulative_return_amount, monetary.currency),
-      amountLabel: 'Estimated change over this analysis period',
+      amountLabel: isFixedShareHistory
+        ? 'Historical change in value over this period'
+        : 'Estimated change over this analysis period',
       reference,
-      explanation: `This applies the historical cumulative return from ${report.analysis.start_date} to ${report.analysis.end_date} to the saved reference amount. It is not actual profit or a forecast.`,
+      explanation: isFixedShareHistory
+        ? `This shows how the value of the same share quantities changed when Aura applied historical prices from ${report.analysis.start_date} to ${report.analysis.end_date}. It is not your actual profit or loss because it does not track your trades or cash flows.`
+        : `This applies the historical cumulative return from ${report.analysis.start_date} to ${report.analysis.end_date} to the saved reference amount. It is not actual profit or a forecast.`,
       tone: metrics.cumulative_return < 0 ? 'danger' : 'success'
     };
   }

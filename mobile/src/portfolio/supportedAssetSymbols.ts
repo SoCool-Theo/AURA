@@ -1,5 +1,6 @@
-// Keep this presentation-only suggestion list aligned with the backend market
-// data pipeline's canonical USER_ASSET_SYMBOLS. Manual symbol entry remains valid.
+// Keep this client-side validation and picker catalog aligned with the backend
+// market-data pipeline's canonical USER_ASSET_SYMBOLS. Manual entry is validated
+// against this exact supported catalog.
 export const supportedAssets = [
   { symbol: 'AAPL', name: 'Apple Inc.' },
   { symbol: 'MSFT', name: 'Microsoft Corporation' },

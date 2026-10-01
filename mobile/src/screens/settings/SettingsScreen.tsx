@@ -17,26 +17,72 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { PageTitle } from '../../components/ui/PageTitle';
+import { authApi } from '../../api/authApi';
+import { apiErrorPresentation, apiValidationIssues } from '../../api/apiErrorPresentation';
+import { ApiError } from '../../api/apiClient';
 import { useAuth } from '../../auth/useAuth';
 import { useAppData } from '../../hooks/useAppData';
 import { usePreferences } from '../../preferences/usePreferences';
 import { colors, spacing } from '../../theme/theme';
+import type {
+  AuthenticatedUserResponse,
+  PreferredLanguage,
+  ProfileTimezone,
+  ProfileUpdateRequest
+} from '../../types/auth';
+
+type ProfileDraft = {
+  displayName: string;
+  email: string;
+  phoneNumber: string;
+  language: PreferredLanguage;
+  timezone: ProfileTimezone;
+  currentPassword: string;
+};
+
+function draftFromUser(user: AuthenticatedUserResponse | null): ProfileDraft {
+  return {
+    displayName: user?.display_name ?? '',
+    email: user?.email ?? '',
+    phoneNumber: user?.phone_number ?? '',
+    language: user?.preferred_language ?? 'en',
+    timezone: user?.timezone ?? 'Asia/Bangkok',
+    currentPassword: ''
+  };
+}
+
+function profileRequestError(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.status === 403) {
+    return 'The current password is incorrect.';
+  }
+  if (error instanceof ApiError && error.status === 409) {
+    return 'That email address is already used by another Aura account.';
+  }
+  const issues = apiValidationIssues(error);
+  if (issues.length) return issues.map((issue) => issue.message).join('. ');
+  return apiErrorPresentation(error, { fallbackMessage: fallback }).message;
+}
 
 export function SettingsScreen() {
-  const { user, signOut } = useAuth();
+  const { user, setCurrentUser, signOut } = useAuth();
   const { resetLocalData } = useAppData();
   const {
     themeMode,
     setThemeMode,
     storageError,
-    displayName,
-    setDisplayName,
     resetPreferences
   } = usePreferences();
 
-  const resolvedName = displayName || 'Aura Investor';
+  const resolvedName = user?.display_name || 'Aura Investor';
   const [editingProfile, setEditingProfile] = useState(false);
-  const [draftName, setDraftName] = useState(resolvedName);
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => draftFromUser(user));
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileNotice, setProfileNotice] = useState<string | null>(null);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordDraft, setPasswordDraft] = useState({ current: '', next: '', confirm: '' });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
 
@@ -50,17 +96,115 @@ export function SettingsScreen() {
   }
 
   useEffect(() => {
-    setDraftName(resolvedName);
-  }, [resolvedName]);
+    setProfileDraft(draftFromUser(user));
+  }, [user]);
 
-  function saveName() {
-    const clean = draftName.trim();
-    if (!clean) {
-      Alert.alert('Name required', 'Enter a display name first.');
+  const emailChanged = Boolean(
+    user && profileDraft.email.trim().toLowerCase() !== user.email
+  );
+
+  function openProfileEditor() {
+    setProfileDraft(draftFromUser(user));
+    setProfileError(null);
+    setEditingProfile(true);
+  }
+
+  async function saveProfile() {
+    if (!user || profileSaving) return;
+    const displayName = profileDraft.displayName.trim() || null;
+    const phoneNumber = profileDraft.phoneNumber.trim() || null;
+    const email = profileDraft.email.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setProfileError('Enter a valid email address.');
       return;
     }
-    setDisplayName(clean);
-    setEditingProfile(false);
+    if (displayName && displayName.length > 100) {
+      setProfileError('Display name must be 100 characters or fewer.');
+      return;
+    }
+    if (phoneNumber && (
+      phoneNumber.length < 4
+      || phoneNumber.length > 32
+      || !/^[+().\-\d\s]+$/.test(phoneNumber)
+    )) {
+      setProfileError('Phone number must be 4–32 characters and use only numbers, spaces, +, parentheses, periods, or hyphens.');
+      return;
+    }
+    if (emailChanged && !profileDraft.currentPassword) {
+      setProfileError('Enter your current password to change the account email.');
+      return;
+    }
+
+    const request: ProfileUpdateRequest = {};
+    if (displayName !== user.display_name) request.display_name = displayName;
+    if (phoneNumber !== user.phone_number) request.phone_number = phoneNumber;
+    if (profileDraft.language !== user.preferred_language) {
+      request.preferred_language = profileDraft.language;
+    }
+    if (profileDraft.timezone !== user.timezone) request.timezone = profileDraft.timezone;
+    if (email !== user.email) {
+      request.email = email;
+      request.current_password = profileDraft.currentPassword;
+    }
+    if (!Object.keys(request).length) {
+      setEditingProfile(false);
+      setProfileNotice('Your profile is already up to date.');
+      return;
+    }
+
+    setProfileSaving(true);
+    setProfileError(null);
+    try {
+      const updatedUser = await authApi.updateProfile(request);
+      setCurrentUser(updatedUser);
+      setProfileNotice('Profile changes saved.');
+      setEditingProfile(false);
+    } catch (error) {
+      setProfileError(profileRequestError(error, 'Aura could not save your profile. Please try again.'));
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  function openPasswordEditor() {
+    setPasswordDraft({ current: '', next: '', confirm: '' });
+    setPasswordError(null);
+    setChangingPassword(true);
+  }
+
+  async function savePassword() {
+    if (passwordSaving) return;
+    if (!passwordDraft.current) {
+      setPasswordError('Enter your current password.');
+      return;
+    }
+    if (passwordDraft.next.length < 8) {
+      setPasswordError('New password must be at least 8 characters.');
+      return;
+    }
+    if (passwordDraft.current === passwordDraft.next) {
+      setPasswordError('Choose a new password that differs from the current password.');
+      return;
+    }
+    if (passwordDraft.next !== passwordDraft.confirm) {
+      setPasswordError('New password and confirmation do not match.');
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordError(null);
+    try {
+      await authApi.changePassword({
+        current_password: passwordDraft.current,
+        new_password: passwordDraft.next
+      });
+      setPasswordDraft({ current: '', next: '', confirm: '' });
+      setChangingPassword(false);
+      setProfileNotice('Password changed successfully.');
+    } catch (error) {
+      setPasswordError(profileRequestError(error, 'Aura could not change your password. Please try again.'));
+    } finally {
+      setPasswordSaving(false);
+    }
   }
 
   function showHelp() {
@@ -73,7 +217,7 @@ export function SettingsScreen() {
   function showAbout() {
     Alert.alert(
       'About Aura',
-      'Aura provides portfolio risk analytics, historical simulations, and AI explanations grounded in your saved results. Live quotes and Watchlist are unavailable.'
+      'Aura provides portfolio risk analytics, historical simulations, saved-asset Watchlists, and AI explanations grounded in your saved results. Watchlist prices are latest saved market observations, not live quotes.'
     );
   }
 
@@ -127,19 +271,42 @@ export function SettingsScreen() {
             <Text style={styles.name}>{resolvedName}</Text>
             <Text style={styles.email}>{user?.email}</Text>
             <Text style={styles.helper}>
-              Your display name is stored only on this device and is not part of your Aura account.
+              {user?.phone_number || 'No phone number'} · {user?.preferred_language === 'th' ? 'Thai' : 'English'} · {user?.timezone === 'Asia/Yangon' ? 'Yangon' : 'Bangkok'}
             </Text>
           </View>
 
           <Pressable
-            accessibilityLabel="Edit local display name"
+            accessibilityLabel="Edit account profile"
             accessibilityRole="button"
             style={styles.smallAction}
-            onPress={() => setEditingProfile(true)}
+            onPress={openProfileEditor}
           >
             <Ionicons name="pencil-outline" color={colors.primary} size={17} />
           </Pressable>
         </Card>
+
+        {profileNotice ? (
+          <View accessibilityRole="alert" style={styles.profileNotice}>
+            <Ionicons name="checkmark-circle-outline" color={colors.success} size={18} />
+            <Text style={styles.profileNoticeText}>{profileNotice}</Text>
+          </View>
+        ) : null}
+
+        <Pressable
+          accessibilityLabel="Change account password"
+          accessibilityRole="button"
+          style={styles.securityAction}
+          onPress={openPasswordEditor}
+        >
+          <View style={styles.rowIcon}>
+            <Ionicons name="lock-closed-outline" color={colors.primary} size={20} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowLabel}>Change password</Text>
+            <Text style={styles.rowDescription}>Verify your current password and choose a new one.</Text>
+          </View>
+          <Ionicons name="chevron-forward" color={colors.muted} size={18} />
+        </Pressable>
 
         <Text style={styles.sectionTitle}>Appearance</Text>
         <Card style={styles.appearanceCard}>
@@ -333,7 +500,7 @@ export function SettingsScreen() {
         visible={editingProfile}
         transparent
         animationType="fade"
-        onRequestClose={() => setEditingProfile(false)}
+        onRequestClose={() => { if (!profileSaving) setEditingProfile(false); }}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -342,45 +509,208 @@ export function SettingsScreen() {
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
               <View style={styles.modalHeader}>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.modalTitle}>Edit profile</Text>
                   <Text style={styles.modalSubtitle}>
-                    Change your local Aura display name.
+                    Changes are saved to your Aura account.
                   </Text>
                 </View>
                 <Pressable
                   accessibilityLabel="Close edit profile"
                   accessibilityRole="button"
                   style={styles.closeButton}
+                  disabled={profileSaving}
                   onPress={() => setEditingProfile(false)}
                 >
                   <Ionicons name="close" color={colors.text} size={20} />
                 </Pressable>
               </View>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                style={styles.modalScroll}
+              >
+                <Text style={styles.inputLabel}>Display name</Text>
+                <TextInput
+                  accessibilityLabel="Display name"
+                  value={profileDraft.displayName}
+                  onChangeText={(displayName) => setProfileDraft((current) => ({ ...current, displayName }))}
+                  placeholder="Your name"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  autoCapitalize="words"
+                  maxLength={100}
+                  editable={!profileSaving}
+                />
 
-              <Text style={styles.inputLabel}>Display name</Text>
+                <Text style={styles.inputLabel}>Email address</Text>
+                <TextInput
+                  accessibilityLabel="Email address"
+                  value={profileDraft.email}
+                  onChangeText={(email) => setProfileDraft((current) => ({ ...current, email }))}
+                  placeholder="name@example.com"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  editable={!profileSaving}
+                />
+
+                <Text style={styles.inputLabel}>Phone number · Optional</Text>
+                <TextInput
+                  accessibilityLabel="Phone number"
+                  value={profileDraft.phoneNumber}
+                  onChangeText={(phoneNumber) => setProfileDraft((current) => ({ ...current, phoneNumber }))}
+                  placeholder="+66 00 000 0000"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  keyboardType="phone-pad"
+                  maxLength={32}
+                  editable={!profileSaving}
+                />
+
+                <Text style={styles.inputLabel}>Preferred language</Text>
+                <View accessibilityRole="radiogroup" style={styles.choiceRow}>
+                  {([
+                    ['en', 'English'],
+                    ['th', 'Thai']
+                  ] as const).map(([value, label]) => (
+                    <Pressable
+                      key={value}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: profileDraft.language === value }}
+                      onPress={() => setProfileDraft((current) => ({ ...current, language: value }))}
+                      style={[styles.choice, profileDraft.language === value && styles.choiceSelected]}
+                    >
+                      <Text style={[styles.choiceText, profileDraft.language === value && styles.choiceTextSelected]}>{label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <Text style={styles.inputLabel}>Timezone</Text>
+                <View accessibilityRole="radiogroup" style={styles.choiceColumn}>
+                  {([
+                    ['Asia/Bangkok', 'UTC+07:00 Bangkok'],
+                    ['Asia/Yangon', 'UTC+06:30 Yangon']
+                  ] as const).map(([value, label]) => (
+                    <Pressable
+                      key={value}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: profileDraft.timezone === value }}
+                      onPress={() => setProfileDraft((current) => ({ ...current, timezone: value }))}
+                      style={[styles.choice, profileDraft.timezone === value && styles.choiceSelected]}
+                    >
+                      <Text style={[styles.choiceText, profileDraft.timezone === value && styles.choiceTextSelected]}>{label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                {emailChanged ? (
+                  <>
+                    <Text style={styles.inputLabel}>Current password · Required for email change</Text>
+                    <TextInput
+                      accessibilityLabel="Current password for email change"
+                      value={profileDraft.currentPassword}
+                      onChangeText={(currentPassword) => setProfileDraft((current) => ({ ...current, currentPassword }))}
+                      placeholder="Current password"
+                      placeholderTextColor={colors.muted}
+                      style={styles.input}
+                      secureTextEntry
+                      editable={!profileSaving}
+                    />
+                  </>
+                ) : null}
+
+                <Text style={styles.modalNote}>Language and timezone are stored now; translated copy and timezone-based formatting will be applied later.</Text>
+                {profileError ? <Text accessibilityRole="alert" style={styles.modalError}>{profileError}</Text> : null}
+
+                <View style={styles.modalActions}>
+                  <Button
+                    title="Cancel"
+                    variant="secondary"
+                    style={{ flex: 1 }}
+                    disabled={profileSaving}
+                    onPress={() => setEditingProfile(false)}
+                  />
+                  <Button
+                    title={profileSaving ? 'Saving…' : 'Save profile'}
+                    style={{ flex: 1 }}
+                    disabled={profileSaving}
+                    onPress={() => void saveProfile()}
+                  />
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={changingPassword}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!passwordSaving) setChangingPassword(false); }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalAvoidingView}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>Change password</Text>
+                  <Text style={styles.modalSubtitle}>Verify your current password before choosing a new one.</Text>
+                </View>
+                <Pressable
+                  accessibilityLabel="Close change password"
+                  accessibilityRole="button"
+                  style={styles.closeButton}
+                  disabled={passwordSaving}
+                  onPress={() => setChangingPassword(false)}
+                >
+                  <Ionicons name="close" color={colors.text} size={20} />
+                </Pressable>
+              </View>
+
+              <Text style={styles.inputLabel}>Current password</Text>
               <TextInput
-                accessibilityLabel="Display name"
-                value={draftName}
-                onChangeText={setDraftName}
-                placeholder="Your name"
+                accessibilityLabel="Current password"
+                value={passwordDraft.current}
+                onChangeText={(current) => setPasswordDraft((value) => ({ ...value, current }))}
+                placeholder="Current password"
                 placeholderTextColor={colors.muted}
                 style={styles.input}
-                autoCapitalize="words"
+                secureTextEntry
+                editable={!passwordSaving}
               />
-
+              <Text style={styles.inputLabel}>New password</Text>
+              <TextInput
+                accessibilityLabel="New password"
+                value={passwordDraft.next}
+                onChangeText={(next) => setPasswordDraft((value) => ({ ...value, next }))}
+                placeholder="At least 8 characters"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                secureTextEntry
+                editable={!passwordSaving}
+              />
+              <Text style={styles.inputLabel}>Confirm new password</Text>
+              <TextInput
+                accessibilityLabel="Confirm new password"
+                value={passwordDraft.confirm}
+                onChangeText={(confirm) => setPasswordDraft((value) => ({ ...value, confirm }))}
+                placeholder="Repeat new password"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                secureTextEntry
+                editable={!passwordSaving}
+              />
+              <Text style={styles.modalNote}>Use at least 8 characters. Aura never displays or returns your password.</Text>
+              {passwordError ? <Text accessibilityRole="alert" style={styles.modalError}>{passwordError}</Text> : null}
               <View style={styles.modalActions}>
-                <Button
-                  title="Cancel"
-                  variant="secondary"
-                  style={{ flex: 1 }}
-                  onPress={() => setEditingProfile(false)}
-                />
-                <Button
-                  title="Save"
-                  style={{ flex: 1 }}
-                  onPress={saveName}
-                />
+                <Button title="Cancel" variant="secondary" style={{ flex: 1 }} disabled={passwordSaving} onPress={() => setChangingPassword(false)} />
+                <Button title={passwordSaving ? 'Changing…' : 'Change password'} style={{ flex: 1 }} disabled={passwordSaving} onPress={() => void savePassword()} />
               </View>
             </View>
           </View>
@@ -447,6 +777,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  profileNotice: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
+    backgroundColor: colors.positiveBackground,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  profileNoticeText: {
+    flex: 1,
+    color: colors.success,
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  securityAction: {
+    minHeight: 68,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md
   },
   appearanceCard: {
     gap: spacing.sm
@@ -552,6 +913,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg
   },
+  modalScroll: {
+    maxHeight: 560
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -591,6 +955,53 @@ const styles = StyleSheet.create({
     color: colors.text,
     paddingHorizontal: spacing.md,
     fontSize: 14
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    gap: spacing.sm
+  },
+  choiceColumn: {
+    gap: spacing.sm
+  },
+  choice: {
+    flexGrow: 1,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  choiceSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.selectedBackground
+  },
+  choiceText: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  choiceTextSelected: {
+    color: colors.primary
+  },
+  modalNote: {
+    marginTop: spacing.lg,
+    color: colors.muted,
+    fontSize: 10,
+    lineHeight: 15
+  },
+  modalError: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.dangerBorder,
+    backgroundColor: colors.negativeBackground,
+    color: colors.danger,
+    fontSize: 11,
+    lineHeight: 16
   },
   modalActions: {
     flexDirection: 'row',

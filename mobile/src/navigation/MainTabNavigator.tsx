@@ -65,7 +65,23 @@ function PortfolioNavigator() {
       })}
     >
       <PortfolioStack.Screen name="Portfolios" component={PortfoliosScreen} options={{ headerShown: false }} />
-      <PortfolioStack.Screen name="PortfolioDetail" component={PortfolioDetailScreen} options={{ title: 'Portfolio' }} />
+      <PortfolioStack.Screen
+        name="PortfolioDetail"
+        component={PortfolioDetailScreen}
+        options={({ navigation }) => ({
+          title: 'Portfolio',
+          headerBackVisible: false,
+          headerLeft: () => (
+            <BackHeaderButton
+              label="Back from Portfolio"
+              color={palette.text}
+              onPress={() => navigation.canGoBack()
+                ? navigation.goBack()
+                : navigation.getParent()?.navigate('Home')}
+            />
+          )
+        })}
+      />
       <PortfolioStack.Screen name="CreatePortfolio" component={CreatePortfolioScreen} options={{ title: 'Create Portfolio' }} />
       <PortfolioStack.Screen name="AddAsset" component={AddAssetScreen} options={{ title: 'Add Asset' }} />
       <PortfolioStack.Screen name="EditHoldings" component={EditHoldingsScreen} options={{ title: 'Edit Holdings' }} />

@@ -690,7 +690,7 @@ def test_openapi_exposes_all_reporting_operations(
         {"$ref": "#/components/schemas/PortfolioReportV3Response"},
     ]
     methods = _registered_methods()
-    assert len(methods) == 25
+    assert len(methods) == 32
     assert (
         "/api/portfolios/{portfolio_id}/planned-allocation",
         "GET",

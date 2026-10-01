@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { forwardRef, useEffect, useState } from 'react';
 import {
   Keyboard,
   Modal,
@@ -24,7 +24,7 @@ type AssetSymbolFieldProps = Omit<
   value: string;
 };
 
-export function AssetSymbolField({
+export const AssetSymbolField = forwardRef<TextInput, AssetSymbolFieldProps>(function AssetSymbolField({
   accessibilityLabel,
   editable = true,
   error,
@@ -33,7 +33,7 @@ export function AssetSymbolField({
   style,
   value,
   ...props
-}: AssetSymbolFieldProps) {
+}: AssetSymbolFieldProps, ref) {
   const [pickerVisible, setPickerVisible] = useState(false);
   const normalizedValue = value.trim().toUpperCase();
 
@@ -56,6 +56,7 @@ export function AssetSymbolField({
     <>
       <View style={[styles.field, error ? styles.errorField : null]}>
         <TextInput
+          ref={ref}
           accessibilityLabel={accessibilityLabel ?? 'Asset symbol'}
           accessibilityState={{ disabled: !editable }}
           autoCapitalize="characters"
@@ -172,7 +173,7 @@ export function AssetSymbolField({
       </Modal>
     </>
   );
-}
+});
 
 const styles = StyleSheet.create({
   field: { position: 'relative' },

@@ -107,6 +107,15 @@ export type AnalysisMetadata = {
   asset_count: number;
 };
 
+export type HistoricalPortfolioValueContext = {
+  basis: 'fixed-current-shares';
+  currency: 'USD';
+  start_date: IsoDate;
+  end_date: IsoDate;
+  starting_value: string;
+  ending_value: string;
+};
+
 export type PortfolioMetrics = {
   cumulative_return: number;
   annualized_return: number;
@@ -143,6 +152,7 @@ export type PortfolioAnalysisResponse = AnalysisPeriod & {
   correlation_pairs: CorrelationPair[];
   portfolio_returns: PortfolioReturnPoint[];
   asset_returns?: AssetReturnSeries[];
+  historical_value_context?: HistoricalPortfolioValueContext | null;
 };
 
 // Legacy correlation-grid shape used by the untouched prototype mock.

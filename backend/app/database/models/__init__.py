@@ -6,6 +6,7 @@ from .market_data import MarketData
 from .portfolio import Portfolio, PortfolioType
 from .simulation import Simulation
 from .user import User
+from .watchlist import WatchlistItem
 
 __all__ = [
     "Analysis",
@@ -15,4 +16,5 @@ __all__ = [
     "PortfolioType",
     "Simulation",
     "User",
+    "WatchlistItem",
 ]

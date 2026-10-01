@@ -1,0 +1,33 @@
+.page { max-width: 1120px; margin: 0 auto; }
+.header { margin-bottom: 20px; }
+.header > span, .eyebrow { color: var(--purple-light); font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+.header h1 { margin: 6px 0 0; font-size: 31px; }
+.header p { margin: 8px 0 0; color: var(--text-secondary); }
+.identityCard { padding: 22px; display: flex; align-items: center; gap: 16px; }
+.avatar { width: 58px; height: 58px; border-radius: 17px; display: grid; place-items: center; flex: 0 0 auto; background: rgba(139, 92, 246, .16); color: var(--purple-light); font-weight: 850; font-size: 19px; }
+.identityCard h2 { margin: 5px 0 2px; font-size: 18px; }
+.identityCard p { margin: 0; color: var(--text-secondary); font-size: 13px; }
+.secureBadge { margin-left: auto; padding: 8px 11px; border: 1px solid rgba(49, 214, 207, .28); border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; color: var(--teal-primary); background: rgba(49, 214, 207, .07); font-size: 11px; font-weight: 750; }
+.columns { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(310px, .8fr); gap: 16px; align-items: start; }
+.formCard { padding: 22px; }
+.sectionHeading { padding-bottom: 17px; border-bottom: 1px solid var(--border-divider); display: flex; align-items: center; gap: 12px; }
+.sectionHeading h2 { margin: 0; font-size: 17px; }
+.sectionHeading p { margin: 5px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.sectionIcon { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; flex: 0 0 auto; color: var(--purple-light); background: rgba(139, 92, 246, .14); }
+.securityIcon { color: var(--teal-primary); background: rgba(49, 214, 207, .12); }
+.formGrid { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.passwordFields { margin-top: 18px; display: grid; gap: 15px; }
+.formGrid label, .passwordFields label { display: block; color: var(--text-secondary); font-size: 11px; font-weight: 700; }
+.formGrid label small { color: var(--text-muted); font-weight: 500; }
+.formGrid input, .formGrid select, .passwordFields input { width: 100%; box-sizing: border-box; height: 44px; margin-top: 7px; padding: 0 12px; border: 1px solid var(--border-control); border-radius: 10px; outline: none; background: var(--control-bg); color: var(--text-primary); font: inherit; font-size: 12px; transition: border-color .16s ease, background .16s ease; }
+.formGrid input:focus, .formGrid select:focus, .passwordFields input:focus { border-color: var(--teal-primary); background: var(--control-hover); }
+.formGrid select { cursor: pointer; }
+.fullWidth { grid-column: 1 / -1; }
+.fieldNote { margin: 14px 0 0; color: var(--text-muted); font-size: 10px; line-height: 1.55; }
+.error, .success { margin: 14px 0 0; padding: 10px 12px; border-radius: 9px; font-size: 11px; line-height: 1.5; }
+.error { border: 1px solid rgba(255, 107, 122, .35); background: var(--red-dark); color: var(--red-primary); }
+.success { border: 1px solid rgba(49, 214, 207, .28); background: rgba(49, 214, 207, .08); color: var(--teal-primary); }
+.actions { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-divider); display: flex; justify-content: flex-end; gap: 9px; }
+.actions button:disabled { cursor: not-allowed; opacity: .55; }
+@media (max-width: 860px) { .columns { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .identityCard { align-items: flex-start; flex-wrap: wrap; } .secureBadge { width: 100%; box-sizing: border-box; margin-left: 0; justify-content: center; } .formGrid { grid-template-columns: 1fr; } .fullWidth { grid-column: auto; } .actions button { flex: 1; } }

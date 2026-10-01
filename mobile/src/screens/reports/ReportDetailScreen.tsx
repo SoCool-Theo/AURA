@@ -1,11 +1,12 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { AnalysisResults } from '../../components/analytics/AnalysisResults';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { PageTitle } from '../../components/ui/PageTitle';
@@ -36,6 +37,7 @@ export function ReportDetailScreen({
   const [loadError, setLoadError] = useState<unknown>(null);
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<unknown>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const requestRef = useRef(0);
   const deletingRef = useRef(false);
 
@@ -66,42 +68,30 @@ export function ReportDetailScreen({
 
   function confirmDelete() {
     if (!report || deletingRef.current) return;
-    Alert.alert(
-      'Delete report?',
-      `Permanently delete the saved analysis for ${report.analysis.portfolio_name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (deletingRef.current) return;
-            deletingRef.current = true;
-            setDeleting(true);
-            setActionError(null);
-            try {
-              await deleteReport(portfolioId, reportId);
-              const navigationState = navigation.getState?.();
-              const previousRoute = navigationState?.routes?.[
-                navigationState.index - 1
-              ]?.name;
-              if (
-                previousRoute === 'Analytics'
-                || previousRoute === 'PortfolioAnalysis'
-              ) {
-                navigation.popToTop();
-              } else {
-                navigation.goBack();
-              }
-            } catch (error) {
-              setActionError(error);
-              deletingRef.current = false;
-              setDeleting(false);
-            }
-          }
-        }
-      ]
-    );
+    setActionError(null);
+    setDeleteOpen(true);
+  }
+
+  async function submitDelete() {
+    if (!report || deletingRef.current) return;
+    deletingRef.current = true;
+    setDeleting(true);
+    setActionError(null);
+    try {
+      await deleteReport(portfolioId, reportId);
+      setDeleteOpen(false);
+      const navigationState = navigation.getState?.();
+      const previousRoute = navigationState?.routes?.[navigationState.index - 1]?.name;
+      if (previousRoute === 'Analytics' || previousRoute === 'PortfolioAnalysis') {
+        navigation.popToTop();
+      } else {
+        navigation.goBack();
+      }
+    } catch (error) {
+      setActionError(error);
+      deletingRef.current = false;
+      setDeleting(false);
+    }
   }
 
   if (loadStatus === 'loading' && !report) {
@@ -203,6 +193,18 @@ export function ReportDetailScreen({
           Sharing, export, download, and report editing are unavailable.
         </Text>
       </ScrollView>
+      <ConfirmationDialog
+        visible={deleteOpen}
+        title="Delete report?"
+        description="This permanently removes the saved analysis snapshot and cannot be undone."
+        subjectLabel="Saved report"
+        subject={`${report.analysis.portfolio_name} · ${report.id}`}
+        confirmLabel="Delete Report"
+        busy={deleting}
+        errorMessage={actionError ? reportErrorMessage(actionError, 'Unable to delete report.') : null}
+        onCancel={() => { if (!deleting) { setDeleteOpen(false); setActionError(null); } }}
+        onConfirm={() => void submitDelete()}
+      />
     </SafeAreaView>
   );
 }

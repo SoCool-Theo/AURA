@@ -1273,8 +1273,8 @@ the grounded AI Assistant. The Backend AI Agent and React web AI integration
 are complete and merged into `develop`. Mobile AI integration is complete and
 pushed on `feat/mobile-web-parity`.
 
-Future or optional gaps include Watchlist persistence, customer quote/live
-market-data APIs, asset search/catalogue support, shares and invested amounts,
+Future or optional gaps include customer quote/live market-data APIs, global
+asset search/catalogue support, shares and invested amounts,
 live portfolio valuation, editable profiles, password management, global
 Search, Notifications, support/contact APIs, report export/share/delete
 actions, and user-level report/simulation history optimization.
@@ -1437,8 +1437,9 @@ as completed. This ongoing expansion does not make deployment complete.
   allocation.
 - The 17 user assets remain distinct from the internal `THB=X` USD/THB
   instrument included in default and scheduled market-data updates.
-- Real analysis uses current allocation against the selected historical period
-  without replaying shares or changing financial formulas.
+- Current analysis uses fixed owned shares at each historical price date for
+  portfolio-level return/risk metrics; current allocation remains authoritative
+  for concentration, diversification, and risk contribution.
 - Reports retain V1 and add immutable
   `portfolio-analysis-response-v2` snapshots.
 - Historical, Allocation, and Combined simulations retain V1 and add immutable
@@ -1776,11 +1777,12 @@ are outside this mobile-only Step 8M.
 
 ### Completed mobile report monetary metric details
 
-- Current V2 and planned V3 report responses now include deterministic
-  `monetary_metrics` derived only from the saved report snapshot. Cumulative
-  return and annualized return use the saved reference amount; maximum
-  drawdown reconstructs the exact saved peak-to-trough wealth path instead of
-  multiplying the drawdown percentage by the wrong starting value.
+- Current V2 and planned V3 report responses include deterministic
+  `monetary_metrics` derived only from the saved report snapshot. New current
+  reports use the fixed-share historical starting value and exact ending-minus-
+  starting change; planned reports use the proposed reference amount. Maximum
+  drawdown remains tied to the saved historical path rather than today's
+  portfolio value.
 - The monetary context is response-only and does not modify persisted report
   JSONB, require a migration, fetch fresh prices, or revalue historical reports.
   V1 legacy reports remain percentage-only because they have no trustworthy
@@ -1956,3 +1958,387 @@ remain separate follow-on work.
 - When a latest report exists, the action grounds Aura in that exact immutable
   report. Otherwise it opens the selected portfolio context without inventing
   saved analysis results.
+
+### Completed planned estimated ending value
+
+- Planned V3 report responses now include a backend-derived
+  `estimated_ending_value`, calculated from the immutable proposed total and
+  saved historical cumulative-return amount. It does not use current prices,
+  estimated shares, or client-side financial calculations.
+- Web and mobile planned report results show the beginner-facing label
+  **Estimated Value at End of Period** as a clickable metric. Its detail view
+  explains the saved proposed amount, historical change, selected period, and
+  the non-forecast limitation.
+- The field is response-only and backward-compatible; no report snapshot,
+  database migration, or dependency change was required.
+- Reporting regression suite: 131 passed. Web production-authority suite: 19
+  passed. Mobile production-authority suite: 30 passed. Mobile TypeScript and
+  the web production build completed successfully.
+
+### Completed fixed-share current portfolio history
+
+- Current portfolio analysis now values the same owned share quantities at
+  every aligned historical price date. Cumulative return, annualized return,
+  annualized volatility, Sharpe ratio, and maximum drawdown all come from that
+  historical portfolio-value series.
+- Current valuation weights remain authoritative for concentration,
+  diversification, and risk contribution against historical covariance.
+- New V2 snapshots freeze the historical USD starting and ending values.
+  Report mapping uses the exact ending-minus-starting change and no longer
+  multiplies today's saved portfolio value by historical return. Older V2
+  snapshots remain readable and omit unverifiable portfolio money context.
+- Web and mobile label the result **Historical Portfolio Return**, show the
+  fixed-share historical start/end values when available, and explicitly state
+  that the result is not the user's actual profit or loss.
+- Fixed-share focused backend suite: 445 passed. Complete backend unit suite:
+  2,386 passed. Reporting schema/API regression suite: 83 passed. Web
+  production-authority suite: 19 passed and production build completed. Mobile
+  production-authority suite: 30 passed and TypeScript compilation completed.
+
+### Completed portfolio input warning navigation
+
+- Web and mobile create/edit portfolio forms now show a warning popup when
+  local validation or a backend `422` response identifies invalid input.
+- Validation returns the exact first invalid holding row and field. The same
+  message is shown inline, the field receives its error styling, and the form
+  moves focus to that input. Web scrolls the field into view; mobile reuses the
+  keyboard-aware form scroll behavior after focusing it.
+- Empty holding lists direct the user to the holdings area. On mobile, Aura
+  restores one blank row and focuses its symbol field so the user can correct
+  the problem immediately.
+- Web production-authority suite: 20 passed and the production build completed.
+  Mobile production-authority suite: 31 passed and TypeScript compilation
+  completed.
+
+### Completed planned report USD/THB display switch
+
+- New planned V3 reports capture a best-effort USD/THB observation with its
+  requested date and observation date. Missing or stale FX does not block
+  planned analysis or saving the report.
+- Report detail derives complete backend-owned USD and THB views for the saved
+  proposed total, holding amounts, estimated ending value, and other monetary
+  metric explanations. Percentage, allocation, and risk results do not change.
+- Web and mobile show an accessible USD/THB selector on the saved planned
+  allocation card when the snapshot contains frozen FX. Older reports without
+  FX remain readable in their original plan currency.
+- Focused reporting backend suite: 96 passed; reporting API integration suite:
+  39 passed; complete backend unit suite: 2,389 passed. Web
+  production-authority suite: 20 passed and production build completed. Mobile
+  TypeScript compilation completed.
+
+### Completed portfolio input warning presentation and validation
+
+- Web asset-symbol controls keep the picker button aligned to the input when an
+  inline validation warning is shown; the warning no longer stretches the
+  button below the input.
+- Web and mobile current-share inputs now use `10.50` guidance and enforce a
+  maximum of two decimal places in local validation before submission.
+- Current and planned holding forms validate typed symbols against Aura's exact
+  17-asset catalog before starting portfolio creation or replacement. Unsupported
+  entries such as `ASDF` are identified as symbol-field errors.
+- Web browser alerts and mobile native alerts were replaced with centered,
+  theme-aware Aura warning dialogs. Choosing **Show input** closes the dialog,
+  preserves the inline warning, and reveals/focuses the exact invalid field.
+- Web production-authority suite: 20 passed and production build completed.
+  Mobile production-authority suite: 31 passed and TypeScript compilation
+  completed.
+
+### Completed Watchlist Backend V1
+
+- Added authenticated observation-only Watchlist CRUD at `GET/POST
+  /api/watchlist` and `DELETE /api/watchlist/{symbol}`. Ownership always comes
+  from the Bearer-authenticated user; request bodies cannot supply `user_id`.
+- Added reversible migration `a8d3f1c6b2e7` and the `watchlist_items` model with
+  UUID identity, user cascade ownership, deterministic creation ordering, and
+  database-enforced `UNIQUE(user_id, symbol)`.
+- Reused Aura's canonical 17-symbol user-asset registry. Symbols are normalized
+  before service validation; duplicate normalized entries return a sanitized
+  conflict and non-owned or missing deletes share one private not-found result.
+- Watchlist responses derive latest available price, previous-available daily
+  change, and first-available-observation YTD change from persisted PostgreSQL
+  `adjusted_close` rows. One focused query returns at most the three required
+  observations per symbol; no provider call, fill, fabricated price, or market
+  data mutation occurs.
+- Watchlist storage contains no holdings, quantities, invested amounts,
+  allocations, prices, returns, or risk metrics and has no portfolio-analysis,
+  simulation, reporting, or AI-agent effect.
+- Complete focused Watchlist suite: 45 passed, including 2 guarded live
+  PostgreSQL tests covering authenticated CRUD, enrichment, ownership
+  isolation, uniqueness, user cascade, fresh-session persistence, cleanup,
+  and preservation of the existing 95,488 market-data rows. Backend database
+  regression suite: 196 passed. Complete unit and non-live API integration
+  suite: 2,892 passed. Python compilation, dependency consistency, and Git
+  whitespace checks pass.
+- The populated local test database was upgraded additively from
+  `d4a6f8c2e1b7` through the current `a8d3f1c6b2e7` head without changing
+  existing row counts. A live Watchlist-only downgrade to `f2c8e9a1b3d4` and
+  upgrade back to head also passed while preserving all existing market data.
+- Web and mobile Watchlist integration was completed in the following frontend
+  task without changing the backend contract.
+
+### Completed Watchlist Frontend Integration V1
+
+- Added typed web and mobile clients for authenticated `GET/POST
+  /api/watchlist` and `DELETE /api/watchlist/{symbol}` through each platform's
+  shared API client and centralized Bearer-session handling.
+- Replaced both deferred Watchlist screens with real loading, empty, populated,
+  retryable error, add, duplicate/unsupported, and remove states. Null market
+  values render as an em dash, and the UI labels prices as latest saved data
+  rather than live quotes.
+- Reused each client's canonical 17-asset catalogue for local picker/search
+  labels and exclusion of already-added assets. The clients do not calculate
+  daily or YTD returns, call market-data providers, or persist a second local
+  Watchlist authority.
+- Preserved the existing web protected route and the mobile `More` stack route;
+  no additional bottom tab or navigation architecture was introduced.
+- Removed obsolete Watchlist mock datasets and the unused web summary component
+  that derived client-side aggregate movement values.
+- Web production-authority suite: 23 passed; TypeScript/Vite production build
+  passed. Mobile production-authority suite: 35 passed; TypeScript checking and
+  Expo public-config validation passed.
+
+### Completed latest-analysis simulation references
+
+- Web and mobile historical-scenario results now use the selected portfolio's
+  newest saved analysis as the visible reference instead of a synthetic flat
+  no-movement baseline.
+- Web and mobile allocation-change results also show the newest saved analysis,
+  its period, backend metrics, and exact report-detail action as additional
+  context. The authoritative original-versus-modified calculation remains the
+  backend comparison over one common requested period.
+- New combined-simulation results directly compare the newest saved portfolio
+  analysis with the modified portfolio under the selected historical scenario
+  in a metric table and a selectable two-line normalized chart on both clients.
+  The backend's period-matched original-versus-modified scenario comparison is
+  still shown separately and remains authoritative for simulation deltas.
+- The comparison identifies the saved report time and analysis period, exposes
+  an exact report-detail action, and handles loading, missing-report, and
+  retrieval-error states without invalidating the scenario result.
+- Reference metrics come directly from the immutable saved analysis. Its chart
+  path is a display-only normalized reconstruction of the saved backend return
+  observations; scenario metrics and trajectory remain backend-owned.
+- Trajectory charts on both clients show each selected line with its own date
+  and normalized-value labels. The all-lines view omits x-axis dates when the
+  compared periods may differ and retains shared normalized-value labels.
+- Web production-authority suite: 29 passed and the production build completed.
+  Mobile production-authority suite: 38 passed and TypeScript compilation
+  completed.
+
+### Completed mobile saved-simulation AI grounding
+
+- Mobile saved-simulation detail now exposes an **Open AI Assistant** action
+  that carries both the owning portfolio ID and the exact saved simulation ID.
+- The Assistant preserves that immutable simulation context across the chat,
+  sends `simulation_id` with every explanation request, shows simulation-
+  specific starter questions, and clearly labels the selected snapshot.
+- Users can explicitly switch back to live portfolio context. Changing the
+  selected portfolio also clears the saved-simulation context and starts a
+  fresh conversation.
+- Mobile production-authority suite: 39 passed. TypeScript compilation
+  completed successfully.
+
+### Completed Backend Account Profile V1
+
+- Extended the authenticated `GET /api/auth/me` response with nullable display
+  name and phone number plus persisted language and timezone preferences.
+- Added authenticated `PATCH /api/auth/me` for partial profile updates. Email
+  changes require the current password, normalized duplicate emails return a
+  sanitized conflict, and ownership always comes from the Bearer session.
+- Added authenticated `PUT /api/auth/me/password` for current-password-verified
+  password replacement. Passwords remain one-way hashed and are never returned.
+- Added reversible migration `b9e4d2f7c1a6` with additive profile columns,
+  safe defaults for existing users, and database constraints matching the V1
+  language, timezone, and field-length contract.
+- Kept transaction ownership at the API boundary: repositories flush but do
+  not commit, while each successful mutation commits exactly once.
+- Profile photos, notification delivery/preferences, session revocation, and
+  password-reset email flows remain outside Backend Profile V1.
+- Focused profile/auth suite: 74 passed. Expanded auth, migration, model, and
+  API-contract regression suite: 101 passed. Isolated live PostgreSQL migration
+  and authentication lifecycle suite: 2 passed, including persistence and
+  downgrade cleanup. Python compilation passed.
+
+### Completed Account Profile Frontend Integration V1
+
+- Web and mobile Settings now read display name, email, optional phone number,
+  preferred language, and timezone from the authenticated backend user instead
+  of treating browser or device storage as profile authority.
+- Both clients submit typed partial updates through `PATCH /api/auth/me`, only
+  send changed fields, require the current password when the email changes, and
+  immediately synchronize the returned user into shared authentication state.
+- Both clients provide a separate current-password-verified password form using
+  `PUT /api/auth/me/password`, including minimum-length, difference, and
+  confirmation checks before submission.
+- Backend validation, incorrect-password, duplicate-email, network, and server
+  failures have themed inline presentation without exposing credentials or
+  backend internals. Successful changes receive visible confirmation.
+- Profile photos and notification controls remain visibly unavailable because
+  Backend Profile V1 does not provide storage or delivery contracts for them.
+- Web production-authority suite: 30 passed and the production build completed.
+  Mobile production-authority suite: 40 passed and TypeScript compilation
+  completed successfully.
+
+### Completed internal frozen-artifact asset forecasting
+
+- Internal forecasting loads the configured artifact version from trusted,
+  read-only deployment storage. The registry validates all 34 symbol/target
+  records and model/metadata checksums before deserialization and caches loaded
+  models without caching forecast results.
+- Inference uses the caller's current application database session and existing
+  MarketDataService. The latest stored observation supplies the forecast origin;
+  existing forecast-features-v1 construction and a four-calendar-day freshness
+  limit remain authoritative.
+- Frozen baselines use their serialized constants; fitted Linear Regression and
+  Random Forest models consume the latest feature vector. ARIMA uses the approved
+  deployment anchor: the first stored observation on or after the artifact cutoff
+  is step one, and each subsequent stored observation advances one step. Missing
+  dates and the purged training-label gap add no steps.
+- The internal typed asset outlook applies frozen q10/q90 residual prediction
+  intervals at nominal 80% coverage and preserves volatility non-negativity.
+  There is no runtime fitting, state update, selection, calibration, or fallback.
+- Validation uses synthetic artifacts and mocked market data. No generated
+  artifacts, real databases, public forecast APIs, portfolio composition,
+  forecast persistence, AI integration, or clients were changed.
+
+### Completed authenticated current asset outlook API
+
+- Added `GET /api/forecasting/assets/{symbol}/outlook` using Aura's existing
+  Bearer authentication and application database session. Symbols follow the
+  canonical 17-asset normalization and support rules; no portfolio context or
+  historical/as-of input is exposed.
+- Public Pydantic response contracts expose finite numeric predictions, nested
+  nominal 80% prediction intervals, fixed 30-day horizon, current market-data
+  provenance, selected model IDs, artifact version, and deterministic educational
+  limitations. The pure mapper copies inference-owned values without rounding,
+  clamping, or recalculating them.
+- Unsupported symbols return safe 404 responses; stale data, insufficient
+  history, artifact failures, and invalid predictions return safe 503 responses.
+  Internal paths, residuals, evaluation metrics, credentials, and exception
+  details are not exposed.
+- Tests use mocked inference and sessions. Frozen model artifacts, internal
+  prediction semantics, portfolio composition, persistence, migrations,
+  scheduler/updater behavior, AI integration, and client code are unchanged.
+
+### Completed authenticated portfolio forecast composition
+
+- Added owner-scoped `GET /api/forecasting/portfolios/{portfolio_id}/outlook`
+  with existing Bearer authentication, application sessions, and ownership-safe
+  `404` behavior. No caller weight, horizon, scenario, or as-of override is
+  supported; the endpoint is read-only and persists no forecast.
+- Reused the authoritative baseline resolver: current USD valuation weights
+  for CURRENT, saved weights for LEGACY, and existing proposed-amount target
+  weights for PLANNED. The response identifies the baseline kind. Only sum
+  drift within absolute `1e-10` is normalized; invalid/empty/unsupported
+  allocations fail with a sanitized `409` rather than dropping components.
+- Every component reuses frozen asset inference with one server-selected UTC
+  reference date and the four-calendar-day freshness rule. Portfolio expected
+  return is an arithmetic weighted sum, without compounding or annualization.
+- Forecasting-local correlation computes log returns on each asset's stored
+  calendar, intersects return dates, and uses the latest 60–252 common returns
+  on or before the earliest component origin. A single batch historical query
+  supplies correlation data; there is no provider call, filling, external
+  calendar, or change to deterministic historical correlation.
+- Portfolio forecast volatility uses `D @ R @ D` covariance and
+  `sqrt(w.T @ Sigma @ w)`. Signed Euler contributions and shares are preserved;
+  both are zero at zero portfolio volatility. Matrix tolerance is `1e-12` and
+  negative variance roundoff is floored only within `1e-14` squared volatility
+  units. Invalid/non-finite matrices or results fail with a safe `503`.
+- Ordered components preserve their own origins, individual calibrated
+  intervals, model IDs, artifact version, and market-data age. Portfolio
+  market-data-as-of is the oldest component date. No portfolio prediction
+  interval is created; deterministic wording explains correlation uncertainty
+  and the educational/non-advisory scope.
+- Added synthetic composition, response-schema, and authenticated API tests.
+  Updated only the global OpenAPI inventory assertions in existing asset and
+  reporting API tests; reporting behavior and contracts remain unchanged.
+  The public API documentation now records the new endpoint and methodology.
+- Validation: 106 targeted tests and 3,140 tests across the complete backend
+  unit suite plus relevant database-free auth, portfolio, reporting,
+  simulation/history, forecasting, Watchlist, health, and CORS API suites pass.
+  Compilation, import/OpenAPI checks (25 paths/32 operations), `pip check`,
+  and Git whitespace checks pass. All 68 frozen model/metadata files match
+  their manifest checksums.
+- No real database, real model evaluation/training, artifact writes, migrations,
+  updater changes, AI/client changes, new dependency, commit, push, merge,
+  PR, or branch change occurred. Live acceptance and the separate stale-market-
+  data operational task remain outstanding; no subsequent phase was started.
+
+### Completed offline selection dataset provenance support
+
+- Both manual return/volatility selection commands now require an explicit
+  environment file and accept `--database-url-key` (default `DATABASE_URL`).
+  They reuse the fingerprint workflow's loader, read only the requested file
+  key without interpolation/fallback, and never serialize connection details.
+- Added a shared offline helper for canonical market-data fingerprinting and
+  paired expected fingerprint/row-count verification. The loaded records are
+  fingerprinted before history adaptation or any candidate evaluation; exactly
+  those records supply the unchanged evaluator. Mismatch/invalid expectations
+  stop without writing a selection report, and existing output is preserved.
+- Reports now include additive actual cutoff, symbol count, row count, hash,
+  and `provenance_verified` metadata. Developer runs without both expectations
+  explicitly remain unverified. The selection-report parser/freezer already
+  tolerates additive metadata and required no production change.
+- Added mocked/synthetic tests for explicit key selection, missing-key and
+  no-fallback behavior, credential-safe failures, gate ordering, mismatches,
+  deterministic report metadata, unchanged numerical/selection results, and
+  freezer compatibility. Targeted suite: 67 passed. Complete forecasting unit
+  suite: 345 passed. Broader forecasting/schema/API suite: 474 passed.
+  Compilation, import/parser checks, `pip check`, whitespace, and scope checks
+  pass; both candidate evaluator functions are unchanged from HEAD.
+- Documented exact user-controlled remediation commands with new report paths
+  that preserve old selection evidence. No real evaluation, database access,
+  fitting, manifest replacement, artifact generation, production inference,
+  API, analytics, client, dependency, migration, or Git history change occurred.
+- The original selection provenance remains insufficient: supporting future
+  verified runs does not retroactively establish the original reports' dataset.
+  Merge readiness remains blocked pending manual verified reports, comparison
+  of their selections, and a separate decision on any versioned artifact work.
+
+### Completed verified selection reconciliation and final readiness audit
+
+- The user manually reproduced selection decisions on the authoritative frozen
+  69,928-row, 17-symbol dataset at cutoff `2026-09-17`, fingerprint
+  `dd8cfbe6963ffad4cb3f64034e834d324c7981426704193c00256c9add504e99`.
+  Both supplied reports record verified provenance. Their byte SHA-256 values
+  and the deterministic symbol-sorted reconciliation are recorded in
+  `docs/development/forecasting-selection-provenance.md`.
+- All 17 return and 17 volatility candidate IDs match both frozen manifests:
+  34/34 matches. This resolves the prior selection-reproduction readiness gate.
+  The original Phase 4/5 run dataset provenance was not independently recorded
+  and is NOT newly proven. The original package `forecast-v1-20260917` remains
+  frozen: it was NOT regenerated; calibration and final-test reports were NOT
+  rerun. Verified reports supplement, rather than replace, the original evidence.
+- Read-only artifact validation passes: 17 symbols, two targets, 34 unique
+  artifacts, all 68 model/metadata checksums, completed final-test marker,
+  feature/target versions, 0.80 interval coverage, authoritative fingerprint,
+  canonical selection manifest hash, and embedded/source evidence consistency.
+- Runtime review and synthetic regressions confirm application-session persisted
+  data plus immutable model prediction only, approved ARIMA stored-calendar step
+  alignment, no runtime training/provider/offline database calls, existing Bearer
+  authentication, ownership isolation, and sanitized failure behavior. Shared
+  modules contain offline helper definitions but request paths never call them.
+- Portfolio composition retains authoritative weights, arithmetic weighted
+  expected return, `D @ R @ D` covariance, square-root quadratic-form volatility,
+  60–252 common-date log returns at the earliest origin, signed contributions,
+  no filling/fallback/dropped assets, and no calibrated portfolio-level interval.
+  API documentation now explicitly distinguishes deterministic historical
+  analytics from 30-calendar-day non-annualized probabilistic forecasting,
+  empirical asset intervals, and offline/versioned retraining. The existing
+  `backend/.env.example` artifact version matches the frozen package unchanged.
+- All 345 forecasting unit tests also pass in a dedicated run. All 3,219 backend
+  unit and non-live API tests pass, including auth, portfolio,
+  valuation, schemas, analytics, reporting, simulation, forecasting, and AI Agent
+  regressions. Compilation, import/OpenAPI (25 paths/32 operations), `pip check`,
+  whitespace, and scope checks pass. The 54 warnings are from the existing short
+  JWT secret in AI test fixtures. Live/PostgreSQL integration tests were excluded.
+- Added narrow root-output ignore rules for forecasting JSON evidence, the
+  Supabase snapshot dump, and artifact backup ZIP. These files and frozen
+  artifacts remain untracked/ignored; no user file was deleted or rewritten.
+- Readiness decision: READY TO MERGE under the requested gates. Stale-data `503`
+  is expected and does not block this decision; production updater restoration
+  and fresh-data live acceptance remain separate operational follow-ups. Trusted
+  immutable artifact deployment remains required; hashes are not authenticity
+  proofs. Changes await user review and explicit commit authorization.
+- No real database connection, ML training/evaluation, calibration/final testing,
+  artifact generation, production code/contract change, dependency addition,
+  commit, push, merge, PR, history rewrite, or branch switch occurred in this audit.

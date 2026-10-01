@@ -1,14 +1,17 @@
 """Atomic, JSON-safe Pydantic contracts for Aura analytics results."""
 
 from datetime import date
+from decimal import Decimal
 import math
 from typing import Annotated, Literal, Self
 
 from pydantic import (
     BeforeValidator,
     Field,
+    SerializerFunctionWrapHandler,
     Strict,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
@@ -64,6 +67,10 @@ CorrelationFloat = Annotated[
 NonNegativeInt = Annotated[int, Field(strict=True, ge=0)]
 PositiveInt = Annotated[int, Field(strict=True, gt=0)]
 RiskPoints = Annotated[int, Field(strict=True, ge=0, le=3)]
+PositiveHistoricalValue = Annotated[
+    Decimal,
+    Field(gt=Decimal("0"), allow_inf_nan=False),
+]
 
 
 class MaximumDrawdownMetrics(AuraBaseModel):
@@ -245,6 +252,25 @@ class AnalysisMetadata(AuraBaseModel):
         return self
 
 
+class HistoricalPortfolioValueContext(AuraBaseModel):
+    """Fixed-share USD values across one current portfolio analysis period."""
+
+    basis: Literal["fixed-current-shares"]
+    currency: Literal["USD"]
+    start_date: date
+    end_date: date
+    starting_value: PositiveHistoricalValue
+    ending_value: PositiveHistoricalValue
+
+    @model_validator(mode="after")
+    def validate_date_order(self) -> Self:
+        if self.start_date > self.end_date:
+            raise ValueError(
+                "historical value start_date must not be after end_date"
+            )
+        return self
+
+
 class PortfolioMetrics(AuraBaseModel):
     """The engine's top-level scalar portfolio metrics."""
 
@@ -255,7 +281,7 @@ class PortfolioMetrics(AuraBaseModel):
 
 
 class PortfolioReturnPoint(AuraBaseModel):
-    """One dated periodically rebalanced portfolio return observation."""
+    """One dated portfolio return observation."""
 
     date: date
     portfolio_return: FiniteFloat
@@ -329,6 +355,17 @@ class PortfolioAnalysisResponse(AnalysisPeriod):
         Field(min_length=1),
     ]
     asset_returns: list[AssetReturnSeries] = Field(default_factory=list)
+    historical_value_context: HistoricalPortfolioValueContext | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_unavailable_historical_value_context(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, object]:
+        serialized = handler(self)
+        if self.historical_value_context is None:
+            serialized.pop("historical_value_context", None)
+        return serialized
 
     @field_validator("portfolio_name", mode="before")
     @classmethod
@@ -459,4 +496,25 @@ class PortfolioAnalysisResponse(AnalysisPeriod):
                 "metadata return_observation_count must match the number "
                 "of portfolio return observations"
             )
+        context = self.historical_value_context
+        if context is not None:
+            if (
+                context.start_date != self.metadata.analysis_start
+                or context.end_date != self.metadata.analysis_end
+            ):
+                raise ValueError(
+                    "historical value dates must match analysis metadata"
+                )
+            historical_return = (
+                context.ending_value / context.starting_value - Decimal("1")
+            )
+            if not math.isclose(
+                float(historical_return),
+                self.portfolio_metrics.cumulative_return,
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            ):
+                raise ValueError(
+                    "historical values must match portfolio cumulative return"
+                )
         return self

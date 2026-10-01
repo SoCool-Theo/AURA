@@ -123,6 +123,33 @@ export function LearnScreen({ navigation }: { navigation: any }) {
             );
           })}
         </View>
+
+        <Card style={styles.aiCard}>
+          <View style={styles.aiCardTop}>
+            <View style={styles.aiIcon}>
+              <Ionicons name="sparkles-outline" color={colors.primarySoft} size={24} />
+            </View>
+            <View style={styles.aiCopy}>
+              <Text style={styles.aiTitle}>Ask Aura about your results</Text>
+              <Text style={styles.aiDescription}>
+                The AI Assistant can explain your saved analysis and simulation results while keeping its educational boundaries clear.
+              </Text>
+            </View>
+          </View>
+          <Button
+            title="Open AI Assistant"
+            variant="secondary"
+            accessibilityHint="Opens the AI Assistant tab"
+            onPress={() => navigation.getParent()?.navigate('AI')}
+          />
+        </Card>
+
+        <View style={styles.educationNote}>
+          <Ionicons name="shield-checkmark-outline" color={colors.primary} size={16} />
+          <Text style={styles.educationNoteText}>
+            Learning content explains historical portfolio-risk concepts and is not financial or investment advice.
+          </Text>
+        </View>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );
@@ -147,5 +174,13 @@ const styles = StyleSheet.create({
   lessonTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
   lessonMeta: { color: colors.muted, fontSize: 10, marginTop: 4 },
   lessonRight: { alignItems: 'flex-end', gap: 5 },
-  completion: { fontSize: 10, fontWeight: '900' }
+  completion: { fontSize: 10, fontWeight: '900' },
+  aiCard: { gap: spacing.md, marginTop: spacing.sm },
+  aiCardTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  aiIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.cyanBackground, alignItems: 'center', justifyContent: 'center' },
+  aiCopy: { flex: 1 },
+  aiTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  aiDescription: { color: colors.textSecondary, fontSize: 11, lineHeight: 17, marginTop: 4 },
+  educationNote: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm },
+  educationNoteText: { flex: 1, color: colors.muted, fontSize: 10, lineHeight: 15 }
 });

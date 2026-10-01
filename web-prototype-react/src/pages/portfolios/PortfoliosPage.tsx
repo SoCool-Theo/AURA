@@ -8,7 +8,7 @@ import {
 } from '../../api/portfoliosApi';
 import { listPortfolioReports } from '../../api/reportsApi';
 import { PortfolioCard } from '../../components/portfolio/PortfolioCard';
-import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
+import { ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
 import { AuraSelect } from '../../components/ui/AuraSelect';
@@ -18,6 +18,7 @@ import type {
   PortfolioSummaryResponse,
 } from '../../types/portfolio';
 import type { PortfolioReportSummary } from '../../types/report';
+import { PortfolioActionDialog, type PortfolioAction } from './components/PortfolioActionDialog';
 import styles from './PortfolioIntegration.module.css';
 
 interface PortfolioSummaryProps {
@@ -58,7 +59,6 @@ export function PortfoliosPage() {
   const [portfolios, setPortfolios] = useState<PortfolioSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>(null);
-  const [actionError, setActionError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState('updated');
@@ -66,6 +66,10 @@ export function PortfoliosPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [latestReports, setLatestReports] = useState<Map<string, PortfolioReportSummary>>(new Map());
   const [reportLookupError, setReportLookupError] = useState(false);
+  const [dialogAction, setDialogAction] = useState<PortfolioAction | null>(null);
+  const [dialogPortfolio, setDialogPortfolio] = useState<PortfolioSummaryResponse | null>(null);
+  const [dialogName, setDialogName] = useState('');
+  const [dialogError, setDialogError] = useState<unknown>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -135,53 +139,47 @@ export function PortfoliosPage() {
     )))).toLocaleDateString()
     : '—';
 
-  async function rename(portfolio: PortfolioSummaryResponse) {
+  function openActionDialog(action: PortfolioAction, portfolio: PortfolioSummaryResponse) {
     if (busyId) return;
-    const name = prompt('New portfolio name', portfolio.name);
-    if (!name?.trim() || name.trim() === portfolio.name) return;
-
-    setBusyId(portfolio.id);
-    setActionError(null);
-    try {
-      const updated = await updatePortfolio(portfolio.id, { name: name.trim() });
-      setPortfolios(previous => previous.map(item => (
-        item.id === portfolio.id ? toSummary(updated) : item
-      )));
-    } catch (error) {
-      setActionError(error);
-    } finally {
-      setBusyId(null);
-    }
+    setEditing(null);
+    setDialogAction(action);
+    setDialogPortfolio(portfolio);
+    setDialogName(action === 'duplicate' ? `${portfolio.name} Copy` : portfolio.name);
+    setDialogError(null);
   }
 
-  async function duplicate(portfolio: PortfolioSummaryResponse) {
+  function closeActionDialog() {
     if (busyId) return;
-    const name = prompt('Name for duplicated portfolio', `${portfolio.name} Copy`);
-    if (!name?.trim()) return;
-
-    setBusyId(portfolio.id);
-    setActionError(null);
-    try {
-      const duplicated = await duplicatePortfolio(portfolio.id, { name: name.trim() });
-      setPortfolios(previous => [...previous, toSummary(duplicated)]);
-    } catch (error) {
-      setActionError(error);
-    } finally {
-      setBusyId(null);
-    }
+    setDialogAction(null);
+    setDialogPortfolio(null);
+    setDialogError(null);
   }
 
-  async function remove(portfolio: PortfolioSummaryResponse) {
-    if (busyId) return;
-    if (!confirm(`Delete ${portfolio.name}? This cannot be undone.`)) return;
-
-    setBusyId(portfolio.id);
-    setActionError(null);
+  async function submitActionDialog() {
+    if (busyId || !dialogAction || !dialogPortfolio) return;
+    const name = dialogName.trim();
+    if (dialogAction !== 'delete' && !name) return;
+    if (dialogAction === 'rename' && name === dialogPortfolio.name) {
+      closeActionDialog();
+      return;
+    }
+    setBusyId(dialogPortfolio.id);
+    setDialogError(null);
     try {
-      await deletePortfolio(portfolio.id);
-      setPortfolios(previous => previous.filter(item => item.id !== portfolio.id));
+      if (dialogAction === 'rename') {
+        const updated = await updatePortfolio(dialogPortfolio.id, { name });
+        setPortfolios(previous => previous.map(item => item.id === dialogPortfolio.id ? toSummary(updated) : item));
+      } else if (dialogAction === 'duplicate') {
+        const duplicated = await duplicatePortfolio(dialogPortfolio.id, { name });
+        setPortfolios(previous => [...previous, toSummary(duplicated)]);
+      } else {
+        await deletePortfolio(dialogPortfolio.id);
+        setPortfolios(previous => previous.filter(item => item.id !== dialogPortfolio.id));
+      }
+      setDialogAction(null);
+      setDialogPortfolio(null);
     } catch (error) {
-      setActionError(error);
+      setDialogError(error);
     } finally {
       setBusyId(null);
     }
@@ -205,7 +203,6 @@ export function PortfoliosPage() {
         <PortfolioSummary label="Access" value="Private" detail="Available only in your account" icon="shield" tone="green" />
       </div>}
 
-      {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to update this portfolio." />}
       {reportLookupError && <p className={styles.contextNotice} role="alert">Some latest-report shortcuts are temporarily unavailable. Portfolios can still be opened normally.</p>}
 
       {loading && (
@@ -246,9 +243,9 @@ export function PortfoliosPage() {
               busy={Boolean(busyId)}
               menuOpen={editing === portfolio.id}
               onToggleMenu={() => setEditing(editing === portfolio.id ? null : portfolio.id)}
-              onRename={() => { void rename(portfolio); setEditing(null); }}
-              onDuplicate={() => { void duplicate(portfolio); setEditing(null); }}
-              onDelete={() => { void remove(portfolio); setEditing(null); }}
+              onRename={() => openActionDialog('rename', portfolio)}
+              onDuplicate={() => openActionDialog('duplicate', portfolio)}
+              onDelete={() => openActionDialog('delete', portfolio)}
               onOpenPortfolio={() => go(`portfolio/${portfolio.id}`)}
               onOpenLatestReport={latestReport
                 ? () => go(`reports/${portfolio.id}/${latestReport.id}`)
@@ -267,6 +264,16 @@ export function PortfoliosPage() {
           </button>
         </Card>
       ) : null}
+      {dialogAction && dialogPortfolio && <PortfolioActionDialog
+        action={dialogAction}
+        portfolioName={dialogPortfolio.name}
+        value={dialogName}
+        busy={busyId === dialogPortfolio.id}
+        error={dialogError}
+        onValueChange={value => { setDialogName(value); setDialogError(null); }}
+        onCancel={closeActionDialog}
+        onSubmit={() => void submitActionDialog()}
+      />}
     </div>
   );
 }

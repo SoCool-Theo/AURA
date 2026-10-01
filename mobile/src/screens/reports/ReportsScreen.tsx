@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { Card } from '../../components/ui/Card';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
@@ -48,6 +48,7 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
   const [actionError, setActionError] = useState<unknown>(null);
   const deletingIdsRef = useRef(new Set<string>());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [reportToDelete, setReportToDelete] = useState<ReportHistoryItem | null>(null);
 
   useFocusEffect(useCallback(() => {
     if (listStatus === 'ready' || portfolios.length) {
@@ -77,31 +78,25 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
 
   function confirmDelete(report: ReportHistoryItem) {
     if (deletingIdsRef.current.has(report.id)) return;
-    Alert.alert(
-      'Delete report?',
-      `Permanently delete the saved analysis for ${report.portfolio_name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (deletingIdsRef.current.has(report.id)) return;
-            deletingIdsRef.current.add(report.id);
-            setDeletingIds(new Set(deletingIdsRef.current));
-            setActionError(null);
-            try {
-              await deleteReport(report.portfolio_id, report.id);
-            } catch (error) {
-              setActionError(error);
-            } finally {
-              deletingIdsRef.current.delete(report.id);
-              setDeletingIds(new Set(deletingIdsRef.current));
-            }
-          }
-        }
-      ]
-    );
+    setActionError(null);
+    setReportToDelete(report);
+  }
+
+  async function submitDelete() {
+    const report = reportToDelete;
+    if (!report || deletingIdsRef.current.has(report.id)) return;
+    deletingIdsRef.current.add(report.id);
+    setDeletingIds(new Set(deletingIdsRef.current));
+    setActionError(null);
+    try {
+      await deleteReport(report.portfolio_id, report.id);
+      setReportToDelete(null);
+    } catch (error) {
+      setActionError(error);
+    } finally {
+      deletingIdsRef.current.delete(report.id);
+      setDeletingIds(new Set(deletingIdsRef.current));
+    }
   }
 
   if (
@@ -308,6 +303,18 @@ export function ReportsScreen({ navigation }: { navigation: any }) {
           Saved reports are read-only. Export, sharing, download, and editing are unavailable.
         </Text>
       </KeyboardAwareScrollView>
+      <ConfirmationDialog
+        visible={reportToDelete !== null}
+        title="Delete report?"
+        description="This permanently removes the saved analysis snapshot and cannot be undone."
+        subjectLabel="Saved report"
+        subject={reportToDelete ? `${reportToDelete.portfolio_name} · ${reportToDelete.id}` : ''}
+        confirmLabel="Delete Report"
+        busy={Boolean(reportToDelete && deletingIds.has(reportToDelete.id))}
+        errorMessage={reportToDelete && actionError ? reportErrorMessage(actionError, 'Unable to delete report.') : null}
+        onCancel={() => { if (!reportToDelete || !deletingIds.has(reportToDelete.id)) { setReportToDelete(null); setActionError(null); } }}
+        onConfirm={() => void submitDelete()}
+      />
     </SafeAreaView>
   );
 }

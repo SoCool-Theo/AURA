@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: PositiveInt = 30
     market_data_update_time_utc: time = time(hour=2)
+    forecasting_artifact_version: Annotated[
+        str, Field(pattern=r"^forecast-v[0-9]+-[0-9]{8}$")
+    ] = "forecast-v1-20260917"
 
     # AI / LLM configuration
     aura_llm_provider: Literal["openai", "groq"] | None = None

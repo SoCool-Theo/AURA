@@ -115,6 +115,44 @@ def _validate_weights(
     )
 
 
+def _validate_share_quantities(
+    share_quantities: Mapping[str, float], asset_symbols: pd.Index
+) -> np.ndarray:
+    if not isinstance(share_quantities, Mapping):
+        raise TypeError("share_quantities must implement Mapping")
+
+    quantity_items = list(share_quantities.items())
+    quantity_keys = [key for key, _ in quantity_items]
+    if set(quantity_keys) != set(asset_symbols):
+        raise ValueError(
+            "share quantity symbols must exactly match the price columns"
+        )
+
+    validated_quantities: dict[str, float] = {}
+    for symbol, value in quantity_items:
+        if not isinstance(symbol, str):
+            raise TypeError("share quantity symbols must be strings")
+        if not symbol or not symbol.strip() or symbol != symbol.strip():
+            raise ValueError("share quantity symbols must be normalized")
+        if isinstance(value, (bool, np.bool_)):
+            raise TypeError("share quantity values cannot be Boolean")
+        if isinstance(value, (complex, np.complexfloating)):
+            raise TypeError("share quantity values cannot be complex")
+        if not isinstance(value, Real):
+            raise TypeError("share quantity values must be real numeric values")
+        numeric_value = float(value)
+        if not math.isfinite(numeric_value) or numeric_value <= 0.0:
+            raise ValueError(
+                "share quantity values must be positive and finite"
+            )
+        validated_quantities[symbol] = numeric_value
+
+    return np.asarray(
+        [validated_quantities[symbol] for symbol in asset_symbols],
+        dtype=float,
+    )
+
+
 def _validate_portfolio_return_series(portfolio_returns: pd.Series) -> np.ndarray:
     if not isinstance(portfolio_returns, pd.Series):
         raise TypeError("portfolio_returns must be a pandas Series")
@@ -149,6 +187,36 @@ def calculate_asset_returns(prices: pd.DataFrame) -> pd.DataFrame:
         return_values,
         index=prices.index[1:],
         columns=prices.columns,
+    )
+
+
+def calculate_fixed_share_portfolio_values(
+    prices: pd.DataFrame,
+    share_quantities: Mapping[str, float],
+) -> pd.Series:
+    """Value fixed owned quantities at every supplied historical price date."""
+    if not isinstance(prices, pd.DataFrame):
+        raise TypeError("prices must be a pandas DataFrame")
+    if len(prices.index) < 2:
+        raise ValueError("prices must contain at least two rows")
+    if len(prices.columns) == 0:
+        raise ValueError("prices must contain at least one asset column")
+
+    _validate_datetime_index(prices.index, "prices")
+    _validate_symbols(prices.columns, "price")
+    price_values = _validated_real_values(
+        prices.to_numpy(), "price", require_positive=True
+    )
+    aligned_quantities = _validate_share_quantities(
+        share_quantities,
+        prices.columns,
+    )
+    portfolio_values = price_values @ aligned_quantities
+
+    return pd.Series(
+        portfolio_values,
+        index=prices.index,
+        name="portfolio_value",
     )
 
 

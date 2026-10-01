@@ -57,6 +57,7 @@ APPLICATION_TABLES = {
     "market_data",
     "portfolios",
     "users",
+    "watchlist_items",
 }
 INITIAL_REVISION = "9f4c2a7b1d3e"
 LEGACY_MIGRATION_USER_ID = UUID("00000000-0000-0000-0000-000000000001")

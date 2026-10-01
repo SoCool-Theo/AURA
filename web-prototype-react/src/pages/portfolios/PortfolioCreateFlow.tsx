@@ -7,6 +7,7 @@ import {
 import { go } from '../../app/routes';
 import { FormErrorSummary } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { Icon } from '../../components/ui/Icon';
 import type {
   PortfolioCurrency,
@@ -25,6 +26,12 @@ import {
 } from './portfolioValidation';
 import { AssetSymbolField } from './components/AssetSymbolField';
 import { HoldingDecimalInput } from './components/HoldingDecimalInput';
+import { PortfolioInputWarningDialog } from './components/PortfolioInputWarningDialog';
+import {
+  apiPortfolioInputWarning,
+  localHoldingInputWarning,
+  type PortfolioInputWarning,
+} from './portfolioInputWarning';
 
 type CreateMode = 'CURRENT' | 'PLANNED';
 type DraftHolding = RealHoldingDraft | PlannedHoldingDraft;
@@ -41,6 +48,24 @@ export function PortfolioCreateFlow() {
   const [partialError, setPartialError] = useState<unknown>(null);
   const [createdPortfolio, setCreatedPortfolio] = useState<PortfolioResponse | null>(null);
   const [saving, setSaving] = useState(false);
+  const [inputWarning, setInputWarning] = useState<PortfolioInputWarning | null>(null);
+  const [holdingToRemove, setHoldingToRemove] = useState<DraftHolding | null>(null);
+
+  function inputIds() {
+    return {
+      name: 'create-portfolio-name',
+      emptyHoldings: 'create-add-holding',
+      rows: holdings.map(holding => ({
+        symbol: `create-holding-${holding.id}`,
+        shares: `create-holding-${holding.id}-shares`,
+        proposedAmount: `create-holding-${holding.id}-proposed-amount`,
+      })),
+    };
+  }
+
+  function presentInputWarning(warning: PortfolioInputWarning) {
+    setInputWarning(warning);
+  }
 
   function addHolding() {
     const id = nextHoldingId.current;
@@ -52,6 +77,7 @@ export function PortfolioCreateFlow() {
         : createRealHoldingDraft(id),
     ]);
     setError(null);
+    setInputWarning(null);
   }
 
   function updateHolding(id: number, update: Partial<DraftHolding>) {
@@ -59,6 +85,7 @@ export function PortfolioCreateFlow() {
       holding.id === id ? { ...holding, ...update } : holding
     )));
     setError(null);
+    setInputWarning(null);
   }
 
   function moveHolding(index: number, direction: -1 | 1) {
@@ -67,6 +94,14 @@ export function PortfolioCreateFlow() {
     const next = [...holdings];
     [next[index], next[destination]] = [next[destination], next[index]];
     setHoldings(next);
+  }
+
+  function removeHolding() {
+    if (!holdingToRemove || saving) return;
+    setHoldings(previous => previous.filter(item => item.id !== holdingToRemove.id));
+    setError(null);
+    setInputWarning(null);
+    setHoldingToRemove(null);
   }
 
   function selectMode(nextMode: CreateMode) {
@@ -80,12 +115,15 @@ export function PortfolioCreateFlow() {
     nextHoldingId.current = 1;
     setError(null);
     setPartialError(null);
+    setInputWarning(null);
   }
 
   async function savePortfolio() {
     if (saving) return;
     if (!name.trim()) {
-      setError('Enter a portfolio name.');
+      const message = 'Enter a portfolio name.';
+      setError(message);
+      presentInputWarning({ elementId: inputIds().name, message });
       return;
     }
 
@@ -94,6 +132,7 @@ export function PortfolioCreateFlow() {
       : validateRealHoldingDrafts(holdings as RealHoldingDraft[]);
     if (!validation.holdings) {
       setError(validation.error);
+      presentInputWarning(localHoldingInputWarning(validation.issue, inputIds()));
       return;
     }
 
@@ -117,6 +156,8 @@ export function PortfolioCreateFlow() {
         setCreatedPortfolio(target);
       } catch (requestError) {
         setError(requestError);
+        const warning = apiPortfolioInputWarning(requestError, inputIds());
+        if (warning) presentInputWarning(warning);
         setSaving(false);
         return;
       }
@@ -135,6 +176,8 @@ export function PortfolioCreateFlow() {
       go(`portfolio/${saved.id}`);
     } catch (requestError) {
       setPartialError(requestError);
+      const warning = apiPortfolioInputWarning(requestError, inputIds());
+      if (warning) presentInputWarning(warning);
     } finally {
       setSaving(false);
     }
@@ -142,6 +185,7 @@ export function PortfolioCreateFlow() {
 
   return (
     <div className="page create-page">
+      <PortfolioInputWarningDialog warning={inputWarning} />
       <button className="create-back-link" onClick={() => go('portfolios')} disabled={saving}>← Back to Portfolios</button>
       <section className="create-header">
         <div>
@@ -177,7 +221,16 @@ export function PortfolioCreateFlow() {
           <div className="wizard-step-content basic-info-step">
             <label className="wizard-field">
               <span>Portfolio Name</span><small>Choose a clear name you will recognize later.</small>
-              <input value={name} onChange={event => { setName(event.target.value); setError(null); }} placeholder="e.g. Long-Term Growth" disabled={saving || Boolean(createdPortfolio)} />
+              <input
+                id="create-portfolio-name"
+                aria-describedby={inputWarning?.elementId === 'create-portfolio-name' ? 'create-portfolio-name-error' : undefined}
+                aria-invalid={inputWarning?.elementId === 'create-portfolio-name'}
+                value={name}
+                onChange={event => { setName(event.target.value); setError(null); setInputWarning(null); }}
+                placeholder="e.g. Long-Term Growth"
+                disabled={saving || Boolean(createdPortfolio)}
+              />
+              {inputWarning?.elementId === 'create-portfolio-name' && <small id="create-portfolio-name-error" className={styles.fieldError}>{inputWarning.message}</small>}
             </label>
           </div>
 
@@ -225,7 +278,7 @@ export function PortfolioCreateFlow() {
           <div className="wizard-step-content holdings-step">
             <div className="wizard-title-row">
               <div><strong>Holdings</strong><p>Add each asset in the order you want it displayed.</p></div>
-              <button className="primary-btn" onClick={addHolding} disabled={saving}>＋ Add Holding</button>
+              <button id="create-add-holding" className="primary-btn" onClick={addHolding} disabled={saving}>＋ Add Holding</button>
             </div>
             <div className="table-scroll">
               <table className={styles.holdingTable}>
@@ -240,10 +293,11 @@ export function PortfolioCreateFlow() {
                 <tbody>{holdings.map((holding, index) => (
                   <tr key={holding.id}>
                     <td>{index + 1}</td>
-                    <td><AssetSymbolField ariaLabel={`Holding ${index + 1} symbol`} id={`create-holding-${holding.id}`} value={holding.symbol} onChange={symbol => updateHolding(holding.id, { symbol })} disabled={saving} /></td>
+                    <td><AssetSymbolField ariaLabel={`Holding ${index + 1} symbol`} id={`create-holding-${holding.id}`} value={holding.symbol} onChange={symbol => updateHolding(holding.id, { symbol })} disabled={saving} error={inputWarning?.elementId === `create-holding-${holding.id}` ? inputWarning.message : null} /></td>
                     {mode === 'PLANNED' && 'proposedAmount' in holding ? (
                       <td>
                         <HoldingDecimalInput
+                          id={`create-holding-${holding.id}-proposed-amount`}
                           aria-label={`${holding.symbol || `Holding ${index + 1}`} proposed amount`}
                           value={holding.proposedAmount}
                           onValueChange={(proposedAmount) =>
@@ -251,25 +305,28 @@ export function PortfolioCreateFlow() {
                           }
                           placeholder="4000.00"
                           disabled={saving}
+                          error={inputWarning?.elementId === `create-holding-${holding.id}-proposed-amount` ? inputWarning.message : null}
                         />
                       </td>
                     ) : 'shares' in holding ? (
                       <td>
                         <HoldingDecimalInput
+                          id={`create-holding-${holding.id}-shares`}
                           aria-label={`${holding.symbol || `Holding ${index + 1}`} quantity owned`}
                           value={holding.shares}
                           onValueChange={(shares) =>
                             updateHolding(holding.id, { shares })
                           }
-                          placeholder="10.5"
+                          placeholder="10.50"
                           disabled={saving}
+                          error={inputWarning?.elementId === `create-holding-${holding.id}-shares` ? inputWarning.message : null}
                         />
                       </td>
                     ) : null}
                     <td><div className={styles.orderActions}>
                       <button aria-label={`Move holding ${index + 1} up`} onClick={() => moveHolding(index, -1)} disabled={saving || index === 0}>↑</button>
                       <button aria-label={`Move holding ${index + 1} down`} onClick={() => moveHolding(index, 1)} disabled={saving || index === holdings.length - 1}>↓</button>
-                      <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => { setHoldings(previous => previous.filter(item => item.id !== holding.id)); setError(null); }} disabled={saving}>×</button>
+                      <button className={styles.dangerButton} aria-label={`Remove holding ${index + 1}`} onClick={() => setHoldingToRemove(holding)} disabled={saving}>×</button>
                     </div></td>
                   </tr>
                 ))}</tbody>
@@ -312,6 +369,16 @@ export function PortfolioCreateFlow() {
           </Card>
         </aside>
       </div>
+      {holdingToRemove && <ConfirmationDialog
+        title="Remove holding?"
+        description="This removes the holding from the portfolio draft. Save or create the portfolio to apply the remaining holdings."
+        subjectLabel="Holding"
+        subject={holdingToRemove.symbol || 'Unnamed holding'}
+        confirmLabel="Remove Holding"
+        busy={false}
+        onCancel={() => setHoldingToRemove(null)}
+        onConfirm={removeHolding}
+      />}
     </div>
   );
 }

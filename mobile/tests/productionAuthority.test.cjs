@@ -7,6 +7,10 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const root = path.resolve(__dirname, '..');
+const supportedAssetSymbols = [
+  'AAPL', 'MSFT', 'TSLA', 'NVDA', 'AMZN', 'GOOGL', 'META', 'SPY', 'QQQ',
+  'DIA', 'VTI', 'GLD', 'SLV', 'BND', 'TLT', 'BTC-USD', 'ETH-USD'
+];
 
 function load(file, mocks = {}, globals = {}) {
   const module = { exports: {} };
@@ -461,17 +465,19 @@ test('Welcome uses the two-card preview and unboxed feature icons', () => {
 });
 
 test('real holding contracts preserve precision, order, modes, and valuation allocations', () => {
-  const validation = load('src/portfolio/portfolioValidation.ts');
+  const validation = load('src/portfolio/portfolioValidation.ts', {
+    './supportedAssetSymbols': { supportedAssetSymbols }
+  });
   const portfolioTypes = load('src/types/portfolio.ts');
   const simulation = load('src/simulation/simulationValidation.ts');
 
   const result = validation.validateRealHoldingDrafts([
-    { id: 'first', symbol: ' msft ', shares: '10.125' },
+    { id: 'first', symbol: ' msft ', shares: '10.12' },
     { id: 'second', symbol: 'AAPL', shares: '4.5' }
   ]);
   assert.equal(result.error, null);
   assert.deepEqual(JSON.parse(JSON.stringify(result.holdings)), [
-    { symbol: 'MSFT', shares: '10.125' },
+    { symbol: 'MSFT', shares: '10.12' },
     { symbol: 'AAPL', shares: '4.5' }
   ]);
   assert.match(
@@ -480,6 +486,14 @@ test('real holding contracts preserve precision, order, modes, and valuation all
     ]).error,
     /positive quantity owned/i
   );
+  const invalid = validation.validateRealHoldingDrafts([
+    { id: 'a', symbol: 'AAPL', shares: '0' }
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(invalid.issue)), {
+    index: 0,
+    field: 'shares',
+    message: invalid.error
+  });
 
   const legacy = { symbol: 'AAPL', weight: 1, invested_amount: null, invested_currency: null, shares: null, purchase_date: null, position: 0 };
   const real = { symbol: 'MSFT', weight: null, invested_amount: null, invested_currency: null, shares: '1', purchase_date: null, position: 0 };
@@ -494,11 +508,149 @@ test('real holding contracts preserve precision, order, modes, and valuation all
     { symbol: 'MSFT', current_allocation: '0.625' },
     { symbol: 'AAPL', current_allocation: '0.375' }
   ] });
-  assert.deepEqual(JSON.parse(JSON.stringify(inputs)), { MSFT: '62.5', AAPL: '37.5' });
+  assert.deepEqual(JSON.parse(JSON.stringify(inputs)), { MSFT: '62.50', AAPL: '37.50' });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(simulation.allocationInputsFromValuation({ holdings: [
+      { symbol: 'AAPL', current_allocation: '0.3333333333' },
+      { symbol: 'MSFT', current_allocation: '0.3333333333' },
+      { symbol: 'NVDA', current_allocation: '0.3333333334' }
+    ] }))),
+    { AAPL: '33.33', MSFT: '33.33', NVDA: '33.34' }
+  );
+  assert.equal(simulation.isAllocationPercentInput('12.23'), true);
+  assert.equal(simulation.isAllocationPercentInput('12.234'), false);
+  const roundedThirds = { AAPL: '33.33', MSFT: '33.33', NVDA: '33.34' };
+  const roundedPortfolio = {
+    holdings: [
+      { symbol: 'AAPL' },
+      { symbol: 'MSFT' },
+      { symbol: 'NVDA' }
+    ]
+  };
+  assert.equal(simulation.validateModifiedAllocation(roundedPortfolio, roundedThirds).error, null);
+  assert.deepEqual(roundedThirds, { AAPL: '33.33', MSFT: '33.33', NVDA: '33.34' });
+
+  const initialAllocation = { AAPL: '40.00', MSFT: '35.00', NVDA: '25.00' };
+  const rebalanced = simulation.rebalanceAllocationInputs(
+    initialAllocation,
+    ['AAPL', 'MSFT'],
+    'AAPL',
+    '50'
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(rebalanced)), {
+    AAPL: '50',
+    MSFT: '25.00',
+    NVDA: '25.00'
+  });
+  assert.equal(Object.values(rebalanced).reduce((total, value) => total + Number(value), 0), 100);
+  assert.deepEqual(initialAllocation, { AAPL: '40.00', MSFT: '35.00', NVDA: '25.00' });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(simulation.rebalanceAllocationInputs(
+      rebalanced,
+      ['AAPL', 'MSFT'],
+      'AAPL',
+      '20.00'
+    ))),
+    { AAPL: '20.00', MSFT: '55.00', NVDA: '25.00' }
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(simulation.rebalanceAllocationInputs(
+      { AAPL: '100.00', MSFT: '0.00', NVDA: '0.00' },
+      ['AAPL', 'MSFT'],
+      'AAPL',
+      '40.00'
+    ))),
+    { AAPL: '40.00', MSFT: '60.00', NVDA: '0.00' }
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(simulation.rebalanceAllocationInputs(
+      { AAPL: '39.95', MSFT: '54.31', GOOG: '5.74' },
+      ['MSFT', 'GOOG'],
+      'MSFT',
+      '55.00'
+    ))),
+    { AAPL: '39.95', MSFT: '55.00', GOOG: '5.05' }
+  );
+  assert.match(
+    simulation.validateModifiedAllocation(roundedPortfolio, {
+      AAPL: '33.333',
+      MSFT: '33.333',
+      NVDA: '33.334'
+    }).error,
+    /needs a weight/
+  );
+});
+
+test('allocation and combined mobile screens use the two-target allocation editor', () => {
+  const allocation = fs.readFileSync(path.join(root, 'src/screens/simulations/AllocationChangeScreen.tsx'), 'utf8');
+  const combined = fs.readFileSync(path.join(root, 'src/screens/simulations/CombinedSimulationScreen.tsx'), 'utf8');
+  const editor = fs.readFileSync(path.join(root, 'src/components/simulations/AllocationEditor.tsx'), 'utf8');
+  const results = fs.readFileSync(path.join(root, 'src/components/simulations/SimulationResults.tsx'), 'utf8');
+  assert.match(allocation, /rebalanceAllocationInputs/);
+  assert.match(combined, /rebalanceAllocationInputs/);
+  assert.match(editor, /percent\.toFixed\(2\)/);
+  assert.match(editor, /onBlur/);
+  assert.match(editor, /Select exactly two assets/);
+  assert.match(editor, /accessibilityRole="checkbox"/);
+  assert.match(editor, /editable=\{!disabled && selected && selectedSymbols\.length === 2\}/);
+  assert.match(editor, /onPress=\{\(\) => toggleTarget\(holding\.symbol\)\}/);
+  assert.match(editor, /onPressIn=\{\(event\) => event\.stopPropagation\(\)\}/);
+  assert.match(allocation, /getPortfolioReportHistory\(selectedPortfolioSummary\)/);
+  assert.match(allocation, /getReport\(selectedPortfolioSummary\.id, newest\.id\)/);
+  assert.match(allocation, /screen: 'ReportDetail'/);
+  assert.match(combined, /getPortfolioReportHistory\(selectedPortfolioSummary\)/);
+  assert.match(combined, /getReport\(selectedPortfolioSummary\.id, newest\.id\)/);
+  assert.match(combined, /screen: 'ReportDetail'/);
+  assert.match(results, /Latest saved portfolio analysis/);
+  assert.match(results, /Latest portfolio analysis vs new combined simulation/);
+  assert.match(results, /metrics=\{response\.modified\.metrics\}/);
+  assert.match(results, /points: response\.modified\.trajectory/);
+  assert.match(results, /label: 'New combined result'/);
+  assert.match(results, /backend original and modified results over the same requested period/);
+  assert.match(results, /View latest analysis details/);
+});
+
+test('portfolio input warnings identify, reveal, and focus the first invalid mobile field', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const warning = read('src/portfolio/portfolioInputWarning.ts');
+  const create = read('src/screens/portfolios/CreatePortfolioScreen.tsx');
+  const editor = read('src/components/portfolio/HoldingsEditor.tsx');
+  const dialog = read('src/components/portfolio/PortfolioInputWarningDialog.tsx');
+  const input = read('src/components/ui/Input.tsx');
+  const validation = load('src/portfolio/portfolioValidation.ts', {
+    './supportedAssetSymbols': { supportedAssetSymbols }
+  });
+
+  assert.doesNotMatch(warning, /Alert\.alert\(/);
+  assert.match(warning, /revealField\(warning\.fieldKey\)/);
+  assert.match(warning, /apiValidationIssues\(error\)/);
+  assert.match(create, /presentInputWarning\(localHoldingInputWarning/);
+  assert.match(editor, /presentInputWarning\(localHoldingInputWarning/);
+  assert.match(create, /fieldRefs\.current\.get\(fieldKey\)\?\.focus\(\)/);
+  assert.match(input, /forwardRef<TextInput, InputProps>/);
+  assert.match(dialog, /<Modal/);
+  assert.match(dialog, /Check your information/);
+  assert.match(dialog, /Show input/);
+  assert.match(create, /<PortfolioInputWarningDialog/);
+  assert.match(editor, /<PortfolioInputWarningDialog/);
+  assert.match(create, /placeholder="10\.50"/);
+  assert.match(editor, /placeholder="10\.50"/);
+  assert.match(validation.validateRealHoldingDrafts([{
+    id: 'one',
+    symbol: 'AAPL',
+    shares: '10.125'
+  }]).error, /up to 2 decimal places/);
+  assert.match(validation.validateRealHoldingDrafts([{
+    id: 'two',
+    symbol: 'ASDF',
+    shares: '10.50'
+  }]).error, /ASDF is not supported/);
 });
 
 test('planned mobile contracts preserve amount authority and consume backend target weights', async () => {
-  const validation = load('src/portfolio/portfolioValidation.ts');
+  const validation = load('src/portfolio/portfolioValidation.ts', {
+    './supportedAssetSymbols': { supportedAssetSymbols }
+  });
   const simulation = load('src/simulation/simulationValidation.ts');
   const calls = [];
   const { portfoliosApi } = load('src/api/portfoliosApi.ts', {
@@ -521,6 +673,9 @@ test('planned mobile contracts preserve amount authority and consume backend tar
   assert.match(validation.validatePlannedHoldingDrafts([
     { id: 'a', symbol: 'AAPL', proposedAmount: '0' }
   ]).error, /positive proposed amount/i);
+  assert.match(validation.validatePlannedHoldingDrafts([
+    { id: 'a', symbol: 'ASDF', proposedAmount: '1000.00' }
+  ]).error, /ASDF is not supported/);
 
   const allocation = {
     portfolio_id: portfolioId,
@@ -534,7 +689,7 @@ test('planned mobile contracts preserve amount authority and consume backend tar
   };
   assert.deepEqual(
     JSON.parse(JSON.stringify(simulation.allocationInputsFromPlannedAllocation(allocation))),
-    { AAPL: '40', NVDA: '60' }
+    { AAPL: '40.00', NVDA: '60.00' }
   );
 
   await portfoliosApi.create({ name: 'Plan', portfolio_type: 'PLANNED', plan_currency: 'USD' });
@@ -548,6 +703,69 @@ test('planned mobile contracts preserve amount authority and consume backend tar
   );
   assert.equal(calls[2].path, `/api/portfolios/${portfolioId}/planned-allocation`);
   assert.equal(calls[3].path, `/api/portfolios/${portfolioId}/planned-preview`);
+});
+
+test('mobile Watchlist uses the authenticated backend contract and backend metrics', async () => {
+  const calls = [];
+  const { watchlistApi } = load('src/api/watchlistApi.ts', {
+    './apiClient': { apiRequest: async (requestPath, options = {}) => {
+      calls.push({ path: requestPath, options });
+      return requestPath === '/api/watchlist' && options.method === 'POST'
+        ? { symbol: options.body.symbol }
+        : { items: [] };
+    } }
+  });
+
+  await watchlistApi.list();
+  await watchlistApi.add('ETH-USD');
+  await watchlistApi.remove('ETH-USD');
+
+  assert.equal(calls[0].path, '/api/watchlist');
+  assert.equal(calls[1].path, '/api/watchlist');
+  assert.equal(calls[1].options.method, 'POST');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[1].options.body)), { symbol: 'ETH-USD' });
+  assert.equal(calls[2].path, '/api/watchlist/ETH-USD');
+  assert.equal(calls[2].options.method, 'DELETE');
+  assert.equal(calls[2].options.responseMode, 'none');
+
+  class ApiError extends Error {
+    constructor(options) {
+      super(options.message ?? 'Request failed');
+      Object.assign(this, options);
+    }
+  }
+  const ui = load('src/watchlist/watchlistUi.ts', {
+    '../api/apiClient': { ApiError }
+  });
+  assert.equal(ui.formatWatchlistPrice(null), '—');
+  assert.equal(ui.formatWatchlistPercent(null), '—');
+  assert.equal(ui.formatWatchlistPercent(-1.236), '-1.24%');
+  assert.match(ui.watchlistErrorMessage(new ApiError({ status: 404 }), 'remove'), /no longer in/i);
+  assert.match(ui.watchlistErrorMessage(new ApiError({ status: 409 }), 'add'), /already in/i);
+  assert.doesNotMatch(ui.watchlistErrorMessage(new ApiError({ status: 500, message: 'database secret' }), 'remove'), /database|secret/i);
+});
+
+test('mobile Watchlist stays under More and has no mock or local-storage authority', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const screen = read('src/screens/watchlist/WatchlistScreen.tsx');
+  const navigator = read('src/navigation/MainTabNavigator.tsx');
+  const more = read('src/screens/settings/MoreScreen.tsx');
+
+  assert.match(screen, /watchlistApi\.list/);
+  assert.match(screen, /watchlistApi\.add/);
+  assert.match(screen, /watchlistApi\.remove/);
+  assert.match(screen, /supportedAssets\.filter/);
+  assert.match(screen, /Loading your Watchlist/);
+  assert.match(screen, /Your Watchlist is empty/);
+  assert.match(screen, /latest_price/);
+  assert.match(screen, /latest_price_date/);
+  assert.match(screen, /daily_change_percent/);
+  assert.match(screen, /ytd_change_percent/);
+  assert.match(navigator, /MoreStack\.Screen name="Watchlist"/);
+  assert.match(more, /Follow supported assets/);
+  assert.ok(!/Watchlist.*Unavailable|coming later/i.test(`${screen}\n${more}`));
+  assert.ok(!/AsyncStorage|SecureStore|watchlistCatalog|watchlist\.mock/i.test(screen));
+  assert.ok(!/fetch\(['"]https?:|OPENAI_API_KEY|ALPHA_VANTAGE|YAHOO/i.test(screen));
 });
 
 test('planned mobile presentation keeps estimates display-only and supports V3 history', () => {
@@ -571,6 +789,12 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(analysis, /Estimated shares are for display only/);
   assert.match(analysis, /MetricAmountSheet/);
   assert.match(analysis, /Tap for amount/);
+  assert.match(analysis, /setSelectedMetric\('endingValue'\)/);
+  assert.match(analysis, /Estimated Value at End of Period/);
+  assert.match(analysis, /monetary\.estimated_ending_value/);
+  assert.match(analysis, /Historical Portfolio Return/);
+  assert.match(analysis, /analysis\.historical_value_context/);
+  assert.match(analysis, /Same shares at historical prices/);
   assert.match(analysis, /RETURN_VIEW_RANGES\.map/);
   assert.match(analysis, /setReturnViewRange\(range\)/);
   assert.match(analysis, /accessibilityRole="tab"/);
@@ -578,10 +802,83 @@ test('planned mobile presentation keeps estimates display-only and supports V3 h
   assert.match(metricDetails, /cumulative_return_amount/);
   assert.match(metricDetails, /annualized_return_amount/);
   assert.match(metricDetails, /maximum_drawdown_amount/);
+  assert.match(metricDetails, /estimated_ending_value/);
+  assert.match(metricDetails, /not a prediction of future value/);
+  assert.match(metricDetails, /fixed-shares-historical-value/);
+  assert.match(metricDetails, /not your actual profit or loss/);
   assert.ok(!/reference_amount\s*\*/.test(`${analysis}\n${metricDetails}`));
   assert.match(simulation, /Saved planned allocation/);
   assert.match(history, /isSimulationHistoryV3/);
   assert.ok(!/proposedAmount\s*\/|proposed_amount\s*\//.test(`${create}\n${editor}\n${detail}`));
+});
+
+test('mobile historical scenarios compare the latest saved analysis with the event result', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const screen = read('src/screens/simulations/HistoricalScenarioScreen.tsx');
+  const results = read('src/components/simulations/SimulationResults.tsx');
+  const chart = read('src/components/charts/SimulationTrajectoryChart.tsx');
+
+  assert.match(screen, /originalAllocation=\{originalAllocation\}/);
+  assert.match(screen, /Number\(holding\.current_allocation\)/);
+  assert.match(screen, /Number\(holding\.target_allocation\)/);
+  assert.match(screen, /getPortfolioReportHistory\(selectedPortfolioSummary\)/);
+  assert.match(screen, /getReport\(selectedPortfolioSummary\.id, newest\.id\)/);
+  assert.match(screen, /screen: 'ReportDetail'/);
+  assert.match(results, /Latest portfolio analysis vs historical scenario/);
+  assert.match(results, /reference\.portfolio_metrics\.cumulative_return/);
+  assert.match(results, /reference\.max_drawdown\.max_drawdown/);
+  assert.match(results, /View latest analysis details/);
+  assert.match(results, /Allocation used by this scenario run/);
+  assert.match(results, /savedAnalysisTrajectory\(latestAnalysis\.analysis\)/);
+  assert.match(chart, /accessibilityLabel="Choose trajectory lines"/);
+  assert.match(chart, /accessibilityRole="radio"/);
+  assert.match(chart, /selectedSeries === 'all' \? null/);
+  assert.match(chart, />Date<\/SvgText>/);
+  assert.doesNotMatch(results, /no-movement comparison line/);
+  assert.doesNotMatch(results, /normalized_ending_value\s*[-+*/]/);
+});
+
+test('mobile reconstructs a normalized display path from saved backend return observations', () => {
+  const simulation = load('src/simulation/simulationFormatting.ts');
+  const analysis = {
+    start_date: '2026-01-01',
+    portfolio_returns: [
+      { date: '2026-01-02', portfolio_return: 0.1 },
+      { date: '2026-01-03', portfolio_return: -0.1 }
+    ]
+  };
+  assert.deepEqual(JSON.parse(JSON.stringify(simulation.savedAnalysisTrajectory(analysis))), [
+    { date: '2026-01-01', normalized_value: 1 },
+    { date: '2026-01-02', normalized_value: 1.1 },
+    { date: '2026-01-03', normalized_value: 0.9900000000000001 }
+  ]);
+  assert.deepEqual(analysis.portfolio_returns, [
+    { date: '2026-01-02', portfolio_return: 0.1 },
+    { date: '2026-01-03', portfolio_return: -0.1 }
+  ]);
+});
+
+test('mobile destructive actions and portfolio naming use Aura-themed dialogs', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const confirmation = read('src/components/ui/ConfirmationDialog.tsx');
+  const portfolio = read('src/screens/portfolios/PortfolioDetailScreen.tsx');
+  const reports = read('src/screens/reports/ReportsScreen.tsx');
+  const reportDetail = read('src/screens/reports/ReportDetailScreen.tsx');
+  const watchlist = read('src/screens/watchlist/WatchlistScreen.tsx');
+  const create = read('src/screens/portfolios/CreatePortfolioScreen.tsx');
+  const editor = read('src/components/portfolio/HoldingsEditor.tsx');
+
+  assert.match(confirmation, /<Modal/);
+  assert.match(confirmation, /colors\.surface/);
+  assert.match(confirmation, /variant="danger"/);
+  assert.match(portfolio, /visible=\{nameAction !== null\}/);
+  assert.match(portfolio, /<ConfirmationDialog/);
+  assert.match(reports, /<ConfirmationDialog/);
+  assert.match(reportDetail, /<ConfirmationDialog/);
+  assert.match(watchlist, /<ConfirmationDialog/);
+  assert.match(create, /<ConfirmationDialog/);
+  assert.match(editor, /<ConfirmationDialog/);
+  assert.doesNotMatch(`${portfolio}\n${reports}\n${reportDetail}\n${watchlist}`, /Alert\.alert/);
 });
 
 test('mobile asset picker shows full names while preserving symbol values', () => {
@@ -673,6 +970,30 @@ test('portfolio report entry points preserve newest-report AI grounding', () => 
   assert.ok(!/navigate\('AI',\s*\{[^}]*reportId/.test(reportDetail));
 });
 
+test('saved simulation opens Assistant with exact immutable simulation grounding', () => {
+  const simulationDetail = fs.readFileSync(
+    path.join(root, 'src/screens/simulations/SimulationResultScreen.tsx'),
+    'utf8'
+  );
+  const assistant = fs.readFileSync(
+    path.join(root, 'src/screens/assistant/AssistantScreen.tsx'),
+    'utf8'
+  );
+  const navigationTypes = fs.readFileSync(
+    path.join(root, 'src/navigation/navigationTypes.ts'),
+    'utf8'
+  );
+
+  assert.match(simulationDetail, /Ask Aura about this saved simulation/);
+  assert.match(simulationDetail, /navigate\('AI', \{ portfolioId, simulationId \}\)/);
+  assert.match(navigationTypes, /AI: \{ portfolioId\?: string; simulationId\?: string \}/);
+  assert.match(assistant, /requestedSimulationId/);
+  assert.match(assistant, /simulation_id: selectedSimulationId/);
+  assert.match(assistant, /IMMUTABLE SIMULATION/);
+  assert.match(assistant, /exact immutable saved simulation/);
+  assert.match(assistant, /Use live portfolio context/);
+});
+
 test('More report detail exposes an accessible back action to Reports', () => {
   const navigation = fs.readFileSync(
     path.join(root, 'src/navigation/MainTabNavigator.tsx'),
@@ -701,6 +1022,16 @@ test('mobile Analytics exposes an explicit back action in both navigation stacks
   assert.match(navigation, /MoreStack\.Screen[\s\S]*name="Analytics"[\s\S]*label="Back to More"/);
   assert.match(navigation, /onPress=\{\(\) => navigation\.navigate\('More'\)\}/);
   assert.match(navigation, /navigation\.canGoBack\(\) \? navigation\.goBack\(\)/);
+});
+
+test('Portfolio detail exposes a back action when opened directly from Home', () => {
+  const navigation = fs.readFileSync(
+    path.join(root, 'src/navigation/MainTabNavigator.tsx'),
+    'utf8'
+  );
+
+  assert.match(navigation, /PortfolioStack\.Screen[\s\S]*name="PortfolioDetail"[\s\S]*label="Back from Portfolio"/);
+  assert.match(navigation, /navigation\.canGoBack\(\)[\s\S]*navigation\.goBack\(\)[\s\S]*navigation\.getParent\(\)\?\.navigate\('Home'\)/);
 });
 
 test('real holding API clients send explicit currency and real holding payloads', async () => {
@@ -781,6 +1112,8 @@ test('valuation, report V2, and simulation V2 pages preserve backend authority',
   assert.match(reportDetail, /Later[\s\S]*portfolio or market changes do not alter them/);
   assert.match(allocation, /allocationInputsFromValuation/);
   assert.match(combined, /allocationInputsFromValuation/);
+  assert.match(allocation, /<AllocationEditor/);
+  assert.match(combined, /<AllocationEditor/);
   assert.match(simulationDetail, /isSimulationHistoryV2/);
   assert.ok(!/getPortfolioValuation/.test(`${analysis}\n${reportDetail}\n${simulationDetail}`));
 });
@@ -794,7 +1127,14 @@ test('AI client uses the authenticated backend contract and rejects malformed su
   }
   const portfolioId = 'e6518442-58cb-408f-ae3f-bf47fb00b555';
   const reportId = '10000000-0000-0000-0000-000000000001';
-  const request = { portfolio_id: portfolioId, message: 'Why is this risky?' };
+  const request = {
+    portfolio_id: portfolioId,
+    message: 'Why is this risky?',
+    history: [
+      { role: 'user', content: 'What is my portfolio?' },
+      { role: 'assistant', content: 'Your portfolio contains saved holdings.' }
+    ]
+  };
   let response = {
     answer: 'The saved report shows historical concentration risk.',
     sources: [
@@ -861,12 +1201,62 @@ test('AI errors remain truthful and retryable without exposing provider details'
 test('mobile Assistant has no direct provider access or synthetic conversation authority', () => {
   const api = fs.readFileSync(path.join(root, 'src/api/agentApi.ts'), 'utf8');
   const screen = fs.readFileSync(path.join(root, 'src/screens/assistant/AssistantScreen.tsx'), 'utf8');
+  const answerContent = fs.readFileSync(path.join(root, 'src/components/assistant/AnswerContent.tsx'), 'utf8');
+  const answerFormatting = load('src/agent/answerFormatting.ts');
 
   assert.match(api, /apiRequest/);
   assert.match(api, /\/api\/agent\/explain/);
   assert.match(screen, /usePortfolios/);
   assert.match(screen, /AbortController/);
   assert.match(screen, /newest saved report/);
+  assert.match(screen, /messages\.slice\(-8\)/);
+  assert.match(screen, /history/);
+  assert.match(screen, /Start a conversation/);
+  assert.match(screen, /FOLLOW-UP IDEAS/);
+  assert.match(screen, /item\.id === latestAssistantMessageId && !sending/);
+  assert.match(screen, /style=\{styles\.assistantMessageColumn\}/);
+  assert.doesNotMatch(screen, /followUpsExpanded|See more|See less/);
+  assert.match(screen, /accessibilityLabel="Hide message composer"/);
+  assert.match(screen, /accessibilityLabel="Show message composer"/);
+  assert.match(screen, /name="chevron-down"/);
+  assert.match(screen, /name="chevron-up"/);
+  assert.match(screen, /Grounding details/);
+  assert.match(screen, /title="New chat"/);
+  assert.match(screen, /style=\{styles\.userBubble\}/);
+  assert.match(screen, /style=\{styles\.assistantBubble\}/);
+  assert.match(screen, /<Card style=\{styles\.composerCard\}>/);
+  assert.doesNotMatch(screen, /<View style=\{styles\.composerCard\}>/);
+  assert.match(screen, /footer=\{composer\}/);
+  assert.match(screen, /style=\{\[styles\.composerDock, composerHidden && styles\.composerDockHidden\]\}/);
+  const composerDockStyle = screen.match(/composerDock:\s*\{([\s\S]*?)\r?\n\s*\},\r?\n\s*composerDockHidden:/)?.[1] ?? '';
+  assert.doesNotMatch(composerDockStyle, /backgroundColor|borderTop/);
+  assert.match(composerDockStyle, /position: 'absolute'/);
+  assert.match(screen, /paddingBottom: composerHeight \+ spacing\.lg/);
+  assert.match(screen, /setComposerHeight\(nativeEvent\.layout\.height\)/);
+  assert.doesNotMatch(screen, /shadowOpacity: 0\.24|elevation: 10/);
+  assert.match(screen, /<AnswerContent answer=\{item\.content\}/);
+  assert.match(answerContent, /formatAgentAnswer/);
+  const formatted = answerFormatting.formatAgentAnswer(
+    '## Main risk\n\nYour **largest holding** matters.\n\n- Concentration\n2. Drawdown'
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(formatted)), [
+    { type: 'heading', parts: [{ text: 'Main risk', bold: false }] },
+    {
+      type: 'paragraph',
+      parts: [
+        { text: 'Your ', bold: false },
+        { text: 'largest holding', bold: true },
+        { text: ' matters.', bold: false }
+      ]
+    },
+    {
+      type: 'bullets',
+      items: [
+        [{ text: 'Concentration', bold: false }],
+        [{ text: 'Drawdown', bold: false }]
+      ]
+    }
+  ]);
   assert.ok(!/OPENAI_API_KEY|GROQ_API_KEY|api\.openai|api\.groq/i.test(`${api}\n${screen}`));
   assert.ok(!/AsyncStorage|SecureStore|conversationHistory|chatHistory/.test(screen));
 });
@@ -924,4 +1314,40 @@ test('mobile asset-risk detail is report-backed, navigable, and never recalculat
   assert.match(metricDetails, /monetary\.maximum_drawdown_amount/);
   assert.doesNotMatch(metricDetails, /reference_amount\s*\*/);
   assert.doesNotMatch(detail, /Math\.(sqrt|pow)|annualized_volatility\s*[*/+-]|max_drawdown\s*[*/+-]/);
+});
+
+test('mobile settings use the authenticated Backend Profile V1 contract', async () => {
+  const calls = [];
+  const { authApi } = load('src/api/authApi.ts', {
+    './apiClient': {
+      apiRequest: async (requestPath, options = {}) => {
+        calls.push({ path: requestPath, options });
+        return requestPath.endsWith('/password') ? undefined : { id: 'user' };
+      }
+    }
+  });
+  await authApi.updateProfile({ display_name: 'Aura User' });
+  await authApi.changePassword({
+    current_password: 'current-pass',
+    new_password: 'different-pass'
+  });
+  assert.equal(calls[0].path, '/api/auth/me');
+  assert.equal(calls[0].options.method, 'PATCH');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].options.body)), { display_name: 'Aura User' });
+  assert.equal(calls[1].path, '/api/auth/me/password');
+  assert.equal(calls[1].options.method, 'PUT');
+  assert.equal(calls[1].options.responseMode, 'none');
+
+  const settings = fs.readFileSync(path.join(root, 'src/screens/settings/SettingsScreen.tsx'), 'utf8');
+  const context = fs.readFileSync(path.join(root, 'src/auth/AuthProvider.tsx'), 'utf8');
+  const types = fs.readFileSync(path.join(root, 'src/types/auth.ts'), 'utf8');
+  assert.match(settings, /authApi\.updateProfile\(request\)/);
+  assert.match(settings, /authApi\.changePassword/);
+  assert.match(settings, /request\.current_password = profileDraft\.currentPassword/);
+  assert.match(settings, /emailChanged \?/);
+  assert.match(settings, /setCurrentUser\(updatedUser\)/);
+  assert.doesNotMatch(settings, /setDisplayName|stored only on this device/);
+  assert.match(context, /setCurrentUser: setUser/);
+  assert.match(types, /preferred_language: PreferredLanguage/);
+  assert.match(types, /timezone: ProfileTimezone/);
 });

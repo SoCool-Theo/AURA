@@ -5,11 +5,13 @@ import {
   getPortfolioValuation,
   listPortfolios,
 } from '../../api/portfoliosApi';
+import { getPortfolioReport, listPortfolioReports } from '../../api/reportsApi';
 import { listHistoricalScenarios, runAllocationSimulation, runCombinedSimulation, runHistoricalScenario } from '../../api/simulationsApi';
 import { go } from '../../app/routes';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
-import type { PortfolioResponse, PortfolioSummaryResponse } from '../../types/portfolio';
+import type { PortfolioHoldingInput, PortfolioResponse, PortfolioSummaryResponse } from '../../types/portfolio';
+import type { PortfolioReportResponse } from '../../types/report';
 import type { HistoricalScenarioResponse, SimulationAllocation, SimulationMode, SimulationRunResult } from '../../types/simulation';
 import styles from './SimulationIntegration.module.css';
 import { AllocationEditor } from './components/AllocationEditor';
@@ -21,6 +23,7 @@ import {
   allocationInputsFromPlannedAllocation,
   allocationInputsFromPortfolio,
   allocationInputsFromValuation,
+  rebalanceAllocationInputs,
   validateModifiedAllocation,
 } from './simulationUi';
 
@@ -40,6 +43,7 @@ export function SimulationsPage({ portfolioId }: Props) {
   const [endDate, setEndDate] = useState(period.end);
   const [allocation, setAllocation] = useState<SimulationAllocation>({});
   const [baselineAllocation, setBaselineAllocation] = useState<SimulationAllocation>({});
+  const [originalAllocation, setOriginalAllocation] = useState<PortfolioHoldingInput[]>([]);
   const [result, setResult] = useState<SimulationRunResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
@@ -47,9 +51,12 @@ export function SimulationsPage({ portfolioId }: Props) {
   const [actionError, setActionError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [historyReloadKey, setHistoryReloadKey] = useState(0);
+  const [latestAnalysis, setLatestAnalysis] = useState<PortfolioReportResponse | null>(null);
+  const [latestAnalysisStatus, setLatestAnalysisStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [latestAnalysisError, setLatestAnalysisError] = useState<unknown>(null);
 
   useEffect(() => {
-    const controller = new AbortController(); setLoading(true); setLoadError(null); setActionError(null); setPortfolio(null); setResult(null); setAllocation({}); setBaselineAllocation({});
+    const controller = new AbortController(); setLoading(true); setLoadError(null); setActionError(null); setPortfolio(null); setResult(null); setAllocation({}); setBaselineAllocation({}); setOriginalAllocation([]);
     Promise.all([listPortfolios({ signal: controller.signal }), listHistoricalScenarios(controller.signal)])
       .then(([portfolioResponse, scenarioResponse]) => {
         setPortfolios(portfolioResponse.portfolios); setScenarios(scenarioResponse.scenarios);
@@ -58,20 +65,67 @@ export function SimulationsPage({ portfolioId }: Props) {
         const selected = portfolioId || portfolioResponse.portfolios[0]?.id || '';
         setSelectedPortfolioId(selected); setScenarioId(current => scenarioResponse.scenarios.some(item => item.id === current) ? current : scenarioResponse.scenarios[0]?.id ?? '');
         if (selected) return getPortfolio(selected, { signal: controller.signal }).then(async detail => {
-          const inputs = detail.portfolio_type === 'PLANNED' && detail.holdings.length
-            ? allocationInputsFromPlannedAllocation(await getPlannedPortfolioAllocation(detail.id, { signal: controller.signal }))
-            : detail.portfolio_type === 'CURRENT' && detail.holdings.length
-              ? allocationInputsFromValuation(await getPortfolioValuation(detail.id, 'USD', { signal: controller.signal }))
-              : allocationInputsFromPortfolio(detail);
+          let inputs: SimulationAllocation;
+          let savedAllocation: PortfolioHoldingInput[];
+          if (detail.portfolio_type === 'PLANNED' && detail.holdings.length) {
+            const planned = await getPlannedPortfolioAllocation(detail.id, { signal: controller.signal });
+            inputs = allocationInputsFromPlannedAllocation(planned);
+            savedAllocation = planned.holdings.map(holding => ({
+              symbol: holding.symbol,
+              weight: Number(holding.target_allocation),
+            }));
+          } else if (detail.portfolio_type === 'CURRENT' && detail.holdings.length) {
+            const valuation = await getPortfolioValuation(detail.id, 'USD', { signal: controller.signal });
+            inputs = allocationInputsFromValuation(valuation);
+            savedAllocation = valuation.holdings.map(holding => ({
+              symbol: holding.symbol,
+              weight: Number(holding.current_allocation),
+            }));
+          } else {
+            inputs = allocationInputsFromPortfolio(detail);
+            savedAllocation = detail.holdings.flatMap(holding => holding.weight === null
+              ? []
+              : [{ symbol: holding.symbol, weight: holding.weight }]);
+          }
           setPortfolio(detail);
           setAllocation(inputs);
           setBaselineAllocation(inputs);
+          setOriginalAllocation(savedAllocation);
         });
       })
       .catch(requestError => { if (!controller.signal.aborted) setLoadError(requestError); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [portfolioId, reloadKey]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLatestAnalysis(null);
+    setLatestAnalysisError(null);
+    if (!selectedPortfolioId) {
+      setLatestAnalysisStatus('idle');
+      return () => controller.abort();
+    }
+
+    setLatestAnalysisStatus('loading');
+    void listPortfolioReports(selectedPortfolioId, { signal: controller.signal })
+      .then(async response => {
+        const newest = response.reports[0];
+        if (!newest) return null;
+        return getPortfolioReport(selectedPortfolioId, newest.id, { signal: controller.signal });
+      })
+      .then(report => {
+        if (controller.signal.aborted) return;
+        setLatestAnalysis(report);
+        setLatestAnalysisStatus('ready');
+      })
+      .catch(error => {
+        if (controller.signal.aborted) return;
+        setLatestAnalysisError(error);
+        setLatestAnalysisStatus('error');
+      });
+    return () => controller.abort();
+  }, [selectedPortfolioId]);
 
   const totalAllocation = Object.values(allocation).reduce((sum, value) => sum + Number(value), 0);
   function clearOutput() { setResult(null); setActionError(null); }
@@ -109,13 +163,13 @@ export function SimulationsPage({ portfolioId }: Props) {
       <strong>{portfolio.portfolio_type === 'PLANNED' ? 'Hypothetical planned allocation' : portfolio.portfolio_type === 'CURRENT' ? 'Current portfolio baseline' : 'Legacy saved allocation'}</strong>
       <span>{portfolio.portfolio_type === 'PLANNED' ? 'Results describe how the proposed allocation would have behaved historically. They are not a forecast or an investment recommendation.' : portfolio.portfolio_type === 'CURRENT' ? 'The original allocation is derived from the current value of the saved shares.' : 'The original allocation uses the portfolio’s saved compatibility weights.'}</span>
     </div>}
-    {mode !== 'historical-scenario' && portfolio && <AllocationEditor mode={mode} portfolio={portfolio} allocation={allocation} totalAllocation={totalAllocation} disabled={running} onReset={resetAllocation} onChange={(symbol, value) => { setAllocation(current => ({ ...current, [symbol]: value })); clearOutput(); }} />}
+    {mode !== 'historical-scenario' && portfolio && <AllocationEditor mode={mode} portfolio={portfolio} allocation={allocation} totalAllocation={totalAllocation} disabled={running} onReset={resetAllocation} onChange={(symbol, value, selectedSymbols) => { setAllocation(current => rebalanceAllocationInputs(current, selectedSymbols, symbol, value)); clearOutput(); }} />}
     {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to run this simulation." />}
     {loading && <Card className={styles.state}><h2>Loading simulation setup</h2><p role="status">Retrieving your portfolios and Aura’s historical scenario catalogue.</p></Card>}
     {!loading && !loadError && !portfolios.length && <Card className={styles.state}><h2>No portfolios to simulate</h2><p>Create a portfolio and save its complete allocation first.</p><button className="primary-btn" onClick={() => go('create')}>Create Portfolio</button></Card>}
     {!loading && Boolean(loadError) && !portfolio && <ScreenErrorState error={loadError} fallbackMessage="Unable to load simulation setup." resourceName="Portfolio" onRetry={() => setReloadKey(value => value + 1)} />}
     {running && <Card className={styles.state}><h2>Running simulation</h2><p role="status">Aura is calculating and saving one immutable simulation snapshot.</p></Card>}
-    {result && !running && <><div className={styles.saved}><strong>Simulation saved.</strong> This successful run is already available in history.</div><SimulationResults result={result} /></>}
+    {result && !running && <><div className={styles.saved}><strong>Simulation saved.</strong> This successful run is already available in history.</div><SimulationResults result={result} originalAllocation={originalAllocation} latestAnalysis={latestAnalysis} latestAnalysisStatus={latestAnalysisStatus} latestAnalysisError={latestAnalysisError} onViewLatestAnalysis={latestAnalysis ? () => go(`reports/${latestAnalysis.portfolio_id}/${latestAnalysis.id}`) : undefined} /></>}
     {!loading && selectedPortfolioId && <SimulationHistory portfolioId={selectedPortfolioId} reloadKey={historyReloadKey} />}
   </div>;
 }

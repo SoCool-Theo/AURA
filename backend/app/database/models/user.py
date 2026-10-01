@@ -14,6 +14,7 @@ from ..base import Base
 
 if TYPE_CHECKING:
     from .portfolio import Portfolio
+    from .watchlist import WatchlistItem
 
 
 class User(Base):
@@ -25,6 +26,24 @@ class User(Base):
             "(email IS NULL AND password_hash IS NULL) OR "
             "(email IS NOT NULL AND password_hash IS NOT NULL)",
             name="ck_users_credentials_complete",
+        ),
+        CheckConstraint(
+            "display_name IS NULL OR "
+            "length(display_name) BETWEEN 1 AND 100",
+            name="ck_users_display_name_length",
+        ),
+        CheckConstraint(
+            "phone_number IS NULL OR "
+            "length(phone_number) BETWEEN 4 AND 32",
+            name="ck_users_phone_number_length",
+        ),
+        CheckConstraint(
+            "preferred_language IN ('en', 'th')",
+            name="ck_users_preferred_language",
+        ),
+        CheckConstraint(
+            "timezone IN ('Asia/Bangkok', 'Asia/Yangon')",
+            name="ck_users_timezone",
         ),
         UniqueConstraint("email", name="uq_users_email"),
     )
@@ -47,8 +66,27 @@ class User(Base):
     )
     email: Mapped[str | None] = mapped_column(Text, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    phone_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    preferred_language: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="en",
+        server_default="en",
+    )
+    timezone: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="Asia/Bangkok",
+        server_default="Asia/Bangkok",
+    )
 
     portfolios: Mapped[list[Portfolio]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    watchlist_items: Mapped[list[WatchlistItem]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,

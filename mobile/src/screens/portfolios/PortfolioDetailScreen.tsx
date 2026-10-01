@@ -1,6 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { DonutAllocationChart } from '../../components/charts/DonutAllocationChart';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { AssetRow } from '../../components/portfolio/AssetRow';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -77,6 +77,7 @@ export function PortfolioDetailScreen({
   const [nameAction, setNameAction] = useState<NameAction>(null);
   const [draftName, setDraftName] = useState('');
   const [pendingAction, setPendingAction] = useState<NameAction | 'delete'>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [actionError, setActionError] = useState<unknown>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const loadRequestRef = useRef(0);
@@ -192,34 +193,28 @@ export function PortfolioDetailScreen({
 
   function confirmDelete() {
     if (!portfolio || actionPendingRef.current) return;
-    Alert.alert(
-      'Delete portfolio?',
-      'This permanently deletes the portfolio and its holdings.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (actionPendingRef.current) return;
-            actionPendingRef.current = true;
-            setPendingAction('delete');
-            try {
-              setActionError(null);
-              setActionMessage(null);
-              await deletePortfolio(portfolio.id);
-              navigation.popToTop();
-            } catch (error) {
-              setActionError(error);
-              setActionMessage(portfolioErrorMessage(error));
-            } finally {
-              actionPendingRef.current = false;
-              setPendingAction(null);
-            }
-          }
-        }
-      ]
-    );
+    setActionError(null);
+    setActionMessage(null);
+    setDeleteOpen(true);
+  }
+
+  async function submitDelete() {
+    if (!portfolio || actionPendingRef.current) return;
+    actionPendingRef.current = true;
+    setPendingAction('delete');
+    try {
+      setActionError(null);
+      setActionMessage(null);
+      await deletePortfolio(portfolio.id);
+      setDeleteOpen(false);
+      navigation.popToTop();
+    } catch (error) {
+      setActionError(error);
+      setActionMessage(portfolioErrorMessage(error));
+    } finally {
+      actionPendingRef.current = false;
+      setPendingAction(null);
+    }
   }
 
   if (loadStatus === 'loading' && !portfolio) {
@@ -570,6 +565,18 @@ export function PortfolioDetailScreen({
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      <ConfirmationDialog
+        visible={deleteOpen}
+        title="Delete portfolio?"
+        description="This permanently deletes the portfolio and its saved holdings. This action cannot be undone."
+        subjectLabel="Portfolio"
+        subject={portfolio.name}
+        confirmLabel="Delete Portfolio"
+        busy={pendingAction === 'delete'}
+        errorMessage={deleteOpen ? actionMessage : null}
+        onCancel={() => { if (!actionPendingRef.current) { setDeleteOpen(false); setActionError(null); setActionMessage(null); } }}
+        onConfirm={() => void submitDelete()}
+      />
     </SafeAreaView>
   );
 }

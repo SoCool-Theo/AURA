@@ -11,43 +11,133 @@ export type AllocationValidationResult =
   | { allocation: PortfolioAllocationInput[]; error: null }
   | { allocation: null; error: string };
 
+const TOTAL_ALLOCATION_BASIS_POINTS = 10_000;
+
+function allocationInputsFromRatios(
+  entries: Array<{ symbol: string; ratio: number | null }>
+): AllocationInputs {
+  const percentages = entries.map(({ symbol, ratio }) => ({
+    symbol,
+    value: ratio !== null && Number.isFinite(ratio) ? ratio * 100 : null
+  }));
+  const rounded = percentages.map(({ symbol, value }) => ({
+    symbol,
+    value: value === null ? null : Number(value.toFixed(2))
+  }));
+  let lastValidIndex = -1;
+  for (let index = rounded.length - 1; index >= 0; index -= 1) {
+    if (rounded[index].value !== null) {
+      lastValidIndex = index;
+      break;
+    }
+  }
+
+  if (lastValidIndex >= 0) {
+    const exactTotal = percentages.reduce(
+      (total, { value }) => total + (value ?? 0),
+      0
+    );
+    const roundedTotal = rounded.reduce(
+      (total, { value }) => total + (value ?? 0),
+      0
+    );
+    const correction = Number(
+      (Number(exactTotal.toFixed(2)) - roundedTotal).toFixed(2)
+    );
+    const finalValue = rounded[lastValidIndex].value;
+    if (finalValue !== null && correction !== 0) {
+      rounded[lastValidIndex] = {
+        ...rounded[lastValidIndex],
+        value: Number((finalValue + correction).toFixed(2))
+      };
+    }
+  }
+
+  return Object.fromEntries(rounded.map(({ symbol, value }) => [
+    symbol,
+    value === null ? '' : value.toFixed(2)
+  ]));
+}
+
+export function isAllocationPercentInput(value: string): boolean {
+  return /^\d{0,3}(?:\.\d{0,2})?$/.test(value);
+}
+
+function parsedBasisPoints(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed || !isAllocationPercentInput(trimmed)) return null;
+  const percent = Number(trimmed);
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) return null;
+  return Math.round(percent * 100);
+}
+
+export function rebalanceAllocationInputs(
+  inputs: AllocationInputs,
+  selectedSymbols: readonly string[],
+  changedSymbol: string,
+  value: string
+): AllocationInputs {
+  const next = { ...inputs, [changedSymbol]: value };
+  const changedBasisPoints = parsedBasisPoints(value);
+  if (
+    changedBasisPoints === null
+    || selectedSymbols.length !== 2
+    || !selectedSymbols.includes(changedSymbol)
+  ) {
+    return next;
+  }
+
+  const pairedSymbol = selectedSymbols.find((symbol) => symbol !== changedSymbol)!;
+  const unselectedSymbols = Object.keys(inputs).filter(
+    (symbol) => !selectedSymbols.includes(symbol)
+  );
+  let unselectedTotalBasisPoints = 0;
+  for (const symbol of unselectedSymbols) {
+    const basisPoints = parsedBasisPoints(inputs[symbol] ?? '');
+    if (basisPoints === null) return next;
+    unselectedTotalBasisPoints += basisPoints;
+  }
+  const pairBasisPoints = (
+    TOTAL_ALLOCATION_BASIS_POINTS - unselectedTotalBasisPoints
+  );
+  if (pairBasisPoints < 0) {
+    return next;
+  }
+  const finalChangedBasisPoints = Math.min(changedBasisPoints, pairBasisPoints);
+  if (finalChangedBasisPoints !== changedBasisPoints) {
+    next[changedSymbol] = (finalChangedBasisPoints / 100).toFixed(2);
+  }
+  next[pairedSymbol] = (
+    (pairBasisPoints - finalChangedBasisPoints) / 100
+  ).toFixed(2);
+  return next;
+}
+
 export function allocationInputsFromPortfolio(
   portfolio: PortfolioResponse
 ): AllocationInputs {
-  return Object.fromEntries(portfolio.holdings.map((holding) => [
-    holding.symbol,
-    holding.weight === null
-      ? ''
-      : String(Number((holding.weight * 100).toFixed(10)))
-  ]));
+  return allocationInputsFromRatios(portfolio.holdings.map((holding) => ({
+    symbol: holding.symbol,
+    ratio: holding.weight
+  })));
 }
 
 export function allocationInputsFromValuation(
   valuation: PortfolioValuationResponse
 ): AllocationInputs {
-  return Object.fromEntries(valuation.holdings.map((holding) => {
-    const allocation = Number(holding.current_allocation);
-    return [
-      holding.symbol,
-      Number.isFinite(allocation)
-        ? String(Number((allocation * 100).toFixed(10)))
-        : ''
-    ];
-  }));
+  return allocationInputsFromRatios(valuation.holdings.map((holding) => ({
+    symbol: holding.symbol,
+    ratio: Number(holding.current_allocation)
+  })));
 }
 
 export function allocationInputsFromPlannedAllocation(
   allocation: PortfolioPlannedAllocationResponse
 ): AllocationInputs {
-  return Object.fromEntries(allocation.holdings.map((holding) => {
-    const target = Number(holding.target_allocation);
-    return [
-      holding.symbol,
-      Number.isFinite(target)
-        ? String(Number((target * 100).toFixed(10)))
-        : ''
-    ];
-  }));
+  return allocationInputsFromRatios(allocation.holdings.map((holding) => ({
+    symbol: holding.symbol,
+    ratio: Number(holding.target_allocation)
+  })));
 }
 
 export function validateModifiedAllocation(
@@ -77,6 +167,7 @@ export function validateModifiedAllocation(
     const percent = Number(rawValue);
     if (
       !rawValue
+      || !isAllocationPercentInput(rawValue)
       || !Number.isFinite(percent)
       || percent < 0
       || percent > 100

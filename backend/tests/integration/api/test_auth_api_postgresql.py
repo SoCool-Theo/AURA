@@ -34,6 +34,7 @@ APPLICATION_TABLES = {
     "market_data",
     "portfolios",
     "users",
+    "watchlist_items",
 }
 JWT_SECRET = "phase-5-live-postgresql-secret-value"
 PASSWORD = "live-auth-password"
@@ -192,7 +193,20 @@ def test_live_registration_login_me_duplicate_and_cleanup(
     assert register_response.status_code == 201
     registered = register_response.json()
     assert registered["email"] == "live.user@example.com"
-    assert set(registered) == {"id", "email", "created_at", "updated_at"}
+    assert set(registered) == {
+        "id",
+        "email",
+        "display_name",
+        "phone_number",
+        "preferred_language",
+        "timezone",
+        "created_at",
+        "updated_at",
+    }
+    assert registered["display_name"] is None
+    assert registered["phone_number"] is None
+    assert registered["preferred_language"] == "en"
+    assert registered["timezone"] == "Asia/Bangkok"
     user_id = UUID(registered["id"])
 
     with session_factory() as session:
@@ -239,6 +253,72 @@ def test_live_registration_login_me_duplicate_and_cleanup(
     )
     assert me_response.status_code == 200
     assert me_response.json() == registered
+
+    profile_response = live_client.patch(
+        "/api/auth/me",
+        headers={
+            "Authorization": f"Bearer {token_payload['access_token']}"
+        },
+        json={
+            "display_name": "Live Investor",
+            "phone_number": "+66 81 234 5678",
+            "preferred_language": "th",
+            "timezone": "Asia/Yangon",
+            "email": "updated.live@example.com",
+            "current_password": PASSWORD,
+        },
+    )
+    assert profile_response.status_code == 200
+    profile = profile_response.json()
+    assert profile["email"] == "updated.live@example.com"
+    assert profile["display_name"] == "Live Investor"
+    assert profile["phone_number"] == "+66 81 234 5678"
+    assert profile["preferred_language"] == "th"
+    assert profile["timezone"] == "Asia/Yangon"
+
+    replacement_password = "replacement-live-password"
+    password_response = live_client.put(
+        "/api/auth/me/password",
+        headers={
+            "Authorization": f"Bearer {token_payload['access_token']}"
+        },
+        json={
+            "current_password": PASSWORD,
+            "new_password": replacement_password,
+        },
+    )
+    assert password_response.status_code == 204
+
+    old_login = live_client.post(
+        "/api/auth/login",
+        json={
+            "email": "updated.live@example.com",
+            "password": PASSWORD,
+        },
+    )
+    assert old_login.status_code == 401
+    new_login = live_client.post(
+        "/api/auth/login",
+        json={
+            "email": "updated.live@example.com",
+            "password": replacement_password,
+        },
+    )
+    assert new_login.status_code == 200
+
+    with session_factory() as session:
+        updated_user = session.get(User, user_id)
+        assert updated_user is not None
+        assert updated_user.email == "updated.live@example.com"
+        assert updated_user.display_name == "Live Investor"
+        assert updated_user.phone_number == "+66 81 234 5678"
+        assert updated_user.preferred_language == "th"
+        assert updated_user.timezone == "Asia/Yangon"
+        assert updated_user.password_hash is not None
+        assert verify_password(
+            replacement_password,
+            updated_user.password_hash,
+        )
 
 
 def test_live_credentialless_user_remains_valid_but_cannot_login(

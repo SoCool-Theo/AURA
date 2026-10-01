@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { type ReactNode, useCallback, useEffect, useRef } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -11,14 +11,19 @@ import {
   TextInput
 } from 'react-native';
 
+type KeyboardAwareScrollViewProps = ScrollViewProps & {
+  footer?: ReactNode;
+};
+
 export function KeyboardAwareScrollView({
+  footer,
   keyboardDismissMode = 'on-drag',
   keyboardShouldPersistTaps = 'handled',
   onFocus,
   onScroll,
   scrollEventThrottle = 16,
   ...props
-}: ScrollViewProps) {
+}: KeyboardAwareScrollViewProps) {
   const scrollViewRef = useRef<ScrollView>(null);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollOffsetRef = useRef(0);
@@ -93,6 +98,7 @@ export function KeyboardAwareScrollView({
         }}
         {...props}
       />
+      {footer}
     </KeyboardAvoidingView>
   );
 }
