@@ -29,6 +29,7 @@ from app.forecasting.selection_manifest import (
     selection_manifest_from_dict,
 )
 from backend.scripts.fingerprint_forecasting_market_data import (
+    DatabaseEnvironmentError,
     database_url_from_env_file,
     fingerprint_persisted_market_data,
 )
@@ -46,6 +47,7 @@ OFFICIAL_ARTIFACT_ROOT = (
 def validate_preflight(
     *,
     env_file: Path,
+    database_url_key: str = "DATABASE_URL",
     verification_path: Path,
     selection_manifest_path: Path,
     artifact_root: Path = OFFICIAL_ARTIFACT_ROOT,
@@ -57,7 +59,9 @@ def validate_preflight(
         json.loads(verification_path.read_text(encoding="utf-8"))
     )
     fingerprint = fingerprint_persisted_market_data(
-        database_url=database_url_from_env_file(env_file),
+        database_url=database_url_from_env_file(
+            env_file, database_url_key=database_url_key
+        ),
         evaluation_cutoff=OFFICIAL_EVALUATION_CUTOFF,
     )
     return build_artifact_preflight(
@@ -75,6 +79,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Validate official forecasting artifact inputs without fitting."
     )
     parser.add_argument("--env-file", type=Path, required=True)
+    parser.add_argument("--database-url-key", default="DATABASE_URL")
     parser.add_argument("--verification", type=Path, required=True)
     parser.add_argument("--selection-manifest", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -86,18 +91,25 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         preflight = validate_preflight(
             env_file=args.env_file,
+            database_url_key=args.database_url_key,
             verification_path=args.verification,
             selection_manifest_path=args.selection_manifest,
         )
         args.output.write_text(preflight_json(preflight), encoding="utf-8")
+    except DatabaseEnvironmentError as error:
+        raise SystemExit(
+            f"Forecasting artifact preflight failed: {error}"
+        ) from None
     except (
         OSError,
         SQLAlchemyError,
         TypeError,
         ValueError,
         json.JSONDecodeError,
-    ) as error:
-        raise SystemExit(f"Forecasting artifact preflight failed: {error}") from error
+    ):
+        raise SystemExit(
+            "Forecasting artifact preflight failed: input or database validation failed."
+        ) from None
     print("Aura forecasting artifact preflight passed.")
     print(f"Artifact version: {preflight.artifact_version}")
     print(f"Git commit: {preflight.git_commit}")

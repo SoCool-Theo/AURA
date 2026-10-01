@@ -56,6 +56,7 @@ from app.forecasting.selection_manifest import (
 from app.forecasting.splits import EvaluationPlanConfig, build_chronological_plan
 from app.services.market_data_service import MarketDataService
 from backend.scripts.fingerprint_forecasting_market_data import (
+    DatabaseEnvironmentError,
     database_url_from_env_file,
 )
 
@@ -76,6 +77,7 @@ def _load_json(path: Path) -> object:
 def run_official_artifact_generation(
     *,
     env_file: Path,
+    database_url_key: str = "DATABASE_URL",
     verification_path: Path,
     selection_manifest_path: Path,
     preflight_path: Path,
@@ -97,7 +99,9 @@ def run_official_artifact_generation(
     ):
         raise ForecastArtifactError("preflight no longer matches official inputs")
 
-    engine = create_database_engine(database_url_from_env_file(env_file))
+    engine = create_database_engine(
+        database_url_from_env_file(env_file, database_url_key=database_url_key)
+    )
     try:
         factory = create_session_factory(engine)
         with session_scope(factory) as session:
@@ -201,6 +205,7 @@ def _build_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument("--env-file", type=Path, required=True)
+    parser.add_argument("--database-url-key", default="DATABASE_URL")
     parser.add_argument("--verification", type=Path, required=True)
     parser.add_argument("--selection-manifest", type=Path, required=True)
     parser.add_argument("--preflight", type=Path, required=True)
@@ -212,10 +217,15 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         generated = run_official_artifact_generation(
             env_file=args.env_file,
+            database_url_key=args.database_url_key,
             verification_path=args.verification,
             selection_manifest_path=args.selection_manifest,
             preflight_path=args.preflight,
         )
+    except DatabaseEnvironmentError as error:
+        raise SystemExit(
+            f"Official forecasting artifact generation failed: {error}"
+        ) from None
     except (
         OSError,
         SQLAlchemyError,
@@ -223,10 +233,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         ValueError,
         RuntimeError,
         json.JSONDecodeError,
-    ) as error:
+    ):
         raise SystemExit(
-            f"Official forecasting artifact generation failed: {error}"
-        ) from error
+            "Official forecasting artifact generation failed: input, database, or model validation failed."
+        ) from None
     print("Aura official forecasting artifacts generated.")
     print(f"Artifact version: {OFFICIAL_ARTIFACT_VERSION}")
     print(f"Artifacts: {len(generated)}")

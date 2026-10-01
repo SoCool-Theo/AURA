@@ -6,6 +6,7 @@ import argparse
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
+import re
 import sys
 
 from dotenv import dotenv_values
@@ -37,12 +38,24 @@ def _parse_date(value: str) -> date:
         raise argparse.ArgumentTypeError("date must use YYYY-MM-DD") from error
 
 
-def database_url_from_env_file(path: Path) -> str:
+class DatabaseEnvironmentError(ValueError):
+    """Safe environment-selection diagnostics without connection details."""
+
+
+def database_url_from_env_file(
+    path: Path, *, database_url_key: str = "DATABASE_URL"
+) -> str:
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database_url_key):
+        raise DatabaseEnvironmentError(
+            "database URL key must be an environment-variable name"
+        )
     if not path.is_file():
-        raise ValueError("database environment file does not exist")
-    value = dotenv_values(path).get("DATABASE_URL")
+        raise DatabaseEnvironmentError("database environment file does not exist")
+    value = dotenv_values(path, interpolate=False).get(database_url_key)
     if not isinstance(value, str) or not value:
-        raise ValueError("DATABASE_URL is missing from the environment file")
+        raise DatabaseEnvironmentError(
+            f"{database_url_key} is missing or empty in the environment file"
+        )
     return value
 
 
@@ -74,6 +87,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Fingerprint Aura's read-only forecasting market-data slice."
     )
     parser.add_argument("--env-file", type=Path, required=True)
+    parser.add_argument("--database-url-key", default="DATABASE_URL")
     parser.add_argument("--evaluation-cutoff", type=_parse_date, required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser
@@ -83,12 +97,18 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
     try:
         fingerprint = fingerprint_persisted_market_data(
-            database_url=database_url_from_env_file(args.env_file),
+            database_url=database_url_from_env_file(
+                args.env_file, database_url_key=args.database_url_key
+            ),
             evaluation_cutoff=args.evaluation_cutoff,
         )
         args.output.write_text(fingerprint_json(fingerprint), encoding="utf-8")
-    except (OSError, SQLAlchemyError, TypeError, ValueError) as error:
-        raise SystemExit(f"Forecasting fingerprint failed: {error}") from error
+    except DatabaseEnvironmentError as error:
+        raise SystemExit(f"Forecasting fingerprint failed: {error}") from None
+    except (OSError, SQLAlchemyError, TypeError, ValueError):
+        raise SystemExit(
+            "Forecasting fingerprint failed: unable to read or fingerprint the selected database."
+        ) from None
     print("Aura forecasting market-data fingerprint completed.")
     print(f"Evaluation cutoff: {fingerprint.evaluation_cutoff.isoformat()}")
     print(f"Symbols: {len(fingerprint.symbols)}")
