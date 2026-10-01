@@ -2177,3 +2177,25 @@ remain separate follow-on work.
 - Web production-authority suite: 30 passed and the production build completed.
   Mobile production-authority suite: 40 passed and TypeScript compilation
   completed successfully.
+
+### Completed internal frozen-artifact asset forecasting
+
+- Internal forecasting loads the configured artifact version from trusted,
+  read-only deployment storage. The registry validates all 34 symbol/target
+  records and model/metadata checksums before deserialization and caches loaded
+  models without caching forecast results.
+- Inference uses the caller's current application database session and existing
+  MarketDataService. The latest stored observation supplies the forecast origin;
+  existing forecast-features-v1 construction and a four-calendar-day freshness
+  limit remain authoritative.
+- Frozen baselines use their serialized constants; fitted Linear Regression and
+  Random Forest models consume the latest feature vector. ARIMA uses the approved
+  deployment anchor: the first stored observation on or after the artifact cutoff
+  is step one, and each subsequent stored observation advances one step. Missing
+  dates and the purged training-label gap add no steps.
+- The internal typed asset outlook applies frozen q10/q90 residual prediction
+  intervals at nominal 80% coverage and preserves volatility non-negativity.
+  There is no runtime fitting, state update, selection, calibration, or fallback.
+- Validation uses synthetic artifacts and mocked market data. No generated
+  artifacts, real databases, public forecast APIs, portfolio composition,
+  forecast persistence, AI integration, or clients were changed.

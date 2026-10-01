@@ -1,7 +1,8 @@
-"""Internal foundation for Aura's future asset forecasting capability.
+"""Internal foundation for Aura's asset forecasting capability.
 
 This package is deliberately separate from Aura's deterministic analytics.
-It does not train models, perform inference, or define public API contracts.
+Offline finalization and internal inference have separate explicit entry points.
+This package does not define public forecast API contracts.
 """
 
 from .data import (
