@@ -19,6 +19,7 @@ import { SettingsPage } from '../pages/settings/SettingsPage';
 import { SimulationsPage } from '../pages/simulations/SimulationsPage';
 import { SimulationHistoryDetailPage } from '../pages/simulations/SimulationHistoryDetailPage';
 import { WatchlistPage } from '../pages/watchlist/WatchlistPage';
+import { WelcomePage } from '../pages/welcome/WelcomePage';
 import { AppLayout } from './AppLayout';
 import { go } from './routes';
 
@@ -26,10 +27,17 @@ function App() {
   const route = useHashRoute();
   const { status } = useAuth();
   const isPublicAuthRoute = route.page === 'login' || route.page === 'signup';
+  const isWelcomeRoute = route.page === 'welcome';
 
   useEffect(() => {
-    if (isPublicAuthRoute && status === 'authenticated') go('dashboard');
-  }, [isPublicAuthRoute, status]);
+    if ((isPublicAuthRoute || isWelcomeRoute) && status === 'authenticated') go('dashboard');
+  }, [isPublicAuthRoute, isWelcomeRoute, status]);
+
+  if (isWelcomeRoute) {
+    if (status === 'authenticated') return null;
+    if (status === 'initializing') return <ProtectedRoute>{null}</ProtectedRoute>;
+    return <WelcomePage />;
+  }
 
   if (isPublicAuthRoute) {
     if (status === 'authenticated') return null;

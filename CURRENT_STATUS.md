@@ -2342,3 +2342,24 @@ remain separate follow-on work.
 - No real database connection, ML training/evaluation, calibration/final testing,
   artifact generation, production code/contract change, dependency addition,
   commit, push, merge, PR, history rewrite, or branch switch occurred in this audit.
+
+### Completed public web welcome page (2026-10-01)
+
+- Added a long, responsive welcome page in Aura's existing navy/teal theme:
+  product introduction, current/planned sample preview, workflow, risk analytics,
+  selectable simulation chart lines, AI explanation example, expandable lessons,
+  web/mobile illustrations, methodology, FAQ, and account calls to action.
+- The root URL now opens Welcome for signed-out visitors. Session restoration
+  keeps the focused loading screen, authenticated visitors continue to Dashboard,
+  and existing saved-report/simulation deep links remain protected. Login and
+  signup include a return link to Welcome.
+- Product examples are clearly labelled illustrative, use no live account data,
+  and do not calculate portfolio results. No backend, mobile app, dependencies,
+  financial engine, or authentication contracts changed.
+- Browser checks verified desktop and 390/320-pixel layouts, current/planned
+  switching, single-line chart selection, lesson/FAQ disclosure, mobile menu and
+  Escape handling, and Welcome/Login/Signup navigation. Fixed compact metric
+  overflow and a missing accessible section label during visual review.
+- Validation: production build and 34 web authority tests passed, including new
+  runtime public-entry/session/protected-deep-link regressions. Changes remain
+  uncommitted pending user review and explicit authorization.

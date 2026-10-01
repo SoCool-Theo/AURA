@@ -41,6 +41,86 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+test('public entry defaults to welcome and preserves saved-result deep links', () => {
+  const location = { hash: '' };
+  const routes = load('src/app/routes.ts', {}, { window: { location } });
+  assert.equal(routes.routeFromHash().page, 'welcome');
+  location.hash = '#/';
+  assert.equal(routes.routeFromHash().page, 'welcome');
+  location.hash = '#/assistant/portfolio-1/simulation/run-2';
+  assert.deepEqual(plain(routes.routeFromHash()), {
+    page: 'assistant', id: 'portfolio-1', reportId: 'simulation', contextId: 'run-2',
+  });
+  routes.go('signup');
+  assert.equal(routes.routeFromHash().page, 'signup');
+  routes.go('login');
+  assert.equal(routes.routeFromHash().page, 'login');
+});
+
+test('welcome is public only after session restoration and protected pages remain protected', () => {
+  let route = { page: 'welcome' };
+  let status = 'unauthenticated';
+  let effects = [];
+  const redirects = [];
+  const mocks = {
+    react: { useEffect: effect => effects.push(effect) },
+    '../auth/useAuth': { useAuth: () => ({ status }) },
+    '../hooks/useHashRoute': { useHashRoute: () => route },
+    './routes': { go: destination => redirects.push(destination) },
+  };
+  const components = {
+    '../auth/ProtectedRoute': 'ProtectedRoute', './AppLayout': 'AppLayout',
+    '../pages/analytics/AnalyticsPage': 'AnalyticsPage',
+    '../pages/assistant/AssistantPage': 'AssistantPage',
+    '../pages/auth/LoginPage': 'LoginPage', '../pages/auth/RegisterPage': 'RegisterPage',
+    '../pages/dashboard/DashboardPage': 'DashboardPage', '../pages/learn/LearnPage': 'LearnPage',
+    '../pages/not-found/NotFoundPage': 'NotFoundPage',
+    '../pages/portfolios/CreatePortfolioPage': 'CreatePortfolioPage',
+    '../pages/portfolios/PortfolioDetailPage': 'PortfolioDetailPage',
+    '../pages/portfolios/PortfoliosPage': 'PortfoliosPage',
+    '../pages/reports/ReportsPage': 'ReportsPage', '../pages/reports/ReportDetailPage': 'ReportDetailPage',
+    '../pages/reports/AssetRiskDetailPage': 'AssetRiskDetailPage',
+    '../pages/settings/SettingsPage': 'SettingsPage', '../pages/simulations/SimulationsPage': 'SimulationsPage',
+    '../pages/simulations/SimulationHistoryDetailPage': 'SimulationHistoryDetailPage',
+    '../pages/watchlist/WatchlistPage': 'WatchlistPage', '../pages/welcome/WelcomePage': 'WelcomePage',
+  };
+  for (const [moduleName, component] of Object.entries(components)) {
+    mocks[moduleName] = { [component]: component };
+  }
+  const App = load('src/app/App.tsx', mocks, {
+    React: { createElement: (type, props, ...children) => ({ type, props, children }) },
+  }).default;
+  const render = () => {
+    effects = [];
+    const output = App();
+    effects.forEach(effect => effect());
+    return output;
+  };
+  assert.equal(render().type, 'WelcomePage');
+  status = 'initializing';
+  assert.equal(render().type, 'ProtectedRoute');
+  assert.deepEqual(redirects, []);
+  status = 'authenticated';
+  for (const page of ['welcome', 'login', 'signup']) {
+    route = { page };
+    assert.equal(render(), null);
+    assert.equal(redirects.at(-1), 'dashboard');
+  }
+  status = 'unauthenticated';
+  route = { page: 'login' };
+  assert.equal(render().type, 'LoginPage');
+  route = { page: 'signup' };
+  assert.equal(render().type, 'RegisterPage');
+  route = { page: 'reports', id: 'portfolio-1', reportId: 'report-2' };
+  const protectedResult = render();
+  assert.equal(protectedResult.type, 'ProtectedRoute');
+  assert.equal(protectedResult.children[0].type, 'AppLayout');
+  const report = protectedResult.children[0].children[0];
+  assert.equal(report.type, 'ReportDetailPage');
+  assert.equal(report.props.portfolioId, 'portfolio-1');
+  assert.equal(report.props.reportId, 'report-2');
+});
+
 test('current and planned holding validation preserves facts and never creates weights', () => {
   const validation = load('src/pages/portfolios/portfolioValidation.ts', {
     './supportedAssetSymbols': { supportedAssetSymbols },
