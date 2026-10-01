@@ -38,7 +38,7 @@ function draftFromUser(user: AuthenticatedUserResponse | null): ProfileDraft {
     email: user.email,
     phoneNumber: user.phone_number ?? '',
     language: user.preferred_language,
-    timezone: user.timezone,
+    timezone: 'Asia/Bangkok',
     currentPassword: '',
   };
 }
@@ -202,7 +202,7 @@ export function SettingsPage() {
               <label>Email address<input value={profile.email} type="email" autoComplete="email" required onChange={event => setProfile(current => ({ ...current, email: event.target.value }))} placeholder="name@example.com" /></label>
               <label>Phone number <small>Optional</small><input value={profile.phoneNumber} type="tel" maxLength={32} autoComplete="tel" onChange={event => setProfile(current => ({ ...current, phoneNumber: event.target.value }))} placeholder="+66 00 000 0000" /></label>
               <label>Preferred language<select value={profile.language} onChange={event => setProfile(current => ({ ...current, language: event.target.value as PreferredLanguage }))}><option value="en">English</option><option value="th">Thai</option></select></label>
-              <label className={styles.fullWidth}>Timezone<select value={profile.timezone} onChange={event => setProfile(current => ({ ...current, timezone: event.target.value as ProfileTimezone }))}><option value="Asia/Bangkok">UTC+07:00 Bangkok</option><option value="Asia/Yangon">UTC+06:30 Yangon</option></select></label>
+              <label className={styles.fullWidth}>Timezone<input value="UTC+07:00 Bangkok" readOnly aria-readonly="true" /></label>
               {emailChanged && <label className={styles.fullWidth}>Current password <small>Required to change email</small><input value={profile.currentPassword} type="password" autoComplete="current-password" onChange={event => setProfile(current => ({ ...current, currentPassword: event.target.value }))} /></label>}
             </div>
             <p className={styles.fieldNote}>Language and timezone are saved now; translated copy and timezone-based formatting will be applied in a later UI update.</p>

@@ -47,7 +47,7 @@ function draftFromUser(user: AuthenticatedUserResponse | null): ProfileDraft {
     email: user?.email ?? '',
     phoneNumber: user?.phone_number ?? '',
     language: user?.preferred_language ?? 'en',
-    timezone: user?.timezone ?? 'Asia/Bangkok',
+    timezone: 'Asia/Bangkok',
     currentPassword: ''
   };
 }
@@ -283,7 +283,7 @@ export function SettingsScreen() {
               </Text>
             ) : null}
             <Text style={styles.helper}>
-              {user?.phone_number || 'No phone number'} · {user?.preferred_language === 'th' ? 'Thai' : 'English'} · {user?.timezone === 'Asia/Yangon' ? 'Yangon' : 'Bangkok'}
+              {user?.phone_number || 'No phone number'} · {user?.preferred_language === 'th' ? 'Thai' : 'English'} · Bangkok
             </Text>
           </View>
 
@@ -600,21 +600,8 @@ export function SettingsScreen() {
                 </View>
 
                 <Text style={styles.inputLabel}>Timezone</Text>
-                <View accessibilityRole="radiogroup" style={styles.choiceColumn}>
-                  {([
-                    ['Asia/Bangkok', 'UTC+07:00 Bangkok'],
-                    ['Asia/Yangon', 'UTC+06:30 Yangon']
-                  ] as const).map(([value, label]) => (
-                    <Pressable
-                      key={value}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: profileDraft.timezone === value }}
-                      onPress={() => setProfileDraft((current) => ({ ...current, timezone: value }))}
-                      style={[styles.choice, profileDraft.timezone === value && styles.choiceSelected]}
-                    >
-                      <Text style={[styles.choiceText, profileDraft.timezone === value && styles.choiceTextSelected]}>{label}</Text>
-                    </Pressable>
-                  ))}
+                <View accessibilityLabel="Timezone UTC plus 7 Bangkok" style={[styles.choice, styles.choiceSelected]}>
+                  <Text style={[styles.choiceText, styles.choiceTextSelected]}>UTC+07:00 Bangkok</Text>
                 </View>
 
                 {emailChanged ? (

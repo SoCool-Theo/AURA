@@ -912,6 +912,8 @@ test('web settings use the authenticated Backend Profile V1 contract', async () 
   assert.match(settings, /request\.current_password = profile\.currentPassword/);
   assert.match(settings, /emailChanged &&/);
   assert.match(settings, /setCurrentUser\(updatedUser\)/);
+  assert.match(settings, /value="UTC\+07:00 Bangkok" readOnly/);
+  assert.doesNotMatch(settings, /Yangon|UTC\+06:30/);
   assert.doesNotMatch(settings, /usePersistedState|localStorage/);
   assert.match(context, /setCurrentUser: setUser/);
   assert.match(types, /preferred_language: PreferredLanguage/);

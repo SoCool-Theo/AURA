@@ -1346,6 +1346,8 @@ test('mobile settings use the authenticated Backend Profile V1 contract', async 
   assert.match(settings, /request\.current_password = profileDraft\.currentPassword/);
   assert.match(settings, /emailChanged \?/);
   assert.match(settings, /setCurrentUser\(updatedUser\)/);
+  assert.match(settings, /UTC\+07:00 Bangkok/);
+  assert.doesNotMatch(settings, /Yangon|UTC\+06:30/);
   assert.doesNotMatch(settings, /setDisplayName|stored only on this device/);
   assert.match(context, /setCurrentUser: setUser/);
   assert.match(types, /preferred_language: PreferredLanguage/);
