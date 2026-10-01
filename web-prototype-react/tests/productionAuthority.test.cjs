@@ -940,3 +940,22 @@ test('web account identity prefers the saved name and safely falls back to email
   assert.match(styles, /\.profile-menu strong\{[^}]*overflow-wrap:anywhere/);
   assert.match(styles, /\.dashboard-greeting h1\{[^}]*overflow-wrap:anywhere/);
 });
+
+test('web session restoration uses the focused Aura loading screen', () => {
+  const route = fs.readFileSync(path.join(root, 'src/auth/ProtectedRoute.tsx'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'src/auth/ProtectedRoute.module.css'), 'utf8');
+
+  assert.match(route, /status === 'initializing'/);
+  assert.match(route, /aria-busy="true"/);
+  assert.match(route, /Welcome back/);
+  assert.match(route, /Restoring your Aura session…/);
+  assert.match(route, /Secure session/);
+  assert.match(route, /Portfolio risk education/);
+  assert.match(route, /role="status"/);
+  assert.match(styles, /\.loadingBoundary/);
+  assert.match(styles, /\.loadingHeaderInner/);
+  assert.match(styles, /linear-gradient\(180deg, rgba\(11, 22, 40, \.98\), rgba\(7, 17, 31, \.94\)\)/);
+  assert.match(styles, /max-width: 1680px/);
+  assert.match(styles, /\.secureIcon/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+});
