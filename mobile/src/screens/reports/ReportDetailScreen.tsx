@@ -31,6 +31,7 @@ export function ReportDetailScreen({
 }) {
   const portfolioId = route.params.portfolioId as string;
   const reportId = route.params.reportId as string;
+  const focusAssetSection = route.params.focusAssetSection === true;
   const { getReport, deleteReport } = useReports();
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
@@ -40,6 +41,22 @@ export function ReportDetailScreen({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const requestRef = useRef(0);
   const deletingRef = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const analysisOffsetRef = useRef<number | null>(null);
+  const assetSectionOffsetRef = useRef<number | null>(null);
+
+  const scrollToAssetSection = useCallback(() => {
+    if (!focusAssetSection) return;
+    const analysisOffset = analysisOffsetRef.current;
+    const assetSectionOffset = assetSectionOffsetRef.current;
+    if (analysisOffset === null || assetSectionOffset === null) return;
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, analysisOffset + assetSectionOffset - spacing.md),
+        animated: true
+      });
+    });
+  }, [focusAssetSection]);
 
   const loadReport = useCallback(async () => {
     const requestId = requestRef.current + 1;
@@ -61,10 +78,11 @@ export function ReportDetailScreen({
 
   useFocusEffect(useCallback(() => {
     void loadReport();
+    scrollToAssetSection();
     return () => {
       requestRef.current += 1;
     };
-  }, [loadReport]));
+  }, [loadReport, scrollToAssetSection]));
 
   function confirmDelete() {
     if (!report || deletingRef.current) return;
@@ -120,7 +138,7 @@ export function ReportDetailScreen({
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         <PageTitle
           eyebrow={`SAVED ANALYSIS · ${reportType}`}
           title={`${report.analysis.portfolio_name} Analysis`}
@@ -161,14 +179,25 @@ export function ReportDetailScreen({
           />
         ) : null}
 
-        <AnalysisResults
-          report={report}
-          onOpenAsset={(assetSymbol) => navigation.navigate('AssetRiskDetail', {
-            portfolioId,
-            reportId,
-            assetSymbol
-          })}
-        />
+        <View
+          onLayout={(event) => {
+            analysisOffsetRef.current = event.nativeEvent.layout.y;
+            scrollToAssetSection();
+          }}
+        >
+          <AnalysisResults
+            report={report}
+            onAssetSectionLayout={(offsetY) => {
+              assetSectionOffsetRef.current = offsetY;
+              scrollToAssetSection();
+            }}
+            onOpenAsset={(assetSymbol) => navigation.navigate('AssetRiskDetail', {
+              portfolioId,
+              reportId,
+              assetSymbol
+            })}
+          />
+        </View>
 
         <Card style={styles.assistantCard}>
           <Text style={styles.assistantTitle}>Need help understanding the results?</Text>

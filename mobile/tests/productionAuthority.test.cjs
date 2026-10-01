@@ -1300,6 +1300,12 @@ test('mobile asset-risk detail is report-backed, navigable, and never recalculat
   assert.match(dashboard, /Open \$\{driver\.symbol\} asset risk details/);
   assert.match(navigator, /name="AssetRiskDetail"/);
   assert.match(detail, /getReport\(portfolioId, reportId/);
+  assert.match(detail, /navigation\.popTo\('ReportDetail'/);
+  assert.match(detail, /focusAssetSection: true/);
+  assert.match(detail, /Back to per-asset valuation and risk/);
+  assert.match(reportDetail, /ref=\{scrollRef\}/);
+  assert.match(reportDetail, /onAssetSectionLayout/);
+  assert.match(results, /nativeID="per-asset-analysis"/);
   assert.match(detail, /asset\.risk_classification/);
   assert.match(detail, /report\.analysis\.asset_returns/);
   assert.match(detail, /filterReturnPoints\(series\?\.points \?\? \[\], range\)/);

@@ -41,10 +41,12 @@ import { WebKpiCard } from '../ui/WebKpiCard';
 
 export function AnalysisResults({
   report,
-  onOpenAsset
+  onOpenAsset,
+  onAssetSectionLayout
 }: {
   report: PortfolioReportResponse;
   onOpenAsset?: (symbol: string) => void;
+  onAssetSectionLayout?: (offsetY: number) => void;
 }) {
   const analysis = report.analysis;
   const reportV2 = isPortfolioReportV2(report) ? report : null;
@@ -332,6 +334,10 @@ export function AnalysisResults({
         ))}
       </View>
 
+      <View
+        nativeID="per-asset-analysis"
+        onLayout={(event) => onAssetSectionLayout?.(event.nativeEvent.layout.y)}
+      >
       <SectionHeader title={reportV2 ? 'Per-Asset Valuation and Risk' : reportV3 ? 'Planned Asset Risk' : 'Individual Asset Metrics'} />
       <View style={styles.list}>
         {reportV2 ? reportV2.holdings.map((holding) => (
@@ -407,6 +413,7 @@ export function AnalysisResults({
           </Card>
           </Pressable>
         ))}
+      </View>
       </View>
 
       <SectionHeader title="Asset Relationships" />

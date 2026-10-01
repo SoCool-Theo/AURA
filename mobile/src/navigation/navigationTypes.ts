@@ -12,7 +12,7 @@ export type PortfolioStackParamList = {
   AddAsset: { portfolioId: string };
   EditHoldings: { portfolioId: string };
   PortfolioAnalysis: { portfolioId?: string };
-  ReportDetail: { portfolioId: string; reportId: string };
+  ReportDetail: { portfolioId: string; reportId: string; focusAssetSection?: boolean };
   AssetRiskDetail: { portfolioId: string; reportId: string; assetSymbol: string };
 };
 
@@ -29,7 +29,7 @@ export type MoreStackParamList = {
   More: undefined;
   Analytics: { portfolioId?: string };
   Reports: undefined;
-  ReportDetail: { portfolioId: string; reportId: string };
+  ReportDetail: { portfolioId: string; reportId: string; focusAssetSection?: boolean };
   AssetRiskDetail: { portfolioId: string; reportId: string; assetSymbol: string };
   Watchlist: undefined;
   Learn: undefined;

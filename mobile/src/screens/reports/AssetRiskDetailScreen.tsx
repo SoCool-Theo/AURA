@@ -57,6 +57,14 @@ export function AssetRiskDetailScreen({
   const [range, setRange] = useState<ReturnViewRange>('1Y');
   const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
 
+  const backToAssetSection = useCallback(() => {
+    navigation.popTo('ReportDetail', {
+      portfolioId,
+      reportId,
+      focusAssetSection: true
+    });
+  }, [navigation, portfolioId, reportId]);
+
   const loadReport = useCallback(async () => {
     setStatus('loading');
     setError(null);
@@ -85,7 +93,8 @@ export function AssetRiskDetailScreen({
           resourceName="Asset analysis"
           fallbackMessage="Unable to load this saved asset analysis."
           onRetry={() => void loadReport()}
-          onBack={() => navigation.goBack()}
+          onBack={backToAssetSection}
+          backTitle="Back to Analysis"
         />
       </SafeAreaView>
     );
@@ -101,7 +110,8 @@ export function AssetRiskDetailScreen({
           error={`${assetSymbol} is not part of this saved report.`}
           resourceName="Asset analysis"
           fallbackMessage="Asset analysis not found."
-          onBack={() => navigation.goBack()}
+          onBack={backToAssetSection}
+          backTitle="Back to Analysis"
         />
       </SafeAreaView>
     );
@@ -128,6 +138,17 @@ export function AssetRiskDetailScreen({
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to per-asset valuation and risk"
+          accessibilityHint="Returns to this saved portfolio analysis and its per-asset section"
+          onPress={backToAssetSection}
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        >
+          <Ionicons name="arrow-back" size={18} color={colors.primary} />
+          <Text style={styles.backButtonText}>Per-Asset Valuation and Risk</Text>
+        </Pressable>
+
         <PageTitle
           eyebrow="ASSET RISK DETAIL"
           title={assetSymbol}
@@ -253,6 +274,8 @@ function Detail({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: 110 },
+  backButton: { alignSelf: 'flex-start', minHeight: 40, marginBottom: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  backButtonText: { color: colors.primary, fontSize: 12, fontWeight: '900' },
   riskCard: { gap: spacing.sm, marginTop: spacing.xl, backgroundColor: colors.summaryBackground },
   riskHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   assetMark: { width: 52, height: 52, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.selectedBackground, borderWidth: 1, borderColor: colors.primary },
