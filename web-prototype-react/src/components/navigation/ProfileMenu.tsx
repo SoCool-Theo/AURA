@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { go } from '../../app/routes';
+import { accountDisplayName, accountInitials } from '../../auth/accountIdentity';
 import { useAuth } from '../../auth/useAuth';
 import { Icon } from '../ui/Icon';
 
 export function ProfileMenu() {
   const [open, setOpen] = useState(false);
   const { logout, user } = useAuth();
-  const initials = user?.email.slice(0, 2).toUpperCase() || 'AU';
+  const displayName = accountDisplayName(user);
+  const initials = accountInitials(user);
 
   function openPage(path: string) {
     setOpen(false);
@@ -33,8 +35,10 @@ export function ProfileMenu() {
       </button>
       {open && (
         <div className="profile-menu" role="menu">
-          <strong>{user?.email}</strong>
-          <small>Authenticated Aura account</small>
+          <strong title={displayName}>{displayName}</strong>
+          <small title={user?.email}>
+            {user?.display_name ? user.email : 'Authenticated Aura account'}
+          </small>
           <button role="menuitem" onClick={() => openPage('settings')}>Settings</button>
           <button role="menuitem" onClick={() => openPage('watchlist')}>Watchlist</button>
           <button role="menuitem" onClick={() => openPage('learn')}>Learn</button>

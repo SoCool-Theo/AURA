@@ -20,6 +20,7 @@ import { PageTitle } from '../../components/ui/PageTitle';
 import { authApi } from '../../api/authApi';
 import { apiErrorPresentation, apiValidationIssues } from '../../api/apiErrorPresentation';
 import { ApiError } from '../../api/apiClient';
+import { accountDisplayName, accountInitials } from '../../auth/accountIdentity';
 import { useAuth } from '../../auth/useAuth';
 import { useAppData } from '../../hooks/useAppData';
 import { usePreferences } from '../../preferences/usePreferences';
@@ -73,7 +74,8 @@ export function SettingsScreen() {
     resetPreferences
   } = usePreferences();
 
-  const resolvedName = user?.display_name || 'Aura Investor';
+  const resolvedName = accountDisplayName(user);
+  const initials = accountInitials(user);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => draftFromUser(user));
   const [profileSaving, setProfileSaving] = useState(false);
@@ -263,13 +265,23 @@ export function SettingsScreen() {
         <Card style={styles.profileCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {resolvedName.slice(0, 1).toUpperCase()}
+              {initials}
             </Text>
           </View>
 
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{resolvedName}</Text>
-            <Text style={styles.email}>{user?.email}</Text>
+          <View style={styles.profileIdentity}>
+            <Text
+              ellipsizeMode="middle"
+              numberOfLines={user?.display_name ? 1 : 2}
+              style={styles.name}
+            >
+              {resolvedName}
+            </Text>
+            {user?.display_name ? (
+              <Text ellipsizeMode="middle" numberOfLines={1} style={styles.email}>
+                {user.email}
+              </Text>
+            ) : null}
             <Text style={styles.helper}>
               {user?.phone_number || 'No phone number'} · {user?.preferred_language === 'th' ? 'Thai' : 'English'} · {user?.timezone === 'Asia/Yangon' ? 'Yangon' : 'Bangkok'}
             </Text>
@@ -757,12 +769,19 @@ const styles = StyleSheet.create({
   name: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: '900'
+    fontWeight: '900',
+    lineHeight: 21,
+    flexShrink: 1
+  },
+  profileIdentity: {
+    flex: 1,
+    minWidth: 0
   },
   email: {
     color: colors.textSecondary,
     fontSize: 11,
-    marginTop: 3
+    marginTop: 3,
+    flexShrink: 1
   },
   helper: {
     color: colors.muted,

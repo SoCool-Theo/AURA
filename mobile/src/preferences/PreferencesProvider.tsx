@@ -14,7 +14,6 @@ type PreferencesState = {
   themeMode: ThemeMode;
   notificationsEnabled: boolean;
   hidePortfolioValues: boolean;
-  displayName: string;
 };
 
 type PreferencesContextValue = PreferencesState & {
@@ -23,7 +22,6 @@ type PreferencesContextValue = PreferencesState & {
   setThemeMode: (mode: ThemeMode) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setHidePortfolioValues: (hidden: boolean) => void;
-  setDisplayName: (name: string) => void;
   resetPreferences: () => Promise<void>;
 };
 
@@ -32,8 +30,7 @@ const STORAGE_KEY = 'aura_mobile_preferences_v1';
 const defaults: PreferencesState = {
   themeMode: 'dark',
   notificationsEnabled: true,
-  hidePortfolioValues: false,
-  displayName: ''
+  hidePortfolioValues: false
 };
 
 export const PreferencesContext =
@@ -60,8 +57,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
           const next = {
             themeMode: saved.themeMode === 'light' ? 'light' as const : 'dark' as const,
             notificationsEnabled: typeof saved.notificationsEnabled === 'boolean' ? saved.notificationsEnabled : defaults.notificationsEnabled,
-            hidePortfolioValues: typeof saved.hidePortfolioValues === 'boolean' ? saved.hidePortfolioValues : defaults.hidePortfolioValues,
-            displayName: typeof saved.displayName === 'string' ? saved.displayName : ''
+            hidePortfolioValues: typeof saved.hidePortfolioValues === 'boolean' ? saved.hidePortfolioValues : defaults.hidePortfolioValues
           };
           setPrefs(next);
           applyTheme(next.themeMode);
@@ -100,7 +96,6 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
         update({ notificationsEnabled: enabled }),
       setHidePortfolioValues: (hidden) =>
         update({ hidePortfolioValues: hidden }),
-      setDisplayName: (name) => update({ displayName: name.trim() }),
       resetPreferences: async () => {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
         applyTheme(defaults.themeMode);

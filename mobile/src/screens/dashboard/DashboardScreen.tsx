@@ -12,7 +12,8 @@ import { WebKpiCard } from '../../components/ui/WebKpiCard';
 import { PortfolioReturnsChart } from '../../components/charts/PortfolioReturnsChart';
 import { useDashboard } from '../../dashboard/useDashboard';
 import { dashboardPercent, filterDashboardReturns, type DashboardRange } from '../../dashboard/dashboardPresentation';
-import { usePreferences } from '../../preferences/usePreferences';
+import { accountDisplayName } from '../../auth/accountIdentity';
+import { useAuth } from '../../auth/useAuth';
 import {
   isPortfolioMarketDataUnavailable,
   PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE,
@@ -36,7 +37,7 @@ import {
 const ranges: DashboardRange[] = ['1M', '3M', '6M', '1Y', 'ALL'];
 
 export function DashboardScreen({ navigation }: { navigation: any }) {
-  const { displayName } = usePreferences();
+  const { user } = useAuth();
   const dashboard = useDashboard();
   const {
     portfoliosState,
@@ -55,7 +56,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
   const monetary = reportMonetaryMetrics(report);
   const points = useMemo(() => filterDashboardReturns(analysis?.portfolio_returns ?? [], range), [analysis, range]);
   const selected = portfolios.find((item) => item.id === selectedId);
-  const firstName = (displayName || 'Investor').split(' ')[0];
+  const displayName = accountDisplayName(user);
   const holdingMode = portfolio ? portfolioHoldingMode(portfolio.holdings) : 'empty';
   const marketDataUnavailable = isPortfolioMarketDataUnavailable(dashboard.valuationError);
   const analyze = () => navigation.navigate('MoreTab', { screen: 'Analytics', params: { portfolioId: selectedId } });
@@ -89,7 +90,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
       <ScrollView contentContainerStyle={styles.content} refreshControl={
         <RefreshControl refreshing={dashboard.refreshing} onRefresh={() => void dashboard.refresh()} tintColor={colors.primary} />
       }>
-        <PageTitle eyebrow="AURA" title={`Welcome back, ${firstName}`} subtitle="Your portfolios and latest saved analysis." />
+        <PageTitle eyebrow="AURA" title={`Welcome back, ${displayName}`} subtitle="Your portfolios and latest saved analysis." />
 
         {listStatus === 'error' ? (
           <InlineErrorCard

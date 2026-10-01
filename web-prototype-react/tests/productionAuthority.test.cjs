@@ -917,3 +917,24 @@ test('web settings use the authenticated Backend Profile V1 contract', async () 
   assert.match(types, /preferred_language: PreferredLanguage/);
   assert.match(types, /timezone: ProfileTimezone/);
 });
+
+test('web account identity prefers the saved name and safely falls back to email', () => {
+  const identity = load('src/auth/accountIdentity.ts');
+  const unnamed = { email: 'sherlockthiha2003@gmail.com', display_name: null };
+  const named = { email: 'sherlockthiha2003@gmail.com', display_name: 'Sherlock Thiha' };
+  assert.equal(identity.accountDisplayName(unnamed), 'sherlockthiha2003@gmail.com');
+  assert.equal(identity.accountDisplayName(named), 'Sherlock Thiha');
+  assert.equal(identity.accountInitials(unnamed), 'SH');
+  assert.equal(identity.accountInitials(named), 'ST');
+
+  const dashboard = fs.readFileSync(path.join(root, 'src/pages/dashboard/DashboardPage.tsx'), 'utf8');
+  const profileMenu = fs.readFileSync(path.join(root, 'src/components/navigation/ProfileMenu.tsx'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'src/styles.css'), 'utf8');
+  assert.match(dashboard, /accountDisplayName\(user\)/);
+  assert.doesNotMatch(dashboard, /email\.split\('@'\)/);
+  assert.match(profileMenu, /<strong title=\{displayName\}>\{displayName\}<\/strong>/);
+  assert.match(profileMenu, /user\?\.display_name \? user\.email : 'Authenticated Aura account'/);
+  assert.match(styles, /\.profile-menu\{[^}]*max-width:calc\(100vw - 24px\)/);
+  assert.match(styles, /\.profile-menu strong\{[^}]*overflow-wrap:anywhere/);
+  assert.match(styles, /\.dashboard-greeting h1\{[^}]*overflow-wrap:anywhere/);
+});

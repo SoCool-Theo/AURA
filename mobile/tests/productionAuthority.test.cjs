@@ -1351,3 +1351,24 @@ test('mobile settings use the authenticated Backend Profile V1 contract', async 
   assert.match(types, /preferred_language: PreferredLanguage/);
   assert.match(types, /timezone: ProfileTimezone/);
 });
+
+test('mobile account identity prefers the saved name and safely falls back to email', () => {
+  const identity = load('src/auth/accountIdentity.ts');
+  const unnamed = { email: 'sherlockthiha2003@gmail.com', display_name: null };
+  const named = { email: 'sherlockthiha2003@gmail.com', display_name: 'Sherlock Thiha' };
+  assert.equal(identity.accountDisplayName(unnamed), 'sherlockthiha2003@gmail.com');
+  assert.equal(identity.accountDisplayName(named), 'Sherlock Thiha');
+  assert.equal(identity.accountInitials(unnamed), 'SH');
+  assert.equal(identity.accountInitials(named), 'ST');
+
+  const dashboard = fs.readFileSync(path.join(root, 'src/screens/dashboard/DashboardScreen.tsx'), 'utf8');
+  const settings = fs.readFileSync(path.join(root, 'src/screens/settings/SettingsScreen.tsx'), 'utf8');
+  const preferences = fs.readFileSync(path.join(root, 'src/preferences/PreferencesProvider.tsx'), 'utf8');
+  assert.match(dashboard, /const displayName = accountDisplayName\(user\)/);
+  assert.match(dashboard, /title=\{`Welcome back, \$\{displayName\}`\}/);
+  assert.doesNotMatch(dashboard, /usePreferences|\.split\(' '\)\[0\]/);
+  assert.match(settings, /const resolvedName = accountDisplayName\(user\)/);
+  assert.match(settings, /numberOfLines=\{user\?\.display_name \? 1 : 2\}/);
+  assert.match(settings, /\{user\?\.display_name \? \(/);
+  assert.doesNotMatch(preferences, /displayName|setDisplayName/);
+});
