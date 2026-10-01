@@ -1011,6 +1011,16 @@ test('More report detail exposes an accessible back action to Reports', () => {
   assert.match(backButton, /name="arrow-back"/);
 });
 
+test('mobile Reports back action returns directly to More', () => {
+  const navigation = fs.readFileSync(
+    path.join(root, 'src/navigation/MainTabNavigator.tsx'),
+    'utf8'
+  );
+
+  assert.match(navigation, /MoreStack\.Screen[\s\S]*name="Reports"[\s\S]*headerBackVisible: false/);
+  assert.match(navigation, /name="Reports"[\s\S]*label="Back to More"[\s\S]*navigation\.popTo\('More'\)/);
+});
+
 test('mobile Analytics exposes an explicit back action in both navigation stacks', () => {
   const navigation = fs.readFileSync(
     path.join(root, 'src/navigation/MainTabNavigator.tsx'),

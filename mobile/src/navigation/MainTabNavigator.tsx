@@ -160,7 +160,21 @@ function MoreNavigator() {
           )
         })}
       />
-      <MoreStack.Screen name="Reports" component={ReportsScreen} options={{ title: 'Reports' }} />
+      <MoreStack.Screen
+        name="Reports"
+        component={ReportsScreen}
+        options={({ navigation }) => ({
+          title: 'Reports',
+          headerBackVisible: false,
+          headerLeft: () => (
+            <BackHeaderButton
+              label="Back to More"
+              color={palette.text}
+              onPress={() => navigation.popTo('More')}
+            />
+          )
+        })}
+      />
       <MoreStack.Screen
         name="ReportDetail"
         component={ReportDetailScreen}
