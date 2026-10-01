@@ -2199,3 +2199,22 @@ remain separate follow-on work.
 - Validation uses synthetic artifacts and mocked market data. No generated
   artifacts, real databases, public forecast APIs, portfolio composition,
   forecast persistence, AI integration, or clients were changed.
+
+### Completed authenticated current asset outlook API
+
+- Added `GET /api/forecasting/assets/{symbol}/outlook` using Aura's existing
+  Bearer authentication and application database session. Symbols follow the
+  canonical 17-asset normalization and support rules; no portfolio context or
+  historical/as-of input is exposed.
+- Public Pydantic response contracts expose finite numeric predictions, nested
+  nominal 80% prediction intervals, fixed 30-day horizon, current market-data
+  provenance, selected model IDs, artifact version, and deterministic educational
+  limitations. The pure mapper copies inference-owned values without rounding,
+  clamping, or recalculating them.
+- Unsupported symbols return safe 404 responses; stale data, insufficient
+  history, artifact failures, and invalid predictions return safe 503 responses.
+  Internal paths, residuals, evaluation metrics, credentials, and exception
+  details are not exposed.
+- Tests use mocked inference and sessions. Frozen model artifacts, internal
+  prediction semantics, portfolio composition, persistence, migrations,
+  scheduler/updater behavior, AI integration, and client code are unchanged.
