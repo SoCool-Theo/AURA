@@ -41,6 +41,50 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+test('web profile Sign Out prompts first and only confirmed logout navigates to sign in', async () => {
+  const slots = []; let cursor = 0, dirty, tree, logouts = 0, fail = true;
+  const navigations = [];
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useState: initial => {
+      const i = cursor++; if (!(i in slots)) slots[i] = initial;
+      return [slots[i], value => { slots[i] = typeof value === 'function' ? value(slots[i]) : value; dirty = true; }];
+    },
+    useRef: initial => { const i = cursor++; return slots[i] ??= { current: initial }; },
+  };
+  const { ProfileMenu } = load('src/components/navigation/ProfileMenu.tsx', {
+    react,
+    '../../app/routes': { go: route => navigations.push(route) },
+    '../../auth/accountIdentity': { accountDisplayName: () => 'Aura User', accountInitials: () => 'AU' },
+    '../../auth/useAuth': { useAuth: () => ({ user: { email: 'user@example.com' }, logout: () => {
+      logouts++; if (fail) throw Error('storage failed');
+    } }) },
+    '../ui/Icon': { Icon: 'Icon' }, '../ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
+  }, { React: react });
+  const render = () => { cursor = 0; dirty = false; tree = ProfileMenu(); };
+  const settle = async () => { await new Promise(done => setImmediate(done)); if (dirty) render(); };
+  const request = async () => {
+    tree.children[0].props.onClick(); await settle();
+    tree.children[1].children.at(-1).props.onClick(); await settle();
+  };
+  const dialog = () => tree.children[2];
+  render(); await request();
+  assert.equal(logouts, 0); assert.deepEqual(navigations, []);
+  assert.equal(tree.children[1], false, 'menu closes when confirmation opens');
+  assert.equal(dialog().props.title, 'Sign out?');
+  assert.equal(dialog().props.tone, 'danger'); assert.equal(dialog().props.iconName, 'logout');
+  assert.equal(dialog().props.subject, 'user@example.com');
+  assert.match(dialog().props.description, /will not be deleted/);
+  const staleConfirm = dialog().props.onConfirm;
+  dialog().props.onCancel(); await settle(); staleConfirm(); await settle();
+  assert.equal(logouts, 0); assert.equal(dialog(), false);
+  await request(); dialog().props.onConfirm(); await settle();
+  assert.equal(logouts, 1); assert.ok(dialog().props.error); assert.deepEqual(navigations, []);
+  fail = false;
+  dialog().props.onConfirm(); dialog().props.onConfirm(); await settle();
+  assert.equal(logouts, 2); assert.deepEqual(navigations, ['login']); assert.equal(dialog(), false);
+});
+
 test('web red dialogs have red Close/Cancel text and a centered accessible SVG close icon', () => {
   const react = {
     createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),

@@ -55,6 +55,7 @@ export function Icon({ name, size = 20 }: IconProps) {
     case 'server': return <svg {...common}><rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M8 7h.01M8 17h.01"/></svg>;
     case 'trash': return <svg {...common}><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/></svg>;
     case 'close': return <svg {...common}><path d="m6 6 12 12M18 6 6 18"/></svg>;
+    case 'logout': return <svg {...common}><path d="M10 4H4v16h6M10 12h11m-4-4 4 4-4 4"/></svg>;
     default: return null;
   }
 }

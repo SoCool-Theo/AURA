@@ -13,6 +13,7 @@ type ConfirmationDialogProps = {
   confirmLabel: string;
   busy: boolean;
   tone?: 'danger';
+  iconName?: 'trash' | 'logout';
   error?: unknown;
   children?: ReactNode;
   confirmDisabled?: boolean;
@@ -28,6 +29,7 @@ export function ConfirmationDialog({
   confirmLabel,
   busy,
   tone,
+  iconName = 'trash',
   error,
   children,
   confirmDisabled = false,
@@ -77,7 +79,7 @@ export function ConfirmationDialog({
         <div className={styles.accent} />
         <div className={styles.content}>
           <header className={styles.header}>
-            <div className={styles.titleRow}><span className={styles.icon}><Icon name="trash" size={20} /></span><div><h2 id="confirmation-dialog-title">{title}</h2><p id="confirmation-dialog-description">{description}</p></div></div>
+            <div className={styles.titleRow}><span className={styles.icon}><Icon name={iconName} size={20} /></span><div><h2 id="confirmation-dialog-title">{title}</h2><p id="confirmation-dialog-description">{description}</p></div></div>
             <button type="button" className={styles.close} aria-label={`Close ${title.toLowerCase()}`} disabled={busy} onClick={onCancel}><Icon name="close" size={18} /></button>
           </header>
           <div className={styles.subject}><small>{subjectLabel}</small><strong>{subject}</strong></div>

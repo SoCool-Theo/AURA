@@ -17,6 +17,7 @@ type ConfirmationDialogProps = {
   children?: React.ReactNode;
   confirmDisabled?: boolean;
   tone?: 'danger';
+  iconName?: 'trash-outline' | 'log-out-outline';
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -33,6 +34,7 @@ export function ConfirmationDialog({
   children,
   confirmDisabled = false,
   tone,
+  iconName = 'trash-outline',
   onCancel,
   onConfirm,
 }: ConfirmationDialogProps) {
@@ -44,7 +46,7 @@ export function ConfirmationDialog({
           <ScrollView contentContainerStyle={styles.content} style={{ flexGrow: 0 }} keyboardShouldPersistTaps="handled">
             <View style={styles.header}>
               <View style={styles.titleRow}>
-                <View style={styles.icon}><Ionicons name="trash-outline" color={colors.danger} size={21} /></View>
+                <View style={styles.icon}><Ionicons name={iconName} color={colors.danger} size={21} /></View>
                 <View style={styles.heading}>
                   <Text style={styles.title}>{title}</Text>
                   <Text style={styles.description}>{description}</Text>

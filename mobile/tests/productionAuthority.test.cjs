@@ -27,6 +27,79 @@ function load(file, mocks = {}, globals = {}) {
   return module.exports;
 }
 
+test('mobile Settings sign out confirms, cancels safely, retries failures, and blocks duplicate taps', async () => {
+  const harness = hookHarness();
+  const user = { email: 'user@example.com' };
+  harness.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
+  let signOuts = 0, fail = true, pending;
+  const { SettingsScreen } = load('src/screens/settings/SettingsScreen.tsx', {
+    react: harness.react,
+    'react-native': { Alert: { alert: () => assert.fail('Sign out must use the themed dialog') }, KeyboardAvoidingView: 'Avoid', Modal: 'Modal', Platform: { OS: 'android' }, Pressable: 'Pressable', ScrollView: 'Scroll', Text: 'Text', TextInput: 'Input', View: 'View', StyleSheet: { create: value => value } },
+    'react-native-safe-area-context': { SafeAreaView: 'Safe' }, '@expo/vector-icons': { Ionicons: 'Icon' },
+    '../../components/ui/Button': { Button: 'Button' },
+    '../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
+    './DeleteAccountSection': { DeleteAccountSection: 'DeleteAccount' },
+    '../../components/ui/Card': { Card: 'Card' }, '../../components/ui/PageTitle': { PageTitle: 'Title' },
+    '../../api/authApi': { authApi: {} }, '../../api/apiErrorPresentation': {}, '../../api/apiClient': { ApiError: Error },
+    '../../auth/accountIdentity': { accountDisplayName: () => 'Aura User', accountInitials: () => 'AU' },
+    '../../auth/useAuth': { useAuth: () => ({ user, setCurrentUser: () => {}, signOut: async () => {
+      signOuts++; if (fail) throw Error('storage failed'); await pending.promise;
+    } }) },
+    '../../hooks/useAppData': { useAppData: () => ({ resetLocalData: () => assert.fail('Sign out must not reset data') }) },
+    '../../preferences/usePreferences': { usePreferences: () => ({ themeMode: 'dark', setThemeMode: () => {}, resetPreferences: () => assert.fail('Sign out must not reset preferences') }) },
+    '../../theme/theme': { colors: {}, spacing: {} },
+  });
+  harness.mount(() => SettingsScreen()); await harness.settle();
+  const nodes = () => {
+    const all = [];
+    function visit(node) { if (!node || typeof node !== 'object') return; all.push(node); node.children?.forEach(visit); }
+    visit(harness.value); return all;
+  };
+  const button = () => nodes().find(node => node.type === 'Button' && ['Sign out', 'Please wait…'].includes(node.props.title));
+  const dialog = () => nodes().find(node => node.type === 'Dialog');
+  assert.equal(dialog().props.visible, false);
+  button().props.onPress(); await harness.settle();
+  assert.equal(dialog().props.visible, true); assert.equal(signOuts, 0);
+  assert.equal(dialog().props.tone, 'danger'); assert.equal(dialog().props.iconName, 'log-out-outline');
+  assert.match(dialog().props.description, /will not be deleted/);
+  const staleConfirm = dialog().props.onConfirm;
+  dialog().props.onCancel(); await harness.settle(); staleConfirm(); await harness.settle();
+  assert.equal(signOuts, 0); assert.equal(dialog().props.visible, false);
+  button().props.onPress(); await harness.settle(); dialog().props.onConfirm(); await harness.settle();
+  assert.equal(signOuts, 1); assert.match(dialog().props.errorMessage, /retry sign out/);
+  fail = false; pending = deferred();
+  dialog().props.onConfirm(); dialog().props.onConfirm(); await harness.settle();
+  assert.equal(signOuts, 2); assert.equal(dialog().props.busy, true); assert.equal(button().props.disabled, true);
+  dialog().props.onCancel(); await harness.settle(); assert.equal(dialog().props.visible, true);
+  pending.resolve(); await harness.settle(); assert.equal(dialog().props.visible, false);
+});
+
+test('mobile saved-session Sign Out also confirms and retains its retry flow', async () => {
+  const harness = hookHarness();
+  harness.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
+  let signOuts = 0, retries = 0, fail = true, pending;
+  const { SessionRestoreScreen } = load('src/screens/auth/SessionRestoreScreen.tsx', {
+    react: harness.react, 'react-native': { StyleSheet: { create: value => value } },
+    'react-native-safe-area-context': { SafeAreaView: 'Safe' }, '../../theme/theme': { colors: {} },
+    '../../components/ui/ErrorState': { ScreenErrorState: 'Error' },
+    '../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
+  });
+  harness.mount(() => SessionRestoreScreen({ message: 'Session unavailable', error: Error('offline'), onRetry: async () => { retries++; }, onSignOut: async () => {
+    signOuts++; if (fail) throw Error('storage failed'); await pending.promise;
+  } }));
+  const screen = () => harness.value.children[0]; const dialog = () => harness.value.children[1];
+  screen().props.onRetry(); await harness.settle(); assert.equal(retries, 1); assert.equal(signOuts, 0);
+  screen().props.onBack(); await harness.settle(); assert.equal(dialog().props.visible, true); assert.equal(signOuts, 0);
+  dialog().props.onCancel(); await harness.settle(); assert.equal(signOuts, 0);
+  screen().props.onBack(); await harness.settle(); dialog().props.onConfirm(); await harness.settle();
+  assert.equal(signOuts, 1); assert.match(dialog().props.errorMessage, /Please retry/);
+  fail = false; pending = deferred();
+  dialog().props.onConfirm(); dialog().props.onConfirm(); await harness.settle(); assert.equal(signOuts, 2);
+  dialog().props.onCancel(); screen().props.onRetry(); await harness.settle();
+  assert.equal(dialog().props.visible, true); assert.equal(retries, 1);
+  pending.resolve(); await harness.settle(); assert.equal(dialog().props.visible, false);
+});
+
 test('danger confirmation Close and Cancel use red without changing default dialogs or busy guards', () => {
   const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
   const colors = { text: '#fff', danger: '#FF6B7A', surfaceAlt: '#14213A', negativeBackground: '#2C171E', dangerBorder: '#5B2631' };

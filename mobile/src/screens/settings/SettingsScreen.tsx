@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '../../components/ui/Button';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { DeleteAccountSection } from './DeleteAccountSection';
 import { Card } from '../../components/ui/Card';
 import { PageTitle } from '../../components/ui/PageTitle';
@@ -88,15 +89,37 @@ export function SettingsScreen() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [accountDeleting, setAccountDeleting] = useState(false);
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const signOutConfirmationRef = useRef(false);
   const pendingRef = useRef(false);
 
   async function logout() {
-    if (pendingRef.current) return;
+    if (!signOutConfirmationRef.current || pendingRef.current || accountDeleting) return;
     pendingRef.current = true;
     setPending(true);
-    try { await signOut(); }
-    catch { Alert.alert('Sign out incomplete', 'Aura could not remove the saved session. Please retry.'); }
+    setSignOutError(null);
+    try {
+      await signOut();
+      signOutConfirmationRef.current = false;
+      setConfirmingSignOut(false);
+    }
+    catch { setSignOutError('Aura could not remove the saved session. Please retry sign out.'); }
     finally { pendingRef.current = false; setPending(false); }
+  }
+
+  function requestSignOut() {
+    if (pendingRef.current || accountDeleting) return;
+    signOutConfirmationRef.current = true;
+    setSignOutError(null);
+    setConfirmingSignOut(true);
+  }
+
+  function cancelSignOut() {
+    if (pendingRef.current) return;
+    signOutConfirmationRef.current = false;
+    setConfirmingSignOut(false);
+    setSignOutError(null);
   }
 
   useEffect(() => {
@@ -506,11 +529,17 @@ export function SettingsScreen() {
         <Button
           title={pending ? 'Please wait…' : 'Sign out'}
           variant="danger"
-          onPress={() => void logout()}
+          onPress={requestSignOut}
           disabled={pending || accountDeleting}
           style={{ marginTop: spacing.xl }}
         />
       </ScrollView>
+
+      <ConfirmationDialog visible={confirmingSignOut} title="Sign out?"
+        description="You'll need to sign in again to access Aura. Your account, portfolios, reports, and saved simulations will not be deleted."
+        subject={user?.email ?? resolvedName} subjectLabel="SIGNED-IN ACCOUNT" confirmLabel="Sign out"
+        tone="danger" iconName="log-out-outline" busy={pending} errorMessage={signOutError}
+        onCancel={cancelSignOut} onConfirm={() => void logout()} />
 
       <Modal
         visible={editingProfile}

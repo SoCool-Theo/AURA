@@ -2433,3 +2433,20 @@ remain separate follow-on work.
   TypeScript checks, and web production build. Live PostgreSQL and physical
   device/browser account-deletion acceptance were not performed; no actual
   user accounts/data were deleted and no migrations, commits, or pushes were run.
+
+### Completed sign-out confirmation dialogs (2026-10-02)
+
+- Web profile-menu Sign Out and mobile Settings Sign Out now open the shared
+  Aura red-themed confirmation dialogs before clearing the signed-in session.
+  Mobile's saved-session recovery Sign Out also requires confirmation.
+- Dialogs use sign-out icons, identify the account/device, and clearly state
+  that account and saved portfolio/report/simulation data are not deleted.
+  Cancel/Close perform no sign-out; confirmed actions retain the existing
+  authentication and navigation flows, guarded against duplicate submissions.
+- Mobile cleanup failures retain themed error/retry handling. Automatic session
+  rejection and successful account-deletion cleanup do not prompt again. No
+  backend API, database, dependency, preference, or financial changes were made.
+- Added confirmation/cancel/stale-handler/error/retry/duplicate-tap regressions.
+  Validation: 45 web authority tests, 51 mobile authority tests, both TypeScript
+  checks, and the web production build passed. Browser/device acceptance was
+  not performed; no commit or push was made.
