@@ -41,6 +41,38 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+test('web red dialogs have red Close/Cancel text and a centered accessible SVG close icon', () => {
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useEffect: () => {}, useRef: value => ({ current: value }),
+  };
+  const { ConfirmationDialog } = load('src/components/ui/ConfirmationDialog.tsx', {
+    react, 'react-dom': { createPortal: node => node },
+    './ApiErrorState': { FormErrorSummary: 'Error' }, './Icon': { Icon: 'Icon' },
+    './ConfirmationDialog.module.css': { close: 'close', cancel: 'cancel', dangerTheme: 'dangerTheme' },
+  }, { React: react, document: { body: {} } });
+  for (const busy of [false, true]) {
+    let cancelled = 0;
+    const tree = ConfirmationDialog({ title: 'Delete account?', description: 'Permanent', subject: 'user@example.com', subjectLabel: 'Account', confirmLabel: 'Delete Account', tone: 'danger', busy, onCancel: () => { cancelled++; }, onConfirm: () => {} });
+    const nodes = [];
+    function visit(node) { if (!node || typeof node !== 'object') return; nodes.push(node); node.children?.forEach(visit); }
+    visit(tree);
+    const close = nodes.find(node => node.type === 'button' && node.props.className === 'close');
+    const cancel = nodes.find(node => node.type === 'button' && node.children[0] === 'Cancel');
+    assert.equal(close.props['aria-label'], 'Close delete account?');
+    assert.equal(close.children[0].props.name, 'close');
+    assert.equal(close.children[0].props.size, 18);
+    assert.equal(close.props.disabled, busy); assert.equal(cancel.props.disabled, busy);
+    if (!busy) { close.props.onClick(); cancel.props.onClick(); assert.equal(cancelled, 2); }
+  }
+  const styles = fs.readFileSync(path.join(root, 'src/components/ui/ConfirmationDialog.module.css'), 'utf8');
+  assert.match(styles, /\.close \{[^}]*display: grid; place-items: center; padding: 0;/);
+  assert.match(styles, /\.dangerTheme \.close, \.dangerTheme \.cancel \{ color: var\(--red-bright\)/);
+  assert.match(styles, /\.dangerTheme \.close:hover, \.dangerTheme \.close:focus-visible, \.dangerTheme \.cancel:hover, \.dangerTheme \.cancel:focus-visible \{ color: var\(--red-bright\)/);
+  const { Icon } = load('src/components/ui/Icon.tsx', {}, { React: react });
+  assert.equal(Icon({ name: 'close' }).children[0].props.d, 'm6 6 12 12M18 6 6 18');
+});
+
 test('account deletion password field matches mobile dark red without changing other settings fields', () => {
   const read = file => fs.readFileSync(path.join(root, file), 'utf8');
   const section = read('src/pages/settings/components/DeleteAccountSection.tsx');

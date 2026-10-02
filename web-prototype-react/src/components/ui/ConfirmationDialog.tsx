@@ -78,7 +78,7 @@ export function ConfirmationDialog({
         <div className={styles.content}>
           <header className={styles.header}>
             <div className={styles.titleRow}><span className={styles.icon}><Icon name="trash" size={20} /></span><div><h2 id="confirmation-dialog-title">{title}</h2><p id="confirmation-dialog-description">{description}</p></div></div>
-            <button type="button" className={styles.close} aria-label={`Close ${title.toLowerCase()}`} disabled={busy} onClick={onCancel}>×</button>
+            <button type="button" className={styles.close} aria-label={`Close ${title.toLowerCase()}`} disabled={busy} onClick={onCancel}><Icon name="close" size={18} /></button>
           </header>
           <div className={styles.subject}><small>{subjectLabel}</small><strong>{subject}</strong></div>
           {children}
