@@ -41,6 +41,54 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+test('both welcome brand links return to the top without hash navigation', () => {
+  for (const reducedMotion of [false, true]) {
+    const scrolls = [];
+    const focusCalls = [];
+    const stateUpdates = [];
+    const WelcomePage = load('src/pages/welcome/WelcomePage.tsx', {
+      react: {
+        useEffect: () => {},
+        useRef: () => ({ current: null }),
+        useState: initial => [initial, value => stateUpdates.push(value)],
+      },
+      '../../components/ui/Icon': { Icon: 'Icon' },
+      './WelcomePage.module.css': {},
+    }, {
+      React: { createElement: (type, props, ...children) => ({ type, props, children }) },
+      window: {
+        matchMedia: () => ({ matches: reducedMotion }),
+        scrollTo: options => scrolls.push(plain(options)),
+      },
+      document: { getElementById: id => id === 'welcome-main'
+        ? { focus: options => focusCalls.push(plain(options)) } : null },
+    }).WelcomePage;
+    const brandLinks = [];
+    function collect(node) {
+      if (Array.isArray(node)) return node.forEach(collect);
+      if (!node || typeof node !== 'object') return;
+      if (typeof node.type === 'function' && node.type.name === 'Brand') {
+        brandLinks.push(node.type(node.props));
+      }
+      node.children?.forEach(collect);
+    }
+    collect(WelcomePage());
+    assert.equal(brandLinks.length, 2);
+    for (const link of brandLinks) {
+      let prevented = false;
+      link.props.onClick({ preventDefault: () => { prevented = true; } });
+      assert.ok(prevented);
+      assert.deepEqual(scrolls.at(-1), { top: 0, behavior: reducedMotion ? 'instant' : 'smooth' });
+      assert.deepEqual(focusCalls.at(-1), { preventScroll: true });
+      assert.equal(stateUpdates.at(-1), false);
+    }
+    const previousScrollCount = scrolls.length;
+    brandLinks[0].props.onClick({ ctrlKey: true, preventDefault: () => assert.fail('Preserve modified link clicks') });
+    assert.equal(scrolls.length, previousScrollCount);
+    assert.equal(brandLinks[0].props.href, '#/welcome');
+  }
+});
+
 test('public entry defaults to welcome and preserves saved-result deep links', () => {
   const location = { hash: '' };
   const routes = load('src/app/routes.ts', {}, { window: { location } });

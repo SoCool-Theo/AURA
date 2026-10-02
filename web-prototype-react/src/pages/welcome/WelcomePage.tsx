@@ -21,8 +21,12 @@ const LESSONS = [
   ['stats-chart', 'Sharpe ratio', 'How much return for the risk?', 'The Sharpe ratio compares excess return with volatility. Read it alongside other metrics to understand the historical experience.'],
 ] as const;
 
-function Brand() {
-  return <a href="#/welcome" className={styles.brand} aria-label="Aura welcome page"><span aria-hidden="true" />AURA</a>;
+function Brand({ onBackToTop }: { onBackToTop: () => void }) {
+  return <a href="#/welcome" className={styles.brand} aria-label="Aura welcome page" onClick={event => {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onBackToTop();
+  }}><span aria-hidden="true" />AURA</a>;
 }
 
 function StartLink({ label = 'Get started' }: { label?: string }) {
@@ -90,6 +94,12 @@ export function WelcomePage() {
     section?.focus({ preventScroll: true });
   }
 
+  function scrollToTop() {
+    setMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    document.getElementById('welcome-main')?.focus({ preventScroll: true });
+  }
+
   return <div ref={pageRef} className={styles.page}>
     <a className={styles.skipLink} href="#/welcome" onClick={event => { event.preventDefault(); scrollToSection('main'); }}>Skip to content</a>
     <header className={styles.header} onKeyDown={event => {
@@ -99,7 +109,7 @@ export function WelcomePage() {
       }
     }}>
       <div className={styles.headerInner}>
-        <Brand />
+        <Brand onBackToTop={scrollToTop} />
         <nav id="welcome-navigation" className={`${styles.navigation} ${menuOpen ? styles.navigationOpen : ''}`} aria-label="Welcome navigation">{SECTIONS.map(([id, label]) => <button key={id} onClick={() => scrollToSection(id)}>{label}</button>)}</nav>
         <div className={styles.headerActions}><a href="#/login" className={styles.signIn}>Sign in</a><StartLink /><button ref={menuButtonRef} className={styles.menuButton} aria-label={menuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={menuOpen} aria-controls="welcome-navigation" onClick={() => setMenuOpen(value => !value)}><Icon name={menuOpen ? 'chevron-up' : 'chevron-down'} size={22} /></button></div>
       </div>
@@ -182,6 +192,6 @@ export function WelcomePage() {
       <section className={styles.finalCta} data-reveal><span className={styles.ctaMark} aria-hidden="true" /><span className={styles.eyebrow}>YOUR NEXT STEP STARTS WITH CLARITY</span><h2>Get to know<br /><span>your portfolio.</span></h2><p>Discover the story behind your numbers with Aura.</p><StartLink label="Create your Aura account" /><a href="#/login" className={styles.finalSignIn}>Already have an account? <span>Sign in →</span></a></section>
     </main>
 
-    <footer className={styles.footer}><div className={styles.footerTop}><div><Brand /><p>Portfolio risk education.<br />A clearer perspective on your holdings.</p></div><nav aria-label="Footer navigation">{SECTIONS.map(([id, label]) => <button key={id} onClick={() => scrollToSection(id)}>{label}</button>)}<a href="#/login">Sign in</a></nav></div><div className={styles.footerBottom}><span>Aura · Senior project</span><p>Educational purposes only. Historical performance does not guarantee future results. Not financial or investment advice.</p></div></footer>
+    <footer className={styles.footer}><div className={styles.footerTop}><div><Brand onBackToTop={scrollToTop} /><p>Portfolio risk education.<br />A clearer perspective on your holdings.</p></div><nav aria-label="Footer navigation">{SECTIONS.map(([id, label]) => <button key={id} onClick={() => scrollToSection(id)}>{label}</button>)}<a href="#/login">Sign in</a></nav></div><div className={styles.footerBottom}><span>Aura · Senior project</span><p>Educational purposes only. Historical performance does not guarantee future results. Not financial or investment advice.</p></div></footer>
   </div>;
 }
