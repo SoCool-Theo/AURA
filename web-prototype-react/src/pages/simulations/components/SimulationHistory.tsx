@@ -21,6 +21,20 @@ export function SimulationHistory({ portfolioId, reloadKey }: { portfolioId: str
   }, [portfolioId, reloadKey, retryKey]);
   return <div id="simulation-history"><Card className={styles.history}><div className={styles.historyHeader}><div><h2>Simulation History</h2><p>Immutable successful runs for this portfolio, newest first.</p></div></div>
     {loading && <p role="status">Loading saved simulations…</p>}{Boolean(error) && <InlineErrorCard error={error} fallbackMessage="Unable to load simulation history." onRetry={() => setRetryKey(value => value + 1)} />}{!loading && !error && !items.length && <p>No saved simulations yet.</p>}
-    {!loading && !error && items.length > 0 && <div style={{ overflowX: 'auto' }}><table className={styles.table}><thead><tr><th>Created</th><th>Type</th><th>Scenario</th><th>Requested dates</th><th>Actions</th></tr></thead><tbody>{items.map(item => <tr key={item.id}><td>{formatTimestamp(item.created_at)}</td><td>{simulationTypeLabel(item.simulation_type)}</td><td>{item.scenario_id ?? 'N/A'}</td><td>{item.requested_start_date} to {item.requested_end_date}</td><td><div className={styles.historyActions}><button onClick={() => go(`simulations/${portfolioId}/${item.id}`)}>Open snapshot →</button><DeleteSimulationButton portfolioId={portfolioId} simulationId={item.id} subject={`${simulationTypeLabel(item.simulation_type)} · ${formatTimestamp(item.created_at)} · ${item.id}`} onDeleted={() => { deletedIdsRef.current.add(item.id); setItems(current => current.filter(row => row.id !== item.id)); }} /></div></td></tr>)}</tbody></table></div>}
+    {!loading && !error && items.length > 0 && <div style={{ overflowX: 'auto' }}>
+      <table className={`${styles.table} ${styles.historyTable}`}>
+        <thead><tr><th scope="col">Created</th><th scope="col">Type</th><th scope="col">Scenario</th><th scope="col">Requested dates</th><th scope="col">Actions</th></tr></thead>
+        <tbody>{items.map(item => <tr key={item.id}>
+          <td>{formatTimestamp(item.created_at)}</td>
+          <td>{simulationTypeLabel(item.simulation_type)}</td>
+          <td>{item.scenario_id ?? 'N/A'}</td>
+          <td>{item.requested_start_date} to {item.requested_end_date}</td>
+          <td><div className={styles.historyActions}>
+            <button onClick={() => go(`simulations/${portfolioId}/${item.id}`)}>Open snapshot →</button>
+            <DeleteSimulationButton portfolioId={portfolioId} simulationId={item.id} subject={`${simulationTypeLabel(item.simulation_type)} · ${formatTimestamp(item.created_at)} · ${item.id}`} onDeleted={() => { deletedIdsRef.current.add(item.id); setItems(current => current.filter(row => row.id !== item.id)); }} />
+          </div></td>
+        </tr>)}</tbody>
+      </table>
+    </div>}
   </Card></div>;
 }

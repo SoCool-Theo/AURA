@@ -46,6 +46,17 @@
 .danger:hover:not(:disabled), .danger:focus-visible { border-color: var(--red-bright); background: rgba(182, 46, 58, .4); outline: none; }
 .danger:disabled, .close:disabled { cursor: not-allowed; opacity: .6; }
 
+/* Simulation deletion uses red throughout, without the default teal accent. */
+.dangerTheme { border-color: var(--red-bright); background: linear-gradient(145deg, #30151f, #1c0e17); }
+.dangerTheme .accent { background: var(--red-bright); }
+.dangerTheme .icon, .dangerTheme .subject { background: rgba(255, 89, 100, .12); }
+.dangerTheme .subject { border-color: rgba(255, 89, 100, .45); }
+.dangerTheme .close, .dangerTheme .cancel { border-color: rgba(255, 89, 100, .4); background: rgba(255, 89, 100, .08); }
+.dangerTheme .close:hover, .dangerTheme .cancel:hover { border-color: var(--red-bright); background: rgba(255, 89, 100, .16); }
+.dangerTheme .danger { border-color: var(--red-bright); background: var(--red-bright); color: #240a10; }
+.dangerTheme .danger:hover:not(:disabled) { background: var(--red-primary); }
+.dangerTheme button:focus-visible { outline: 3px solid rgba(255, 89, 100, .5); outline-offset: 2px; border-color: var(--red-bright); }
+
 @media (max-width: 520px) {
   .content { padding: 18px; }
   .actions { display: grid; grid-template-columns: 1fr 1fr; }

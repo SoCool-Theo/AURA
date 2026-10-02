@@ -97,6 +97,10 @@
 @media (max-width: 1000px) { .metrics, .referenceMetricGrid { grid-template-columns: repeat(2, 1fr); } .resultGrid { grid-template-columns: 1fr; } }
 @media (max-width: 650px) { .metrics, .dateFields, .referenceMetricGrid { grid-template-columns: 1fr; } .detailHeader, .historyHeader, .baselineHeading, .assistantCard { align-items: flex-start; flex-direction: column; } .assistantCard button, .referenceContext button { width: 100%; justify-content: center; margin-left: 0; } .baselineRows > div { grid-template-columns: 1fr 1fr; padding-top: 10px; } .baselineRows b { grid-column: 1/-1; padding-bottom: 10px; text-align: left; } .historicalMetricsHeader, .historicalMetricsRow { grid-template-columns: minmax(110px, 1.2fr) repeat(2, minmax(90px, 1fr)); gap: 8px; padding-left: 9px; padding-right: 9px; } }
 .historyActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.historyTable { min-width: 900px; }
+.historyTable th:last-child { text-align: right; }
+.historyTable td:last-child { width: 1%; white-space: nowrap; }
+.historyTable .historyActions { justify-content: flex-end; flex-wrap: nowrap; }
 .deleteButton, .table button.deleteButton { min-height: 44px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--red-primary); color: var(--red-primary); background: rgba(255, 77, 109, .08); font-weight: 700; cursor: pointer; }
 .deleteButton:hover { background: rgba(255, 77, 109, .16); }
 .deleteButton:disabled { opacity: .55; cursor: wait; }

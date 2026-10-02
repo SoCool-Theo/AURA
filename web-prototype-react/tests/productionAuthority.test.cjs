@@ -65,6 +65,7 @@ test('web simulation deletion requires confirmation and only updates history aft
   const settle = async () => { for (let i = 0; i < 5; i++) { await new Promise(done => setImmediate(done)); if (dirty) render(); } };
   render(); assert.equal(tree.children[1], false); assert.equal(calls.length, 0);
   tree.children[0].props.onClick(); await settle();
+  assert.equal(tree.children[1].props.tone, 'danger');
   tree.children[1].props.onCancel(); await settle(); assert.equal(calls.length, 0);
   tree.children[0].props.onClick(); await settle(); tree.children[1].props.onConfirm(); await settle();
   assert.equal(tree.children[1].props.error.message, 'offline'); assert.equal(deleted, 0);
@@ -91,6 +92,19 @@ test('web simulation delete uses the authenticated transport and handles 204', a
   assert.ok(calls[0].url.endsWith('/api/portfolios/a%2Fb/simulations/c%2Fd'));
   assert.equal(calls[0].options.method, 'DELETE');
   assert.equal(calls[0].options.headers.get('Authorization'), 'Bearer token');
+});
+
+test('simulation deletion uses a red-only dialog and right-aligned history actions', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const dialog = read('src/components/ui/ConfirmationDialog.module.css');
+  const history = read('src/pages/simulations/SimulationIntegration.module.css');
+  assert.match(dialog, /\.dangerTheme \.accent \{ background: var\(--red-bright\);/);
+  assert.match(dialog, /\.dangerTheme button:focus-visible \{ outline: 3px solid rgba\(255, 89, 100, \.5\)/);
+  assert.match(dialog, /\.dangerTheme \.danger \{[^}]*background: var\(--red-bright\)/);
+  assert.match(history, /\.historyTable th:last-child \{ text-align: right;/);
+  assert.match(history, /\.historyTable td:last-child \{ width: 1%; white-space: nowrap;/);
+  assert.match(history, /\.historyTable \.historyActions \{ justify-content: flex-end; flex-wrap: nowrap;/);
+  assert.match(read('src/pages/simulations/components/SimulationHistory.tsx'), /styles\.historyTable/);
 });
 
 test('both welcome brand links return to the top without hash navigation', () => {

@@ -31,7 +31,7 @@ export function DeleteSimulationButton({ portfolioId, simulationId, subject, onD
 
   return <>
     <button type="button" aria-label={`Delete simulation ${subject}`} className={styles.deleteButton} disabled={busy} onClick={() => { setError(null); setOpen(true); }}>Delete Simulation</button>
-    {open && <ConfirmationDialog title="Delete simulation?"
+    {open && <ConfirmationDialog tone="danger" title="Delete simulation?"
       description="This permanently removes this saved simulation and cannot be undone. Your portfolio and analysis reports stay unchanged."
       subjectLabel="Saved simulation" subject={subject} confirmLabel="Delete Simulation" busy={busy} error={error}
       onCancel={() => { if (!busyRef.current) { setOpen(false); setError(null); } }} onConfirm={() => void remove()} />}

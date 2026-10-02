@@ -11,6 +11,7 @@ type ConfirmationDialogProps = {
   subjectLabel: string;
   confirmLabel: string;
   busy: boolean;
+  tone?: 'danger';
   error?: unknown;
   onCancel: () => void;
   onConfirm: () => void;
@@ -23,6 +24,7 @@ export function ConfirmationDialog({
   subjectLabel,
   confirmLabel,
   busy,
+  tone,
   error,
   onCancel,
   onConfirm,
@@ -66,7 +68,7 @@ export function ConfirmationDialog({
   return createPortal(
     <div className={styles.overlay}>
       <button type="button" className={styles.backdrop} aria-label={`Close ${title.toLowerCase()}`} disabled={busy} onClick={onCancel} />
-      <section ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="confirmation-dialog-title" aria-describedby="confirmation-dialog-description">
+      <section ref={dialogRef} className={`${styles.dialog} ${tone === 'danger' ? styles.dangerTheme : ''}`} role="dialog" aria-modal="true" aria-labelledby="confirmation-dialog-title" aria-describedby="confirmation-dialog-description">
         <div className={styles.accent} />
         <div className={styles.content}>
           <header className={styles.header}>
@@ -76,7 +78,7 @@ export function ConfirmationDialog({
           <div className={styles.subject}><small>{subjectLabel}</small><strong>{subject}</strong></div>
           {Boolean(error) && <div className={styles.error}><FormErrorSummary error={error} /></div>}
           <div className={styles.actions}>
-            <button ref={cancelRef} type="button" className="secondary-btn" disabled={busy} onClick={onCancel}>Cancel</button>
+            <button ref={cancelRef} type="button" className={`secondary-btn ${styles.cancel}`} disabled={busy} onClick={onCancel}>Cancel</button>
             <button type="button" className={styles.danger} disabled={busy} onClick={onConfirm}>{busy ? 'Working…' : confirmLabel}</button>
           </div>
         </div>
