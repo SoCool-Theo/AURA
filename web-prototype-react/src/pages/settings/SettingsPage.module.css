@@ -29,5 +29,16 @@
 .success { border: 1px solid rgba(49, 214, 207, .28); background: rgba(49, 214, 207, .08); color: var(--teal-primary); }
 .actions { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-divider); display: flex; justify-content: flex-end; gap: 9px; }
 .actions button:disabled { cursor: not-allowed; opacity: .55; }
+.deferredColumns { margin-top: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.deferredItems { margin-top: 4px; }
+.deferredRow { display: flex; align-items: center; gap: 12px; padding: 18px 0; border-bottom: 1px solid var(--border-divider); }
+.deferredRow:last-child { border-bottom: 0; padding-bottom: 0; }
+.deferredIcon { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 11px; background: var(--control-bg); color: var(--text-secondary); display: grid; place-items: center; }
+.deferredCopy { min-width: 0; flex: 1; }
+.deferredLabel { display: block; padding: 0; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 750; text-align: left; cursor: not-allowed; }
+.deferredCopy p { margin: 5px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.unavailableBadge { flex: 0 0 auto; padding: 5px 8px; border: 1px solid var(--border-divider); border-radius: 999px; color: var(--text-muted); background: var(--control-bg); font-size: 9px; }
+@media (max-width: 860px) { .deferredColumns { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .deferredRow { flex-wrap: wrap; } .deferredCopy { flex-basis: calc(100% - 48px); } .unavailableBadge { margin-left: 48px; } }
 @media (max-width: 860px) { .columns { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .identityCard { align-items: flex-start; flex-wrap: wrap; } .secureBadge { width: 100%; box-sizing: border-box; margin-left: 0; justify-content: center; } .formGrid { grid-template-columns: 1fr; } .fullWidth { grid-column: auto; } .actions button { flex: 1; } }

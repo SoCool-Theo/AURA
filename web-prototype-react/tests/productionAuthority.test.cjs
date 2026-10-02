@@ -1154,3 +1154,38 @@ test('web session restoration uses the focused Aura loading screen', () => {
   assert.match(styles, /url\('\.\.\/assets\/aura-market-background\.png'\)/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
+
+test('web settings mirror mobile privacy/alerts and data/support as inactive previews', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const { DeferredSettingsSections } = load('src/pages/settings/components/DeferredSettingsSections.tsx', {
+    '../../../components/ui/Card': { Card: 'Card' },
+    '../../../components/ui/Icon': { Icon: 'Icon' },
+    '../SettingsPage.module.css': {},
+  }, { React: react });
+  const buttons = [], headings = [], text = [];
+  function visit(node) {
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (typeof node === 'string') { text.push(node); return; }
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'button') buttons.push(node);
+    if (node.type === 'h2') headings.push(node.children.join(''));
+    assert.ok(!Object.keys(node.props).some(key => /^on[A-Z]/.test(key)), 'Preview has no event handlers');
+    node.children?.forEach(visit);
+  }
+  visit(DeferredSettingsSections());
+  assert.deepEqual(headings, ['Privacy & alerts', 'Data & support']);
+  const labels = ['Hide portfolio values', 'App notifications', 'Reset local data', 'Help & Support', 'About Aura'];
+  assert.deepEqual(buttons.map(button => button.children.join('')), labels);
+  for (const button of buttons) {
+    assert.equal(button.props.disabled, true);
+    assert.equal(button.props.type, 'button');
+    assert.ok(button.props['aria-describedby']);
+  }
+  assert.equal(text.filter(value => value === 'Not available yet').length, 5);
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const mobile = fs.readFileSync(path.join(root, '../mobile/src/screens/settings/SettingsScreen.tsx'), 'utf8');
+  for (const label of labels) assert.ok(mobile.includes(label));
+  assert.match(read('src/pages/settings/SettingsPage.tsx'), /<DeferredSettingsSections \/>/);
+  const preview = read('src/pages/settings/components/DeferredSettingsSections.tsx');
+  assert.doesNotMatch(preview, /useState|useEffect|localStorage|sessionStorage|authApi|resetLocalData|resetPreferences|onClick|onChange/);
+});

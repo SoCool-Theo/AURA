@@ -12,6 +12,7 @@ import type {
   ProfileUpdateRequest,
 } from '../../types/auth';
 import styles from './SettingsPage.module.css';
+import { DeferredSettingsSections } from './components/DeferredSettingsSections';
 
 type ProfileDraft = {
   displayName: string;
@@ -233,6 +234,7 @@ export function SettingsPage() {
           </form>
         </Card>
       </div>
+      <DeferredSettingsSections />
     </div>
   );
 }
