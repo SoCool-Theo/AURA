@@ -39,6 +39,7 @@ import { darkPalette, lightPalette } from '../theme/colors';
 import { HomeHeaderButton } from '../components/ui/HomeHeaderButton';
 import { BackHeaderButton } from '../components/ui/BackHeaderButton';
 import { usePreferences } from '../preferences/usePreferences';
+import { tabRootAction } from './tabRootNavigation';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const PortfolioStack = createNativeStackNavigator<PortfolioStackParamList>();
@@ -204,6 +205,14 @@ export function MainTabNavigator() {
 
   return (
     <Tab.Navigator
+      screenListeners={({ navigation, route }) => ({
+        tabPress: (event) => {
+          const action = tabRootAction(route.name);
+          if (!action) return;
+          event.preventDefault();
+          navigation.dispatch(action);
+        }
+      })}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {

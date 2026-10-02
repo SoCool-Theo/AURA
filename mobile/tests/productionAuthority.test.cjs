@@ -27,6 +27,102 @@ function load(file, mocks = {}, globals = {}) {
   return module.exports;
 }
 
+test('bottom-tab presses return nested stacks to their roots, including cold deep links', () => {
+  let key = 0;
+  const routerPath = 'node_modules/@react-navigation/routers/src/';
+  const nanoid = { nanoid: () => String(++key) };
+  const CommonActions = load(`${routerPath}CommonActions.tsx`);
+  const BaseRouter = load(`${routerPath}BaseRouter.tsx`, { 'nanoid/non-secure': nanoid });
+  const createParamsFromAction = load(`${routerPath}createParamsFromAction.tsx`);
+  const createRouteFromAction = load(`${routerPath}createRouteFromAction.tsx`, {
+    'nanoid/non-secure': nanoid, './createParamsFromAction': createParamsFromAction
+  });
+  const routerMocks = {
+    'nanoid/non-secure': nanoid, './BaseRouter': BaseRouter,
+    './createParamsFromAction': createParamsFromAction, './createRouteFromAction': createRouteFromAction
+  };
+  const { StackRouter } = load(`${routerPath}StackRouter.tsx`, routerMocks);
+  const SwitchRouter = load(`${routerPath}SwitchRouter.tsx`, routerMocks);
+  const { TabRouter } = load(`${routerPath}TabRouter.tsx`, { './SwitchRouter': SwitchRouter });
+  const tabRoots = load('src/navigation/tabRootNavigation.ts', {
+    '@react-navigation/native': { CommonActions }
+  });
+  const mocks = {
+    react: { createElement: (type, props, ...children) => ({ type, props, children }) },
+    '@expo/vector-icons': { Ionicons: 'Icon' },
+    '@react-navigation/bottom-tabs': { createBottomTabNavigator: () => ({ Navigator: 'TabNavigator', Screen: 'TabScreen' }) },
+    '@react-navigation/native-stack': { createNativeStackNavigator: () => ({ Navigator: 'StackNavigator', Screen: 'StackScreen' }) },
+    '../theme/colors': { darkPalette: {}, lightPalette: {} },
+    '../preferences/usePreferences': { usePreferences: () => ({ themeMode: 'dark' }) },
+    '../components/ui/HomeHeaderButton': { HomeHeaderButton: 'HomeHeaderButton' },
+    '../components/ui/BackHeaderButton': { BackHeaderButton: 'BackHeaderButton' },
+    './tabRootNavigation': tabRoots
+  };
+  // Screens are irrelevant to this navigator listener test; stub their named exports.
+  const source = ts.createSourceFile('navigator.tsx', fs.readFileSync(path.join(root, 'src/navigation/MainTabNavigator.tsx'), 'utf8'), ts.ScriptTarget.Latest, true);
+  for (const node of source.statements) {
+    if (!ts.isImportDeclaration(node) || !node.moduleSpecifier.text.startsWith('../screens/')) continue;
+    mocks[node.moduleSpecifier.text] = Object.fromEntries(
+      node.importClause.namedBindings.elements.map(binding => [binding.name.text, binding.name.text])
+    );
+  }
+  const { MainTabNavigator } = load('src/navigation/MainTabNavigator.tsx', mocks);
+  const listeners = MainTabNavigator().props.screenListeners;
+  const tabOptions = {
+    routeNames: ['Home', 'Portfolio', 'Simulate', 'AI', 'MoreTab'], routeParamList: {}, routeGetIdList: {}
+  };
+  const cases = [
+    ['Portfolio', 'Portfolios', 'PortfolioDetail'],
+    ['Simulate', 'Simulations', 'SimulationResult'],
+    ['MoreTab', 'More', 'Reports'],
+    ['MoreTab', 'More', 'LearnDetail'],
+    ['MoreTab', 'More', 'Settings']
+  ];
+  for (const [tab, rootScreen, detail] of cases) {
+    for (const focused of [false, true]) {
+      for (const coldDeepLink of [false, true]) {
+        const tabs = TabRouter({});
+        let state = tabs.getInitialState(tabOptions);
+        const tabIndex = state.routes.findIndex(route => route.name === tab);
+        const stack = StackRouter({ initialRouteName: rootScreen });
+        const stackOptions = { routeNames: [rootScreen, detail], routeParamList: {}, routeGetIdList: {} };
+        const child = stack.getRehydratedState({
+          index: coldDeepLink ? 0 : 1,
+          routes: [...(coldDeepLink ? [] : [{ name: rootScreen }]), {
+            name: detail, params: { portfolioId: 'portfolio-1', simulationId: 'run-1', lessonId: 'volatility' }
+          }]
+        }, stackOptions);
+        state.routes[tabIndex] = { ...state.routes[tabIndex], state: child, params: { screen: detail, params: child.routes.at(-1).params } };
+        if (focused) state = tabs.getStateForRouteFocus(state, state.routes[tabIndex].key);
+        const previousState = state;
+        let prevented = false;
+        listeners({
+          route: state.routes[tabIndex],
+          navigation: { dispatch: action => { state = tabs.getStateForAction(state, action, tabOptions); } }
+        }).tabPress({ preventDefault: () => { prevented = true; } });
+        assert.ok(prevented);
+        assert.equal(state.index, tabIndex);
+        const params = state.routes[tabIndex].params;
+        assert.equal(params.screen, undefined, 'stale detail screen params are replaced');
+        // React Navigation applies nested params.state as a reset to the child router.
+        const reset = stack.getStateForAction(child, CommonActions.reset(params.state), stackOptions);
+        const result = stack.getRehydratedState(reset, stackOptions);
+        assert.deepEqual(Array.from(result.routes, route => route.name), [rootScreen]);
+        assert.equal(result.index, 0);
+        assert.equal(result.routes[0].params, undefined);
+        assert.equal(stack.getStateForAction(result, CommonActions.goBack(), stackOptions), null);
+        state.routes.forEach((route, index) => {
+          if (index !== tabIndex) assert.equal(route, previousState.routes[index], 'other tabs and AI context remain untouched');
+        });
+      }
+    }
+  }
+  for (const name of ['Home', 'AI']) {
+    listeners({ route: { name }, navigation: { dispatch: () => assert.fail('Keep leaf-tab navigation native') } })
+      .tabPress({ preventDefault: () => assert.fail('Keep leaf-tab navigation native') });
+  }
+});
+
 function hookHarness() {
   const slots = [];
   let cursor = 0, effects = [], render, value, dirty;

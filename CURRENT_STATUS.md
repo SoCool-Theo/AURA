@@ -2363,3 +2363,18 @@ remain separate follow-on work.
 - Validation: production build and 34 web authority tests passed, including new
   runtime public-entry/session/protected-deep-link regressions. Changes remain
   uncommitted pending user review and explicit authorization.
+
+### Completed mobile bottom-tab root navigation (2026-10-02)
+
+- Bottom-bar taps now return Portfolio to Portfolios, Simulate to Simulations,
+  and More to More instead of reopening the last detail screen. Each tap resets
+  only the selected child stack, including direct-entry screens with no root in
+  their existing history. Home and AI retain their native single-screen behavior.
+- In-page report, simulation, and Ask Aura links retain their exact context;
+  other tabs, shared portfolio state, and AI conversations are not reset.
+- Added a navigation listener and small scoped action helper. Regression checks
+  use the installed tab/stack routers for focused/unfocused tabs, normal history,
+  cold deep links, empty root back history, and unchanged other-tab state.
+- Validation: mobile TypeScript check and all 43 mobile authority tests passed.
+  Physical-device interaction was not verified. No backend, web, API, dependency,
+  financial calculation, commit, or push changes were made.
