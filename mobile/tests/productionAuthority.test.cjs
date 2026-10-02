@@ -1408,7 +1408,7 @@ test('mobile asset-risk detail is report-backed, navigable, and never recalculat
   assert.match(detail, /getReport\(portfolioId, reportId/);
   assert.match(detail, /navigation\.popTo\('ReportDetail'/);
   assert.match(detail, /focusAssetSection: true/);
-  assert.match(detail, /Back to per-asset valuation and risk/);
+  assert.doesNotMatch(detail, /Back to per-asset valuation and risk|backButtonText/);
   assert.match(reportDetail, /ref=\{scrollRef\}/);
   assert.match(reportDetail, /onAssetSectionLayout/);
   assert.match(results, /nativeID="per-asset-analysis"/);
