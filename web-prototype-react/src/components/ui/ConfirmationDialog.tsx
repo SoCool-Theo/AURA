@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { FormErrorSummary } from './ApiErrorState';
 import { Icon } from './Icon';
@@ -13,6 +14,8 @@ type ConfirmationDialogProps = {
   busy: boolean;
   tone?: 'danger';
   error?: unknown;
+  children?: ReactNode;
+  confirmDisabled?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -26,6 +29,8 @@ export function ConfirmationDialog({
   busy,
   tone,
   error,
+  children,
+  confirmDisabled = false,
   onCancel,
   onConfirm,
 }: ConfirmationDialogProps) {
@@ -46,7 +51,7 @@ export function ConfirmationDialog({
         return;
       }
       if (event.key !== 'Tab') return;
-      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []);
+      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)') ?? []);
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -76,10 +81,11 @@ export function ConfirmationDialog({
             <button type="button" className={styles.close} aria-label={`Close ${title.toLowerCase()}`} disabled={busy} onClick={onCancel}>×</button>
           </header>
           <div className={styles.subject}><small>{subjectLabel}</small><strong>{subject}</strong></div>
+          {children}
           {Boolean(error) && <div className={styles.error}><FormErrorSummary error={error} /></div>}
           <div className={styles.actions}>
             <button ref={cancelRef} type="button" className={`secondary-btn ${styles.cancel}`} disabled={busy} onClick={onCancel}>Cancel</button>
-            <button type="button" className={styles.danger} disabled={busy} onClick={onConfirm}>{busy ? 'Working…' : confirmLabel}</button>
+            <button type="button" className={styles.danger} disabled={busy || confirmDisabled} onClick={onConfirm}>{busy ? 'Working…' : confirmLabel}</button>
           </div>
         </div>
       </section>

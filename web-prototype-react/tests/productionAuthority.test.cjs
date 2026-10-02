@@ -41,6 +41,96 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+test('web sign out clears authenticated state even when token storage removal fails', () => {
+  const updates = [];
+  const react = {
+    createContext: () => ({ Provider: 'Provider' }),
+    createElement: (_type, props) => props.value,
+    useState: initial => [initial, value => updates.push(value)],
+    useRef: initial => ({ current: initial }),
+    useCallback: fn => fn,
+    useMemo: fn => fn(),
+    useEffect: () => {},
+  };
+  const { AuthProvider } = load('src/auth/AuthContext.tsx', {
+    react,
+    '../api/authApi': {},
+    '../api/apiClient': { ApiError: Error, configureApiAuthentication: () => {} },
+    './authStorage': { clearAccessToken: () => { throw Error('storage unavailable'); } },
+  }, { React: react });
+  assert.throws(() => AuthProvider({}).logout(), /storage unavailable/);
+  assert.deepEqual(updates, [null, null, 'unauthenticated']);
+});
+
+test('web account deletion uses authenticated DELETE and accepts an empty 204', async () => {
+  const calls = [];
+  const transport = load('src/api/apiClient.ts', {
+    '../config/environment': { environment: { apiBaseUrl: 'http://example.invalid' } },
+  }, { fetch: async (url, options) => {
+    calls.push({ url, options }); return { status: 204, ok: true, text: async () => '' };
+  } });
+  const api = load('src/api/authApi.ts', { './apiClient': transport });
+  assert.equal(await api.deleteCurrentUserAccount({ current_password: 'current-password' }, { token: 'token' }), undefined);
+  assert.equal(calls[0].url, 'http://example.invalid/api/auth/me');
+  assert.equal(calls[0].options.method, 'DELETE');
+  assert.equal(calls[0].options.headers.get('Authorization'), 'Bearer token');
+  assert.deepEqual(JSON.parse(calls[0].options.body), { current_password: 'current-password' });
+});
+
+test('web account deletion confirms password, supports cancel/retry, blocks duplicates, and signs out after success', async () => {
+  for (const logoutThrows of [false, true]) {
+    const slots = []; let cursor = 0, dirty, tree;
+    const react = {
+      createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+      useState: initial => {
+        const i = cursor++; if (!(i in slots)) slots[i] = initial;
+        return [slots[i], value => { slots[i] = value; dirty = true; }];
+      },
+      useRef: initial => { const i = cursor++; return slots[i] ??= { current: initial }; },
+    };
+    const calls = []; let fail = true, signedOut = 0, resolve;
+    const { DeleteAccountSection } = load('src/pages/settings/components/DeleteAccountSection.tsx', {
+      react,
+      '../../../api/authApi': { deleteCurrentUserAccount: async request => {
+        calls.push(plain(request)); if (fail) throw Error('wrong password'); await new Promise(done => { resolve = done; });
+      } },
+      '../../../auth/useAuth': { useAuth: () => ({ user: { email: 'user@example.com' }, logout: () => {
+        signedOut++; if (logoutThrows) throw Error('storage unavailable');
+      } }) },
+      '../../../components/ui/Card': { Card: 'Card' },
+      '../../../components/ui/Icon': { Icon: 'Icon' },
+      '../../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
+      '../SettingsPage.module.css': {},
+    }, { React: react });
+    const render = () => { cursor = 0; dirty = false; tree = DeleteAccountSection({}); };
+    const settle = async () => { for (let i = 0; i < 5; i++) { await new Promise(done => setImmediate(done)); if (dirty) render(); } };
+    const button = () => tree.children[0].children[1];
+    const dialog = () => tree.children[1];
+    const password = value => dialog().children[0].children[0].children[1].props.onChange({ target: { value } });
+    render(); assert.equal(calls.length, 0);
+    button().props.onClick(); await settle();
+    assert.equal(dialog().props.tone, 'danger');
+    assert.equal(dialog().props.confirmDisabled, true);
+    dialog().props.onConfirm(); await settle(); assert.equal(calls.length, 0);
+    password('current-password'); await settle();
+    dialog().props.onCancel(); await settle(); assert.equal(calls.length, 0);
+    button().props.onClick(); await settle();
+    assert.equal(dialog().props.confirmDisabled, true, 'cancel clears the secret');
+    password('current-password'); await settle();
+    dialog().props.onConfirm(); await settle();
+    assert.equal(dialog().props.error.message, 'wrong password'); assert.equal(signedOut, 0);
+    fail = false;
+    dialog().props.onConfirm(); dialog().props.onConfirm(); await settle();
+    assert.equal(calls.length, 2); assert.equal(dialog().props.busy, true);
+    dialog().props.onCancel(); await settle(); assert.ok(dialog());
+    resolve(); await settle();
+    assert.equal(signedOut, 1); assert.equal(dialog(), false); assert.equal(button().props.disabled, true);
+    assert.deepEqual(calls[1], { current_password: 'current-password' });
+  }
+  const settings = fs.readFileSync(path.join(root, 'src/pages/settings/SettingsPage.tsx'), 'utf8');
+  assert.ok(settings.indexOf('<DeleteAccountSection') > settings.indexOf('<DeferredSettingsSections'));
+});
+
 test('web simulation deletion requires confirmation and only updates history after success', async () => {
   const slots = []; let cursor = 0, dirty, tree;
   const react = {

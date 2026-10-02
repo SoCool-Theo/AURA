@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from app.api.dependencies import CurrentUser, DatabaseSession
 from app.database.models import User
 from app.schemas.auth import (
+    AccountDeletionRequest,
     AccessTokenResponse,
     AuthenticatedUserResponse,
     LoginRequest,
@@ -142,6 +143,25 @@ def update_me(
             detail="Unable to update profile",
         ) from error
     return response
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_me(
+    request: AccountDeletionRequest,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> None:
+    """Permanently delete the authenticated account in one transaction."""
+    try:
+        AuthService(session).delete_account(current_user, request)
+        session.commit()
+    except CurrentPasswordMismatchError as error:
+        raise _current_password_mismatch() from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to delete account",
+        ) from error
 
 
 @router.put(

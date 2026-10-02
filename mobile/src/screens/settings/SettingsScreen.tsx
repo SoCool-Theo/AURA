@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '../../components/ui/Button';
+import { DeleteAccountSection } from './DeleteAccountSection';
 import { Card } from '../../components/ui/Card';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { authApi } from '../../api/authApi';
@@ -86,6 +87,7 @@ export function SettingsScreen() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [accountDeleting, setAccountDeleting] = useState(false);
   const pendingRef = useRef(false);
 
   async function logout() {
@@ -499,11 +501,13 @@ export function SettingsScreen() {
           </Pressable>
         </View>
 
+        <DeleteAccountSection disabled={pending || profileSaving || passwordSaving} onBusyChange={setAccountDeleting} />
+
         <Button
           title={pending ? 'Please wait…' : 'Sign out'}
           variant="danger"
           onPress={() => void logout()}
-          disabled={pending}
+          disabled={pending || accountDeleting}
           style={{ marginTop: spacing.xl }}
         />
       </ScrollView>

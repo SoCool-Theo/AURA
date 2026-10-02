@@ -2406,3 +2406,30 @@ remain separate follow-on work.
 - Live PostgreSQL and physical-device/browser acceptance were not performed.
   No user data was deleted, no database migration was run, and no commit or
   push was made; changes await user review and explicit commit authorization.
+
+### Completed self-service account deletion (2026-10-02)
+
+- Added Bearer-authenticated `DELETE /api/auth/me` with a required current
+  password and empty `204` success. The service verifies the secret before
+  deleting only the authenticated user; the API commits once, and failures
+  roll back through the request dependency with sanitized error responses.
+- Existing database cascades delete owned CURRENT/PLANNED/LEGACY portfolios,
+  holdings, saved analyses/reports, all simulation modes, and watchlist entries.
+  Shared market data and other users remain intact. Deleted-account tokens
+  subsequently fail the persisted-user lookup. No migration is required.
+- Added red Delete Account sections below Data & Support in web Settings and
+  directly above Sign Out in mobile Settings. Both use red-themed confirmation
+  dialogs with password input, permanent-deletion warnings, cancel/error/retry
+  handling, and duplicate-submission guards. Existing web privacy/support
+  previews remain inactive as requested.
+- Both clients clear their sessions after success. Web also clears authenticated
+  UI if token-storage removal fails; mobile retains its existing secure-storage
+  cleanup error/retry flow. A cleanup failure never retries an already completed
+  server deletion. Local Learn progress/preferences and exported files remain.
+- Added API/service/transport/confirmation regressions and synthetic in-memory
+  FK-cascade tests covering both portfolio types, every simulation mode, other
+  users, market data, and rollback. Public API documentation was updated.
+- Validation: backend unit/non-live API suites, both client authority suites,
+  TypeScript checks, and web production build. Live PostgreSQL and physical
+  device/browser account-deletion acceptance were not performed; no actual
+  user accounts/data were deleted and no migrations, commits, or pushes were run.

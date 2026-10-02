@@ -135,6 +135,12 @@ class PasswordChangeRequest(AuraBaseModel):
         return self
 
 
+class AccountDeletionRequest(AuraBaseModel):
+    """Permanent self-service deletion requiring the current secret."""
+
+    current_password: PlaintextPassword
+
+
 class AccessTokenResponse(AuraBaseModel):
     """Minimal future bearer-token response contract."""
 

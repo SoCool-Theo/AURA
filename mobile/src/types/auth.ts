@@ -38,6 +38,10 @@ export type PasswordChangeRequest = {
   new_password: string;
 };
 
+export type AccountDeletionRequest = {
+  current_password: string;
+};
+
 export type AccessTokenResponse = {
   access_token: string;
   token_type: 'bearer';

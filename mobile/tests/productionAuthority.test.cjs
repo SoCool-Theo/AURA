@@ -168,6 +168,74 @@ function hookHarness() {
 }
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
+test('account deletion uses authenticated DELETE with a password body and empty 204', async () => {
+  const calls = [];
+  const transport = load('src/api/apiClient.ts', {
+    '../auth/authStorage': { getToken: async () => 'token' },
+    '../config/environment': { environment: { apiBaseUrl: 'http://example.invalid' } }
+  }, { fetch: async (url, options) => {
+    calls.push({ url, options }); return { status: 204, ok: true, text: async () => '' };
+  } });
+  const { authApi } = load('src/api/authApi.ts', { './apiClient': transport });
+  assert.equal(await authApi.deleteAccount({ current_password: 'current-password' }), undefined);
+  assert.equal(calls[0].url, 'http://example.invalid/api/auth/me');
+  assert.equal(calls[0].options.method, 'DELETE');
+  assert.equal(calls[0].options.headers.get('Authorization'), 'Bearer token');
+  assert.deepEqual(JSON.parse(calls[0].options.body), { current_password: 'current-password' });
+});
+
+test('mobile account deletion is above sign out and requires password confirmation before deletion', async () => {
+  for (const logoutThrows of [false, true]) {
+    const harness = hookHarness();
+    harness.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
+    const calls = [], busyChanges = []; let fail = true, signedOut = 0, pending;
+    class ApiError extends Error { constructor() { super('Wrong password'); this.status = 403; } }
+    const { DeleteAccountSection } = load('src/screens/settings/DeleteAccountSection.tsx', {
+      react: harness.react,
+      'react-native': { View: 'View', Text: 'Text', TextInput: 'Input', StyleSheet: { create: value => value } },
+      '../../api/authApi': { authApi: { deleteAccount: async request => {
+        calls.push(JSON.parse(JSON.stringify(request))); if (fail) throw new ApiError(); await pending.promise;
+      } } },
+      '../../api/apiClient': { ApiError },
+      '../../api/apiErrorPresentation': { apiErrorPresentation: () => ({ message: 'Unable to delete account.' }) },
+      '../../auth/useAuth': { useAuth: () => ({ user: { email: 'user@example.com' }, signOut: async () => {
+        signedOut++; if (logoutThrows) throw Error('storage unavailable');
+      } }) },
+      '../../components/ui/Button': { Button: 'Button' },
+      '../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
+      '../../theme/theme': { colors: {}, spacing: {} },
+    });
+    harness.mount(() => DeleteAccountSection({ onBusyChange: value => busyChanges.push(value) }));
+    const button = () => harness.value.children[2];
+    const dialog = () => harness.value.children[3];
+    const password = value => dialog().children[1].props.onChangeText(value);
+    assert.equal(button().props.variant, 'danger'); assert.equal(calls.length, 0);
+    button().props.onPress(); await harness.settle();
+    assert.equal(dialog().props.tone, 'danger');
+    assert.equal(dialog().props.confirmDisabled, true);
+    dialog().props.onConfirm(); await harness.settle(); assert.equal(calls.length, 0);
+    password('current-password'); await harness.settle();
+    dialog().props.onCancel(); await harness.settle(); assert.equal(calls.length, 0);
+    button().props.onPress(); await harness.settle();
+    assert.equal(dialog().props.confirmDisabled, true);
+    password('current-password'); await harness.settle();
+    dialog().props.onConfirm(); await harness.settle();
+    assert.equal(dialog().props.errorMessage, 'The current password is incorrect.'); assert.equal(signedOut, 0);
+    fail = false; pending = deferred();
+    dialog().props.onConfirm(); dialog().props.onConfirm(); await harness.settle();
+    assert.equal(calls.length, 2); assert.equal(dialog().props.busy, true);
+    dialog().props.onCancel(); await harness.settle(); assert.equal(dialog().props.visible, true);
+    pending.resolve(); await harness.settle();
+    assert.equal(signedOut, 1); assert.equal(dialog().props.visible, false); assert.equal(button().props.disabled, true);
+    assert.deepEqual(busyChanges, [true, false, true, false]);
+    assert.deepEqual(calls[1], { current_password: 'current-password' });
+  }
+  const settings = fs.readFileSync(path.join(root, 'src/screens/settings/SettingsScreen.tsx'), 'utf8');
+  assert.ok(settings.indexOf('<DeleteAccountSection') > settings.indexOf('Data & support'));
+  assert.ok(settings.indexOf('<DeleteAccountSection') < settings.indexOf("title={pending ? 'Please wait…' : 'Sign out'}"));
+  assert.match(settings, /disabled={pending \|\| accountDeleting}/);
+});
+
 test('simulation delete transport accepts an empty 204 and encodes both IDs', async () => {
   const calls = [];
   const transport = load('src/api/apiClient.ts', {

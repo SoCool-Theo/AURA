@@ -52,3 +52,8 @@ class UserRepository:
         """Replace one already-validated password hash without committing."""
         user.password_hash = password_hash
         self._session.flush()
+
+    def delete(self, user: User) -> None:
+        """Delete one service-authorized User; owned rows cascade in the DB."""
+        self._session.delete(user)
+        self._session.flush()

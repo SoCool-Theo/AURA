@@ -38,6 +38,15 @@
 .deferredLabel { display: block; padding: 0; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 750; text-align: left; cursor: not-allowed; }
 .deferredCopy p { margin: 5px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .unavailableBadge { flex: 0 0 auto; padding: 5px 8px; border: 1px solid var(--border-divider); border-radius: 999px; color: var(--text-muted); background: var(--control-bg); font-size: 9px; }
+.dangerSection { margin-top: 16px; padding: 22px; border-color: rgba(255, 107, 122, .4); display: flex; align-items: center; gap: 24px; }
+.dangerSection .sectionHeading { flex: 1; border: 0; padding: 0; }
+.dangerSection h2, .dangerIcon { color: var(--red-primary); }
+.dangerIcon { background: var(--red-dark); }
+.deleteAccountButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: 0 0 auto; padding: 13px 18px; border: 1px solid var(--red-primary); border-radius: 10px; background: var(--red-dark); color: var(--red-primary); font: inherit; font-weight: 800; cursor: pointer; }
+.deleteAccountButton:hover:not(:disabled) { background: rgba(255, 107, 122, .22); }
+.deleteAccountButton:focus-visible { outline: 2px solid var(--red-primary); outline-offset: 3px; }
+.deleteAccountButton:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 620px) { .dangerSection { flex-direction: column; align-items: stretch; } }
 @media (max-width: 860px) { .deferredColumns { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .deferredRow { flex-wrap: wrap; } .deferredCopy { flex-basis: calc(100% - 48px); } .unavailableBadge { margin-left: 48px; } }
 @media (max-width: 860px) { .columns { grid-template-columns: 1fr; } }

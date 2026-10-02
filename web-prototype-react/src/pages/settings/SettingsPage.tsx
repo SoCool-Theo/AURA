@@ -13,6 +13,7 @@ import type {
 } from '../../types/auth';
 import styles from './SettingsPage.module.css';
 import { DeferredSettingsSections } from './components/DeferredSettingsSections';
+import { DeleteAccountSection } from './components/DeleteAccountSection';
 
 type ProfileDraft = {
   displayName: string;
@@ -235,6 +236,7 @@ export function SettingsPage() {
         </Card>
       </div>
       <DeferredSettingsSections />
+      <DeleteAccountSection disabled={profilePending || passwordPending} />
     </div>
   );
 }

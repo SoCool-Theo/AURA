@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.database.models import User
 from backend.app.schemas.auth import (
+    AccountDeletionRequest,
     LoginRequest,
     PasswordChangeRequest,
     ProfileUpdateRequest,
@@ -409,4 +410,26 @@ def test_password_change_rejects_wrong_current_password_without_hashing() -> Non
 
     hash_password.assert_not_called()
     repository.update_password.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+@pytest.mark.parametrize("password_hash", [None, "encoded-password-hash"])
+def test_account_deletion_rejects_wrong_or_missing_credentials(password_hash) -> None:
+    service, session, repository = _service_with_repository()
+    user = _credential_user()
+    user.password_hash = password_hash
+    with patch.object(service_module, "verify_password", return_value=False):
+        with pytest.raises(CurrentPasswordMismatchError):
+            service.delete_account(user, AccountDeletionRequest(current_password="wrong-password"))
+    repository.delete.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_account_deletion_verifies_password_and_deletes_only_supplied_user() -> None:
+    service, session, repository = _service_with_repository()
+    user = _credential_user()
+    with patch.object(service_module, "verify_password", return_value=True) as verify:
+        service.delete_account(user, AccountDeletionRequest(current_password="current-password"))
+    verify.assert_called_once_with("current-password", user.password_hash)
+    repository.delete.assert_called_once_with(user)
     _assert_session_lifecycle_untouched(session)

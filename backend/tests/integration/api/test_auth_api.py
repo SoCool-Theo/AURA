@@ -535,3 +535,83 @@ def test_health_remains_public_without_jwt_or_database_configuration() -> None:
 
     assert response.status_code == 200
     create_engine.assert_not_called()
+
+
+def test_delete_account_commits_once_and_returns_empty_204(auth_api_harness) -> None:
+    user = _user()
+    auth_api_harness.session.get.return_value = user
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=_authorization(create_access_token(USER_ID)),
+        json={"current_password": PASSWORD},
+    )
+    assert response.status_code == 204
+    assert response.content == b""
+    deleted_user, request = auth_api_harness.service.delete_account.call_args.args
+    assert deleted_user is user
+    assert request.current_password.get_secret_value() == PASSWORD
+    assert PASSWORD not in repr(request)
+    auth_api_harness.session.commit.assert_called_once_with()
+    auth_api_harness.session.rollback.assert_not_called()
+
+
+@pytest.mark.parametrize("failure,code,detail", [
+    (CurrentPasswordMismatchError(), 403, "Current password is incorrect"),
+    (RuntimeError("sensitive internal failure"), 500, "Unable to delete account"),
+])
+def test_delete_account_failures_roll_back_and_are_sanitized(auth_api_harness, failure, code, detail):
+    auth_api_harness.session.get.return_value = _user()
+    auth_api_harness.service.delete_account.side_effect = failure
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=_authorization(create_access_token(USER_ID)),
+        json={"current_password": PASSWORD},
+    )
+    assert response.status_code == code
+    assert response.json() == {"detail": detail}
+    auth_api_harness.session.commit.assert_not_called()
+    auth_api_harness.session.rollback.assert_called_once_with()
+
+
+def test_delete_account_commit_failure_rolls_back(auth_api_harness):
+    auth_api_harness.session.get.return_value = _user()
+    auth_api_harness.session.commit.side_effect = RuntimeError("internal failure")
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=_authorization(create_access_token(USER_ID)),
+        json={"current_password": PASSWORD},
+    )
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Unable to delete account"}
+    auth_api_harness.session.rollback.assert_called_once_with()
+
+
+def test_deleted_account_token_cannot_read_or_delete_again(auth_api_harness):
+    auth_api_harness.session.get.return_value = None
+    headers = _authorization(create_access_token(USER_ID))
+    assert auth_api_harness.client.get("/api/auth/me", headers=headers).status_code == 401
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=headers, json={"current_password": PASSWORD},
+    )
+    assert response.status_code == 401
+    auth_api_harness.service.delete_account.assert_not_called()
+    auth_api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("payload", [{}, {"current_password": "short"},
+    {"current_password": None}, {"current_password": PASSWORD, "user_id": str(USER_ID)}])
+def test_delete_account_rejects_invalid_or_owner_override_payload(auth_api_harness, payload):
+    auth_api_harness.session.get.return_value = _user()
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=_authorization(create_access_token(USER_ID)), json=payload,
+    )
+    assert response.status_code == 422
+    auth_api_harness.service.delete_account.assert_not_called()
+    auth_api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("headers,failure", _INVALID_AUTHORIZATION_CASES)
+def test_delete_account_requires_valid_authentication(auth_api_harness, headers, failure):
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=headers, json={"current_password": PASSWORD},
+    )
+    assert response.status_code == 401, failure
+    auth_api_harness.service.delete_account.assert_not_called()
+    auth_api_harness.session.commit.assert_not_called()
