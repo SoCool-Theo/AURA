@@ -27,6 +27,41 @@ function load(file, mocks = {}, globals = {}) {
   return module.exports;
 }
 
+test('danger confirmation Close and Cancel use red without changing default dialogs or busy guards', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const colors = { text: '#fff', danger: '#FF6B7A', surfaceAlt: '#14213A', negativeBackground: '#2C171E', dangerBorder: '#5B2631' };
+  const { ConfirmationDialog } = load('src/components/ui/ConfirmationDialog.tsx', {
+    react,
+    '@expo/vector-icons': { Ionicons: 'Icon' },
+    'react-native': { Modal: 'Modal', KeyboardAvoidingView: 'AvoidingView', ScrollView: 'Scroll', Pressable: 'Pressable', Text: 'Text', View: 'View', Platform: { OS: 'android' }, StyleSheet: { create: styles => styles } },
+    '../../theme/theme': { colors, spacing: {} },
+    './Button': { Button: 'Button' },
+  });
+  for (const tone of [undefined, 'danger']) {
+    for (const busy of [false, true]) {
+      let cancelled = 0;
+      const tree = ConfirmationDialog({ visible: true, title: 'Delete account?', description: 'Permanent', subject: 'user@example.com', subjectLabel: 'Account', confirmLabel: 'Delete Account', tone, busy, onCancel: () => { cancelled++; }, onConfirm: () => {} });
+      const nodes = [];
+      function visit(node) {
+        if (!node || typeof node !== 'object') return;
+        nodes.push(node); node.children?.forEach(visit);
+      }
+      visit(tree);
+      const close = nodes.find(node => node.type === 'Pressable');
+      const cancel = nodes.find(node => node.type === 'Button' && node.props.title === 'Cancel');
+      const closeStyle = Object.assign({}, ...close.props.style.filter(Boolean));
+      assert.equal(close.children[0].props.color, tone === 'danger' ? colors.danger : colors.text);
+      assert.equal(closeStyle.backgroundColor, tone === 'danger' ? colors.negativeBackground : colors.surfaceAlt);
+      if (tone === 'danger') assert.equal(closeStyle.borderColor, colors.dangerBorder);
+      assert.equal(cancel.props.variant, tone === 'danger' ? 'danger' : 'secondary');
+      assert.equal(close.props.disabled, busy);
+      assert.equal(cancel.props.disabled, busy);
+      tree.props.onRequestClose(); assert.equal(cancelled, busy ? 0 : 1);
+      if (!busy) { close.props.onPress(); cancel.props.onPress(); assert.equal(cancelled, 3); }
+    }
+  }
+});
+
 test('bottom-tab presses return nested stacks to their roots, including cold deep links', () => {
   let key = 0;
   const routerPath = 'node_modules/@react-navigation/routers/src/';

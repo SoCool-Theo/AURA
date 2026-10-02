@@ -61,7 +61,7 @@ export function DeleteAccountSection({ disabled = false }: { disabled?: boolean 
         subject={user?.email ?? ''} subjectLabel="ACCOUNT TO DELETE" confirmLabel="Delete Account"
         tone="danger" busy={busy} error={error} confirmDisabled={password.length < 8 || disabled}
         onCancel={cancel} onConfirm={() => void confirm()}>
-        <div className={styles.passwordFields}>
+        <div className={`${styles.passwordFields} ${styles.deletePassword}`}>
           <label>Current password<input type="password" autoComplete="current-password" value={password}
             disabled={busy} onChange={event => setPassword(event.target.value)} /></label>
         </div>

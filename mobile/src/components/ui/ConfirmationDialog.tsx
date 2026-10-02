@@ -50,8 +50,8 @@ export function ConfirmationDialog({
                   <Text style={styles.description}>{description}</Text>
                 </View>
               </View>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Close ${title.toLowerCase()}`} accessibilityState={{ disabled: busy }} disabled={busy} onPress={onCancel} style={styles.close}>
-                <Ionicons name="close" color={colors.text} size={20} />
+              <Pressable accessibilityRole="button" accessibilityLabel={`Close ${title.toLowerCase()}`} accessibilityState={{ disabled: busy }} disabled={busy} onPress={onCancel} style={[styles.close, tone === 'danger' && styles.dangerClose]}>
+                <Ionicons name="close" color={tone === 'danger' ? colors.danger : colors.text} size={20} />
               </Pressable>
             </View>
             <View style={styles.subject}>
@@ -61,7 +61,7 @@ export function ConfirmationDialog({
             {children}
             {errorMessage ? <Text accessibilityRole="alert" style={styles.error}>{errorMessage}</Text> : null}
             <View style={styles.actions}>
-              <Button title="Cancel" variant="secondary" style={{ flex: 1 }} disabled={busy} onPress={onCancel} />
+              <Button title="Cancel" variant={tone === 'danger' ? 'danger' : 'secondary'} style={{ flex: 1 }} disabled={busy} onPress={onCancel} />
               <Button title={busy ? 'Working…' : confirmLabel} variant="danger" style={{ flex: 1 }} disabled={busy || confirmDisabled} onPress={onConfirm} />
             </View>
           </ScrollView>
@@ -84,6 +84,7 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 19, fontWeight: '900' },
   description: { marginTop: spacing.xs, color: colors.textSecondary, fontSize: 11, lineHeight: 17 },
   close: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceAlt },
+  dangerClose: { backgroundColor: colors.negativeBackground, borderWidth: 1, borderColor: colors.dangerBorder },
   subject: { marginTop: spacing.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.dangerBorder, borderRadius: 12, backgroundColor: colors.negativeBackground },
   subjectLabel: { color: colors.muted, fontSize: 9, fontWeight: '900', letterSpacing: .8 },
   subjectValue: { marginTop: spacing.xs, color: colors.text, fontSize: 13, fontWeight: '900' },

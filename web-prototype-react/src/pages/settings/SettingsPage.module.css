@@ -46,6 +46,10 @@
 .deleteAccountButton:hover:not(:disabled) { background: rgba(255, 107, 122, .22); }
 .deleteAccountButton:focus-visible { outline: 2px solid var(--red-primary); outline-offset: 3px; }
 .deleteAccountButton:disabled { opacity: .55; cursor: not-allowed; }
+.passwordFields.deletePassword input { background: #150a10; border-color: rgba(255, 107, 122, .4); }
+.passwordFields.deletePassword input:focus { background: #150a10; border-color: var(--red-primary); box-shadow: 0 0 0 3px rgba(255, 107, 122, .12); }
+.passwordFields.deletePassword input:focus-visible { outline: 3px solid rgba(255, 107, 122, .4); outline-offset: 2px; }
+.passwordFields.deletePassword input::selection { background: rgba(255, 107, 122, .35); color: var(--text-primary); }
 @media (max-width: 620px) { .dangerSection { flex-direction: column; align-items: stretch; } }
 @media (max-width: 860px) { .deferredColumns { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .deferredRow { flex-wrap: wrap; } .deferredCopy { flex-basis: calc(100% - 48px); } .unavailableBadge { margin-left: 48px; } }

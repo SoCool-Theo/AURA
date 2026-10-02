@@ -41,6 +41,20 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+test('account deletion password field matches mobile dark red without changing other settings fields', () => {
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const section = read('src/pages/settings/components/DeleteAccountSection.tsx');
+  const styles = read('src/pages/settings/SettingsPage.module.css');
+  const mobile = read('../mobile/src/screens/settings/DeleteAccountSection.tsx');
+  assert.match(section, /styles\.passwordFields} \$\{styles\.deletePassword/);
+  assert.match(mobile, /backgroundColor: '#150a10'/);
+  assert.match(styles, /\.passwordFields\.deletePassword input \{ background: #150a10; border-color: rgba\(255, 107, 122, \.4\)/);
+  assert.match(styles, /\.passwordFields\.deletePassword input:focus \{ background: #150a10; border-color: var\(--red-primary\)/);
+  assert.match(styles, /\.passwordFields\.deletePassword input:focus-visible \{ outline: 3px solid rgba\(255, 107, 122, \.4\); outline-offset: 2px;/);
+  assert.match(styles, /\.passwordFields\.deletePassword input::selection \{ background: rgba\(255, 107, 122, \.35\)/);
+  assert.doesNotMatch(read('src/pages/settings/SettingsPage.tsx'), /deletePassword/);
+});
+
 test('web sign out clears authenticated state even when token storage removal fails', () => {
   const updates = [];
   const react = {
