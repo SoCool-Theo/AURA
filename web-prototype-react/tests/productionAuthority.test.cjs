@@ -1335,9 +1335,14 @@ test('web session restoration uses the focused Aura loading screen', () => {
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
-test('web settings mirror mobile privacy/alerts and data/support as inactive previews', () => {
-  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+test('web settings enable only About Aura while retaining other privacy/support previews', () => {
+  let showAbout = false;
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useState: () => [showAbout, value => { showAbout = value; }],
+  };
   const { DeferredSettingsSections } = load('src/pages/settings/components/DeferredSettingsSections.tsx', {
+    react, './AboutAuraDialog': { AboutAuraDialog: 'AboutDialog' },
     '../../../components/ui/Card': { Card: 'Card' },
     '../../../components/ui/Icon': { Icon: 'Icon' },
     '../SettingsPage.module.css': {},
@@ -1349,7 +1354,6 @@ test('web settings mirror mobile privacy/alerts and data/support as inactive pre
     if (!node || typeof node !== 'object') return;
     if (node.type === 'button') buttons.push(node);
     if (node.type === 'h2') headings.push(node.children.join(''));
-    assert.ok(!Object.keys(node.props).some(key => /^on[A-Z]/.test(key)), 'Preview has no event handlers');
     node.children?.forEach(visit);
   }
   visit(DeferredSettingsSections());
@@ -1357,15 +1361,74 @@ test('web settings mirror mobile privacy/alerts and data/support as inactive pre
   const labels = ['Hide portfolio values', 'App notifications', 'Reset local data', 'Help & Support', 'About Aura'];
   assert.deepEqual(buttons.map(button => button.children.join('')), labels);
   for (const button of buttons) {
-    assert.equal(button.props.disabled, true);
+    const isAbout = button.children[0] === 'About Aura';
+    assert.equal(button.props.disabled, !isAbout);
+    if (!isAbout) assert.equal(button.props.onClick, undefined);
     assert.equal(button.props.type, 'button');
     assert.ok(button.props['aria-describedby']);
   }
-  assert.equal(text.filter(value => value === 'Not available yet').length, 5);
+  assert.equal(text.filter(value => value === 'Not available yet').length, 4);
+  const about = buttons.at(-1);
+  assert.equal(about.props['aria-haspopup'], 'dialog');
+  assert.equal(DeferredSettingsSections().children[1], false);
+  about.props.onClick();
+  assert.equal(DeferredSettingsSections().children[1].type, 'AboutDialog');
+  DeferredSettingsSections().children[1].props.onClose();
+  assert.equal(DeferredSettingsSections().children[1], false);
   const read = file => fs.readFileSync(path.join(root, file), 'utf8');
   const mobile = fs.readFileSync(path.join(root, '../mobile/src/screens/settings/SettingsScreen.tsx'), 'utf8');
   for (const label of labels) assert.ok(mobile.includes(label));
   assert.match(read('src/pages/settings/SettingsPage.tsx'), /<DeferredSettingsSections \/>/);
   const preview = read('src/pages/settings/components/DeferredSettingsSections.tsx');
-  assert.doesNotMatch(preview, /useState|useEffect|localStorage|sessionStorage|authApi|resetLocalData|resetPreferences|onClick|onChange/);
+  assert.doesNotMatch(preview, /localStorage|sessionStorage|authApi|resetLocalData|resetPreferences/);
+});
+
+test('web About Aura uses themed content, keyboard dismissal/focus trapping, and returns focus', () => {
+  const focused = [], effects = [], listeners = {};
+  class Element {
+    constructor(name) { this.name = name; this.isConnected = true; }
+    focus(options) { focused.push({ name: this.name, options }); }
+  }
+  const trigger = new Element('about-trigger'), close = new Element('close'), done = new Element('done');
+  const document = { body: { style: { overflow: 'auto' } }, activeElement: trigger };
+  const refs = [{ querySelectorAll: () => [close, done] }, close]; let refIndex = 0, closed = 0;
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useRef: initial => ({ current: refIndex < refs.length ? refs[refIndex++] : initial }),
+    useEffect: callback => effects.push(callback),
+  };
+  const { AboutAuraDialog } = load('src/pages/settings/components/AboutAuraDialog.tsx', {
+    react, 'react-dom': { createPortal: node => node }, '../../../components/ui/Icon': { Icon: 'Icon' },
+    './AboutAuraDialog.module.css': {},
+  }, { React: react, HTMLElement: Element, document, window: {
+    addEventListener: (name, handler) => { listeners[name] = handler; },
+    removeEventListener: name => { delete listeners[name]; },
+  } });
+  const nodes = [], text = [];
+  function visit(node) {
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (typeof node === 'string') { text.push(node); return; }
+    if (!node || typeof node !== 'object') return; nodes.push(node); node.children?.forEach(visit);
+  }
+  visit(AboutAuraDialog({ onClose: () => { closed++; } }));
+  assert.ok(nodes.some(node => node.props.role === 'dialog' && node.props['aria-modal'] === 'true'));
+  const titles = nodes.filter(node => node.type === 'h3').map(node => node.children.join(''));
+  assert.deepEqual(titles, ['Portfolios & risk', 'What-if simulations', 'AI Assistant', 'Watchlist & Learn']);
+  assert.match(text.join(' '), /not live quotes/); assert.match(text.join(' '), /not a trading platform or financial advisor/);
+  assert.match(text.join(' '), /Historical results do not guarantee future performance/);
+  for (const button of nodes.filter(node => node.type === 'button')) button.props.onClick();
+  assert.equal(closed, 3);
+  const cleanup = effects[0](); assert.equal(document.body.style.overflow, 'hidden');
+  assert.equal(focused.at(-1).name, 'close');
+  listeners.keydown({ key: 'Escape' }); assert.equal(closed, 4);
+  let prevented = 0;
+  document.activeElement = done; listeners.keydown({ key: 'Tab', preventDefault: () => { prevented++; } });
+  assert.equal(focused.at(-1).name, 'close');
+  document.activeElement = close; listeners.keydown({ key: 'Tab', shiftKey: true, preventDefault: () => { prevented++; } });
+  assert.equal(focused.at(-1).name, 'done'); assert.equal(prevented, 2);
+  cleanup(); assert.equal(document.body.style.overflow, 'auto'); assert.equal(listeners.keydown, undefined);
+  assert.equal(focused.at(-1).name, 'about-trigger');
+  const styles = fs.readFileSync(path.join(root, 'src/pages/settings/components/AboutAuraDialog.module.css'), 'utf8');
+  assert.match(styles, /background: var\(--bg-card\)/); assert.match(styles, /var\(--teal-primary\)/);
+  assert.match(styles, /overflow-y: auto/); assert.match(styles, /100dvh/);
 });

@@ -2450,3 +2450,21 @@ remain separate follow-on work.
   Validation: 45 web authority tests, 51 mobile authority tests, both TypeScript
   checks, and the web production build passed. Browser/device acceptance was
   not performed; no commit or push was made.
+
+### Completed themed About Aura settings popups (2026-10-02)
+
+- Enabled only About Aura in web Data & Support; the other four web privacy,
+  alerts, reset, and help previews remain disabled. Replaced mobile's native
+  About alert with an Aura navy/teal themed modal opened from the existing row.
+- Both clients show matching current/planned portfolio-risk, what-if simulation,
+  AI Assistant, Watchlist, and Learn overviews. Copy distinguishes saved market
+  observations from live quotes and explains the senior project's educational,
+  non-advisory purpose without promising future investment performance.
+- Added themed Close/Done controls, bounded scrollable content, backdrop
+  dismissal, mobile hardware-back dismissal, and web Escape/focus trapping,
+  scroll locking, and focus restoration. No API call, data reset, or new
+  dependency is required; unrelated settings behavior remains unchanged.
+- Added interaction/content-parity/theme/accessibility regressions. Validation:
+  46 web authority tests, 52 mobile authority tests, both TypeScript checks,
+  and the web production build passed. Physical-device/browser visual acceptance
+  was not performed. No backend, migration, commit, or push changes were made.

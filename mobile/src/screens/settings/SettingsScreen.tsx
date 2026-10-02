@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/ui/Button';
 import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { DeleteAccountSection } from './DeleteAccountSection';
+import { AboutAuraDialog } from './AboutAuraDialog';
 import { Card } from '../../components/ui/Card';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { authApi } from '../../api/authApi';
@@ -89,6 +90,7 @@ export function SettingsScreen() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [accountDeleting, setAccountDeleting] = useState(false);
+  const [showAboutAura, setShowAboutAura] = useState(false);
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const signOutConfirmationRef = useRef(false);
@@ -242,10 +244,7 @@ export function SettingsScreen() {
   }
 
   function showAbout() {
-    Alert.alert(
-      'About Aura',
-      'Aura provides portfolio risk analytics, historical simulations, saved-asset Watchlists, and AI explanations grounded in your saved results. Watchlist prices are latest saved market observations, not live quotes.'
-    );
+    setShowAboutAura(true);
   }
 
   function resetEverything() {
@@ -534,6 +533,8 @@ export function SettingsScreen() {
           style={{ marginTop: spacing.xl }}
         />
       </ScrollView>
+
+      <AboutAuraDialog visible={showAboutAura} onClose={() => setShowAboutAura(false)} />
 
       <ConfirmationDialog visible={confirmingSignOut} title="Sign out?"
         description="You'll need to sign in again to access Aura. Your account, portfolios, reports, and saved simulations will not be deleted."

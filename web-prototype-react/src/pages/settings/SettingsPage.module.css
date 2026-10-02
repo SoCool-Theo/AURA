@@ -36,6 +36,9 @@
 .deferredIcon { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 11px; background: var(--control-bg); color: var(--text-secondary); display: grid; place-items: center; }
 .deferredCopy { min-width: 0; flex: 1; }
 .deferredLabel { display: block; padding: 0; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 750; text-align: left; cursor: not-allowed; }
+.availableLabel { color: var(--teal-primary); cursor: pointer; }
+.availableLabel:hover { text-decoration: underline; }
+.availableLabel:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 4px; border-radius: 3px; }
 .deferredCopy p { margin: 5px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .unavailableBadge { flex: 0 0 auto; padding: 5px 8px; border: 1px solid var(--border-divider); border-radius: 999px; color: var(--text-muted); background: var(--control-bg); font-size: 9px; }
 .dangerSection { margin-top: 16px; padding: 22px; border-color: rgba(255, 107, 122, .4); display: flex; align-items: center; gap: 24px; }

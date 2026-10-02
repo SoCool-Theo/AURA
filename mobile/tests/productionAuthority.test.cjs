@@ -39,6 +39,7 @@ test('mobile Settings sign out confirms, cancels safely, retries failures, and b
     '../../components/ui/Button': { Button: 'Button' },
     '../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
     './DeleteAccountSection': { DeleteAccountSection: 'DeleteAccount' },
+    './AboutAuraDialog': { AboutAuraDialog: 'AboutDialog' },
     '../../components/ui/Card': { Card: 'Card' }, '../../components/ui/PageTitle': { PageTitle: 'Title' },
     '../../api/authApi': { authApi: {} }, '../../api/apiErrorPresentation': {}, '../../api/apiClient': { ApiError: Error },
     '../../auth/accountIdentity': { accountDisplayName: () => 'Aura User', accountInitials: () => 'AU' },
@@ -57,6 +58,11 @@ test('mobile Settings sign out confirms, cancels safely, retries failures, and b
   };
   const button = () => nodes().find(node => node.type === 'Button' && ['Sign out', 'Please wait…'].includes(node.props.title));
   const dialog = () => nodes().find(node => node.type === 'Dialog');
+  const about = () => nodes().find(node => node.type === 'AboutDialog');
+  assert.equal(about().props.visible, false);
+  nodes().find(node => node.type === 'Pressable' && node.props.accessibilityLabel === 'About Aura').props.onPress();
+  await harness.settle(); assert.equal(about().props.visible, true); assert.equal(signOuts, 0);
+  about().props.onClose(); await harness.settle(); assert.equal(about().props.visible, false);
   assert.equal(dialog().props.visible, false);
   button().props.onPress(); await harness.settle();
   assert.equal(dialog().props.visible, true); assert.equal(signOuts, 0);
@@ -72,6 +78,34 @@ test('mobile Settings sign out confirms, cancels safely, retries failures, and b
   assert.equal(signOuts, 2); assert.equal(dialog().props.busy, true); assert.equal(button().props.disabled, true);
   dialog().props.onCancel(); await harness.settle(); assert.equal(dialog().props.visible, true);
   pending.resolve(); await harness.settle(); assert.equal(dialog().props.visible, false);
+});
+
+test('mobile About Aura matches web content and uses themed modal/backdrop/close/Done dismissal', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const colors = { surface: '#101A2C', primary: '#31D6CF' };
+  const { AboutAuraDialog } = load('src/screens/settings/AboutAuraDialog.tsx', {
+    react, '@expo/vector-icons': { Ionicons: 'Icon' },
+    'react-native': { Modal: 'Modal', Pressable: 'Pressable', ScrollView: 'Scroll', Text: 'Text', View: 'View', StyleSheet: { create: value => value, absoluteFill: {} } },
+    '../../components/ui/Button': { Button: 'Button' }, '../../theme/theme': { colors, spacing: {} },
+  });
+  let closed = 0; const tree = AboutAuraDialog({ visible: true, onClose: () => { closed++; } });
+  assert.equal(tree.props.visible, true); tree.props.onRequestClose();
+  const nodes = [], text = [];
+  function visit(node) {
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (typeof node === 'string') { text.push(node); return; }
+    if (!node || typeof node !== 'object') return; nodes.push(node); node.children?.forEach(visit);
+  }
+  visit(tree);
+  assert.ok(nodes.some(node => node.props.accessibilityViewIsModal && node.props.style.backgroundColor === colors.surface));
+  assert.ok(nodes.some(node => node.type === 'Scroll'));
+  for (const control of nodes.filter(node => node.type === 'Pressable' || node.type === 'Button')) control.props.onPress();
+  assert.equal(closed, 4);
+  const web = fs.readFileSync(path.join(root, '../web-prototype-react/src/pages/settings/components/AboutAuraDialog.tsx'), 'utf8');
+  for (const value of text) assert.ok(web.includes(value), `Web/mobile content differs: ${value}`);
+  assert.ok(nodes.some(node => node.type === 'Icon' && node.props.name === 'close' && node.props.color === colors.primary));
+  const source = fs.readFileSync(path.join(root, 'src/screens/settings/SettingsScreen.tsx'), 'utf8');
+  assert.doesNotMatch(source, /Alert\.alert\(\s*'About Aura'/);
 });
 
 test('mobile saved-session Sign Out also confirms and retains its retry flow', async () => {
