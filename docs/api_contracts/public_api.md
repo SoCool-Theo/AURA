@@ -40,6 +40,7 @@ owner-scoped unless noted as public.
 | `POST` | `/api/portfolios/{portfolio_id}/simulations/combined` | Run a scenario/allocation comparison and save history |
 | `GET` | `/api/portfolios/{portfolio_id}/simulations` | List simulation-history metadata |
 | `GET` | `/api/portfolios/{portfolio_id}/simulations/{simulation_id}` | Return one immutable V1/V2/V3 simulation |
+| `DELETE` | `/api/portfolios/{portfolio_id}/simulations/{simulation_id}` | Permanently delete one owned saved simulation |
 | `POST` | `/api/agent/explain` | Return an educational explanation grounded in owned backend context |
 
 ## Current asset forecasting
@@ -318,6 +319,16 @@ portfolio monetary metrics, and per-asset monetary metrics. Opening history
 derives both views from the immutable snapshot without a live FX request.
 
 ## Simulations and immutable history
+
+Saved simulations may be permanently removed with authenticated
+`DELETE /api/portfolios/{portfolio_id}/simulations/{simulation_id}`. Success is
+an empty `204`. Missing/wrong-owner portfolios return `404 Portfolio not found`;
+missing/wrong-associated simulations return `404 Simulation not found`.
+Unexpected failures return sanitized `500 Unable to delete simulation`.
+The API commits once; services/repositories do not own transactions. Deletion
+removes only the selected snapshot, never the portfolio, reports, market data,
+or other simulations. It works for all modes and V1/V2/V3 without restoring or
+recalculating the payload. Deleted IDs no longer resolve for detail or AI context.
 
 The three simulation POST request contracts are unchanged. A historical
 scenario accepts `scenario_id`. Allocation Change accepts an explicit

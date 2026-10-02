@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { Card } from '../../components/ui/Card';
+import { DeleteSimulationButton } from '../../components/simulations/DeleteSimulationButton';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
 import { LoadingState } from '../../components/ui/LoadingState';
@@ -94,7 +95,8 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
           {!history.length ? (
             <Card><EmptyState icon="pulse-outline" title="No simulations yet" description="Run a historical, allocation, or combined simulation to save your first result." /></Card>
           ) : filtered.length ? filtered.map((item) => (
-            <Pressable accessibilityLabel={`Open ${item.portfolio_name} ${simulationTypeLabel(item.simulation_type)} simulation`} accessibilityRole="button" key={item.id} onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}>
+            <View key={item.id} style={{ gap: spacing.sm }}>
+            <Pressable accessibilityLabel={`Open ${item.portfolio_name} ${simulationTypeLabel(item.simulation_type)} simulation`} accessibilityRole="button" onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}>
               <Card style={styles.card}>
                 <View style={styles.icon}><Ionicons name="pulse-outline" color={colors.primary} size={22} /></View>
                 <View style={{ flex: 1 }}>
@@ -107,6 +109,8 @@ export function SimulationHistoryScreen({ navigation }: { navigation: any }) {
                 <Ionicons name="chevron-forward" color={colors.muted} size={18} />
               </Card>
             </Pressable>
+            <DeleteSimulationButton portfolioId={item.portfolio_id} simulationId={item.id} subject={`${item.portfolio_name} · ${simulationTypeLabel(item.simulation_type)} · ${item.id}`} />
+            </View>
           )) : (
             <Card><EmptyState icon="search-outline" title="No matching simulations" description="Change the portfolio filter or search text." /></Card>
           )}

@@ -41,6 +41,58 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+test('web simulation deletion requires confirmation and only updates history after success', async () => {
+  const slots = []; let cursor = 0, dirty, tree;
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useState: initial => {
+      const i = cursor++; if (!(i in slots)) slots[i] = initial;
+      return [slots[i], value => { slots[i] = value; dirty = true; }];
+    },
+    useRef: initial => { const i = cursor++; return slots[i] ??= { current: initial }; },
+    useEffect: () => {}
+  };
+  const calls = []; let fail = true, deleted = 0, resolve;
+  const { DeleteSimulationButton } = load('src/pages/simulations/components/DeleteSimulationButton.tsx', {
+    react,
+    '../../../api/simulationsApi': { deleteSimulationHistory: async (...ids) => {
+      calls.push(ids); if (fail) throw Error('offline'); await new Promise(done => { resolve = done; });
+    } },
+    '../../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
+    '../SimulationIntegration.module.css': {}
+  }, { React: react });
+  const render = () => { cursor = 0; dirty = false; tree = DeleteSimulationButton({ portfolioId: 'a', simulationId: 'b', subject: 'snapshot b', onDeleted: () => { deleted++; } }); };
+  const settle = async () => { for (let i = 0; i < 5; i++) { await new Promise(done => setImmediate(done)); if (dirty) render(); } };
+  render(); assert.equal(tree.children[1], false); assert.equal(calls.length, 0);
+  tree.children[0].props.onClick(); await settle();
+  tree.children[1].props.onCancel(); await settle(); assert.equal(calls.length, 0);
+  tree.children[0].props.onClick(); await settle(); tree.children[1].props.onConfirm(); await settle();
+  assert.equal(tree.children[1].props.error.message, 'offline'); assert.equal(deleted, 0);
+  fail = false;
+  tree.children[1].props.onConfirm(); tree.children[1].props.onConfirm(); await settle();
+  assert.equal(calls.length, 2); assert.equal(tree.children[1].props.busy, true);
+  tree.children[1].props.onCancel(); await settle(); assert.ok(tree.children[1]);
+  resolve(); await settle(); assert.equal(deleted, 1); assert.equal(tree.children[1], false);
+  assert.deepEqual(plain(calls[1]), ['a', 'b']);
+  for (const file of ['components/SimulationHistory.tsx', 'SimulationHistoryDetailPage.tsx']) {
+    assert.match(fs.readFileSync(path.join(root, `src/pages/simulations/${file}`), 'utf8'), /<DeleteSimulationButton/);
+  }
+});
+
+test('web simulation delete uses the authenticated transport and handles 204', async () => {
+  const calls = [];
+  const transport = load('src/api/apiClient.ts', {
+    '../config/environment': { environment: { apiBaseUrl: 'http://example.invalid' } },
+  }, { fetch: async (url, options) => {
+    calls.push({ url, options }); return { status: 204, ok: true, text: async () => '' };
+  } });
+  const api = load('src/api/simulationsApi.ts', { './apiClient': transport });
+  assert.equal(await api.deleteSimulationHistory('a/b', 'c/d', { token: 'token' }), undefined);
+  assert.ok(calls[0].url.endsWith('/api/portfolios/a%2Fb/simulations/c%2Fd'));
+  assert.equal(calls[0].options.method, 'DELETE');
+  assert.equal(calls[0].options.headers.get('Authorization'), 'Bearer token');
+});
+
 test('both welcome brand links return to the top without hash navigation', () => {
   for (const reducedMotion of [false, true]) {
     const scrolls = [];

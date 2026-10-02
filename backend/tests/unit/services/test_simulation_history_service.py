@@ -149,6 +149,39 @@ def _assert_session_lifecycle_untouched(session: MagicMock) -> None:
     session.close.assert_not_called()
 
 
+@pytest.mark.parametrize("simulation_type", ["historical-scenario", "allocation", "combined"])
+def test_delete_scopes_ownership_without_restoring_snapshot(simulation_type: str) -> None:
+    service, session, portfolios, repository = _service_with_dependencies()
+    portfolios.get.return_value = _portfolio()
+    record = _record(simulation_type, snapshot={"invalid": "still deletable"})
+    repository.get_for_portfolio.return_value = record
+    assert service.delete(user_id=_USER_ID, portfolio_id=_PORTFOLIO_ID, simulation_id=_SIMULATION_ID) is True
+    portfolios.get.assert_called_once_with(user_id=_USER_ID, portfolio_id=_PORTFOLIO_ID)
+    repository.get_for_portfolio.assert_called_once_with(portfolio_id=_PORTFOLIO_ID, simulation_id=_SIMULATION_ID)
+    repository.delete.assert_called_once_with(record)
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_delete_unowned_parent_never_queries_simulation() -> None:
+    service, session, portfolios, repository = _service_with_dependencies()
+    portfolios.get.return_value = None
+    assert service.delete(user_id=_USER_ID, portfolio_id=_PORTFOLIO_ID, simulation_id=_SIMULATION_ID) is None
+    repository.get_for_portfolio.assert_not_called()
+    repository.delete.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+@pytest.mark.parametrize("record", [None, _record(portfolio_id=uuid4())])
+def test_delete_missing_or_wrong_association_never_deletes(record: Simulation | None) -> None:
+    service, session, portfolios, repository = _service_with_dependencies()
+    portfolios.get.return_value = _portfolio()
+    repository.get_for_portfolio.return_value = record
+    with pytest.raises(SimulationNotFoundError):
+        service.delete(user_id=_USER_ID, portfolio_id=_PORTFOLIO_ID, simulation_id=_SIMULATION_ID)
+    repository.delete.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
 @pytest.mark.parametrize(
     ("simulation_type", "response_type"),
     [
@@ -622,6 +655,6 @@ def test_service_exports_only_history_service_and_not_found_error() -> None:
         "SimulationNotFoundError",
         "SimulationHistoryService",
     ]
-    assert not hasattr(SimulationHistoryService, "delete")
+    assert hasattr(SimulationHistoryService, "delete")
     assert not hasattr(SimulationHistoryService, "update")
     assert not hasattr(SimulationHistoryService, "search")

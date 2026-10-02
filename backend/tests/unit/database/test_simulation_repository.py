@@ -122,7 +122,18 @@ def test_get_for_portfolio_scopes_both_identifiers_and_returns_none() -> None:
 
 def test_repository_exposes_no_update_or_transaction_methods() -> None:
     method_names = set(dir(SimulationRepository))
-    assert {"update", "replace", "commit", "delete"}.isdisjoint(method_names)
+    assert {"update", "replace", "commit"}.isdisjoint(method_names)
+
+
+def test_delete_flushes_only_the_selected_record_without_committing() -> None:
+    session = MagicMock(spec=Session)
+    simulation = Simulation(id=uuid4(), portfolio_id=uuid4())
+    SimulationRepository(session).delete(simulation)
+    session.delete.assert_called_once_with(simulation)
+    session.flush.assert_called_once_with()
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+    session.close.assert_not_called()
 
 
 def test_sqlalchemy_failure_propagates_without_transaction_cleanup() -> None:

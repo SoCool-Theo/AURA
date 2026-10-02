@@ -1441,7 +1441,8 @@ def test_route_source_uses_only_approved_history_and_transaction_boundaries(
         assert forbidden_reference not in source
 
     assert source.count("SimulationHistoryService(session).save(") == 3
-    assert source.count("session.commit()") == 3
+    assert source.count("session.commit()") == 4
+    assert source.count("SimulationHistoryService(session).delete(") == 1
 
 
 def test_new_and_existing_route_surface_remains_registered(

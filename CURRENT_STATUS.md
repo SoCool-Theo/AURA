@@ -2378,3 +2378,31 @@ remain separate follow-on work.
 - Validation: mobile TypeScript check and all 43 mobile authority tests passed.
   Physical-device interaction was not verified. No backend, web, API, dependency,
   financial calculation, commit, or push changes were made.
+
+### Completed saved-simulation deletion (2026-10-02)
+
+- Added Bearer-authenticated, owner-scoped `DELETE
+  /api/portfolios/{portfolio_id}/simulations/{simulation_id}` returning empty
+  `204`. Missing/unowned parents and missing/wrong-associated snapshots retain
+  safe `404` responses. Failures roll back through the request dependency and
+  expose no internal details; successful requests commit exactly once.
+- Repository/service deletion removes only the selected snapshot without
+  restoring its payload, recalculating results, or changing portfolios, reports,
+  market data, or other simulations. All modes and V1/V2/V3 remain supported;
+  no migration, dependency, or financial calculation change was required.
+- Web Simulation History and Saved Simulation, plus mobile Recent Simulations,
+  Simulation History, and Saved Simulation, now offer red delete actions with
+  the existing Aura-themed confirmation dialogs. Cancel performs no mutation;
+  failures remain visible for retry and duplicate submissions are blocked.
+- Successful deletion removes the history row and returns detail views to
+  history. Mobile shared history filters deleted IDs from in-flight refreshes,
+  preventing stale responses from restoring deleted rows. Web ignores aborted
+  history responses and removes confirmed deletions from its displayed list.
+- Updated the public API contract and added authentication, privacy, transaction,
+  transport/empty-response, confirmation/cancel/retry, duplicate-submission,
+  and stale-history regressions. Verification: 3,237 backend unit/non-live API
+  tests, 37 web authority tests, 46 mobile authority tests, both TypeScript
+  checks, and the web production build passed.
+- Live PostgreSQL and physical-device/browser acceptance were not performed.
+  No user data was deleted, no database migration was run, and no commit or
+  push was made; changes await user review and explicit commit authorization.

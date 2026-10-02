@@ -168,6 +168,80 @@ function hookHarness() {
 }
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
+test('simulation delete transport accepts an empty 204 and encodes both IDs', async () => {
+  const calls = [];
+  const transport = load('src/api/apiClient.ts', {
+    '../auth/authStorage': { getToken: async () => 'token' },
+    '../config/environment': { environment: { apiBaseUrl: 'http://example.invalid' } }
+  }, { fetch: async (url, options) => {
+    calls.push({ url, options });
+    return { status: 204, ok: true, text: async () => '' };
+  } });
+  const { simulationsApi } = load('src/api/simulationsApi.ts', { './apiClient': transport });
+  assert.equal(await simulationsApi.deleteHistory('portfolio/a', 'simulation/b'), undefined);
+  assert.equal(calls[0].url, 'http://example.invalid/api/portfolios/portfolio%2Fa/simulations/simulation%2Fb');
+  assert.equal(calls[0].options.method, 'DELETE');
+  assert.equal(calls[0].options.headers.get('Authorization'), 'Bearer token');
+});
+
+test('simulation deletion removes only its row, retains failed deletes, and prevents stale resurrection', async () => {
+  const harness = hookHarness();
+  const old = { id: 'old', portfolio_id: 'a', created_at: '2026-01-01' };
+  const recent = { id: 'recent', portfolio_id: 'a', created_at: '2026-02-01' };
+  let pending, failDelete = true;
+  const api = {
+    listHistoricalScenarios: async () => ({ scenarios: [] }),
+    history: async () => pending ? pending.promise : { simulations: [old, recent] },
+    deleteHistory: async () => { if (failDelete) throw Error('offline'); }
+  };
+  const { SimulationProvider } = load('src/simulation/SimulationProvider.tsx', {
+    react: harness.react, '../api/simulationsApi': { simulationsApi: api },
+    '../auth/useAuth': { useAuth: () => ({ status: 'authenticated', user: { id: 'user' } }) }
+  });
+  harness.mount(() => SimulationProvider({})); await harness.settle();
+  await harness.value.refreshHistory([{ id: 'a', name: 'A' }]); await harness.settle();
+  await assert.rejects(harness.value.deleteSimulation('a', 'recent'));
+  assert.equal(harness.value.history.length, 2);
+  pending = deferred();
+  const refresh = harness.value.refreshHistory([{ id: 'a', name: 'A' }]);
+  failDelete = false;
+  await harness.value.deleteSimulation('a', 'recent'); await harness.settle();
+  assert.equal(harness.value.history.map(row => row.id).join(), 'old');
+  pending.resolve({ simulations: [old, recent] }); await refresh; await harness.settle();
+  assert.equal(harness.value.history.map(row => row.id).join(), 'old');
+});
+
+test('mobile simulation deletion requires confirmation, supports cancel/retry, and blocks duplicate submissions', async () => {
+  const harness = hookHarness();
+  harness.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
+  const calls = []; let fail = true, deleted = 0, pending;
+  const { DeleteSimulationButton } = load('src/components/simulations/DeleteSimulationButton.tsx', {
+    react: harness.react,
+    '../ui/Button': { Button: 'Button' }, '../ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
+    '../../simulation/useSimulations': { useSimulations: () => ({ deleteSimulation: async (...ids) => {
+      calls.push(ids); if (fail) throw Error('offline'); await pending.promise;
+    } }) },
+    '../../simulation/simulationErrors': { simulationErrorMessage: error => error.message }
+  });
+  harness.mount(() => DeleteSimulationButton({ portfolioId: 'a', simulationId: 'b', subject: 'snapshot b', onDeleted: () => { deleted++; } }));
+  const button = () => harness.value.children[0];
+  const dialog = () => harness.value.children[1];
+  assert.equal(dialog().props.visible, false); assert.equal(calls.length, 0);
+  button().props.onPress(); await harness.settle();
+  dialog().props.onCancel(); await harness.settle(); assert.equal(calls.length, 0);
+  button().props.onPress(); await harness.settle(); dialog().props.onConfirm(); await harness.settle();
+  assert.equal(dialog().props.errorMessage, 'offline'); assert.equal(dialog().props.visible, true); assert.equal(deleted, 0);
+  fail = false; pending = deferred();
+  dialog().props.onConfirm(); dialog().props.onConfirm(); await harness.settle();
+  assert.equal(calls.length, 2); assert.equal(dialog().props.busy, true);
+  dialog().props.onCancel(); await harness.settle(); assert.equal(dialog().props.visible, true);
+  pending.resolve(); await harness.settle(); assert.equal(deleted, 1);
+  assert.equal(dialog().props.visible, false); assert.equal(calls[1].join(), 'a,b');
+  for (const file of ['SimulationHistoryScreen', 'SimulationsScreen', 'SimulationResultScreen']) {
+    assert.match(fs.readFileSync(path.join(root, `src/screens/simulations/${file}.tsx`), 'utf8'), /<DeleteSimulationButton/);
+  }
+});
+
 test('production import graph isolates all financial demos and local calculations', () => {
   const visited = new Set();
   function walk(file) {

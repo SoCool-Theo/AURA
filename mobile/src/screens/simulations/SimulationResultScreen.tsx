@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SimulationResults } from '../../components/simulations/SimulationResults';
+import { DeleteSimulationButton } from '../../components/simulations/DeleteSimulationButton';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ErrorState';
@@ -88,6 +89,11 @@ export function SimulationResultScreen({ route, navigation }: { route: any; navi
               ? 'Saved simulation · current holdings'
               : 'Saved simulation · legacy allocation'}.
         </Text>
+        <View style={{ marginBottom: spacing.lg }}>
+          <DeleteSimulationButton key={`${portfolioId}/${simulationId}`} portfolioId={portfolioId} simulationId={simulationId}
+            subject={`Created ${formatSimulationTimestamp(detail.created_at)} · ${detail.id}`}
+            onDeleted={() => navigation.popTo('SimulationHistory')} />
+        </View>
         <Card style={styles.metadata}>
           <Text style={styles.metaLabel}>SIMULATION ID</Text>
           <Text selectable style={styles.metaValue}>{detail.id}</Text>
