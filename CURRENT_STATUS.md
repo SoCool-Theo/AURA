@@ -2485,3 +2485,12 @@ remain separate follow-on work.
   52 mobile authority tests, both TypeScript checks, and web production build
   passed. Browser/device visual acceptance was not performed. No backend,
   dependency, migration, commit, or push changes were made.
+
+### Removed About Aura row background highlight (2026-10-03)
+
+- Removed the web About Aura hover background while preserving the full-row
+  click target, popup behavior, pointer cursor, and keyboard-only focus outline.
+- Added a styling regression. Validation: 47 web authority tests and the web
+  production build (including TypeScript) passed. No mobile/backend changes,
+  dependencies, commits, or pushes were made; browser visual acceptance was
+  not performed.

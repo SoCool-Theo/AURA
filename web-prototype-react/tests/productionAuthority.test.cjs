@@ -1389,6 +1389,7 @@ test('web settings enable only About Aura while retaining other privacy/support 
   assert.doesNotMatch(preview, /localStorage|sessionStorage|authApi|resetLocalData|resetPreferences/);
   const styles = read('src/pages/settings/SettingsPage.module.css');
   assert.match(styles, /\.availableRow \{ width: 100%/);
+  assert.doesNotMatch(styles, /\.availableRow:hover/);
   assert.match(styles, /\.availableRow:focus-visible \{ outline: 2px solid var\(--teal-primary\)/);
   assert.match(styles, /\.availableRow \{ flex-wrap: nowrap; \}/);
 });

@@ -37,7 +37,6 @@
 .deferredCopy { min-width: 0; flex: 1; }
 .deferredLabel { display: block; padding: 0; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 750; text-align: left; cursor: not-allowed; }
 .availableRow { width: 100%; box-sizing: border-box; border-top: 0; border-left: 0; border-right: 0; background: transparent; color: var(--text-secondary); font: inherit; text-align: left; cursor: pointer; }
-.availableRow:hover { background: rgba(49, 214, 207, .06); }
 .availableRow:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 3px; border-radius: 8px; }
 .availableLabel { color: var(--teal-primary); cursor: inherit; }
 .deferredCopy .availableDescription { display: block; margin-top: 5px; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
