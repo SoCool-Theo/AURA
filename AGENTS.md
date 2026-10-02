@@ -1,4 +1,4 @@
-Aura is a senior project for portfolio risk education.
+Aura is a portfolio risk education platform.
 
 Before modifying code:
 1. Read PROJECT_CONTEXT.md.
@@ -16,3 +16,4 @@ Before modifying code:
 13. Do not modify unrelated parts of the project
 14. Follow existing tests and add tests for new calculations
 15. Update CURRENT_STATUS.md only when meaningful progress is completed and ask for permission before committing.
+16. Use professional product wording in UI, documentation, and future features. Describe Aura as a portfolio risk education platform without academic-project labels.

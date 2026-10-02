@@ -24,7 +24,7 @@ export function AboutAuraDialog({ visible, onClose }: { visible: boolean; onClos
         <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={styles.body}>
           <Text style={styles.description}>Aura helps you understand the risks inside a portfolio and make sense of financial results in everyday language.</Text>
           {features.map(([title, description]) => <View key={title} style={styles.feature}><Text accessibilityRole="header" style={styles.featureTitle}>{title}</Text><Text style={styles.description}>{description}</Text></View>)}
-          <View style={styles.notice}><Ionicons name="school-outline" color={colors.primary} size={20} /><Text style={[styles.description, { flex: 1, fontSize: 11 }]}>Aura is a senior project for portfolio risk education, not a trading platform or financial advisor. Historical results do not guarantee future performance; Aura does not provide buy/sell recommendations.</Text></View>
+          <View style={styles.notice}><Ionicons name="school-outline" color={colors.primary} size={20} /><Text style={[styles.description, { flex: 1, fontSize: 11 }]}>Aura is a portfolio risk education platform, not a trading platform or financial advisor. Historical results do not guarantee future performance; Aura does not provide buy/sell recommendations.</Text></View>
         </ScrollView>
         <View style={styles.footer}><Button title="Done" onPress={onClose} /></View>
       </View>

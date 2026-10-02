@@ -36,9 +36,11 @@
 .deferredIcon { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 11px; background: var(--control-bg); color: var(--text-secondary); display: grid; place-items: center; }
 .deferredCopy { min-width: 0; flex: 1; }
 .deferredLabel { display: block; padding: 0; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 750; text-align: left; cursor: not-allowed; }
-.availableLabel { color: var(--teal-primary); cursor: pointer; }
-.availableLabel:hover { text-decoration: underline; }
-.availableLabel:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 4px; border-radius: 3px; }
+.availableRow { width: 100%; box-sizing: border-box; border-top: 0; border-left: 0; border-right: 0; background: transparent; color: var(--text-secondary); font: inherit; text-align: left; cursor: pointer; }
+.availableRow:hover { background: rgba(49, 214, 207, .06); }
+.availableRow:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 3px; border-radius: 8px; }
+.availableLabel { color: var(--teal-primary); cursor: inherit; }
+.deferredCopy .availableDescription { display: block; margin-top: 5px; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .deferredCopy p { margin: 5px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .unavailableBadge { flex: 0 0 auto; padding: 5px 8px; border: 1px solid var(--border-divider); border-radius: 999px; color: var(--text-muted); background: var(--control-bg); font-size: 9px; }
 .dangerSection { margin-top: 16px; padding: 22px; border-color: rgba(255, 107, 122, .4); display: flex; align-items: center; gap: 24px; }
@@ -55,6 +57,6 @@
 .passwordFields.deletePassword input::selection { background: rgba(255, 107, 122, .35); color: var(--text-primary); }
 @media (max-width: 620px) { .dangerSection { flex-direction: column; align-items: stretch; } }
 @media (max-width: 860px) { .deferredColumns { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .deferredRow { flex-wrap: wrap; } .deferredCopy { flex-basis: calc(100% - 48px); } .unavailableBadge { margin-left: 48px; } }
+@media (max-width: 620px) { .deferredRow { flex-wrap: wrap; } .deferredCopy { flex-basis: calc(100% - 48px); } .availableRow { flex-wrap: nowrap; } .availableRow .deferredCopy { flex-basis: auto; } .unavailableBadge { margin-left: 48px; } }
 @media (max-width: 860px) { .columns { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .identityCard { align-items: flex-start; flex-wrap: wrap; } .secureBadge { width: 100%; box-sizing: border-box; margin-left: 0; justify-content: center; } .formGrid { grid-template-columns: 1fr; } .fullWidth { grid-column: auto; } .actions button { flex: 1; } }

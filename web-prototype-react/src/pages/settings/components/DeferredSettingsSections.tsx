@@ -33,16 +33,22 @@ export function DeferredSettingsSections() {
           <div><h2 id={`${section.id}-heading`}>{section.title}</h2><p>{section.id === 'data-support' ? 'Learn about Aura. Other options are not enabled yet.' : 'Preview only. These options are not enabled yet.'}</p></div>
         </div>
         <div className={styles.deferredItems}>
-          {section.items.map(item => <div key={item.id} className={styles.deferredRow}>
+          {section.items.map(item => item.id === 'about' ? <button key={item.id} type="button"
+            className={`${styles.deferredRow} ${styles.availableRow}`} aria-label={item.title}
+            aria-describedby={`${item.id}-description`} aria-haspopup="dialog" onClick={() => setShowAbout(true)}>
+            <span className={styles.deferredIcon}><Icon name={item.icon} size={20} /></span>
+            <span className={styles.deferredCopy}>
+              <span className={`${styles.deferredLabel} ${styles.availableLabel}`}>{item.title}</span>
+              <span id={`${item.id}-description`} className={styles.availableDescription}>{item.description}</span>
+            </span>
+            <Icon name="chevron-right" size={18} />
+          </button> : <div key={item.id} className={styles.deferredRow}>
             <span className={styles.deferredIcon}><Icon name={item.icon} size={20} /></span>
             <div className={styles.deferredCopy}>
-              <button type="button" disabled={item.id !== 'about'} aria-describedby={`${item.id}-description`}
-                className={`${styles.deferredLabel} ${item.id === 'about' ? styles.availableLabel : ''}`}
-                aria-haspopup={item.id === 'about' ? 'dialog' : undefined}
-                onClick={item.id === 'about' ? () => setShowAbout(true) : undefined}>{item.title}</button>
+              <button type="button" disabled aria-describedby={`${item.id}-description`} className={styles.deferredLabel}>{item.title}</button>
               <p id={`${item.id}-description`}>{item.description}</p>
             </div>
-            {item.id === 'about' ? <Icon name="chevron-right" size={18} /> : <span className={styles.unavailableBadge}>Not available yet</span>}
+            <span className={styles.unavailableBadge}>Not available yet</span>
           </div>)}
         </div>
       </section>

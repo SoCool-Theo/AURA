@@ -53,7 +53,7 @@ export function AboutAuraDialog({ onClose }: { onClose: () => void }) {
         <div className={styles.body}>
           <p id="about-aura-summary">Aura helps you understand the risks inside a portfolio and make sense of financial results in everyday language.</p>
           <div className={styles.features}>{features.map(([title, description]) => <section key={title}><h3>{title}</h3><p>{description}</p></section>)}</div>
-          <div className={styles.notice}><Icon name="school" size={20} /><p>Aura is a senior project for portfolio risk education, not a trading platform or financial advisor. Historical results do not guarantee future performance; Aura does not provide buy/sell recommendations.</p></div>
+          <div className={styles.notice}><Icon name="school" size={20} /><p>Aura is a portfolio risk education platform, not a trading platform or financial advisor. Historical results do not guarantee future performance; Aura does not provide buy/sell recommendations.</p></div>
         </div>
         <footer className={styles.footer}><button type="button" className="primary-btn" onClick={onClose}>Done</button></footer>
       </section>

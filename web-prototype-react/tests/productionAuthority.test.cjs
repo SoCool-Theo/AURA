@@ -1359,10 +1359,10 @@ test('web settings enable only About Aura while retaining other privacy/support 
   visit(DeferredSettingsSections());
   assert.deepEqual(headings, ['Privacy & alerts', 'Data & support']);
   const labels = ['Hide portfolio values', 'App notifications', 'Reset local data', 'Help & Support', 'About Aura'];
-  assert.deepEqual(buttons.map(button => button.children.join('')), labels);
+  assert.deepEqual(buttons.map(button => button.props['aria-label'] ?? button.children.join('')), labels);
   for (const button of buttons) {
-    const isAbout = button.children[0] === 'About Aura';
-    assert.equal(button.props.disabled, !isAbout);
+    const isAbout = button.props['aria-label'] === 'About Aura';
+    assert.equal(Boolean(button.props.disabled), !isAbout);
     if (!isAbout) assert.equal(button.props.onClick, undefined);
     assert.equal(button.props.type, 'button');
     assert.ok(button.props['aria-describedby']);
@@ -1370,6 +1370,12 @@ test('web settings enable only About Aura while retaining other privacy/support 
   assert.equal(text.filter(value => value === 'Not available yet').length, 4);
   const about = buttons.at(-1);
   assert.equal(about.props['aria-haspopup'], 'dialog');
+  assert.equal(about.children[0].children[0].props.name, 'shield');
+  assert.equal(about.children[1].children[0].children[0], 'About Aura');
+  assert.equal(about.children[1].children[1].children[0], 'Learn about Aura and its current features.');
+  assert.equal(about.children[2].type, 'Icon');
+  assert.equal(about.children[2].props.name, 'chevron-right');
+  assert.ok(about.children.every(child => child.type !== 'button'));
   assert.equal(DeferredSettingsSections().children[1], false);
   about.props.onClick();
   assert.equal(DeferredSettingsSections().children[1].type, 'AboutDialog');
@@ -1381,6 +1387,24 @@ test('web settings enable only About Aura while retaining other privacy/support 
   assert.match(read('src/pages/settings/SettingsPage.tsx'), /<DeferredSettingsSections \/>/);
   const preview = read('src/pages/settings/components/DeferredSettingsSections.tsx');
   assert.doesNotMatch(preview, /localStorage|sessionStorage|authApi|resetLocalData|resetPreferences/);
+  const styles = read('src/pages/settings/SettingsPage.module.css');
+  assert.match(styles, /\.availableRow \{ width: 100%/);
+  assert.match(styles, /\.availableRow:focus-visible \{ outline: 2px solid var\(--teal-primary\)/);
+  assert.match(styles, /\.availableRow \{ flex-wrap: nowrap; \}/);
+});
+
+test('Aura product copy and guidance use professional educational-platform branding', () => {
+  const academicLabel = new RegExp(['senior', 'project'].join('\\s+'), 'i');
+  const files = [
+    '../AGENTS.md', '../PROJECT_CONTEXT.md', '../CURRENT_STATUS.md',
+    '../mobile/src/screens/settings/AboutAuraDialog.tsx',
+    'src/pages/settings/components/AboutAuraDialog.tsx', 'src/pages/welcome/WelcomePage.tsx',
+  ];
+  for (const file of files) assert.doesNotMatch(fs.readFileSync(path.join(root, file), 'utf8'), academicLabel, file);
+  const guidance = fs.readFileSync(path.join(root, '../AGENTS.md'), 'utf8');
+  assert.match(guidance, /Use professional product wording in UI, documentation, and future features/);
+  const welcome = fs.readFileSync(path.join(root, 'src/pages/welcome/WelcomePage.tsx'), 'utf8');
+  assert.match(welcome, /Aura · Portfolio risk education/);
 });
 
 test('web About Aura uses themed content, keyboard dismissal/focus trapping, and returns focus', () => {

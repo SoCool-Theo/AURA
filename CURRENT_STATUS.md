@@ -2458,7 +2458,7 @@ remain separate follow-on work.
   About alert with an Aura navy/teal themed modal opened from the existing row.
 - Both clients show matching current/planned portfolio-risk, what-if simulation,
   AI Assistant, Watchlist, and Learn overviews. Copy distinguishes saved market
-  observations from live quotes and explains the senior project's educational,
+  observations from live quotes and explains Aura's educational,
   non-advisory purpose without promising future investment performance.
 - Added themed Close/Done controls, bounded scrollable content, backdrop
   dismissal, mobile hardware-back dismissal, and web Escape/focus trapping,
@@ -2468,3 +2468,20 @@ remain separate follow-on work.
   46 web authority tests, 52 mobile authority tests, both TypeScript checks,
   and the web production build passed. Physical-device/browser visual acceptance
   was not performed. No backend, migration, commit, or push changes were made.
+
+### Completed About Aura full-row interaction and product wording (2026-10-03)
+
+- Web About Aura is now one full-width native button: icon, title, description,
+  whitespace, and side arrow all open the existing popup. Keyboard activation,
+  teal focus/hover styling, and side-arrow placement at narrow widths are retained.
+  Mobile already uses a whole-row Pressable; regression coverage now verifies
+  that the arrow is inside that same control.
+- Removed academic-project branding from both About popups, the welcome footer,
+  repository guidance, and the earlier status note. Aura is described as a
+  portfolio risk education platform, with professional wording required for
+  future features in AGENTS.md. No remaining wording matches were found in the
+  repository source/documentation scan.
+- Added full-row and branding regressions. Validation: 47 web authority tests,
+  52 mobile authority tests, both TypeScript checks, and web production build
+  passed. Browser/device visual acceptance was not performed. No backend,
+  dependency, migration, commit, or push changes were made.

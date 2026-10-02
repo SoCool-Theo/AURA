@@ -60,7 +60,11 @@ test('mobile Settings sign out confirms, cancels safely, retries failures, and b
   const dialog = () => nodes().find(node => node.type === 'Dialog');
   const about = () => nodes().find(node => node.type === 'AboutDialog');
   assert.equal(about().props.visible, false);
-  nodes().find(node => node.type === 'Pressable' && node.props.accessibilityLabel === 'About Aura').props.onPress();
+  const aboutRow = nodes().find(node => node.type === 'Pressable' && node.props.accessibilityLabel === 'About Aura');
+  assert.equal(aboutRow.props.accessibilityRole, 'button');
+  assert.equal(aboutRow.children.at(-1).type, 'Icon');
+  assert.equal(aboutRow.children.at(-1).props.name, 'chevron-forward');
+  aboutRow.props.onPress();
   await harness.settle(); assert.equal(about().props.visible, true); assert.equal(signOuts, 0);
   about().props.onClose(); await harness.settle(); assert.equal(about().props.visible, false);
   assert.equal(dialog().props.visible, false);
