@@ -91,7 +91,7 @@ export function AnalysisResults({
           <RiskBadge level={risk.risk_level} />
         </View>
         <Text style={styles.summaryText}>
-          Risk score {risk.risk_score.toFixed(1)}/100 · {diversification.level} diversification
+          <Text style={{ color: colors[riskTone(risk.risk_level)] }}>Risk score {risk.risk_score.toFixed(1)}/100</Text> · {diversification.level} diversification
         </Text>
         {risk.reasons.map((reason, index) => (
           <Text key={`${index}-${reason}`} style={styles.reason}>• {reason}</Text>
@@ -214,6 +214,7 @@ export function AnalysisResults({
           icon="speedometer-outline"
           label="Risk Score"
           value={`${risk.risk_score.toFixed(1)}/100`}
+          valueColor={colors[riskTone(risk.risk_level)]}
           meta={risk.risk_level}
           tone={riskTone(risk.risk_level)}
         />
@@ -362,7 +363,7 @@ export function AnalysisResults({
             {holding.asset_metrics.risk_classification ? (
               <View style={styles.assetRiskRow}>
                 <RiskBadge level={holding.asset_metrics.risk_classification.risk_level} />
-                <Text style={styles.cardText}>{holding.asset_metrics.risk_classification.risk_score.toFixed(1)}/100</Text>
+                <Text style={[styles.cardText, { color: colors[riskTone(holding.asset_metrics.risk_classification.risk_level)] }]}>{holding.asset_metrics.risk_classification.risk_score.toFixed(1)}/100</Text>
               </View>
             ) : null}
             <Text style={styles.cardText}>
@@ -402,7 +403,7 @@ export function AnalysisResults({
             {asset.risk_classification ? (
               <View style={styles.assetRiskRow}>
                 <RiskBadge level={asset.risk_classification.risk_level} />
-                <Text style={styles.cardText}>{asset.risk_classification.risk_score.toFixed(1)}/100</Text>
+                <Text style={[styles.cardText, { color: colors[riskTone(asset.risk_classification.risk_level)] }]}>{asset.risk_classification.risk_score.toFixed(1)}/100</Text>
               </View>
             ) : null}
             <View style={styles.dataGrid}>

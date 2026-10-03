@@ -1,4 +1,13 @@
 import { ApiError } from '../../api/apiClient';
+import type { RiskLevel } from '../../types/analytics';
+
+// Presentation only: use the classification saved by the backend, not score thresholds.
+export function riskColor(level?: RiskLevel): string {
+  if (level === 'Low') return 'var(--green-primary)';
+  if (level === 'Moderate') return 'var(--amber-primary)';
+  if (level === 'High' || level === 'Very High') return 'var(--red-bright)';
+  return 'var(--text-muted)';
+}
 
 export function formatPercent(value: number, fractionDigits = 2): string {
   return `${(value * 100).toFixed(fractionDigits)}%`;

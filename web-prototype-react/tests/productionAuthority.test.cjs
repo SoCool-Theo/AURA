@@ -45,6 +45,50 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+test('web saved risk levels color both asset labels and scores without reclassifying backend numbers', () => {
+  const ui = load('src/pages/analytics/analyticsUi.ts', { '../../api/apiClient': { ApiError: Error } });
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const { AssetAnalysisCard } = load('src/pages/analytics/components/AssetAnalysisCard.tsx', {
+    '../../../components/ui/Icon': { Icon: 'Icon' }, '../../../components/ui/SymbolBadge': { SymbolBadge: 'Symbol' },
+    '../analyticsUi': ui, '../AnalyticsIntegration.module.css': { assetRiskLevel: 'risk' },
+  }, { React: react });
+  const { AnalysisSummary } = load('src/pages/analytics/components/AnalysisSummary.tsx', {
+    '../../../components/ui/Card': { Card: 'Card' }, '../../../components/ui/Icon': { Icon: 'Icon' },
+    '../analyticsUi': ui, '../AnalyticsIntegration.module.css': {},
+  }, { React: react });
+  const levels = [['Low', 'var(--green-primary)'], ['Moderate', 'var(--amber-primary)'], ['High', 'var(--red-bright)'], ['Very High', 'var(--red-bright)']];
+  for (const [level, color] of levels) {
+    // The same number intentionally receives each saved label: colors must not calculate severity.
+    const risk = { risk_score: 50, risk_level: level, reasons: [] };
+    assert.equal(ui.riskColor(level), color);
+    const asset = { symbol: 'AAPL', weight: .5, cumulative_return: .1, annualized_return: .1, annualized_volatility: .2, max_drawdown: -.1, sharpe_ratio: 1, risk_classification: risk };
+    const paragraph = localWebNodes(AssetAnalysisCard({ asset, onOpen() {} })).find(node => node.type === 'p');
+    assert.equal(paragraph.props.style.color, color); assert.equal(paragraph.children.join(''), `50.0 · ${level} risk`);
+    const summary = localWebNodes(AnalysisSummary({ analysis: { risk_classification: risk, metadata: {} } }));
+    const score = summary.find(node => node.type === 'strong'), label = summary.find(node => node.type === 'span' && node.props.style);
+    assert.equal(score.props.style.color, color); assert.equal(label.props.style.color, color);
+    assert.equal(score.children.join(''), '50.0');
+  }
+  assert.equal(ui.riskColor(undefined), 'var(--text-muted)');
+  const legacy = AssetAnalysisCard({ asset: { symbol: 'OLD', weight: 1, cumulative_return: 0, annualized_return: 0, annualized_volatility: 0, max_drawdown: 0, sharpe_ratio: null }, onOpen() {} });
+  assert.ok(!localWebNodes(legacy).some(node => node.type === 'p'));
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const detail = read('src/pages/reports/AssetRiskDetailPage.tsx');
+  assert.match(detail, /<strong style=\{\{ color: riskColor\(risk\?\.risk_level\) \}\}/);
+  assert.match(detail, /<span style=\{\{ color: riskColor\(risk\?\.risk_level\) \}\}/);
+  const dashboard = read('src/pages/dashboard/components/DashboardKpiGrid.tsx');
+  assert.match(dashboard, /<strong style=\{\{ color: riskColor\(risk\?\.risk_level\) \}\}/);
+  assert.match(dashboard, /className=\{`metric-change \$\{riskLabelTone\}`\} style=\{\{ color: riskColor\(risk\?\.risk_level\) \}\}/);
+});
+
+test('web gauge score accepts risk color while keeping legacy callers unchanged', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const { GaugeChart } = load('src/components/charts/GaugeChart.tsx', { '../../utils/uiCalculations': { clamp: (value, min, max) => Math.max(min, Math.min(max, value)) } }, { React: react });
+  const colored = localWebNodes(GaugeChart({ score: 83.3, color: 'var(--red-bright)' })).find(node => node.type === 'strong');
+  assert.equal(colored.props.style.color, 'var(--red-bright)'); assert.equal(colored.children[0], 83.3);
+  assert.equal(localWebNodes(GaugeChart({ score: 30 })).find(node => node.type === 'strong').props.style, undefined);
+});
+
 function mountWebPrivacy(accountId, storage) {
   const slots = []; let cursor = 0, wrapper, tree;
   const react = {

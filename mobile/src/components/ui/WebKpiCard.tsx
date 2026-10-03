@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type ColorValue } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { colors, spacing } from '../../theme/theme';
@@ -8,6 +8,7 @@ export function WebKpiCard({
   icon,
   label,
   value,
+  valueColor,
   meta,
   tone = 'primary',
   onPress,
@@ -16,6 +17,7 @@ export function WebKpiCard({
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
+  valueColor?: ColorValue;
   meta?: string;
   tone?: 'primary' | 'success' | 'warning' | 'danger' | 'blue';
   onPress?: () => void;
@@ -39,7 +41,7 @@ export function WebKpiCard({
         {onPress ? <Ionicons name="chevron-forward" size={17} color={colors.muted} /> : null}
       </View>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
+      <Text style={[styles.value, valueColor != null && { color: valueColor }]}>{value}</Text>
       {meta ? <Text style={[styles.meta, { color: selected.fg }]}>{meta}</Text> : null}
     </>
   );

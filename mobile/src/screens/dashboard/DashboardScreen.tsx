@@ -204,7 +204,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                     : 'Current valuation unavailable'}
                 tone="blue"
               />
-              <WebKpiCard icon="speedometer-outline" label="Risk Score" value={analysis?.risk_classification.risk_score == null ? 'N/A' : `${analysis.risk_classification.risk_score.toFixed(1)}/100`} meta={analysis?.risk_classification.risk_level ?? 'No verified report loaded'} tone={analysis ? riskTone(analysis.risk_classification.risk_level) : 'primary'} />
+              <WebKpiCard icon="speedometer-outline" label="Risk Score" value={analysis?.risk_classification.risk_score == null ? 'N/A' : `${analysis.risk_classification.risk_score.toFixed(1)}/100`} valueColor={analysis ? colors[riskTone(analysis.risk_classification.risk_level)] : colors.muted} meta={analysis?.risk_classification.risk_level ?? 'No verified report loaded'} tone={analysis ? riskTone(analysis.risk_classification.risk_level) : 'primary'} />
               <WebKpiCard
                 icon="trending-up-outline"
                 label="Annualized Return"

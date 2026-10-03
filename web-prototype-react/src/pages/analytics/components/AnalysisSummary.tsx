@@ -1,7 +1,7 @@
 import { Card } from '../../../components/ui/Card';
 import { Icon } from '../../../components/ui/Icon';
 import type { PortfolioAnalysisResponse } from '../../../types/analytics';
-import { formatNumber } from '../analyticsUi';
+import { formatNumber, riskColor } from '../analyticsUi';
 import styles from '../AnalyticsIntegration.module.css';
 
 interface AnalysisSummaryProps {
@@ -31,8 +31,8 @@ export function AnalysisSummary({ analysis }: AnalysisSummaryProps) {
       </div>
       <div className={`${styles.score} ${scoreTone}`}>
         <Icon name="speedometer" size={22} />
-        <strong>{formatNumber(classification.risk_score, 1)}</strong>
-        <span>{classification.risk_level} risk</span>
+        <strong style={{ color: riskColor(classification.risk_level) }}>{formatNumber(classification.risk_score, 1)}</strong>
+        <span style={{ color: riskColor(classification.risk_level) }}>{classification.risk_level} risk</span>
       </div>
     </Card>
   );

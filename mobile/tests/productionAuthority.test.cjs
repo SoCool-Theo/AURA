@@ -1950,6 +1950,33 @@ function localMobileNodes(tree) {
   return [tree, ...(tree.children ?? []).flatMap(localMobileNodes)];
 }
 function plain(value) { return JSON.parse(JSON.stringify(value)); }
+
+test('mobile saved risk labels and score values share severity colors without coloring unrelated KPI values', () => {
+  const colors = { success: 'green', warning: 'amber', danger: 'red', text: 'white', muted: 'gray' };
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const native = { Pressable: 'Pressable', Text: 'Text', View: 'View', StyleSheet: { create: value => value } };
+  const { riskTone } = load('src/report/reportFormatting.ts');
+  const { RiskBadge } = load('src/components/ui/RiskBadge.tsx', { react, 'react-native': native, '../../theme/colors': { colors } });
+  const { WebKpiCard } = load('src/components/ui/WebKpiCard.tsx', { react, 'react-native': native, '@expo/vector-icons': { Ionicons: 'Icon' }, './Card': { Card: 'Card' }, '../../theme/theme': { colors, spacing: {} } });
+  const styleColor = node => node.props.style.filter(Boolean).map(style => style.color).filter(Boolean).at(-1);
+  for (const [level, color] of [['Low', 'green'], ['Moderate', 'amber'], ['High', 'red'], ['Very High', 'red']]) {
+    const badge = localMobileNodes(RiskBadge({ level })).find(node => node.type === 'Text');
+    assert.equal(styleColor(badge), color);
+    const card = WebKpiCard({ icon: 'speedometer-outline', label: 'Risk Score', value: '50.0/100', meta: level, tone: riskTone(level), valueColor: colors[riskTone(level)] });
+    const texts = localMobileNodes(card).filter(node => node.type === 'Text');
+    assert.equal(styleColor(texts.find(node => node.children[0] === '50.0/100')), color);
+    assert.equal(styleColor(texts.find(node => node.children[0] === level)), color);
+  }
+  const unrelated = localMobileNodes(WebKpiCard({ icon: 'wallet-outline', label: 'Value', value: '$100', tone: 'danger' })).find(node => node.type === 'Text' && node.children[0] === '$100');
+  assert.equal(styleColor(unrelated), 'white');
+  const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+  const analysis = read('src/components/analytics/AnalysisResults.tsx');
+  assert.match(analysis, /valueColor=\{colors\[riskTone\(risk.risk_level\)\]\}/);
+  assert.match(analysis, /color: colors\[riskTone\(holding.asset_metrics.risk_classification.risk_level\)\]/);
+  assert.match(analysis, /color: colors\[riskTone\(asset.risk_classification.risk_level\)\]/);
+  assert.match(read('src/screens/reports/AssetRiskDetailScreen.tsx'), /color: risk \? colors\[riskTone\(risk.risk_level\)\] : colors.muted/);
+  assert.match(read('src/screens/dashboard/DashboardScreen.tsx'), /valueColor=\{analysis \? colors\[riskTone\(analysis.risk_classification.risk_level\)\] : colors.muted\}/);
+});
 function mountMobileProgress(accountId, storage) {
   const h = hookHarness();
   h.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });

@@ -2701,3 +2701,25 @@ remain separate follow-on work.
   87 web/shared-client tests, TypeScript/production build, and whitespace checks
   passed. Existing bundle-size warning remains. Browser visual acceptance was
   not run; no dependencies, migration, commit, or push was added.
+
+### Matching risk label and score colors — 2026-10-04
+
+- Web AssetAnalysisCard now colors the combined score/label by its saved
+  classification rather than fixed teal. Low uses green, Moderate amber,
+  and High/Very High red. Analytics summaries, asset-risk detail headings/
+  score cards, dashboard risk KPI values/labels, and gauge numbers match.
+  Added a presentation-only riskColor helper in the existing analyticsUi file.
+- Mobile AnalysisResults, AssetRiskDetailScreen, and DashboardScreen now color
+  scores consistently with their existing RiskBadge/riskTone palette, including
+  current, planned, and legacy asset rows. WebKpiCard accepts an optional value
+  color only used for risk scores; other metric values keep their styling.
+  Missing/legacy classifications remain absent or neutral, never invented.
+- Added client regressions for all four saved levels, label/score consistency,
+  neutral missing data, unchanged unrelated KPIs, and backwards-compatible
+  gauge callers. The same test number is used with different saved labels to
+  ensure the UI does not calculate or override backend classifications.
+- Validation: 89 web/shared-client tests and 68 mobile authority tests (157
+  total), both TypeScript checks, web production build, and whitespace checks
+  passed. Existing web bundle warning remains. Browser/device visual acceptance
+  was not run; backend calculations, dependencies, migrations, commits, and
+  pushes are unchanged.

@@ -24,7 +24,8 @@ import {
 } from '../../portfolio/portfolioFormatting';
 import {
   formatAnalysisNumber,
-  formatRatioPercent
+  formatRatioPercent,
+  riskTone
 } from '../../report/reportFormatting';
 import {
   assetReportMetricAmountContent,
@@ -153,7 +154,7 @@ export function AssetRiskDetailScreen({
             </View>
             <View style={styles.riskTitle}>
               <Text style={styles.overline}>HISTORICAL ASSET RISK</Text>
-              <Text style={styles.score}>{risk ? `${risk.risk_score.toFixed(1)}/100` : 'N/A'}</Text>
+              <Text style={[styles.score, { color: risk ? colors[riskTone(risk.risk_level)] : colors.muted }]}>{risk ? `${risk.risk_score.toFixed(1)}/100` : 'N/A'}</Text>
             </View>
             {risk ? <RiskBadge level={risk.risk_level} /> : null}
           </View>
