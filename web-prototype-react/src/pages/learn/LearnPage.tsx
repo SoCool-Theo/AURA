@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLearnProgress } from '../../learn/LearnProgress';
 import { go } from '../../app/routes';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
@@ -167,6 +168,9 @@ const LESSONS: Lesson[] = [
 ];
 
 export function LearnPage() {
+  const { learnProgress, localError, retryLocalData } = useLearnProgress();
+  const completed = LESSONS.filter(lesson => learnProgress[lesson.id]).length;
+  const percent = Math.round(completed / LESSONS.length * 100);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
 
   return (
@@ -179,16 +183,18 @@ export function LearnPage() {
         </div>
         <div className="learn-progress-pill">
           <span><Icon name="school" size={18} /></span>
-          <div><strong>{LESSONS.length} lessons</strong><small>About 36 minutes total</small></div>
+          <div><strong>{localError ? 'Progress unavailable' : `${completed}/${LESSONS.length} lessons completed`}</strong><small>Saved for this account in this browser</small></div>
         </div>
       </header>
+      {localError ? <div role="alert" className="learn-progress-error">{localError} <button className="secondary-btn" onClick={retryLocalData}>Retry local progress</button></div>
+        : <div className="learn-progress-track" role="progressbar" aria-label="Lessons completed" aria-valuemin={0} aria-valuemax={LESSONS.length} aria-valuenow={completed}><span style={{ width: `${percent}%` }} /></div>}
 
       <div className="learn-feature-grid">
-        <LearningFeature lesson={LESSONS[0]} onOpen={setSelectedLesson} />
-        <LearningPath />
+        <LearningFeature lesson={LESSONS[0]} onOpen={setSelectedLesson} completed={Boolean(learnProgress[LESSONS[0].id])} />
+        <LearningPath learnProgress={learnProgress} />
       </div>
 
-      <LessonLibrary lessons={LESSONS} onOpen={setSelectedLesson} />
+      <LessonLibrary lessons={LESSONS} onOpen={setSelectedLesson} learnProgress={learnProgress} />
 
       <Card className="learn-aura-card">
         <span><Icon name="spark" size={22} /></span>

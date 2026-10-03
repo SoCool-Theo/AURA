@@ -54,7 +54,7 @@ function mountWebPrivacy(accountId, storage) {
     useState: initial => {
       const i = cursor++;
       if (!(i in slots)) slots[i] = typeof initial === 'function' ? initial() : initial;
-      return [slots[i], next => { slots[i] = next; render(); }];
+      return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; render(); }];
     },
   };
   const privacy = load('src/privacy/PortfolioPrivacy.tsx', {
@@ -186,7 +186,7 @@ test('web privacy covers result surfaces without masking public prices, FX, or n
   assert.ok(masked > 15); assert.ok(publicPrices > 0);
   const chart = fs.readFileSync(path.join(root, 'src/pages/simulations/components/SimulationTrajectoryChart.tsx'), 'utf8');
   assert.match(chart, /normalized_value/); assert.doesNotMatch(chart, /formatPortfolioMoney/);
-  const main = fs.readFileSync(path.join(root, 'src/main.tsx'), 'utf8'); assert.match(main, /<PortfolioPrivacyProvider><App \/><\/PortfolioPrivacyProvider>/);
+  const main = fs.readFileSync(path.join(root, 'src/main.tsx'), 'utf8'); assert.match(main, /<PortfolioPrivacyProvider><LearnProgressProvider><App \/><\/LearnProgressProvider><\/PortfolioPrivacyProvider>/);
   const assistant = fs.readFileSync(path.join(root, 'src/pages/assistant/AssistantPage.tsx'), 'utf8');
   assert.match(assistant, /if \(sendingRef.current \|\| hideValues\) return/);
   assert.ok(assistant.indexOf('if (hideValues) return') < assistant.indexOf('{messages.map'));
@@ -1487,15 +1487,18 @@ test('web session restoration uses the focused Aura loading screen', () => {
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
-test('web settings enable local privacy and About Aura while retaining other support previews', () => {
-  let showAbout = false;
+test('web settings enable local reset, privacy and About Aura while retaining other support previews', () => {
+  let cursor = 0; const slots = [];
   let hiddenValues = false;
   const react = {
     createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
-    useState: () => [showAbout, value => { showAbout = value; }],
+    useState: initial => { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => { slots[i] = value; }]; },
+    useRef: initial => { const i = cursor++; return slots[i] ??= { current: initial }; },
   };
   const { DeferredSettingsSections } = load('src/pages/settings/components/DeferredSettingsSections.tsx', {
     react, './AboutAuraDialog': { AboutAuraDialog: 'AboutDialog' },
+    '../../../learn/LearnProgress': { useLearnProgress: () => ({ resetLocalData: async () => {} }) },
+    '../../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
     '../../../components/ui/Card': { Card: 'Card' },
     '../../../components/ui/Icon': { Icon: 'Icon' },
     '../SettingsPage.module.css': {},
@@ -1503,6 +1506,7 @@ test('web settings enable local privacy and About Aura while retaining other sup
       hideValues: hiddenValues, ready: true, storageError: null, setHideValues: value => { hiddenValues = value; },
     }) },
   }, { React: react });
+  const render = () => { cursor = 0; return DeferredSettingsSections(); };
   const buttons = [], headings = [], text = [];
   function visit(node) {
     if (Array.isArray(node)) return node.forEach(visit);
@@ -1512,18 +1516,18 @@ test('web settings enable local privacy and About Aura while retaining other sup
     if (node.type === 'h2') headings.push(node.children.join(''));
     node.children?.forEach(visit);
   }
-  visit(DeferredSettingsSections());
+  visit(render());
   assert.deepEqual(headings, ['Privacy & alerts', 'Data & support']);
   const labels = ['Hide portfolio values', 'App notifications', 'Reset local data', 'Help & Support', 'About Aura'];
   assert.deepEqual(buttons.map(button => button.props['aria-label'] ?? button.children.join('')), labels);
   for (const button of buttons) {
-    const enabled = ['About Aura', 'Hide portfolio values'].includes(button.props['aria-label']);
+    const enabled = ['About Aura', 'Hide portfolio values', 'Reset local data'].includes(button.props['aria-label']);
     assert.equal(Boolean(button.props.disabled), !enabled);
     if (!enabled) assert.equal(button.props.onClick, undefined);
     assert.equal(button.props.type, 'button');
     assert.ok(button.props['aria-describedby']);
   }
-  assert.equal(text.filter(value => value === 'Not available yet').length, 3);
+  assert.equal(text.filter(value => value === 'Not available yet').length, 2);
   assert.equal(buttons[0].props.role, 'switch');
   assert.equal(buttons[0].props['aria-checked'], false);
   buttons[0].props.onClick(); assert.equal(hiddenValues, true);
@@ -1535,17 +1539,18 @@ test('web settings enable local privacy and About Aura while retaining other sup
   assert.equal(about.children[2].type, 'Icon');
   assert.equal(about.children[2].props.name, 'chevron-right');
   assert.ok(about.children.every(child => child.type !== 'button'));
-  assert.equal(DeferredSettingsSections().children[1], false);
+  assert.equal(render().children[2], false);
   about.props.onClick();
-  assert.equal(DeferredSettingsSections().children[1].type, 'AboutDialog');
-  DeferredSettingsSections().children[1].props.onClose();
-  assert.equal(DeferredSettingsSections().children[1], false);
+  assert.equal(render().children[2].type, 'AboutDialog');
+  render().children[2].props.onClose();
+  assert.equal(render().children[2], false);
   const read = file => fs.readFileSync(path.join(root, file), 'utf8');
   const mobile = fs.readFileSync(path.join(root, '../mobile/src/screens/settings/SettingsScreen.tsx'), 'utf8');
   for (const label of labels) assert.ok(mobile.includes(label));
   assert.match(read('src/pages/settings/SettingsPage.tsx'), /<DeferredSettingsSections \/>/);
   const preview = read('src/pages/settings/components/DeferredSettingsSections.tsx');
-  assert.doesNotMatch(preview, /localStorage|sessionStorage|authApi|resetLocalData|resetPreferences/);
+  assert.doesNotMatch(preview, /localStorage|sessionStorage|authApi/);
+  assert.match(preview, /await resetLocalData\(\)/);
   const styles = read('src/pages/settings/SettingsPage.module.css');
   assert.match(styles, /\.availableRow \{ width: 100%/);
   assert.doesNotMatch(styles, /\.availableRow:hover/);
@@ -1615,4 +1620,159 @@ test('web About Aura uses themed content, keyboard dismissal/focus trapping, and
   const styles = fs.readFileSync(path.join(root, 'src/pages/settings/components/AboutAuraDialog.module.css'), 'utf8');
   assert.match(styles, /background: var\(--bg-card\)/); assert.match(styles, /var\(--teal-primary\)/);
   assert.match(styles, /overflow-y: auto/); assert.match(styles, /100dvh/);
+});
+// Small hook harness for local UI workflows, not a browser E2E renderer.
+function localWebHarness() {
+  const slots = []; let cursor = 0, tree, component;
+  const react = {
+    createContext: () => ({ Provider: 'Provider' }),
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useContext: () => tree.props.value,
+    useState: initial => {
+      const i = cursor++;
+      if (!(i in slots)) slots[i] = typeof initial === 'function' ? initial() : initial;
+      return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }];
+    },
+    useRef: initial => { const i = cursor++; return slots[i] ??= { current: initial }; },
+    useMemo: fn => fn(), useEffect: () => {},
+  };
+  return { react, mount(fn) { component = fn; this.render(); }, render() { cursor = 0; tree = component(); }, get tree() { return tree; } };
+}
+function localWebNodes(tree) {
+  if (Array.isArray(tree)) return tree.flatMap(localWebNodes);
+  if (!tree || typeof tree !== 'object') return [];
+  return [tree, ...(tree.children ?? []).flatMap(localWebNodes)];
+}
+function mountWebProgress(accountId, storage) {
+  const h = localWebHarness();
+  const api = load('src/learn/LearnProgress.tsx', {
+    react: h.react, '../auth/useAuth': { useAuth: () => ({ user: accountId ? { id: accountId } : null }) },
+  }, { React: h.react, localStorage: storage });
+  const wrapper = api.LearnProgressProvider({ children: 'content' });
+  h.mount(() => accountId ? wrapper.type(wrapper.props) : wrapper);
+  return { h, api, get value() { return h.tree.props.value; }, key: wrapper.props.key };
+}
+
+test('web Learn completion persists per account, supports undo, survives login and resets only its own key', async () => {
+  const saved = new Map([['session', 'token'], ['reports', 'saved-report']]);
+  const storage = { getItem: key => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value), removeItem: key => saved.delete(key) };
+  const first = mountWebProgress('a', storage);
+  assert.deepEqual(plain(first.value.learnProgress), {});
+  first.value.toggleLessonComplete('risk-score'); first.h.render();
+  assert.equal(first.value.learnProgress['risk-score'], true);
+  first.value.toggleLessonComplete('risk-score'); first.h.render();
+  assert.equal(first.value.learnProgress['risk-score'], false);
+  first.value.toggleLessonComplete('volatility'); first.h.render();
+  assert.equal(mountWebProgress(null, storage).value.learnProgress.volatility, undefined);
+  assert.equal(mountWebProgress('a', storage).value.learnProgress.volatility, true);
+  const other = mountWebProgress('b', storage);
+  assert.deepEqual(plain(other.value.learnProgress), {});
+  other.value.toggleLessonComplete('drawdown'); other.h.render();
+  await first.value.resetLocalData(); first.h.render();
+  assert.deepEqual(plain(first.value.learnProgress), {});
+  assert.equal(mountWebProgress('a', storage).value.learnProgress.volatility, undefined);
+  assert.equal(mountWebProgress('b', storage).value.learnProgress.drawdown, true);
+  assert.equal(saved.get('session'), 'token'); assert.equal(saved.get('reports'), 'saved-report');
+});
+
+test('web Learn handles corrupt, blocked and failed-save storage without false completion', async () => {
+  for (const raw of ['null', '[]', 'bad-json', '{"risk-score":1}']) {
+    const state = mountWebProgress('a', { getItem: () => raw });
+    assert.ok(state.value.localError); assert.deepEqual(plain(state.value.learnProgress), {});
+  }
+  let failRead = true, failWrite = true, failReset = true;
+  const saved = new Map();
+  const state = mountWebProgress('a', {
+    getItem: key => { if (failRead) throw Error('blocked'); return saved.get(key) ?? null; },
+    setItem: (key, value) => { if (failWrite) throw Error('quota'); saved.set(key, value); },
+    removeItem: key => { if (failReset) throw Error('blocked'); saved.delete(key); },
+  });
+  assert.ok(state.value.localError);
+  failRead = false; state.value.retryLocalData(); state.h.render();
+  assert.equal(state.value.localError, null);
+  state.value.toggleLessonComplete('risk-score'); state.h.render();
+  assert.equal(state.value.learnProgress['risk-score'], undefined); assert.match(state.value.localError, /could not be saved/);
+  failWrite = false; state.value.retryLocalData(); state.h.render();
+  state.value.toggleLessonComplete('risk-score'); state.h.render();
+  await assert.rejects(() => state.value.resetLocalData()); state.h.render();
+  assert.equal(state.value.learnProgress['risk-score'], true);
+  failReset = false; await state.value.resetLocalData(); state.h.render();
+  assert.deepEqual(plain(state.value.learnProgress), {});
+});
+
+test('web Learn opens without auto-completion, explicitly marks/undoes and shows actual total/path progress', () => {
+  const state = mountWebProgress('a', { getItem: () => null, setItem: () => {} });
+  const h = localWebHarness();
+  const progress = { useLearnProgress: () => state.value };
+  const { LearnPage } = load('src/pages/learn/LearnPage.tsx', {
+    react: h.react, '../../learn/LearnProgress': progress,
+    '../../app/routes': { go: () => {} }, '../../components/ui/Card': { Card: 'Card' }, '../../components/ui/Icon': { Icon: 'Icon' },
+    './components/LearningFeature': { LearningFeature: 'Feature' }, './components/LearningPath': { LearningPath: 'Path' },
+    './components/LessonLibrary': { LessonLibrary: 'Library' }, './components/LessonDialog': { LessonDialog: 'Dialog' },
+  }, { React: h.react });
+  h.mount(() => LearnPage());
+  const library = () => localWebNodes(h.tree).find(node => node.type === 'Library');
+  const bar = () => localWebNodes(h.tree).find(node => node.props.role === 'progressbar');
+  const lessons = library().props.lessons;
+  assert.equal(bar().props['aria-valuenow'], 0);
+  library().props.onOpen(lessons[0]); h.render();
+  assert.equal(state.value.learnProgress[lessons[0].id], undefined);
+  const dialogHarness = localWebHarness();
+  const { LessonDialog } = load('src/pages/learn/components/LessonDialog.tsx', {
+    react: dialogHarness.react, '../../../learn/LearnProgress': progress,
+    'react-dom': { createPortal: node => node }, '../../../components/ui/Icon': { Icon: 'Icon' },
+  }, { React: dialogHarness.react, document: { body: {} } });
+  dialogHarness.mount(() => LessonDialog({ lesson: lessons[0], onClose: () => {} }));
+  const complete = () => localWebNodes(dialogHarness.tree).find(node => node.type === 'button' && /Mark/.test(node.children[0]));
+  assert.equal(state.value.learnProgress[lessons[0].id], undefined);
+  complete().props.onClick(); state.h.render(); dialogHarness.render(); h.render();
+  assert.equal(bar().props['aria-valuenow'], 1);
+  assert.equal(complete().children[0], 'Mark as not completed');
+  complete().props.onClick(); state.h.render(); h.render();
+  assert.equal(bar().props['aria-valuenow'], 0);
+  for (const lesson of lessons) { state.value.toggleLessonComplete(lesson.id); state.h.render(); }
+  state.value.toggleLessonComplete('unknown-lesson'); state.h.render(); h.render();
+  assert.equal(bar().props['aria-valuenow'], 9); assert.equal(bar().props['aria-valuemax'], 9);
+  const { LearningPath } = load('src/pages/learn/components/LearningPath.tsx', { '../../../components/ui/Card': { Card: 'Card' } }, { React: h.react });
+  const pathTree = LearningPath({ learnProgress: state.value.learnProgress });
+  assert.deepEqual(localWebNodes(pathTree).filter(node => node.type === 'b').map(node => node.children.join('')), ['4/4 completed', '1/1 completed', '4/4 completed']);
+});
+
+test('web Reset local data confirms/cancels, blocks duplicates, retries failure and preserves unrelated data', async () => {
+  const h = localWebHarness(); let clears = 0, privacyResets = 0, fail = true, release;
+  const { DeferredSettingsSections } = load('src/pages/settings/components/DeferredSettingsSections.tsx', {
+    react: h.react, '../../../components/ui/Card': { Card: 'Card' }, '../../../components/ui/Icon': { Icon: 'Icon' },
+    '../../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' }, './AboutAuraDialog': { AboutAuraDialog: 'AboutDialog' }, '../SettingsPage.module.css': {},
+    '../../../privacy/PortfolioPrivacy': { usePortfolioPrivacy: () => ({ hideValues: true, ready: true, setHideValues: () => {}, resetPrivacy: async () => { privacyResets++; } }) },
+    '../../../learn/LearnProgress': { useLearnProgress: () => ({ resetLocalData: async () => { clears++; if (fail) throw Error('blocked'); await new Promise(resolve => { release = resolve; }); } }) },
+  }, { React: h.react });
+  h.mount(() => DeferredSettingsSections());
+  const button = () => localWebNodes(h.tree).find(node => node.props['aria-label'] === 'Reset local data');
+  const dialog = () => localWebNodes(h.tree).find(node => node.type === 'Dialog');
+  button().props.onClick(); h.render(); assert.equal(clears, 0);
+  assert.equal(dialog().props.tone, 'danger'); assert.match(dialog().props.description, /turns Hide portfolio values off/);
+  assert.match(dialog().props.description, /session stay unchanged/);
+  const staleConfirm = dialog().props.onConfirm;
+  dialog().props.onCancel(); h.render(); staleConfirm();
+  assert.equal(clears, 0); assert.equal(dialog(), undefined);
+  button().props.onClick(); h.render(); dialog().props.onConfirm();
+  await new Promise(resolve => setImmediate(resolve)); h.render();
+  assert.equal(clears, 1); assert.equal(privacyResets, 0); assert.match(JSON.stringify(dialog()), /Local reset incomplete/);
+  fail = false; dialog().props.onConfirm(); dialog().props.onConfirm(); h.render();
+  assert.equal(clears, 2); assert.equal(dialog().props.busy, true); assert.equal(button().props.disabled, true);
+  dialog().props.onCancel(); h.render(); assert.ok(dialog());
+  release(); await new Promise(resolve => setImmediate(resolve)); h.render();
+  assert.equal(privacyResets, 1); assert.equal(dialog(), undefined);
+  assert.match(JSON.stringify(h.tree), /Local data reset/);
+});
+
+test('web strict privacy reset persists before unmasking and retains other account preferences', async () => {
+  let fail = true;
+  const saved = new Map([['aura_portfolio_privacy_v1:a', 'true'], ['aura_portfolio_privacy_v1:b', 'true']]);
+  const state = mountWebPrivacy('a', { getItem: key => saved.get(key), setItem: (key, value) => { if (fail) throw Error('blocked'); saved.set(key, value); } });
+  await assert.rejects(() => state.value.resetPrivacy());
+  assert.equal(state.value.hideValues, true); assert.match(state.value.storageError, /could not be reset/);
+  fail = false; await state.value.resetPrivacy();
+  assert.equal(state.value.hideValues, false); assert.equal(saved.get('aura_portfolio_privacy_v1:a'), 'false');
+  assert.equal(saved.get('aura_portfolio_privacy_v1:b'), 'true');
 });

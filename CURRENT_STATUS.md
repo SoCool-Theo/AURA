@@ -2526,3 +2526,28 @@ remain separate follow-on work.
   52 web authority tests, 57 mobile authority tests, both TypeScript checks,
   and web production build passed. Browser/physical-device acceptance was not
   performed. No dependencies, commits, or pushes were added.
+### Local data reset and Learn completion — 2026-10-03
+
+- Enabled Reset local data in web and replaced mobile's native reset alert with
+  Aura-themed confirmation. Cancel and duplicate-submit guards, retryable
+  partial-failure messages, and success notices are included. The warning
+  explicitly says Hide portfolio values turns Off. Reset clears only the
+  current account's local Learn progress/privacy choice; mobile also restores
+  device appearance/notification preferences and removes obsolete demo keys.
+  Server-owned account/profile, portfolios, holdings, reports, simulations,
+  watchlist, authentication tokens, and signed-in sessions stay unchanged.
+- Added account-scoped browser Learn progress and account-scoped mobile progress
+  using local storage only. Opening lessons or YouTube does not complete them:
+  users explicitly mark lessons completed and can undo completion. Counts,
+  lesson badges, progress bars, and web learning-path groups reflect saved
+  completion; storage failures are explained without claiming a successful
+  save. Logout/login retains each account's choices on the same device/browser.
+  Existing unscoped mobile Learn progress is not assigned to an account because
+  its ownership is unknown; its legacy key is removed only on explicit reset.
+- Strict privacy reset persists Off before revealing values. Mobile preferences
+  serialize reset after earlier writes, and Learn ignores stale pre-reset reads.
+  Other accounts' Learn progress and privacy choices are not cleared. No bulk
+  storage clear, backend change, migration, or dependency was added.
+- Validation: 57 web and 63 mobile authority regression tests (120 total), both
+  TypeScript checks, web production build, and git diff whitespace checks passed.
+  Browser/physical-device acceptance was not performed. No commit or push.

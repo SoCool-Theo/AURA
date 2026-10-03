@@ -72,11 +72,12 @@ function profileRequestError(error: unknown, fallback: string): string {
 export function SettingsScreen() {
   const privacy = usePortfolioPrivacy();
   const { user, setCurrentUser, signOut } = useAuth();
-  const { resetLocalData } = useAppData();
+  const { resetLocalData, loading: progressLoading, localPending } = useAppData();
   const {
     themeMode,
     setThemeMode,
     storageError,
+    ready: preferencesReady,
     resetPreferences
   } = usePreferences();
 
@@ -98,6 +99,11 @@ export function SettingsScreen() {
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const signOutConfirmationRef = useRef(false);
   const pendingRef = useRef(false);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
+  const resetConfirmationRef = useRef(false);
+  const resetUnavailable = pending || accountDeleting || progressLoading || localPending || !privacy.ready || preferencesReady === false;
 
   async function logout() {
     if (!signOutConfirmationRef.current || pendingRef.current || accountDeleting) return;
@@ -251,32 +257,29 @@ export function SettingsScreen() {
   }
 
   function resetEverything() {
+    if (pendingRef.current || resetUnavailable) return;
+    resetConfirmationRef.current = true;
+    setResetError(null); setResetNotice(null); setConfirmingReset(true);
+  }
+
+  function cancelReset() {
     if (pendingRef.current) return;
-    Alert.alert(
-      'Reset local app data?',
-      'This resets Learn progress and preferences on this device, and removes obsolete demo storage. Your portfolios, reports, simulations, and session are not deleted.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            if (pendingRef.current) return;
-            pendingRef.current = true;
-            setPending(true);
-            try {
-              await resetLocalData();
-              await resetPreferences();
-            } catch {
-              Alert.alert('Local reset incomplete', 'Some device data could not be reset. Please retry.');
-            } finally {
-              pendingRef.current = false;
-              setPending(false);
-            }
-          }
-        }
-      ]
-    );
+    resetConfirmationRef.current = false;
+    setConfirmingReset(false); setResetError(null);
+  }
+
+  async function confirmReset() {
+    if (!resetConfirmationRef.current || pendingRef.current || accountDeleting) return;
+    pendingRef.current = true; setPending(true); setResetError(null);
+    try {
+      await resetLocalData();
+      await resetPreferences();
+      await privacy.resetPrivacy();
+      resetConfirmationRef.current = false; setConfirmingReset(false);
+      setResetNotice('Local data reset. Learn progress is cleared, appearance is Dark, and Hide portfolio values is off for this account.');
+    } catch {
+      setResetError('Local reset incomplete. Some local settings may already have reset. Please try again.');
+    } finally { pendingRef.current = false; setPending(false); }
   }
 
   return (
@@ -442,7 +445,7 @@ export function SettingsScreen() {
               </Text>
             </View>
             <Switch accessibilityLabel="Hide portfolio values" value={privacy.hideValues}
-              disabled={!privacy.ready} onValueChange={privacy.setHideValues}
+              disabled={!privacy.ready || pending || accountDeleting} onValueChange={privacy.setHideValues}
               trackColor={{ false: colors.border, true: colors.primary }} thumbColor={colors.text} />
           </View>
           {privacy.storageError ? <Text accessibilityRole="alert" style={{ color: colors.danger, padding: spacing.md }}>{privacy.storageError}</Text> : null}
@@ -469,10 +472,10 @@ export function SettingsScreen() {
           <Pressable
             accessibilityLabel="Reset local data"
             accessibilityRole="button"
-            accessibilityState={{ disabled: pending }}
+            accessibilityState={{ disabled: resetUnavailable }}
             style={[styles.row, styles.rowBorder]}
             onPress={resetEverything}
-            disabled={pending}
+            disabled={resetUnavailable}
           >
             <View style={styles.rowIcon}>
               <Ionicons
@@ -530,6 +533,8 @@ export function SettingsScreen() {
           </Pressable>
         </View>
 
+        {resetNotice ? <Text accessibilityLiveRegion="polite" style={styles.rowDescription}>{resetNotice}</Text> : null}
+
         <DeleteAccountSection disabled={pending || profileSaving || passwordSaving} onBusyChange={setAccountDeleting} />
 
         <Button
@@ -548,6 +553,11 @@ export function SettingsScreen() {
         subject={user?.email ?? resolvedName} subjectLabel="SIGNED-IN ACCOUNT" confirmLabel="Sign out"
         tone="danger" iconName="log-out-outline" busy={pending} errorMessage={signOutError}
         onCancel={cancelSignOut} onConfirm={() => void logout()} />
+
+      <ConfirmationDialog visible={confirmingReset} title="Reset local data?" tone="danger"
+        description="This clears Learn progress and turns Hide portfolio values off for your current account on this device. Appearance resets to Dark and obsolete demo storage is removed. Your account, portfolios, holdings, reports, simulations, watchlist, and signed-in session stay unchanged. Other accounts’ privacy and Learn progress are not reset."
+        subject={user?.email ?? resolvedName} subjectLabel="THIS DEVICE ONLY" confirmLabel="Reset local data"
+        busy={pending} errorMessage={resetError} onCancel={cancelReset} onConfirm={() => void confirmReset()} />
 
       <Modal
         visible={editingProfile}

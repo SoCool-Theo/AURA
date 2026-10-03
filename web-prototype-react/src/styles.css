@@ -590,3 +590,9 @@ html{scrollbar-gutter:stable;scrollbar-color:var(--border-hover) var(--bg-app);s
 @media (max-width:900px){
   body{background-attachment:scroll;background-position:62% center}
 }
+.learn-progress-track { height: 7px; background: var(--border-control); border-radius: 999px; overflow: hidden; margin: 0 0 24px; }
+.learn-progress-track > span { display: block; height: 100%; background: var(--teal-primary); }
+.learn-progress-error, .learn-completion-controls { color: var(--text-secondary); }
+.learn-completion-controls { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 28px; }
+.learn-completion-controls p { margin: 0; }
+.learn-completion-controls small { line-height: 1.5; }

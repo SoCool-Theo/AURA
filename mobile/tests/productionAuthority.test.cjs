@@ -469,7 +469,7 @@ test('mobile privacy covers result surfaces while preserving public prices, FX, 
   assert.ok(providers.indexOf('<AuthProvider>') < providers.indexOf('<PortfolioPrivacyProvider>'));
   const settings = fs.readFileSync(path.join(root, 'src/screens/settings/SettingsScreen.tsx'), 'utf8');
   assert.match(settings, /<Switch accessibilityLabel="Hide portfolio values"/);
-  assert.match(settings, /disabled=\{!privacy.ready\}/);
+  assert.match(settings, /disabled=\{!privacy.ready \|\| pending \|\| accountDeleting\}/);
   assert.match(settings, /onValueChange=\{privacy.setHideValues\}/);
   const assistant = fs.readFileSync(path.join(root, 'src/screens/assistant/AssistantScreen.tsx'), 'utf8');
   assert.match(assistant, /if \(sendingRef.current \|\| hideValues\) return/);
@@ -828,17 +828,18 @@ test('local storage reads only Learn progress and rejects malformed values', asy
       multiRemove: async keys => { removed.push(...keys); }
     }
   });
-  assert.equal(Object.keys(await api.loadLearnProgress()).length, 0);
+  assert.equal(Object.keys(await api.loadLearnProgress('account-a')).length, 0);
   for (const invalid of ['null', '[]', 'invalid', '{"lesson":42}']) {
-    raw = invalid; await assert.rejects(() => api.loadLearnProgress());
+    raw = invalid; await assert.rejects(() => api.loadLearnProgress('account-a'));
   }
-  raw = '{"lesson":true}'; assert.equal((await api.loadLearnProgress()).lesson, true);
-  await api.saveLearnProgress({ lesson: true });
+  raw = '{"lesson":true}'; assert.equal((await api.loadLearnProgress('account-a')).lesson, true);
+  await api.saveLearnProgress('account-a', { lesson: true });
   assert.equal(new Set(reads).size, 1);
   assert.equal(writes[0][0], reads[0]);
-  await api.clearLocalAuraData();
+  await api.clearLocalAuraData('account-a');
   assert.ok(removed.includes(reads[0]));
   assert.ok(!removed.some(key => /token|auth/i.test(key)));
+  assert.ok(!removed.includes(api.learnProgressStorageKey('account-b')));
 });
 
 test('financial presentation preserves signs/nulls and allocation preserves saved order and zero weights', () => {
@@ -1936,4 +1937,173 @@ test('mobile account identity prefers the saved name and safely falls back to em
   assert.match(settings, /numberOfLines=\{user\?\.display_name \? 1 : 2\}/);
   assert.match(settings, /\{user\?\.display_name \? \(/);
   assert.doesNotMatch(preferences, /displayName|setDisplayName/);
+});
+function localMobileNodes(tree) {
+  if (Array.isArray(tree)) return tree.flatMap(localMobileNodes);
+  if (!tree || typeof tree !== 'object') return [];
+  return [tree, ...(tree.children ?? []).flatMap(localMobileNodes)];
+}
+function plain(value) { return JSON.parse(JSON.stringify(value)); }
+function mountMobileProgress(accountId, storage) {
+  const h = hookHarness();
+  h.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
+  const api = load('src/storage/appStorage.ts', { '@react-native-async-storage/async-storage': storage });
+  const { AppDataProvider } = load('src/storage/AppDataProvider.tsx', {
+    react: h.react, './appStorage': api, '../auth/useAuth': { useAuth: () => ({ user: accountId ? { id: accountId } : null }) },
+  });
+  const wrapper = AppDataProvider({});
+  h.mount(() => wrapper.type(wrapper.props));
+  return { h, api, get value() { return h.value.props.value; } };
+}
+
+test('mobile Learn progress persists per account, supports undo and resets only current account/obsolete local keys', async () => {
+  const saved = new Map([['auth-token', 'session'], ['report', 'saved-report'], ['aura_portfolio_privacy_v1:b', 'true']]);
+  const storage = { getItem: async key => saved.get(key) ?? null, setItem: async (key, value) => saved.set(key, value), multiRemove: async keys => keys.forEach(key => saved.delete(key)) };
+  const first = mountMobileProgress('a', storage);
+  assert.equal(first.value.loading, true); await first.h.settle();
+  await first.value.toggleLessonComplete('risk-score'); await first.h.settle();
+  assert.equal(first.value.learnProgress['risk-score'], true);
+  await first.value.toggleLessonComplete('risk-score'); await first.h.settle();
+  assert.equal(first.value.learnProgress['risk-score'], false);
+  await first.value.toggleLessonComplete('drawdown'); await first.h.settle(); first.h.unmount();
+  const signedOut = mountMobileProgress(null, storage); await signedOut.h.settle();
+  assert.deepEqual(plain(signedOut.value.learnProgress), {});
+  const restored = mountMobileProgress('a', storage); await restored.h.settle();
+  assert.equal(restored.value.learnProgress.drawdown, true);
+  const other = mountMobileProgress('b', storage); await other.h.settle();
+  assert.deepEqual(plain(other.value.learnProgress), {});
+  await other.value.toggleLessonComplete('volatility'); await other.h.settle();
+  await restored.value.resetLocalData(); await restored.h.settle();
+  assert.deepEqual(plain(restored.value.learnProgress), {});
+  const refreshed = mountMobileProgress('a', storage); await refreshed.h.settle();
+  assert.deepEqual(plain(refreshed.value.learnProgress), {});
+  assert.equal(JSON.parse(saved.get(first.api.learnProgressStorageKey('b'))).volatility, true);
+  assert.equal(saved.get('auth-token'), 'session'); assert.equal(saved.get('report'), 'saved-report');
+  assert.equal(saved.get('aura_portfolio_privacy_v1:b'), 'true');
+});
+
+test('mobile Learn saves only on success, rejects reset during writes, and ignores pre-reset reads', async () => {
+  let failWrite = true, pendingWrite;
+  const saved = new Map();
+  const storage = {
+    getItem: async key => saved.get(key) ?? null,
+    setItem: async (key, value) => { if (failWrite) throw Error('quota'); if (pendingWrite) await pendingWrite.promise; saved.set(key, value); },
+    multiRemove: async keys => keys.forEach(key => saved.delete(key)),
+  };
+  const state = mountMobileProgress('a', storage); await state.h.settle();
+  await state.value.toggleLessonComplete('risk-score'); await state.h.settle();
+  assert.equal(state.value.learnProgress['risk-score'], undefined); assert.match(state.value.localError, /Could not save/);
+  failWrite = false; await state.value.retryLocalData(); await state.h.settle();
+  pendingWrite = deferred();
+  const save = state.value.toggleLessonComplete('risk-score');
+  await state.value.toggleLessonComplete('risk-score');
+  await assert.rejects(() => state.value.resetLocalData());
+  pendingWrite.resolve(); await save; await state.h.settle();
+  assert.equal(state.value.learnProgress['risk-score'], true);
+  const pendingRead = deferred();
+  const delayed = mountMobileProgress('a', { ...storage, getItem: () => pendingRead.promise });
+  await delayed.value.resetLocalData(); await delayed.h.settle();
+  pendingRead.resolve('{"drawdown":true}'); await delayed.h.settle();
+  assert.deepEqual(plain(delayed.value.learnProgress), {}); assert.equal(delayed.value.loading, false);
+});
+
+test('mobile strict privacy reset queues after toggles, stays hidden on failure, and does not touch other accounts', async () => {
+  const saved = new Map([['aura_portfolio_privacy_v1:a', 'true'], ['aura_portfolio_privacy_v1:b', 'true']]);
+  let fail = true, pending;
+  const state = mountMobilePrivacy('a', {
+    getItem: async key => saved.get(key) ?? null,
+    setItem: async (key, value) => { if (fail) throw Error('blocked'); if (pending) await pending.promise; saved.set(key, value); },
+  });
+  await state.harness.settle(); await assert.rejects(() => state.value.resetPrivacy()); await state.harness.settle();
+  assert.equal(state.value.hideValues, true); assert.match(state.value.storageError, /could not be reset/);
+  fail = false; pending = deferred(); state.value.setHideValues(true);
+  const resetting = state.value.resetPrivacy(); await state.harness.settle();
+  assert.equal(state.value.hideValues, true);
+  pending.resolve(); await resetting; await state.harness.settle();
+  assert.equal(state.value.hideValues, false); assert.equal(saved.get('aura_portfolio_privacy_v1:a'), 'false');
+  assert.equal(saved.get('aura_portfolio_privacy_v1:b'), 'true');
+});
+
+test('mobile Reset uses themed confirmation, cancel/duplicate guards and partial failure retry without signing out', async () => {
+  const h = hookHarness(); h.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
+  const user = { id: 'a', email: 'a@example.com' };
+  let clears = 0, preferences = 0, privacy = 0, fail = true, pending;
+  const { SettingsScreen } = load('src/screens/settings/SettingsScreen.tsx', {
+    react: h.react,
+    'react-native': { Alert: { alert: () => assert.fail('Reset must use Aura themed confirmation') }, KeyboardAvoidingView: 'Avoid', Modal: 'Modal', Platform: { OS: 'android' }, Pressable: 'Pressable', ScrollView: 'Scroll', Switch: 'Switch', Text: 'Text', TextInput: 'Input', View: 'View', StyleSheet: { create: value => value } },
+    'react-native-safe-area-context': { SafeAreaView: 'Safe' }, '@expo/vector-icons': { Ionicons: 'Icon' },
+    '../../components/ui/Button': { Button: 'Button' }, '../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
+    './DeleteAccountSection': { DeleteAccountSection: 'Delete' }, './AboutAuraDialog': { AboutAuraDialog: 'About' },
+    '../../components/ui/Card': { Card: 'Card' }, '../../components/ui/PageTitle': { PageTitle: 'Title' },
+    '../../api/authApi': { authApi: {} }, '../../api/apiErrorPresentation': {}, '../../api/apiClient': { ApiError: Error },
+    '../../auth/accountIdentity': { accountDisplayName: () => 'Aura User', accountInitials: () => 'AU' },
+    '../../auth/useAuth': { useAuth: () => ({ user, signOut: () => assert.fail('Reset must not sign out') }) },
+    '../../hooks/useAppData': { useAppData: () => ({ loading: false, localPending: false, resetLocalData: async () => { clears++; if (fail) throw Error('blocked'); await pending.promise; } }) },
+    '../../preferences/usePreferences': { usePreferences: () => ({ themeMode: 'dark', ready: true, resetPreferences: async () => { preferences++; } }) },
+    '../../privacy/PortfolioPrivacy': { usePortfolioPrivacy: () => ({ hideValues: true, ready: true, resetPrivacy: async () => { privacy++; } }) },
+    '../../theme/theme': { colors: {}, spacing: {} },
+  });
+  h.mount(() => SettingsScreen()); await h.settle();
+  const button = () => localMobileNodes(h.value).find(node => node.props.accessibilityLabel === 'Reset local data');
+  const dialog = () => localMobileNodes(h.value).find(node => node.type === 'Dialog' && node.props.title === 'Reset local data?');
+  button().props.onPress(); await h.settle(); assert.equal(clears, 0); assert.equal(dialog().props.visible, true);
+  assert.equal(dialog().props.tone, 'danger'); assert.match(dialog().props.description, /turns Hide portfolio values off/);
+  const staleConfirm = dialog().props.onConfirm;
+  dialog().props.onCancel(); await h.settle(); staleConfirm(); await h.settle(); assert.equal(clears, 0);
+  button().props.onPress(); await h.settle(); dialog().props.onConfirm(); await h.settle();
+  assert.match(dialog().props.errorMessage, /Local reset incomplete/); assert.equal(privacy, 0); assert.equal(preferences, 0);
+  fail = false; pending = deferred(); dialog().props.onConfirm(); dialog().props.onConfirm(); await h.settle();
+  assert.equal(clears, 2); assert.equal(dialog().props.busy, true); assert.equal(button().props.disabled, true);
+  dialog().props.onCancel(); await h.settle(); assert.equal(dialog().props.visible, true);
+  pending.resolve(); await h.settle(); assert.equal(dialog().props.visible, false);
+  assert.equal(preferences, 1); assert.equal(privacy, 1); assert.match(JSON.stringify(h.value), /Local data reset/);
+});
+
+test('mobile appearance reset waits for earlier writes and persists defaults last', async () => {
+  const h = hookHarness(); let pending, saved, fail = false;
+  const { PreferencesProvider } = load('src/preferences/PreferencesProvider.tsx', {
+    react: h.react, 'react-native': { Appearance: { setColorScheme: () => {} } },
+    '@react-native-async-storage/async-storage': { getItem: async () => null, setItem: async (_key, value) => { if (pending) await pending.promise; if (fail) throw Error('blocked'); saved = value; } },
+  });
+  h.mount(() => PreferencesProvider({})); await h.settle();
+  pending = deferred(); h.value.setThemeMode('light');
+  const reset = h.value.resetPreferences(); await h.settle();
+  pending.resolve(); await reset; await h.settle();
+  assert.equal(h.value.themeMode, 'dark'); assert.deepEqual(JSON.parse(saved), { themeMode: 'dark', notificationsEnabled: true });
+  fail = true; await assert.rejects(() => h.value.resetPreferences());
+});
+test('mobile lesson opening does not auto-complete; explicit completion/undo updates actual progress counts', async () => {
+  const saved = new Map();
+  const state = mountMobileProgress('a', { getItem: async key => saved.get(key) ?? null, setItem: async (key, value) => saved.set(key, value), multiRemove: async () => {} });
+  const lessons = load('src/mocks/learn.mock.ts');
+  const h = hookHarness(); h.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
+  const common = {
+    react: h.react, 'react-native': { Linking: { openURL: () => {} }, Pressable: 'Pressable', ScrollView: 'Scroll', View: 'View', Text: 'Text', StyleSheet: { create: value => value } },
+    'react-native-safe-area-context': { SafeAreaView: 'Safe' }, '@expo/vector-icons': { Ionicons: 'Icon' },
+    '../../components/ui/Button': { Button: 'Button' }, '../../components/ui/Card': { Card: 'Card' },
+    '../../components/ui/Input': { Input: 'Input' }, '../../components/ui/PageTitle': { PageTitle: 'Title' },
+    '../../components/ui/Tag': { Tag: 'Tag' }, '../../components/ui/EmptyState': { EmptyState: 'Empty' },
+    '../../components/ui/KeyboardAwareScrollView': { KeyboardAwareScrollView: 'Scroll' },
+    '../../mocks/learn.mock': lessons, '../../hooks/useAppData': { useAppData: () => state.value },
+    '../../theme/theme': { colors: {}, spacing: {}, typography: {} },
+  };
+  const { LearnDetailScreen } = load('src/screens/learn/LearnDetailScreen.tsx', common);
+  const { LearnScreen } = load('src/screens/learn/LearnScreen.tsx', common);
+  const lesson = lessons.learnLessons[0];
+  h.mount(() => LearnDetailScreen({ route: { params: { lessonId: lesson.id } } }));
+  const complete = () => localMobileNodes(h.value).find(node => node.type === 'Button' && /progress|completed/.test(node.props.title));
+  assert.equal(complete().props.disabled, true);
+  await state.h.settle(); h.render();
+  assert.equal(state.value.learnProgress[lesson.id], undefined, 'reading is not completion');
+  await complete().props.onPress(); await state.h.settle(); h.render();
+  assert.equal(complete().props.title, 'Mark as not completed');
+  await complete().props.onPress(); await state.h.settle(); h.render();
+  assert.equal(complete().props.title, 'Mark lesson completed');
+  for (const item of lessons.learnLessons) { await state.value.toggleLessonComplete(item.id); await state.h.settle(); }
+  await state.value.toggleLessonComplete('unknown-lesson'); await state.h.settle();
+  h.mount(() => LearnScreen({ navigation: { navigate: () => {} } }));
+  const bar = localMobileNodes(h.value).find(node => node.props.accessibilityRole === 'progressbar');
+  assert.equal(bar.props.accessibilityValue.now, 9); assert.equal(bar.props.accessibilityValue.max, 9);
+  const completedCards = localMobileNodes(h.value).filter(node => node.type === 'Pressable' && /, completed$/.test(node.props.accessibilityLabel));
+  assert.equal(completedCards.length, 9);
 });

@@ -6,8 +6,9 @@ type Privacy = {
   ready: boolean;
   storageError: string | null;
   setHideValues: (hidden: boolean) => void;
+  resetPrivacy: () => Promise<void>;
 };
-const defaults: Privacy = { hideValues: false, ready: true, storageError: null, setHideValues: () => {} };
+const defaults: Privacy = { hideValues: false, ready: true, storageError: null, setHideValues: () => {}, resetPrivacy: async () => {} };
 const PrivacyContext = createContext(defaults);
 export const privacyStorageKey = (accountId: string) => `aura_portfolio_privacy_v1:${encodeURIComponent(accountId)}`;
 export const HIDDEN_VALUE = '••••';
@@ -32,7 +33,16 @@ function AccountPrivacy({ accountId, children }: { accountId: string; children: 
     catch { storageError = 'This choice applies now but could not be saved in this browser. Try again.'; }
     setState({ hideValues: hidden, storageError });
   }
-  return <PrivacyContext.Provider value={{ ...state, ready: true, setHideValues }}>{children}</PrivacyContext.Provider>;
+  async function resetPrivacy() {
+    try {
+      localStorage.setItem(key, 'false');
+      setState({ hideValues: false, storageError: null });
+    } catch (error) {
+      setState(previous => ({ ...previous, storageError: 'Privacy preferences could not be reset. Try again.' }));
+      throw error;
+    }
+  }
+  return <PrivacyContext.Provider value={{ ...state, ready: true, setHideValues, resetPrivacy }}>{children}</PrivacyContext.Provider>;
 }
 
 export function PortfolioPrivacyProvider({ children }: { children: ReactNode }) {

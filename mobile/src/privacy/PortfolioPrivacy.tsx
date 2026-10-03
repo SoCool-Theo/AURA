@@ -7,8 +7,9 @@ type Privacy = {
   ready: boolean;
   storageError: string | null;
   setHideValues: (hidden: boolean) => void;
+  resetPrivacy: () => Promise<void>;
 };
-const defaults: Privacy = { hideValues: false, ready: true, storageError: null, setHideValues: () => {} };
+const defaults: Privacy = { hideValues: false, ready: true, storageError: null, setHideValues: () => {}, resetPrivacy: async () => {} };
 const PrivacyContext = createContext(defaults);
 export const privacyStorageKey = (accountId: string) => `aura_portfolio_privacy_v1:${encodeURIComponent(accountId)}`;
 export const HIDDEN_VALUE = '••••';
@@ -46,7 +47,19 @@ function AccountPrivacy({ accountId, children }: PropsWithChildren<{ accountId: 
       .then(() => { if (mounted.current) setStorageError(null); })
       .catch(() => { if (mounted.current) setStorageError('This choice applies now but could not be saved on this device. Try again.'); });
   }
-  return <PrivacyContext.Provider value={{ hideValues, ready, storageError, setHideValues }}>{children}</PrivacyContext.Provider>;
+  async function resetPrivacy() {
+    if (!ready) throw new Error('Privacy preferences are still loading.');
+    const task = writes.current.then(() => AsyncStorage.setItem(key, 'false'));
+    writes.current = task.catch(() => {});
+    try {
+      await task;
+      if (mounted.current) { setHidden(false); setStorageError(null); }
+    } catch (error) {
+      if (mounted.current) setStorageError('Privacy preferences could not be reset. Try again.');
+      throw error;
+    }
+  }
+  return <PrivacyContext.Provider value={{ hideValues, ready, storageError, setHideValues, resetPrivacy }}>{children}</PrivacyContext.Provider>;
 }
 
 export function PortfolioPrivacyProvider({ children }: PropsWithChildren) {
