@@ -20,9 +20,10 @@ interface ReportDetailPageProps {
   portfolioId: string;
   reportId: string;
   focusAssetSection?: boolean;
+  focusRiskDrivers?: boolean;
 }
 
-export function ReportDetailPage({ portfolioId, reportId, focusAssetSection = false }: ReportDetailPageProps) {
+export function ReportDetailPage({ portfolioId, reportId, focusAssetSection = false, focusRiskDrivers = false }: ReportDetailPageProps) {
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -52,12 +53,13 @@ export function ReportDetailPage({ portfolioId, reportId, focusAssetSection = fa
   }, [portfolioId, reportId, reloadKey]);
 
   useEffect(() => {
-    if (!report || !focusAssetSection) return;
+    if (!report || loading || error || (!focusAssetSection && !focusRiskDrivers)) return;
     const frame = window.requestAnimationFrame(() => {
-      document.getElementById('per-asset-analysis')?.scrollIntoView({ block: 'start' });
+      const section = document.getElementById(focusRiskDrivers ? 'risk-drivers' : 'per-asset-analysis');
+      section?.scrollIntoView({ block: 'start' });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [focusAssetSection, report]);
+  }, [focusAssetSection, focusRiskDrivers, report, loading, error]);
 
   async function remove() {
     if (deletingRef.current || !report) return;

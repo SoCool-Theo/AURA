@@ -62,7 +62,7 @@ function App() {
       simulationId={route.reportId === 'simulation' ? route.contextId : undefined}
     />; break;
     case 'reports': content = route.id && route.reportId
-      ? <ReportDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} reportId={route.reportId} focusAssetSection={route.contextId === 'assets'} />
+      ? <ReportDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} reportId={route.reportId} focusAssetSection={route.contextId === 'assets'} focusRiskDrivers={route.contextId === 'risk-drivers'} />
       : <ReportsPage />; break;
     case 'asset': content = route.id && route.reportId && route.contextId
       ? <AssetRiskDetailPage key={`${route.id}/${route.reportId}/${route.contextId}`} portfolioId={route.id} reportId={route.reportId} assetSymbol={route.contextId} />

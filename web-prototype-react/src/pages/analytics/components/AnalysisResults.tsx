@@ -171,7 +171,7 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
         <Card className={styles.metric}><MetricLabel icon="assets" label="Effective Assets" tone="blue" /><strong>{formatNumber(concentration.effective_number_of_assets)}</strong><span>HHI {formatNumber(concentration.hhi, 4)}</span></Card>
       </div>
 
-      <RiskDriverTable riskDrivers={analysis.risk_drivers} />
+      <div id="risk-drivers" style={{ scrollMarginTop: 18 }}><RiskDriverTable riskDrivers={analysis.risk_drivers} /></div>
 
       <section id="per-asset-analysis" className={`card ${styles.section}`} style={{ scrollMarginTop: 18 }}>
         <div className={styles.sectionHeading}>

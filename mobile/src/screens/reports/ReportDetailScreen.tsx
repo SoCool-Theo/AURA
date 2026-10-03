@@ -32,6 +32,7 @@ export function ReportDetailScreen({
   const portfolioId = route.params.portfolioId as string;
   const reportId = route.params.reportId as string;
   const focusAssetSection = route.params.focusAssetSection === true;
+  const focusRiskDrivers = route.params.focusRiskDrivers === true;
   const { getReport, deleteReport } = useReports();
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
@@ -44,19 +45,22 @@ export function ReportDetailScreen({
   const scrollRef = useRef<ScrollView>(null);
   const analysisOffsetRef = useRef<number | null>(null);
   const assetSectionOffsetRef = useRef<number | null>(null);
+  const riskDriversOffsetRef = useRef<number | null>(null);
 
-  const scrollToAssetSection = useCallback(() => {
-    if (!focusAssetSection) return;
+  const scrollToSection = useCallback(() => {
+    if (!focusAssetSection && !focusRiskDrivers) return;
     const analysisOffset = analysisOffsetRef.current;
-    const assetSectionOffset = assetSectionOffsetRef.current;
-    if (analysisOffset === null || assetSectionOffset === null) return;
+    const sectionOffset = focusRiskDrivers ? riskDriversOffsetRef.current : assetSectionOffsetRef.current;
+    if (analysisOffset === null || sectionOffset === null) return;
+    const requestId = requestRef.current;
     requestAnimationFrame(() => {
+      if (requestRef.current !== requestId) return;
       scrollRef.current?.scrollTo({
-        y: Math.max(0, analysisOffset + assetSectionOffset - spacing.md),
+        y: Math.max(0, analysisOffset + sectionOffset - spacing.md),
         animated: true
       });
     });
-  }, [focusAssetSection]);
+  }, [focusAssetSection, focusRiskDrivers]);
 
   const loadReport = useCallback(async () => {
     const requestId = requestRef.current + 1;
@@ -78,11 +82,11 @@ export function ReportDetailScreen({
 
   useFocusEffect(useCallback(() => {
     void loadReport();
-    scrollToAssetSection();
+    scrollToSection();
     return () => {
       requestRef.current += 1;
     };
-  }, [loadReport, scrollToAssetSection]));
+  }, [loadReport, scrollToSection]));
 
   function confirmDelete() {
     if (!report || deletingRef.current) return;
@@ -182,14 +186,18 @@ export function ReportDetailScreen({
         <View
           onLayout={(event) => {
             analysisOffsetRef.current = event.nativeEvent.layout.y;
-            scrollToAssetSection();
+            scrollToSection();
           }}
         >
           <AnalysisResults
             report={report}
             onAssetSectionLayout={(offsetY) => {
               assetSectionOffsetRef.current = offsetY;
-              scrollToAssetSection();
+              scrollToSection();
+            }}
+            onRiskDriversSectionLayout={(offsetY) => {
+              riskDriversOffsetRef.current = offsetY;
+              scrollToSection();
             }}
             onOpenAsset={(assetSymbol) => navigation.navigate('AssetRiskDetail', {
               portfolioId,

@@ -1951,6 +1951,43 @@ function localMobileNodes(tree) {
 }
 function plain(value) { return JSON.parse(JSON.stringify(value)); }
 
+test('mobile report section jump waits for both layouts and preserves existing asset-section navigation', async () => {
+  for (const [flags, section] of [[{ focusRiskDrivers: true }, 'risk'], [{ focusAssetSection: true }, 'assets'], [{}, null]]) {
+    const h = hookHarness(), frames = [], scrolled = [], requests = [];
+    h.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
+    const getReport = async (...args) => { requests.push(args); return { id: 'exact', portfolio_id: 'p', created_at: 'today', analysis: { portfolio_name: 'Saved portfolio' } }; };
+    const { ReportDetailScreen } = load('src/screens/reports/ReportDetailScreen.tsx', {
+      react: h.react, 'react-native': { ScrollView: 'Scroll', Text: 'Text', View: 'View', StyleSheet: { create: value => value } },
+      'react-native-safe-area-context': { SafeAreaView: 'Safe' }, '@react-navigation/native': { useFocusEffect: fn => h.react.useEffect(fn, [fn]) },
+      '../../components/analytics/AnalysisResults': { AnalysisResults: 'Analysis' }, '../../components/ui/Button': { Button: 'Button' },
+      '../../components/ui/Card': { Card: 'Card' }, '../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
+      '../../components/ui/ErrorState': { InlineErrorCard: 'Error', ScreenErrorState: 'Error' }, '../../components/ui/LoadingState': { LoadingState: 'Loading' }, '../../components/ui/PageTitle': { PageTitle: 'Title' },
+      '../../report/reportErrors': { reportErrorMessage: () => 'Error' }, '../../report/reportFormatting': { formatReportTimestamp: value => value },
+      '../../report/useReports': { useReports: () => ({ getReport, deleteReport() {} }) }, '../../theme/theme': { colors: {}, spacing: { md: 12 } },
+      '../../types/report': { isPortfolioReportV2: () => false, isPortfolioReportV3: () => false },
+    }, { requestAnimationFrame: fn => { frames.push(fn); return 1; } });
+    h.mount(() => ReportDetailScreen({ route: { params: { portfolioId: 'p', reportId: 'exact', ...flags } }, navigation: {} }));
+    assert.equal(frames.length, 0); await h.settle();
+    const nodes = localMobileNodes(h.value), scroll = nodes.find(node => node.type === 'Scroll'), analysis = nodes.find(node => node.type === 'Analysis');
+    scroll.props.ref.current = { scrollTo: options => scrolled.push(options) };
+    const wrapper = nodes.find(node => node.type === 'View' && node.props.onLayout);
+    wrapper.props.onLayout({ nativeEvent: { layout: { y: 100 } } }); assert.equal(frames.length, 0);
+    analysis.props.onRiskDriversSectionLayout(200);
+    analysis.props.onAssetSectionLayout(400);
+    frames.splice(0).forEach(fn => fn());
+    assert.deepEqual(scrolled.map(item => item.y), section === 'risk' ? [288, 288] : section === 'assets' ? [488] : []);
+    assert.deepEqual(requests, [['p', 'exact']]);
+    // Scheduled scrolls must not run after the report screen loses focus/unmounts.
+    wrapper.props.onLayout({ nativeEvent: { layout: { y: 100 } } }); h.unmount();
+    const count = scrolled.length; frames.splice(0).forEach(fn => fn()); assert.equal(scrolled.length, count);
+  }
+  const dashboard = fs.readFileSync(path.join(root, 'src/screens/dashboard/DashboardScreen.tsx'), 'utf8');
+  assert.match(dashboard, /title="Top Risk Drivers" action="View analysis" onPress=\{\(\) => openReport\(true\)\}/);
+  assert.match(dashboard, /reportId: report.id, focusRiskDrivers/);
+  const results = fs.readFileSync(path.join(root, 'src/components/analytics/AnalysisResults.tsx'), 'utf8');
+  assert.match(results, /nativeID="risk-drivers" onLayout=[^\n]*onRiskDriversSectionLayout/);
+});
+
 test('mobile saved risk labels and score values share severity colors without coloring unrelated KPI values', () => {
   const colors = { success: 'green', warning: 'amber', danger: 'red', text: 'white', muted: 'gray' };
   const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };

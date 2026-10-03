@@ -43,11 +43,13 @@ import { WebKpiCard } from '../ui/WebKpiCard';
 export function AnalysisResults({
   report,
   onOpenAsset,
-  onAssetSectionLayout
+  onAssetSectionLayout,
+  onRiskDriversSectionLayout
 }: {
   report: PortfolioReportResponse;
   onOpenAsset?: (symbol: string) => void;
   onAssetSectionLayout?: (offsetY: number) => void;
+  onRiskDriversSectionLayout?: (offsetY: number) => void;
 }) {
   const privateValue = usePrivateValue();
   const analysis = report.analysis;
@@ -304,6 +306,7 @@ export function AnalysisResults({
         </Text>
       </Card>
 
+      <View nativeID="risk-drivers" onLayout={(event) => onRiskDriversSectionLayout?.(event.nativeEvent.layout.y)} style={styles.riskDriversSection}>
       <SectionHeader title="Risk Drivers" />
       <View style={styles.list}>
         {analysis.risk_drivers.entries.map((driver) => (
@@ -337,6 +340,7 @@ export function AnalysisResults({
         ))}
       </View>
 
+      </View>
       <View
         nativeID="per-asset-analysis"
         onLayout={(event) => onAssetSectionLayout?.(event.nativeEvent.layout.y)}
@@ -484,6 +488,7 @@ function Metadata({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   results: { gap: spacing.md, marginTop: spacing.xl },
+  riskDriversSection: { gap: spacing.md },
   summaryCard: { gap: spacing.sm, backgroundColor: colors.summaryBackground },
   snapshotCard: { gap: spacing.md, backgroundColor: colors.cyanBackground },
   plannedCard: { gap: spacing.md, backgroundColor: colors.summaryBackground, borderColor: colors.primary },

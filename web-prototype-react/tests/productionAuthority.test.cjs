@@ -45,6 +45,49 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+test('web Top Risk Drivers opens the exact saved report section, retaining setup when no report exists', () => {
+  const routes = [], react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const { RiskDrivers } = load('src/pages/dashboard/components/RiskDrivers.tsx', {
+    '../../../app/routes': { go: route => routes.push(route) }, '../../../components/ui/Card': { Card: 'Card' },
+    '../../../components/ui/SymbolBadge': { SymbolBadge: 'Symbol' }, '../dashboardUi': { formatPercent: value => `${value * 100}%` }, '../DashboardIntegration.module.css': {},
+  }, { React: react });
+  const render = (reportId, loading = false) => localWebNodes(RiskDrivers({ portfolioId: 'portfolio', reportId, drivers: [], loading, failed: false })).find(node => node.type === 'button');
+  render('saved-report').props.onClick(); assert.deepEqual(routes, ['reports/portfolio/saved-report/risk-drivers']);
+  render(null).props.onClick(); assert.equal(routes[1], 'analytics/portfolio');
+  assert.equal(render('saved-report', true).props.disabled, true);
+  const app = fs.readFileSync(path.join(root, 'src/app/App.tsx'), 'utf8');
+  const results = fs.readFileSync(path.join(root, 'src/pages/analytics/components/AnalysisResults.tsx'), 'utf8');
+  assert.match(app, /focusRiskDrivers=\{route.contextId === 'risk-drivers'\}/);
+  assert.match(results, /id="risk-drivers"[^\n]*<RiskDriverTable/);
+});
+
+test('web report detail waits for the saved snapshot before jumping to Risk Drivers or the existing asset section', async () => {
+  for (const [options, expected] of [[{ focusRiskDrivers: true }, 'risk-drivers'], [{ focusAssetSection: true }, 'per-asset-analysis'], [{}, null]]) {
+    const slots = []; let cursor = 0, effects = [], resolve;
+    const pending = new Promise(done => { resolve = done; }), requests = [], frames = [], scrolled = [];
+    const react = {
+      createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+      useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => { slots[i] = value; }]; },
+      useRef(initial) { const i = cursor++; return slots[i] ??= { current: initial }; },
+      useEffect(fn) { effects.push(fn); },
+    };
+    const { ReportDetailPage } = load('src/pages/reports/ReportDetailPage.tsx', {
+      react, '../../api/reportsApi': { getPortfolioReport: (portfolioId, reportId) => { requests.push([portfolioId, reportId]); return pending; } },
+      '../../app/routes': { go() {} }, '../../components/ui/ApiErrorState': { InlineErrorCard: 'Error', ScreenErrorState: 'Error' },
+      '../../components/ui/Icon': { Icon: 'Icon' }, '../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
+      '../../types/report': { isPortfolioReportV2: () => false, isPortfolioReportV3: () => false },
+      '../analytics/analyticsUi': { formatReportTimestamp: value => value }, '../analytics/components/AnalysisResults': { AnalysisResults: 'Analysis' }, './ReportDetailPage.module.css': {},
+    }, { React: react, AbortController, window: { requestAnimationFrame: fn => { frames.push(fn); return 1; }, cancelAnimationFrame() {} },
+      document: { getElementById: id => ({ scrollIntoView: options => scrolled.push([id, options.block]) }) } });
+    const render = () => { cursor = 0; effects = []; return ReportDetailPage({ portfolioId: 'p', reportId: 'exact', ...options }); };
+    render(); effects[0](); effects[1](); assert.equal(frames.length, 0, 'no premature scroll while loading');
+    resolve({ id: 'exact', portfolio_id: 'p', created_at: 'today', analysis: { portfolio_name: 'Saved portfolio' } });
+    await new Promise(done => setImmediate(done)); render(); effects[1]();
+    frames.forEach(fn => fn()); assert.deepEqual(scrolled, expected ? [[expected, 'start']] : []);
+    assert.deepEqual(requests, [['p', 'exact']]);
+  }
+});
+
 test('web saved risk levels color both asset labels and scores without reclassifying backend numbers', () => {
   const ui = load('src/pages/analytics/analyticsUi.ts', { '../../api/apiClient': { ApiError: Error } });
   const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
@@ -1321,7 +1364,8 @@ test('web asset-risk detail is report-backed, navigable, and never recalculates 
   assert.match(app, /case 'asset':/);
   assert.match(app, /focusAssetSection=\{route\.contextId === 'assets'\}/);
   assert.match(detail, /go\(`reports\/\$\{portfolioId\}\/\$\{reportId\}\/assets`\)/);
-  assert.match(reportDetail, /getElementById\('per-asset-analysis'\)\?\.scrollIntoView/);
+  assert.match(reportDetail, /getElementById\(focusRiskDrivers \? 'risk-drivers' : 'per-asset-analysis'\)/);
+  assert.match(reportDetail, /section\?\.scrollIntoView/);
   assert.match(detail, /getPortfolioReport\(portfolioId, reportId/);
   assert.match(detail, /asset\.risk_classification/);
   assert.match(detail, /report\.analysis\.asset_returns/);

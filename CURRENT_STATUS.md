@@ -2723,3 +2723,23 @@ remain separate follow-on work.
   passed. Existing web bundle warning remains. Browser/device visual acceptance
   was not run; backend calculations, dependencies, migrations, commits, and
   pushes are unchanged.
+
+### Dashboard View analysis jumps to Risk Drivers — 2026-10-04
+
+- Web dashboard RiskDrivers now opens the exact saved report used by the
+  dashboard with a risk-drivers section target instead of the analysis setup
+  page. Loading disables the action; without a report it retains setup navigation.
+- Added the section anchor to AnalysisResults and a matching App/ReportDetailPage
+  focus flag. Scrolling waits until the report is loaded and rendered, preserves
+  the existing per-asset section jump, and does not create a new analysis.
+- Mobile DashboardScreen's corresponding action now says View analysis and
+  opens that saved report with a typed focusRiskDrivers flag. AnalysisResults
+  reports section layout; ReportDetailScreen waits for both offsets and guards
+  scheduled scrolls after blur/unmount. Normal report opening remains unchanged.
+- Updated client regression tests for exact-report navigation, no-report
+  fallback, loading guards, deferred section scrolling, existing asset jumps,
+  and mobile layout/unmount behavior. Validation: 91 web/shared-client tests
+  plus 69 mobile authority tests (160 total), both TypeScript checks, web
+  production build, and whitespace checks passed. Existing bundle warning
+  remains. Browser/device visual acceptance was not run; no backend changes,
+  dependencies, migrations, commits, or pushes were added.

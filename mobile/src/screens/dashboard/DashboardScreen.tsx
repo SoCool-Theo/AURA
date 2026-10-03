@@ -62,9 +62,9 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
   const holdingMode = portfolio ? portfolioHoldingMode(portfolio.holdings) : 'empty';
   const marketDataUnavailable = isPortfolioMarketDataUnavailable(dashboard.valuationError);
   const analyze = () => navigation.navigate('MoreTab', { screen: 'Analytics', params: { portfolioId: selectedId } });
-  const openReport = () => {
+  const openReport = (focusRiskDrivers = false) => {
     if (report) navigation.navigate('MoreTab', {
-      screen: 'ReportDetail', params: { portfolioId: report.portfolio_id, reportId: report.id }
+      screen: 'ReportDetail', params: { portfolioId: report.portfolio_id, reportId: report.id, focusRiskDrivers }
     });
   };
   const openAssetRisk = (assetSymbol: string) => {
@@ -263,7 +263,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                       <Text style={styles.body}>Requested: {analysis.start_date} → {analysis.end_date}</Text>
                       <Text style={styles.body}>Effective: {analysis.metadata.analysis_start} → {analysis.metadata.analysis_end}</Text>
                       <Text style={styles.body}>Metrics describe this saved report. Current holdings may have changed since it was created.</Text>
-                      <Button title="Open saved report" variant="secondary" onPress={openReport} />
+                      <Button title="Open saved report" variant="secondary" onPress={() => openReport()} />
                     </Card>
                     <SectionHeader title="Portfolio periodic returns" />
                     <Card style={styles.state}>
@@ -282,7 +282,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                       <PortfolioReturnsChart points={points} />
                       <Text style={styles.body}>Chart window ends at the latest return observation. Filters change displayed points only; all metrics retain the saved report period.</Text>
                     </Card>
-                    <SectionHeader title="Top Risk Drivers" action="View report" onPress={openReport} />
+                    <SectionHeader title="Top Risk Drivers" action="View analysis" onPress={() => openReport(true)} />
                     <Card>
                       {analysis.risk_drivers.entries.slice(0, 3).map((driver) => (
                         <Pressable
