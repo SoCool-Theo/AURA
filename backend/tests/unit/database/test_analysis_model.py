@@ -18,6 +18,8 @@ from backend.app.database import (
 
 
 EXPECTED_TABLES = {
+    "notifications",
+    "notification_preferences",
     "users",
     "portfolios",
     "holdings",

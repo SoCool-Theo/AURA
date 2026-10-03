@@ -2605,3 +2605,42 @@ remain separate follow-on work.
   size warning remains (about 509 kB minified / 147 kB gzip). Browser/device
   visual acceptance and live-provider checks were not performed. No dependency,
   migration, commit, or push was added.
+
+### Account-owned in-app notifications V1 — 2026-10-03
+
+- Added notification/preferences ORM models, a scoped repository/service,
+  strict schemas, and five authenticated notification operations using the
+  existing shared FastAPI/PostgreSQL architecture. Account-owned master,
+  analysis, and simulation preferences default On and survive logout/login.
+  Off suppresses future events without deleting old messages; re-enabling
+  does not backfill existing history. Local reset does not change these settings.
+- New report and all three simulation API saves record generic notifications
+  before the same single commit. Errors roll back the save and notification;
+  unique target keys deduplicate repeated recording of the same result. Exact
+  portfolio/resource ownership is checked without reading financial snapshots.
+  Messages contain no portfolio names, balances, holdings, or financial advice.
+  Result/portfolio/account deletion cascades related notifications, and account
+  deletion also removes notification preferences.
+- Added migration `c3d5e7f9a2b4` after `b9e4d2f7c1a6`. The migration has been
+  checked against ORM metadata and generated PostgreSQL upgrade/downgrade SQL
+  without applying it to a deployed database. Apply it before using notification
+  APIs or creating new reports/simulations with the updated backend.
+- Web navigation now has a working unread-count bell and protected, themed
+  inbox/preferences routes. Mobile More has an unread-count Notifications entry,
+  and Settings opens matching account preference controls. Both clients show
+  newest-first paginated updates, exact saved-result links, mark-one/all-read,
+  loading/empty/error/retry states, and guarded writes. Background/hidden polling
+  stops; foreground refresh uses 30-second intervals. Read/settings mutations
+  refresh badges, and stale account/unmounted responses cannot restore old UI.
+- Added matching typed API adapters, state/foreground hooks, web CSS, mobile
+  navigation/screens, persistence/API/interaction tests, and updated public
+  API/backlog/Help guidance. Removed the obsolete unused mobile device-global
+  notification preference so local reset cannot imply resetting account settings.
+- Validation: 3,290 backend unit/non-live API tests; 76 web/shared-client tests
+  and 67 mobile authority tests (143 client tests total); both TypeScript checks;
+  web production build; migration SQL/model parity. Existing short-JWT-fixture
+  warnings and the non-blocking web bundle warning remain.
+- Live PostgreSQL notification acceptance and browser/physical-device visual
+  acceptance are pending. No phone/browser push, email delivery, OS permission
+  prompt, device tokens, price alerts, new dependencies, deployed migration,
+  commit, push, or financial calculation changes were made.

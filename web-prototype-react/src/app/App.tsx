@@ -17,6 +17,7 @@ import { ReportDetailPage } from '../pages/reports/ReportDetailPage';
 import { AssetRiskDetailPage } from '../pages/reports/AssetRiskDetailPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
 import { HelpSupportPage } from '../pages/help/HelpSupportPage';
+import { NotificationsPage } from '../pages/notifications/NotificationsPage';
 import { SimulationsPage } from '../pages/simulations/SimulationsPage';
 import { SimulationHistoryDetailPage } from '../pages/simulations/SimulationHistoryDetailPage';
 import { WatchlistPage } from '../pages/watchlist/WatchlistPage';
@@ -71,6 +72,8 @@ function App() {
     case 'create': content = <CreatePortfolioPage />; break;
     case 'settings': content = <SettingsPage />; break;
     case 'help': content = <HelpSupportPage />; break;
+    case 'notifications': content = <NotificationsPage key="inbox" />; break;
+    case 'notification-settings': content = <NotificationsPage key="notification-settings" settings />; break;
     case '404': content = <NotFoundPage />; break;
     default: content = <NotFoundPage />;
   }

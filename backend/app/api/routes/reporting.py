@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.dependencies import CurrentUser, DatabaseSession
+from app.services.notification_service import NotificationService
 from app.schemas.common import AnalysisPeriod
 from app.schemas.reporting import (
     PortfolioReportDetailResponse,
@@ -100,6 +101,7 @@ def create_report(
         raise _portfolio_not_found()
 
     try:
+        NotificationService(session).record_saved(user_id=current_user.id, portfolio_id=portfolio_id, kind="analysis", resource_id=report.id)
         session.commit()
     except Exception as error:
         raise _internal_error("Unable to create report") from error

@@ -22,6 +22,7 @@ import { AssistantScreen } from '../screens/assistant/AssistantScreen';
 import { MoreScreen } from '../screens/settings/MoreScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
 import { HelpSupportScreen } from '../screens/settings/HelpSupportScreen';
+import { NotificationsScreen } from '../screens/notifications/NotificationsScreen';
 import { ReportsScreen } from '../screens/reports/ReportsScreen';
 import { ReportDetailScreen } from '../screens/reports/ReportDetailScreen';
 import { AssetRiskDetailScreen } from '../screens/reports/AssetRiskDetailScreen';
@@ -200,6 +201,14 @@ function MoreNavigator() {
       <MoreStack.Screen name="HelpSupport" component={HelpSupportScreen} options={({ navigation }) => ({
         title: 'Help & Support',
         headerBackVisible: false,
+        headerLeft: () => <BackHeaderButton label="Back to Settings" color={palette.text} onPress={() => navigation.popTo('Settings')} />
+      })} />
+      <MoreStack.Screen name="Notifications" component={NotificationsScreen} options={({ navigation }) => ({
+        title: 'Notifications', headerBackVisible: false,
+        headerLeft: () => <BackHeaderButton label="Back to More" color={palette.text} onPress={() => navigation.popTo('More')} />
+      })} />
+      <MoreStack.Screen name="NotificationSettings" component={NotificationsScreen} options={({ navigation }) => ({
+        title: 'App notifications', headerBackVisible: false,
         headerLeft: () => <BackHeaderButton label="Back to Settings" color={palette.text} onPress={() => navigation.popTo('Settings')} />
       })} />
     </MoreStack.Navigator>

@@ -68,7 +68,7 @@ function profileRequestError(error: unknown, fallback: string): string {
   return apiErrorPresentation(error, { fallbackMessage: fallback }).message;
 }
 
-export function SettingsScreen({ navigation }: { navigation?: { navigate: (screen: 'HelpSupport') => void } } = {}) {
+export function SettingsScreen({ navigation }: { navigation?: { navigate: (screen: 'HelpSupport' | 'NotificationSettings') => void } } = {}) {
   const privacy = usePortfolioPrivacy();
   const { user, setCurrentUser, signOut } = useAuth();
   const { resetLocalData, loading: progressLoading, localPending } = useAppData();
@@ -446,7 +446,7 @@ export function SettingsScreen({ navigation }: { navigation?: { navigate: (scree
           </View>
           {privacy.storageError ? <Text accessibilityRole="alert" style={{ color: colors.danger, padding: spacing.md }}>{privacy.storageError}</Text> : null}
 
-          <View style={styles.row}>
+          <Pressable style={styles.row} accessibilityRole="button" accessibilityLabel="App notifications" onPress={() => navigation?.navigate('NotificationSettings')}>
             <View style={styles.rowIcon}>
               <Ionicons
                 name="notifications-outline"
@@ -457,10 +457,11 @@ export function SettingsScreen({ navigation }: { navigation?: { navigate: (scree
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLabel}>App notifications</Text>
               <Text style={styles.rowDescription}>
-                Unavailable: notification delivery is not integrated.
+                Manage notifications inside Aura.
               </Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" color={colors.muted} size={18} />
+          </Pressable>
         </View>
 
         <Text style={styles.sectionTitle}>Data & support</Text>

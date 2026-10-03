@@ -10,16 +10,19 @@ import { useReports } from '../../report/useReports';
 import { useSimulations } from '../../simulation/useSimulations';
 import { colors, spacing } from '../../theme/theme';
 import { useFocusEffect } from '@react-navigation/native';
+import { useNotificationBadge } from '../../notifications/useNotifications';
 
 const items = [
   { label: 'Analytics', description: 'Detailed risk metrics', icon: 'analytics-outline', color: colors.primary, bg: colors.cyanBackground, route: 'Analytics' },
   { label: 'Reports', description: 'Saved analysis results', icon: 'document-text-outline', color: colors.purpleSoft, bg: colors.purpleBackground, route: 'Reports' },
   { label: 'Watchlist', description: 'Follow supported assets', icon: 'eye-outline', color: colors.primary, bg: colors.cyanBackground, route: 'Watchlist' },
   { label: 'Learn', description: 'Portfolio-risk education', icon: 'school-outline', color: colors.blue, bg: colors.blueBackground, route: 'Learn' },
+  { label: 'Notifications', description: 'Saved analysis and simulation updates', icon: 'notifications-outline', color: colors.primary, bg: colors.cyanBackground, route: 'Notifications' },
   { label: 'Settings', description: 'Account and preferences', icon: 'settings-outline', color: colors.textSecondary, bg: colors.surfaceAlt, route: 'Settings' }
 ] as const;
 
 export function MoreScreen({ navigation }: { navigation: any }) {
+  const unread = useNotificationBadge();
   const {
     portfolios,
     activePortfolioId,
@@ -105,7 +108,7 @@ export function MoreScreen({ navigation }: { navigation: any }) {
         <View style={styles.list}>
           {items.map((item) => (
             <Pressable
-              accessibilityLabel={item.label}
+              accessibilityLabel={item.route === 'Notifications' && unread != null ? `Notifications, ${unread} unread` : item.label}
               accessibilityRole="button"
               key={item.label}
               onPress={() => open(item.route)}
@@ -116,6 +119,7 @@ export function MoreScreen({ navigation }: { navigation: any }) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.label}>{item.label}</Text>
+                  {item.route === 'Notifications' && unread != null && unread > 0 && <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 12 }}>{unread} unread</Text>}
                   <Text style={styles.description}>{item.description}</Text>
                 </View>
                 <Ionicons name="chevron-forward" color={colors.muted} size={19} />

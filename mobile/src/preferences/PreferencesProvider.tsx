@@ -13,22 +13,19 @@ export type ThemeMode = 'dark' | 'light';
 
 type PreferencesState = {
   themeMode: ThemeMode;
-  notificationsEnabled: boolean;
 };
 
 type PreferencesContextValue = PreferencesState & {
   ready: boolean;
   storageError: string | null;
   setThemeMode: (mode: ThemeMode) => void;
-  setNotificationsEnabled: (enabled: boolean) => void;
   resetPreferences: () => Promise<void>;
 };
 
 const STORAGE_KEY = 'aura_mobile_preferences_v1';
 
 const defaults: PreferencesState = {
-  themeMode: 'dark',
-  notificationsEnabled: true
+  themeMode: 'dark'
 };
 
 export const PreferencesContext =
@@ -55,8 +52,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
         if (raw) {
           const saved = JSON.parse(raw) as Partial<PreferencesState>;
           const next = {
-            themeMode: saved.themeMode === 'light' ? 'light' as const : 'dark' as const,
-            notificationsEnabled: typeof saved.notificationsEnabled === 'boolean' ? saved.notificationsEnabled : defaults.notificationsEnabled
+            themeMode: saved.themeMode === 'light' ? 'light' as const : 'dark' as const
           };
           currentPrefs.current = next;
           setPrefs(next);
@@ -91,8 +87,6 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
         applyTheme(mode);
         update({ themeMode: mode });
       },
-      setNotificationsEnabled: (enabled) =>
-        update({ notificationsEnabled: enabled }),
       resetPreferences: async () => {
         if (!ready) throw new Error('Device preferences are still loading.');
         const task = writes.current.then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(defaults)));

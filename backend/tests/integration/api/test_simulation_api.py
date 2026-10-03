@@ -150,6 +150,12 @@ def bearer_request_headers() -> Iterator[None]:
             REQUEST_HEADERS.clear()
 
 
+@pytest.fixture(autouse=True)
+def notifications_service():
+    with patch.object(route_module, "NotificationService") as factory:
+        yield factory.return_value
+
+
 @pytest.fixture
 def api_harness() -> Iterator[ApiHarness]:
     session = MagicMock(spec=Session)
@@ -1503,6 +1509,7 @@ def test_app_import_and_public_health_keep_database_initialization_lazy() -> Non
 def test_each_post_captures_one_utc_valuation_date_at_route_boundary(
     request: pytest.FixtureRequest,
     fixture_name: str,
+    notifications_service,
 ) -> None:
     harness, path, body, expected = _post_case(request, fixture_name)
     harness.service.run.return_value = expected
@@ -1521,6 +1528,7 @@ def test_each_post_captures_one_utc_valuation_date_at_route_boundary(
         )
 
     assert response.status_code == 200
+    notifications_service.record_saved.assert_called_once_with(user_id=OWNER_ID, portfolio_id=PORTFOLIO_ID, kind="simulation", resource_id=harness.history_service.save.return_value.id)
     current_date.assert_called_once_with()
     assert harness.service.run_with_context.call_count == 1
     assert (

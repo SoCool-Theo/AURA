@@ -2075,7 +2075,7 @@ test('mobile appearance reset waits for earlier writes and persists defaults las
   pending = deferred(); h.value.setThemeMode('light');
   const reset = h.value.resetPreferences(); await h.settle();
   pending.resolve(); await reset; await h.settle();
-  assert.equal(h.value.themeMode, 'dark'); assert.deepEqual(JSON.parse(saved), { themeMode: 'dark', notificationsEnabled: true });
+  assert.equal(h.value.themeMode, 'dark'); assert.deepEqual(JSON.parse(saved), { themeMode: 'dark' });
   fail = true; await assert.rejects(() => h.value.resetPreferences());
 });
 test('mobile lesson opening does not auto-complete; explicit completion/undo updates actual progress counts', async () => {

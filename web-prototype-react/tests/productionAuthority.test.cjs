@@ -528,6 +528,7 @@ test('welcome is public only after session restoration and protected pages remai
     '../pages/reports/AssetRiskDetailPage': 'AssetRiskDetailPage',
     '../pages/settings/SettingsPage': 'SettingsPage', '../pages/simulations/SimulationsPage': 'SimulationsPage',
     '../pages/help/HelpSupportPage': 'HelpSupportPage',
+    '../pages/notifications/NotificationsPage': 'NotificationsPage',
     '../pages/simulations/SimulationHistoryDetailPage': 'SimulationHistoryDetailPage',
     '../pages/watchlist/WatchlistPage': 'WatchlistPage', '../pages/welcome/WelcomePage': 'WelcomePage',
   };
@@ -1493,7 +1494,7 @@ test('web session restoration uses the focused Aura loading screen', () => {
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
-test('web settings enable local reset, privacy, help and About Aura while retaining notification preview', () => {
+test('web settings enable privacy, local reset, help, About Aura and account notification settings', () => {
   let cursor = 0; const slots = [];
   const navigations = [];
   let hiddenValues = false;
@@ -1529,19 +1530,20 @@ test('web settings enable local reset, privacy, help and About Aura while retain
   const labels = ['Hide portfolio values', 'App notifications', 'Reset local data', 'Help & Support', 'About Aura'];
   assert.deepEqual(buttons.map(button => button.props['aria-label'] ?? button.children.join('')), labels);
   for (const button of buttons) {
-    const enabled = ['About Aura', 'Hide portfolio values', 'Reset local data', 'Help & Support'].includes(button.props['aria-label']);
+    const enabled = ['About Aura', 'Hide portfolio values', 'Reset local data', 'Help & Support', 'App notifications'].includes(button.props['aria-label']);
     assert.equal(Boolean(button.props.disabled), !enabled);
     if (!enabled) assert.equal(button.props.onClick, undefined);
     assert.equal(button.props.type, 'button');
     assert.ok(button.props['aria-describedby']);
   }
-  assert.equal(text.filter(value => value === 'Not available yet').length, 1);
+  assert.equal(text.filter(value => value === 'Not available yet').length, 0);
   assert.equal(buttons[0].props.role, 'switch');
   assert.equal(buttons[0].props['aria-checked'], false);
   const help = buttons.find(button => button.props['aria-label'] === 'Help & Support');
   assert.equal(help.props['aria-haspopup'], undefined);
   assert.equal(help.children.at(-1).props.name, 'chevron-right');
   help.props.onClick(); assert.deepEqual(navigations, ['help']);
+  buttons[1].props.onClick(); assert.equal(navigations.at(-1), 'notification-settings');
   buttons[0].props.onClick(); assert.equal(hiddenValues, true);
   const about = buttons.at(-1);
   assert.equal(about.props['aria-haspopup'], 'dialog');

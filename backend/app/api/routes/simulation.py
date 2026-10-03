@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.dependencies import CurrentUser, DatabaseSession
+from app.services.notification_service import NotificationService
 from app.scenarios.definitions import HISTORICAL_SCENARIOS
 from app.schemas.simulation import (
     AllocationSimulationRequest,
@@ -302,6 +303,7 @@ def run_historical_scenario(
         )
         if history is None:
             raise _portfolio_not_found()
+        NotificationService(session).record_saved(user_id=current_user.id, portfolio_id=portfolio_id, kind="simulation", resource_id=history.id)
         session.commit()
     except HTTPException:
         raise
@@ -372,6 +374,7 @@ def run_allocation_simulation(
         )
         if history is None:
             raise _portfolio_not_found()
+        NotificationService(session).record_saved(user_id=current_user.id, portfolio_id=portfolio_id, kind="simulation", resource_id=history.id)
         session.commit()
     except HTTPException:
         raise
@@ -444,6 +447,7 @@ def run_combined_simulation(
         )
         if history is None:
             raise _portfolio_not_found()
+        NotificationService(session).record_saved(user_id=current_user.id, portfolio_id=portfolio_id, kind="simulation", resource_id=history.id)
         session.commit()
     except HTTPException:
         raise

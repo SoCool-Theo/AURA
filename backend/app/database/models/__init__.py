@@ -7,6 +7,7 @@ from .portfolio import Portfolio, PortfolioType
 from .simulation import Simulation
 from .user import User
 from .watchlist import WatchlistItem
+from .notification import Notification, NotificationPreferences
 
 __all__ = [
     "Analysis",
@@ -17,4 +18,6 @@ __all__ = [
     "Simulation",
     "User",
     "WatchlistItem",
+    "Notification",
+    "NotificationPreferences",
 ]

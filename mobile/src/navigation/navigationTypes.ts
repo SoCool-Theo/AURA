@@ -36,6 +36,8 @@ export type MoreStackParamList = {
   LearnDetail: { lessonId: string };
   Settings: undefined;
   HelpSupport: undefined;
+  Notifications: undefined;
+  NotificationSettings: undefined;
 };
 
 export type MainTabParamList = {

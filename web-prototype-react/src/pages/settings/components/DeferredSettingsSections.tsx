@@ -13,7 +13,7 @@ const sections = [
     id: 'privacy-alerts', title: 'Privacy & alerts', icon: 'shield',
     items: [
       { id: 'hide-values', title: 'Hide portfolio values', icon: 'eye', description: 'Hide monetary portfolio values while using Aura.' },
-      { id: 'notifications', title: 'App notifications', icon: 'bell', description: 'Manage Aura notifications and alerts.' },
+      { id: 'notifications', title: 'App notifications', icon: 'bell', description: 'Manage notifications inside Aura.' },
     ],
   },
   {
@@ -26,7 +26,7 @@ const sections = [
   },
 ];
 
-// Privacy is local to this account/browser; remaining previews have no API access.
+// Screen privacy is local; notifications use separate account-owned preferences.
 export function DeferredSettingsSections() {
   const { hideValues, ready, storageError, setHideValues, resetPrivacy } = usePortfolioPrivacy();
   const { resetLocalData } = useLearnProgress();
@@ -78,10 +78,10 @@ export function DeferredSettingsSections() {
               <span id="hide-values-description" className={styles.availableDescription}>Hide personal amounts and share quantities. Remembered for this account in this browser only.</span>
             </span>
             <span className={`${styles.privacySwitch} ${hideValues ? styles.privacySwitchOn : ''}`} aria-hidden="true"><i /></span>
-          </button> : item.id === 'about' || item.id === 'reset-data' || item.id === 'help' ? <button key={item.id} type="button"
+          </button> : item.id === 'about' || item.id === 'reset-data' || item.id === 'help' || item.id === 'notifications' ? <button key={item.id} type="button"
             className={`${styles.deferredRow} ${styles.availableRow}`} aria-label={item.title}
-            aria-describedby={`${item.id}-description`} aria-haspopup={item.id === 'help' ? undefined : 'dialog'} disabled={item.id === 'reset-data' && (!ready || resetBusy)}
-            onClick={() => { if (item.id === 'about') setShowAbout(true); else if (item.id === 'help') go('help'); else requestReset(); }}>
+            aria-describedby={`${item.id}-description`} aria-haspopup={item.id === 'help' || item.id === 'notifications' ? undefined : 'dialog'} disabled={item.id === 'reset-data' && (!ready || resetBusy)}
+            onClick={() => { if (item.id === 'about') setShowAbout(true); else if (item.id === 'help') go('help'); else if (item.id === 'notifications') go('notification-settings'); else requestReset(); }}>
             <span className={styles.deferredIcon}><Icon name={item.icon} size={20} /></span>
             <span className={styles.deferredCopy}>
               <span className={`${styles.deferredLabel} ${styles.availableLabel}`}>{item.title}</span>

@@ -65,7 +65,7 @@ export const helpSections: HelpSection[] = [
       'The choice is remembered for your account in this browser or on this device, including after sign out and sign in. It does not synchronize between web and mobile or other devices. It is screen privacy, not encryption or an account-security lock.',
     ] },
     { id: 'reset-local-data', question: 'What does Reset local data clear?', answer: [
-      'After confirmation, Reset local data clears this account’s local Learn progress and turns Hide portfolio values Off. On mobile it also restores device appearance to Dark and notification preferences to their defaults, and removes obsolete demo storage. Notification delivery is not available yet.',
+      'After confirmation, Reset local data clears this account’s local Learn progress and turns Hide portfolio values Off. On mobile it also restores device appearance to Dark and removes obsolete demo storage. Account notification preferences and your notification inbox stay unchanged. App notifications controls updates inside Aura; phone push, browser push, email notifications, and price alerts are not enabled.',
       'It does not delete your account, portfolios, holdings, reports, simulations, or watchlist, and it does not sign you out. Other accounts’ local Learn progress and privacy choices remain unchanged.',
       'Reset is not account deletion. If a reset fails partway through, some preferences may already have reset; read the message and retry.',
     ] },
