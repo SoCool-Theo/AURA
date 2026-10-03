@@ -63,6 +63,7 @@ test('web Top Risk Drivers opens the exact saved report section, retaining setup
 
 test('web report detail waits for the saved snapshot before jumping to Risk Drivers or the existing asset section', async () => {
   for (const [options, expected] of [[{ focusRiskDrivers: true }, 'risk-drivers'], [{ focusAssetSection: true }, 'per-asset-analysis'], [{}, null]]) {
+    for (const navigationHeight of [76, 108.5, null]) {
     const slots = []; let cursor = 0, effects = [], resolve;
     const pending = new Promise(done => { resolve = done; }), requests = [], frames = [], scrolled = [];
     const react = {
@@ -78,13 +79,17 @@ test('web report detail waits for the saved snapshot before jumping to Risk Driv
       '../../types/report': { isPortfolioReportV2: () => false, isPortfolioReportV3: () => false },
       '../analytics/analyticsUi': { formatReportTimestamp: value => value }, '../analytics/components/AnalysisResults': { AnalysisResults: 'Analysis' }, './ReportDetailPage.module.css': {},
     }, { React: react, AbortController, window: { requestAnimationFrame: fn => { frames.push(fn); return 1; }, cancelAnimationFrame() {} },
-      document: { getElementById: id => ({ scrollIntoView: options => scrolled.push([id, options.block]) }) } });
+      document: {
+        querySelector: selector => { assert.equal(selector, '.top-nav'); return navigationHeight == null ? null : { getBoundingClientRect: () => ({ height: navigationHeight }) }; },
+        getElementById: id => ({ style: { scrollMarginTop: '18px' }, scrollIntoView(options) { scrolled.push([id, options.block, this.style.scrollMarginTop]); } }),
+      } });
     const render = () => { cursor = 0; effects = []; return ReportDetailPage({ portfolioId: 'p', reportId: 'exact', ...options }); };
     render(); effects[0](); effects[1](); assert.equal(frames.length, 0, 'no premature scroll while loading');
     resolve({ id: 'exact', portfolio_id: 'p', created_at: 'today', analysis: { portfolio_name: 'Saved portfolio' } });
     await new Promise(done => setImmediate(done)); render(); effects[1]();
-    frames.forEach(fn => fn()); assert.deepEqual(scrolled, expected ? [[expected, 'start']] : []);
+    frames.forEach(fn => fn()); assert.deepEqual(scrolled, expected ? [[expected, 'start', `${Math.ceil(navigationHeight ?? 0) + 18}px`]] : []);
     assert.deepEqual(requests, [['p', 'exact']]);
+    }
   }
 });
 

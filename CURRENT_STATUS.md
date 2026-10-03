@@ -2743,3 +2743,17 @@ remain separate follow-on work.
   production build, and whitespace checks passed. Existing bundle warning
   remains. Browser/device visual acceptance was not run; no backend changes,
   dependencies, migrations, commits, or pushes were added.
+
+### Keep report section headings visible after jumps — 2026-10-04
+
+- Fixed web ReportDetailPage section jumps hiding Risk Drivers under the sticky
+  top bar. Before scrolling, the target's scroll margin now includes the measured
+  navigation height plus 18px of spacing, instead of only the original 18px.
+  This also protects the existing per-asset jump and adapts to wrapped navigation
+  on narrow browser layouts without changing the report or page structure.
+- Extended the report-jump regression to cover desktop, wrapped/fractional-height,
+  and absent navigation, alongside loading guards and untargeted report opening.
+  Validation: 91 web/shared-client tests, TypeScript/production build, and
+  whitespace checks passed. Existing bundle warning remains; browser visual
+  acceptance was not run. Mobile, backend, dependencies, migrations, commits,
+  and pushes were unchanged.

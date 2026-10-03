@@ -56,6 +56,10 @@ export function ReportDetailPage({ portfolioId, reportId, focusAssetSection = fa
     if (!report || loading || error || (!focusAssetSection && !focusRiskDrivers)) return;
     const frame = window.requestAnimationFrame(() => {
       const section = document.getElementById(focusRiskDrivers ? 'risk-drivers' : 'per-asset-analysis');
+      if (!section) return;
+      // The sticky navigation grows when its links wrap on narrow screens.
+      const navigationHeight = document.querySelector('.top-nav')?.getBoundingClientRect().height ?? 0;
+      section.style.scrollMarginTop = `${Math.ceil(navigationHeight) + 18}px`;
       section?.scrollIntoView({ block: 'start' });
     });
     return () => window.cancelAnimationFrame(frame);
