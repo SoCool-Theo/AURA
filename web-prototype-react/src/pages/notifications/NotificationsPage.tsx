@@ -42,7 +42,7 @@ export function NotificationsPage({ settings = false }: { settings?: boolean }) 
         <p>New analysis reports and saved simulations will appear here when notifications are enabled. Older results are not added automatically.</p></Card>
         : <ul className={styles.list}>{center.feed.items.map(item => <li key={item.id}>
           <Card className={`${styles.item} ${item.read_at ? '' : styles.unread}`}>
-            <span className={styles.icon}><Icon name={item.kind === 'analysis' ? 'reports' : 'simulations'} size={22} /></span>
+            <span className={styles.icon}><Icon name={item.kind === 'analysis' ? 'reports' : 'simulations'} size={18} /></span>
             <div className={styles.copy}><h2>{item.title} {!item.read_at && <span className={styles.badge}>Unread</span>}</h2>
               <p>{item.message}</p><time className={styles.helper} dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time></div>
             <div className={styles.actions}>

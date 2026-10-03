@@ -329,3 +329,13 @@ test('both clients keep preferences account-owned and implement no push permissi
   assert.match(screen, /screen: 'SimulationResult'/); assert.match(screen, /simulationId: item.resource_id/);
   assert.match(screen, /reportId: item.resource_id/);
 });
+
+test('web notification cards use scoped compact spacing and horizontal actions with touch-friendly narrow layouts', () => {
+  const css = fs.readFileSync(path.join(webRoot, 'src/pages/notifications/NotificationsPage.module.css'), 'utf8');
+  assert.match(css, /\.item \{[^}]*padding: 16px 18px/);
+  assert.match(css, /\.icon \{[^}]*width: 38px; height: 38px/);
+  assert.match(css, /\.actions \{[^}]*flex-wrap: wrap/);
+  assert.doesNotMatch(css, /\.actions \{[^}]*flex-direction: column/);
+  assert.match(css, /\.toolbar button, \.actions button, \.pagination button \{[^}]*min-height: 36px[^}]*font-size: 12px/);
+  assert.match(css, /@media \(max-width: 600px\)[^\n]*min-height: 44px/);
+});

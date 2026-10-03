@@ -2687,3 +2687,17 @@ remain separate follow-on work.
   TypeScript/production build, and whitespace checks passed. Existing web
   bundle-size warning remains; browser/device visual acceptance was not run.
   No dependencies, migrations, commits, or pushes were added.
+
+### Smaller web notification cards and controls — 2026-10-03
+
+- Reduced NotificationsPage card padding, icon size, heading/body sizes,
+  button padding/type size, and list/pagination gaps in its scoped CSS.
+  Actions now share a compact horizontal row instead of a tall stack.
+- Actions wrap below the content on narrower screens, with 44px minimum
+  button heights for touch layouts. Red delete/clear-all styling, unread state,
+  confirmations, and all notification behavior are unchanged. Mobile and
+  backend code were not modified.
+- Updated the page icon and added a scoped-layout regression. Validation:
+  87 web/shared-client tests, TypeScript/production build, and whitespace checks
+  passed. Existing bundle-size warning remains. Browser visual acceptance was
+  not run; no dependencies, migration, commit, or push was added.

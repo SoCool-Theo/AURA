@@ -5,16 +5,19 @@
 .header p, .copy p, .empty p { color: var(--text-secondary); line-height: 1.6; }
 .eyebrow { color: var(--teal-primary); letter-spacing: .12em; font-size: 11px; font-weight: 800; }
 .helper { display: block; color: var(--text-muted); font-size: 13px; line-height: 1.7; }
-.toolbar, .toolbar > div, .pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.list { list-style: none; padding: 0; display: grid; gap: 14px; }
-.item { display: flex; align-items: center; gap: 18px; padding: 24px; }
+.toolbar, .toolbar > div, .pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.toolbar button, .actions button, .pagination button { min-height: 36px; padding: 7px 12px; border-radius: 8px; font-size: 12px; line-height: 20px; }
+.list { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 10px; }
+.item { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 12px; }
 .unread { border-color: var(--teal-primary); }
-.icon { flex-shrink: 0; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; color: var(--teal-primary); background: var(--control-bg); }
+.icon { flex-shrink: 0; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; color: var(--teal-primary); background: var(--control-bg); }
 .copy { flex: 1; min-width: 0; }
-.copy h2 { font-size: 18px; margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.copy p { margin: 8px 0; }
+.copy h2 { font-size: 16px; margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.copy p { margin: 5px 0; font-size: 13px; }
+.copy time { font-size: 12px; }
 .badge { color: var(--teal-primary); font-size: 11px; font-weight: 700; }
-.actions { display: flex; align-items: center; flex-direction: column; gap: 8px; }
+.actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+.actions .link { padding-inline: 8px; }
 .preferences { padding: 24px; }
 .preference { width: 100%; display: flex; text-align: left; align-items: center; justify-content: space-between; gap: 20px; border: 0; border-bottom: 1px solid var(--border-divider); padding: 22px 0; background: transparent; color: var(--text-primary); font: inherit; cursor: pointer; }
 .preference strong { display: block; margin-bottom: 6px; }
@@ -29,10 +32,11 @@
 .error { padding: 20px; margin-bottom: 20px; color: var(--red); }
 .notice { color: var(--teal-primary); }
 .danger { color: var(--red-primary); font-weight: 700; }
-.clearAll { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; border: 1px solid var(--red-primary); border-radius: 10px; background: var(--red-dark); color: var(--red-primary); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.clearAll { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--red-primary); background: var(--red-dark); color: var(--red-primary); font-family: inherit; font-weight: 700; cursor: pointer; }
 .clearAll:hover:not(:disabled) { background: color-mix(in srgb, var(--red-primary) 12%, var(--red-dark)); }
 .clearAll:focus-visible { outline: 2px solid var(--red-primary); outline-offset: 4px; }
 .link:disabled, .clearAll:disabled { opacity: .5; cursor: default; }
-.pagination { margin-top: 22px; }
+.pagination { margin-top: 14px; }
 .back:focus-visible, .link:focus-visible, .preference:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 4px; border-radius: 8px; }
-@media (max-width: 600px) { .item { flex-wrap: wrap; padding: 18px; } .actions { width: 100%; flex-direction: row; flex-wrap: wrap; } .preferences { padding: 18px; } }
+@media (max-width: 800px) { .item { flex-wrap: wrap; } .actions { width: 100%; justify-content: flex-start; padding-left: 52px; } }
+@media (max-width: 600px) { .item { padding: 14px; gap: 10px; } .actions { padding-left: 0; } .toolbar button, .actions button, .pagination button { min-height: 44px; } .preferences { padding: 18px; } }
