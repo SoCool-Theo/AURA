@@ -28,6 +28,8 @@
 .empty h2 { font-size: 20px; }
 .error { padding: 20px; margin-bottom: 20px; color: var(--red); }
 .notice { color: var(--teal-primary); }
+.danger { color: var(--red-primary); font-weight: 700; }
+.link:disabled { opacity: .5; cursor: default; }
 .pagination { margin-top: 22px; }
 .back:focus-visible, .link:focus-visible, .preference:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 4px; border-radius: 8px; }
 @media (max-width: 600px) { .item { flex-wrap: wrap; padding: 18px; } .actions { width: 100%; flex-direction: row; flex-wrap: wrap; } .preferences { padding: 18px; } }

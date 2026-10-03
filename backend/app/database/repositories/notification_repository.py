@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -52,4 +52,20 @@ class NotificationRepository:
 
     def mark_all_read(self, user_id: UUID) -> None:
         self._session.execute(update(Notification).where(Notification.user_id == user_id, Notification.read_at.is_(None)).values(read_at=datetime.now(UTC)))
+        self._session.flush()
+
+    def clear(self, user_id: UUID, notification_id: UUID) -> bool:
+        """Remove only the owned inbox entry, never its linked saved result."""
+        removed = self._session.execute(
+            delete(Notification).where(
+                Notification.user_id == user_id,
+                Notification.id == notification_id,
+            ).returning(Notification.id)
+        ).scalar_one_or_none()
+        self._session.flush()
+        return removed is not None
+
+    def clear_all(self, user_id: UUID) -> None:
+        """Clear all pages of this account's inbox without touching preferences."""
+        self._session.execute(delete(Notification).where(Notification.user_id == user_id))
         self._session.flush()

@@ -116,6 +116,7 @@ export function MoreScreen({ navigation }: { navigation: any }) {
               <Card style={styles.item}>
                 <View style={[styles.icon, { backgroundColor: item.bg }]}>
                   <Ionicons name={item.icon} color={item.color} size={22} />
+                  {item.route === 'Notifications' && unread != null && unread > 0 && <View accessible={false} style={styles.notificationDot} />}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.label}>{item.label}</Text>
@@ -142,6 +143,7 @@ const styles = StyleSheet.create({
   list: { gap: spacing.md, marginTop: spacing.xl },
   item: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   icon: { width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  notificationDot: { position: 'absolute', top: 9, right: 9, width: 9, height: 9, borderRadius: 5, backgroundColor: colors.danger, borderWidth: 1, borderColor: colors.surface },
   label: { color: colors.text, fontSize: 15, fontWeight: '900' },
   description: { color: colors.muted, fontSize: 11, marginTop: 4 }
 });

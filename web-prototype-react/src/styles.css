@@ -291,7 +291,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .top-nav-actions{display:flex;align-items:center;gap:12px;margin-left:auto}
 .nav-action{position:relative;width:40px;height:40px;border:0;border-radius:10px;background:transparent;color:var(--text-primary);display:grid;place-items:center;transition:background .18s ease,color .18s ease}
 .nav-action:hover{background:var(--control-hover);color:var(--purple-light)}
-.notification-button{position:relative}.notification-count{position:absolute;top:0;right:0;min-width:17px;height:17px;border-radius:10px;padding:0 3px;display:grid;place-items:center;background:var(--teal-primary);color:var(--bg-nav);font-size:10px;font-weight:800}
+.notification-button{position:relative}.notification-button .notification-dot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:var(--red-primary);box-shadow:0 0 0 2px var(--bg-nav);pointer-events:none}
 .profile-menu-wrap{position:relative}
 .profile-trigger{height:48px;padding:0 0 0 4px;border:0;background:transparent;color:var(--text-primary);display:flex;align-items:center;gap:12px}
 .profile-trigger .avatar{width:40px;height:40px;border:1px solid var(--border-control);border-radius:50%;display:grid;place-items:center;background:var(--control-bg);font-size:14px;color:var(--text-secondary)}

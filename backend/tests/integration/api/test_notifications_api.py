@@ -82,6 +82,8 @@ def record_all(harness):
     ("put", "/api/notifications/preferences", {"enabled": True, "analysis_enabled": True, "simulation_enabled": True}),
     ("post", "/api/notifications/read-all", None),
     ("post", f"/api/notifications/{uuid4()}/read", None),
+    ("delete", "/api/notifications", None),
+    ("delete", f"/api/notifications/{uuid4()}", None),
 ])
 def test_notifications_require_authentication(harness, method, path, body):
     client = harness[0]
@@ -189,7 +191,7 @@ def test_missing_and_wrong_portfolio_targets_cannot_create_notifications(harness
         assert service.list(users[0], limit=25, offset=0).total == 0
 
 
-@pytest.mark.parametrize("method,path", [("get", "/api/notifications"), ("get", "/api/notifications/preferences"), ("put", "/api/notifications/preferences"), ("post", "/api/notifications/read-all"), ("post", f"/api/notifications/{uuid4()}/read")])
+@pytest.mark.parametrize("method,path", [("get", "/api/notifications"), ("get", "/api/notifications/preferences"), ("put", "/api/notifications/preferences"), ("post", "/api/notifications/read-all"), ("post", f"/api/notifications/{uuid4()}/read"), ("delete", "/api/notifications"), ("delete", f"/api/notifications/{uuid4()}")])
 def test_unexpected_failures_are_sanitized(harness, method, path):
     client, _, _, _, _, headers = harness
     with patch("app.api.routes.notifications.NotificationService", side_effect=RuntimeError("secret database detail")):
@@ -218,3 +220,73 @@ def test_notifications_and_preferences_follow_caller_rollback(harness):
         session.rollback()
     assert client.get("/api/notifications", headers=headers[0]).json()["total"] == 0
     assert client.get("/api/notifications/preferences", headers=headers[0]).json()["enabled"] is True
+
+
+@pytest.mark.parametrize("read_first", [False, True])
+def test_clear_one_is_owner_scoped_and_preserves_saved_resources(harness, read_first):
+    client, engine, tables, _, _, headers = harness
+    record_all(harness)
+    own = client.get("/api/notifications", headers=headers[0]).json()["items"][0]
+    path = f"/api/notifications/{own['id']}"
+    assert client.delete(path, headers=headers[1]).status_code == 404
+    assert client.delete(f"/api/notifications/{uuid4()}", headers=headers[0]).status_code == 404
+    if read_first:
+        assert client.post(path + "/read", headers=headers[0]).status_code == 204
+    response = client.delete(path, headers=headers[0])
+    assert response.status_code == 204 and response.content == b""
+    assert client.delete(path, headers=headers[0]).status_code == 404
+    feed = client.get("/api/notifications", headers=headers[0]).json()
+    assert feed["total"] == feed["unread_count"] == 11
+    assert own["id"] not in {item["id"] for item in feed["items"]}
+    assert client.get("/api/notifications", headers=headers[1]).json()["total"] == 12
+    with engine.connect() as connection:
+        assert len(connection.execute(select(tables[Analysis].c.id)).all()) == 6
+        assert len(connection.execute(select(tables[Simulation].c.id)).all()) == 18
+        assert len(connection.execute(select(tables[Portfolio].c.id)).all()) == 6
+
+
+def test_clear_all_covers_all_pages_and_keeps_targets_and_preferences(harness):
+    client, engine, tables, users, _, headers = harness
+    record_all(harness)
+    prefs = {"enabled": False, "analysis_enabled": False, "simulation_enabled": True}
+    client.put("/api/notifications/preferences", headers=headers[0], json=prefs)
+    assert len(client.get("/api/notifications?limit=5&offset=5", headers=headers[0]).json()["items"]) == 5
+    for _ in range(2):
+        response = client.delete("/api/notifications", headers={**headers[0], "X-User-ID": str(users[1])})
+        assert response.status_code == 204 and response.content == b""
+    assert client.get("/api/notifications", headers=headers[0]).json() == {"items": [], "total": 0, "unread_count": 0}
+    assert client.get("/api/notifications", headers=headers[1]).json()["unread_count"] == 12
+    assert client.get("/api/notifications/preferences", headers=headers[0]).json() == prefs
+    with engine.connect() as connection:
+        assert len(connection.execute(select(tables[User].c.id)).all()) == 2
+        assert len(connection.execute(select(tables[Portfolio].c.id)).all()) == 6
+        assert len(connection.execute(select(tables[Analysis].c.id)).all()) == 6
+        assert len(connection.execute(select(tables[Simulation].c.id)).all()) == 18
+
+
+@pytest.mark.parametrize("all_messages", [False, True])
+def test_clear_changes_follow_caller_rollback(harness, all_messages):
+    client, engine, _, users, _, headers = harness
+    record_all(harness)
+    with Session(engine) as session:
+        service = NotificationService(session)
+        if all_messages:
+            service.clear_all(users[0])
+        else:
+            notification = service.list(users[0], limit=1, offset=0).items[0]
+            assert service.clear(users[0], notification.id)
+        session.rollback()
+    assert client.get("/api/notifications", headers=headers[0]).json()["total"] == 12
+
+
+@pytest.mark.parametrize("all_messages", [False, True])
+def test_clear_commit_failure_is_sanitized_and_rolled_back(harness, all_messages):
+    client, _, _, _, _, headers = harness
+    record_all(harness)
+    notification_id = client.get("/api/notifications", headers=headers[0]).json()["items"][0]["id"]
+    path = "/api/notifications" if all_messages else f"/api/notifications/{notification_id}"
+    with patch.object(Session, "commit", side_effect=RuntimeError("private connection information")):
+        response = client.delete(path, headers=headers[0])
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Unable to process notifications"}
+    assert client.get("/api/notifications", headers=headers[0]).json()["total"] == 12

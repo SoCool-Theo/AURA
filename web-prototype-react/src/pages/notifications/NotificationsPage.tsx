@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { go } from '../../app/routes';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { notificationPreferenceRows, useNotificationCenter } from '../../notifications/useNotifications';
 import { watchNotificationForeground } from '../../notifications/notificationForeground';
 import styles from './NotificationsPage.module.css';
@@ -35,7 +36,8 @@ export function NotificationsPage({ settings = false }: { settings?: boolean }) 
     {!settings && center.feed && <>
       <div className={styles.toolbar}><p className={styles.helper} role="status">{center.feed.unread_count} unread · {center.feed.total} total</p>
         <div><button type="button" className="secondary-btn" disabled={disabled} onClick={() => void center.refresh()}>Refresh</button>
-          <button type="button" className="secondary-btn" disabled={disabled || !center.feed.unread_count} onClick={() => void center.markAll()}>Mark all as read</button></div></div>
+          <button type="button" className="secondary-btn" disabled={disabled || !center.feed.unread_count} onClick={() => void center.markAll()}>Mark all as read</button>
+          <button type="button" className={`${styles.link} ${styles.danger}`} disabled={disabled || !center.feed.total} onClick={() => center.requestClear('all')}>Clear all notifications</button></div></div>
       {center.feed.items.length === 0 ? <Card className={styles.empty}><Icon name="bell" size={32} /><h2>You’re all caught up</h2>
         <p>New analysis reports and saved simulations will appear here when notifications are enabled. Older results are not added automatically.</p></Card>
         : <ul className={styles.list}>{center.feed.items.map(item => <li key={item.id}>
@@ -46,6 +48,7 @@ export function NotificationsPage({ settings = false }: { settings?: boolean }) 
             <div className={styles.actions}>
               <button className="secondary-btn" type="button" disabled={disabled} onClick={() => void center.open(item, () => go(`${item.kind === 'analysis' ? 'reports' : 'simulations'}/${encodeURIComponent(item.portfolio_id)}/${encodeURIComponent(item.resource_id)}`))}>View {item.kind === 'analysis' ? 'report' : 'simulation'} →</button>
               {!item.read_at && <button className={styles.link} type="button" disabled={disabled} onClick={() => void center.markRead(item)}>Mark as read</button>}
+              <button className={`${styles.link} ${styles.danger}`} type="button" disabled={disabled} onClick={() => center.requestClear(item)}>Clear notification</button>
             </div>
           </Card>
         </li>)}</ul>}
@@ -53,5 +56,12 @@ export function NotificationsPage({ settings = false }: { settings?: boolean }) 
         <span className={styles.helper}>Page {Math.floor(center.offset / 25) + 1}</span>
         <button className="secondary-btn" type="button" disabled={disabled || center.offset + center.feed.items.length >= center.feed.total || center.offset >= 10000} onClick={center.next}>Next</button></div>
     </>}
+    {center.clearTarget && <ConfirmationDialog title={center.clearTarget === 'all' ? 'Clear all notifications?' : 'Clear notification?'}
+      tone="danger" description="This permanently removes the selected notification messages from your account’s inbox on web and mobile. Your portfolios, reports, simulations, and notification preferences stay unchanged. This cannot be undone."
+      subject={center.clearTarget === 'all' ? 'All notifications, including other pages' : center.clearTarget.title}
+      subjectLabel="NOTIFICATIONS ONLY" confirmLabel={center.clearTarget === 'all' ? 'Clear all notifications' : 'Clear notification'}
+      busy={center.busy} onCancel={center.cancelClear} onConfirm={() => void center.confirmClear()}>
+      {center.error && <p className={styles.error} role="alert">{center.error}</p>}
+    </ConfirmationDialog>}
   </div>;
 }

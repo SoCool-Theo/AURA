@@ -8,6 +8,7 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { MainTabParamList, MoreStackParamList } from '../../navigation/navigationTypes';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { notificationPreferenceRows, useNotificationCenter } from '../../notifications/useNotifications';
 import { watchNotificationForeground } from '../../notifications/notificationForeground';
@@ -39,6 +40,7 @@ export function NotificationsScreen({ route, navigation }: NativeStackScreenProp
       {!settings && center.feed && <>
         <Text accessibilityLiveRegion="polite" style={styles.helper}>{center.feed.unread_count} unread · {center.feed.total} total</Text>
         <Button title="Mark all as read" variant="secondary" disabled={disabled || !center.feed.unread_count} onPress={() => void center.markAll()} />
+        <Button title="Clear all notifications" variant="danger" disabled={disabled || !center.feed.total} onPress={() => center.requestClear('all')} />
         {center.feed.items.length === 0 ? <Card style={styles.empty}>
           <Ionicons name="notifications-outline" size={32} color={colors.primary} /><Text style={styles.title}>You’re all caught up</Text>
           <Text style={styles.helper}>New analysis reports and saved simulations will appear here when notifications are enabled. Older results are not added automatically.</Text>
@@ -51,6 +53,7 @@ export function NotificationsScreen({ route, navigation }: NativeStackScreenProp
             else navigation.getParent<BottomTabNavigationProp<MainTabParamList>>()?.navigate('Simulate', { screen: 'SimulationResult', params: { portfolioId: item.portfolio_id, simulationId: item.resource_id } });
           })} />
           {!item.read_at && <Pressable accessibilityRole="button" accessibilityLabel="Mark as read" disabled={disabled} onPress={() => void center.markRead(item)} style={styles.read}><Text style={styles.notice}>Mark as read</Text></Pressable>}
+          <Button title="Clear notification" variant="danger" disabled={disabled} onPress={() => center.requestClear(item)} />
         </Card>)}
         <View style={styles.pagination}>
           <Button title="Previous" variant="secondary" disabled={disabled || center.offset === 0} onPress={center.previous} />
@@ -59,6 +62,11 @@ export function NotificationsScreen({ route, navigation }: NativeStackScreenProp
         </View>
       </>}
     </ScrollView>
+    {center.clearTarget && <ConfirmationDialog visible title={center.clearTarget === 'all' ? 'Clear all notifications?' : 'Clear notification?'}
+      tone="danger" description="This permanently removes the selected notification messages from your account’s inbox on web and mobile. Your portfolios, reports, simulations, and notification preferences stay unchanged. This cannot be undone."
+      subject={center.clearTarget === 'all' ? 'All notifications, including other pages' : center.clearTarget.title}
+      subjectLabel="NOTIFICATIONS ONLY" confirmLabel={center.clearTarget === 'all' ? 'Clear all notifications' : 'Clear notification'}
+      busy={center.busy} errorMessage={center.error} onCancel={center.cancelClear} onConfirm={() => void center.confirmClear()} />}
   </SafeAreaView>;
 }
 

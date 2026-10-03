@@ -2644,3 +2644,30 @@ remain separate follow-on work.
   acceptance are pending. No phone/browser push, email delivery, OS permission
   prompt, device tokens, price alerts, new dependencies, deployed migration,
   commit, push, or financial calculation changes were made.
+
+### Unread notification dots and clear inbox actions — 2026-10-03
+
+- Web TopNavigation and mobile More Notifications icons now show a small red
+  top-corner dot only when the account has unread notifications. Accessible
+  labels retain the unread count; zero/unknown counts do not show a dot.
+- Both notification inboxes now offer Clear notification and Clear all
+  notifications with existing red-themed danger confirmations. Clear-all
+  covers every page. Cancel revokes authorization; duplicate confirmations,
+  failed writes/retries, stale accounts, and unmounts are guarded. Already-cleared
+  single entries refresh safely; an emptied late page returns to page one.
+  Successful clears refresh inbox totals and the unread indicator.
+- Updated notification repository/service/routes with authenticated,
+  account-scoped DELETE operations, and both client API adapters/state hooks.
+  Only notification messages are removed; saved reports, simulations,
+  portfolios, and account notification preferences remain unchanged.
+  No extra migration is required beyond notification V1's c3d5e7f9a2b4.
+- Updated public API documentation (30 paths / 41 operations) and added
+  persistence/API/interaction regressions for ownership, rollback, sanitization,
+  confirmation, cancellation, retry, pagination, counts, and red-dot rendering.
+- Validation: 3,301 backend unit/non-live API tests; 86 web/shared-client tests
+  and 67 mobile authority tests (153 client tests total); both TypeScript checks;
+  web production build and whitespace checks passed. Existing short-JWT fixture
+  warnings and the non-blocking web main-bundle warning (about 520 kB) remain.
+  Live PostgreSQL and browser/physical-device visual acceptance were not run.
+  No dependencies, deployed migrations, commits, pushes, push delivery, or
+  financial calculation changes were added.

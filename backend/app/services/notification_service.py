@@ -54,3 +54,9 @@ class NotificationService:
 
     def mark_all_read(self, user_id: UUID) -> None:
         self._repository.mark_all_read(user_id)
+
+    def clear(self, user_id: UUID, notification_id: UUID) -> bool:
+        return self._repository.clear(user_id, notification_id)
+
+    def clear_all(self, user_id: UUID) -> None:
+        self._repository.clear_all(user_id)

@@ -16,6 +16,29 @@ def _internal_error() -> HTTPException:
     return HTTPException(status_code=500, detail="Unable to process notifications")
 
 
+@router.delete("", status_code=204, response_class=Response)
+def clear_all_notifications(session: DatabaseSession, current_user: CurrentUser) -> Response:
+    try:
+        NotificationService(session).clear_all(current_user.id)
+        session.commit()
+    except Exception as error:
+        raise _internal_error() from error
+    return Response(status_code=204)
+
+
+@router.delete("/{notification_id}", status_code=204, response_class=Response)
+def clear_notification(notification_id: UUID, session: DatabaseSession, current_user: CurrentUser) -> Response:
+    try:
+        if not NotificationService(session).clear(current_user.id, notification_id):
+            raise HTTPException(status_code=404, detail="Notification not found")
+        session.commit()
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _internal_error() from error
+    return Response(status_code=204)
+
+
 @router.get("", response_model=NotificationListResponse)
 def list_notifications(session: DatabaseSession, current_user: CurrentUser,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,

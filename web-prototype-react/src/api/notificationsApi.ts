@@ -10,6 +10,12 @@ export function subscribeNotifications(listener: () => void) {
 export function notificationsChanged() { listeners.forEach(listener => listener()); }
 
 export const notificationsApi = {
+  clear(id: string, options: ApiCallOptions = {}) {
+    return apiRequest<void>(`/api/notifications/${encodeURIComponent(id)}`, { ...options, method: 'DELETE' });
+  },
+  clearAll(options: ApiCallOptions = {}) {
+    return apiRequest<void>('/api/notifications', { ...options, method: 'DELETE' });
+  },
   list(offset = 0, limit = 25, options: ApiCallOptions = {}) {
     return apiRequest<NotificationList>(`/api/notifications?limit=${limit}&offset=${offset}`, options);
   },

@@ -45,6 +45,8 @@ export function useNotificationCenter(settings: boolean) {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null), [notice, setNotice] = useState<string | null>(null);
+  const [clearTarget, setClearTarget] = useState<NotificationItem | 'all' | null>(null);
+  const clearAuthorization = useRef<{ account: string; target: NotificationItem | 'all' } | null>(null);
   const current = () => mounted.current && identity.current === id;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; }; }, []);
 
@@ -69,7 +71,7 @@ export function useNotificationCenter(settings: boolean) {
     } finally { if (mounted.current && identity.current === id && run === generation.current) setLoading(false); }
   }, [id, settings, offset]);
 
-  useEffect(() => { mutation.current = false; setBusy(false); setOffset(0); setNotice(null); setError(null); }, [id, settings]);
+  useEffect(() => { mutation.current = false; clearAuthorization.current = null; setClearTarget(null); setBusy(false); setOffset(0); setNotice(null); setError(null); }, [id, settings]);
   useEffect(() => { void refresh(); return () => { generation.current++; }; }, [refresh]);
 
   const runMutation = async (operation: () => Promise<void>, success?: () => void) => {
@@ -88,6 +90,33 @@ export function useNotificationCenter(settings: boolean) {
   const visible = state.account === id ? state : {};
   return {
     feed: visible.feed, prefs: visible.prefs, loading, busy, error, notice, offset,
+    clearTarget: clearAuthorization.current?.account === id ? clearTarget : null,
+    requestClear: (target: NotificationItem | 'all') => {
+      if (loading || mutation.current || !id || !current()) return;
+      clearAuthorization.current = { account: id, target }; setClearTarget(target); setError(null);
+    },
+    cancelClear: () => {
+      if (mutation.current) return;
+      clearAuthorization.current = null; setClearTarget(null); setError(null);
+    },
+    confirmClear: () => {
+      const authorization = clearAuthorization.current;
+      if (!authorization || authorization.account !== id) return Promise.resolve();
+      const target = authorization.target;
+      return runMutation(async () => {
+        if (target === 'all') await notificationsApi.clearAll();
+        else {
+          try { await notificationsApi.clear(target.id); }
+          catch (failure) {
+            // Another client may already have cleared this owned inbox entry.
+            if (!failure || typeof failure !== 'object' || !('status' in failure) || failure.status !== 404) throw failure;
+          }
+        }
+      }, () => {
+        clearAuthorization.current = null; setClearTarget(null);
+        setNotice(target === 'all' ? 'All notifications cleared. Your saved results are unchanged.' : 'Notification cleared. Your saved result is unchanged.');
+      });
+    },
     refresh,
     next: () => { if (!loading && !busy) setOffset(value => value + 25); },
     previous: () => { if (!loading && !busy) setOffset(value => Math.max(0, value - 25)); },
