@@ -39,6 +39,11 @@
 .availableRow { width: 100%; box-sizing: border-box; border-top: 0; border-left: 0; border-right: 0; background: transparent; color: var(--text-secondary); font: inherit; text-align: left; cursor: pointer; }
 .availableRow:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 3px; border-radius: 8px; }
 .availableLabel { color: var(--teal-primary); cursor: inherit; }
+.availableRow .deferredLabel { cursor: inherit; }
+.privacySwitch { width: 40px; height: 24px; padding: 3px; box-sizing: border-box; flex: 0 0 40px; border: 1px solid var(--border-control); border-radius: 999px; background: var(--control-bg); }
+.privacySwitch i { display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--text-muted); }
+.privacySwitchOn { border-color: var(--teal-primary); background: rgba(49, 214, 207, .16); }
+.privacySwitchOn i { margin-left: auto; background: var(--teal-primary); }
 .deferredCopy .availableDescription { display: block; margin-top: 5px; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .deferredCopy p { margin: 5px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .unavailableBadge { flex: 0 0 auto; padding: 5px 8px; border: 1px solid var(--border-divider); border-radius: 999px; color: var(--text-muted); background: var(--control-bg); font-size: 9px; }

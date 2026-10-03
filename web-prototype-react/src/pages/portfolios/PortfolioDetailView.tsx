@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import { useEffect, useState } from 'react';
 import {
   deletePortfolio,
@@ -42,6 +43,7 @@ import {
 type DetailTab = 'Overview' | 'Holdings' | 'Record';
 
 export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
+  const privateValue = usePrivateValue();
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -185,11 +187,11 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
       : 'Saved Allocation';
   const totalValue = portfolio.portfolio_type === 'PLANNED'
     ? plannedPreview
-      ? formatPortfolioMoney(plannedPreview.total_proposed_amount, plannedPreview.plan_currency)
+      ? privateValue(formatPortfolioMoney(plannedPreview.total_proposed_amount, plannedPreview.plan_currency))
       : contextLoading ? 'Loading…' : 'N/A'
     : portfolio.portfolio_type === 'CURRENT'
       ? valuation
-        ? formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency)
+        ? privateValue(formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency))
         : contextLoading ? 'Loading…' : 'N/A'
       : formatPortfolioAllocation(
         portfolio.holdings.reduce((sum, holding) => sum + (holding.weight ?? 0), 0),

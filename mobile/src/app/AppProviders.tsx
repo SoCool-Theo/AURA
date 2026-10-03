@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '../auth/AuthProvider';
+import { PortfolioPrivacyProvider } from '../privacy/PortfolioPrivacy';
 import {
   PreferencesProvider
 } from '../preferences/PreferencesProvider';
@@ -42,17 +43,19 @@ function NavigationShell({ children }: PropsWithChildren) {
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AuthProvider>
-        <PortfolioProvider>
-          <ReportProvider>
-            <SimulationProvider>
-              <AppDataProvider>
-                <NavigationContainer theme={navigationTheme}>
-                  {children}
-                </NavigationContainer>
-              </AppDataProvider>
-            </SimulationProvider>
-          </ReportProvider>
-        </PortfolioProvider>
+        <PortfolioPrivacyProvider>
+          <PortfolioProvider>
+            <ReportProvider>
+              <SimulationProvider>
+                <AppDataProvider>
+                  <NavigationContainer theme={navigationTheme}>
+                    {children}
+                  </NavigationContainer>
+                </AppDataProvider>
+              </SimulationProvider>
+            </ReportProvider>
+          </PortfolioProvider>
+        </PortfolioPrivacyProvider>
       </AuthProvider>
     </>
   );

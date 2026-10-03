@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View
@@ -27,6 +28,7 @@ import { accountDisplayName, accountInitials } from '../../auth/accountIdentity'
 import { useAuth } from '../../auth/useAuth';
 import { useAppData } from '../../hooks/useAppData';
 import { usePreferences } from '../../preferences/usePreferences';
+import { usePortfolioPrivacy } from '../../privacy/PortfolioPrivacy';
 import { colors, spacing } from '../../theme/theme';
 import type {
   AuthenticatedUserResponse,
@@ -68,6 +70,7 @@ function profileRequestError(error: unknown, fallback: string): string {
 }
 
 export function SettingsScreen() {
+  const privacy = usePortfolioPrivacy();
   const { user, setCurrentUser, signOut } = useAuth();
   const { resetLocalData } = useAppData();
   const {
@@ -435,10 +438,14 @@ export function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLabel}>Hide portfolio values</Text>
               <Text style={styles.rowDescription}>
-                Unavailable: Aura does not currently provide monetary portfolio values.
+                Hide personal amounts and share quantities. Remembered for this account on this device only.
               </Text>
             </View>
+            <Switch accessibilityLabel="Hide portfolio values" value={privacy.hideValues}
+              disabled={!privacy.ready} onValueChange={privacy.setHideValues}
+              trackColor={{ false: colors.border, true: colors.primary }} thumbColor={colors.text} />
           </View>
+          {privacy.storageError ? <Text accessibilityRole="alert" style={{ color: colors.danger, padding: spacing.md }}>{privacy.storageError}</Text> : null}
 
           <View style={styles.row}>
             <View style={styles.rowIcon}>

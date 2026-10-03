@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { usePortfolioPrivacy } from '../../privacy/PortfolioPrivacy';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -65,6 +66,7 @@ function sourceLabel(source: AgentSourceReference): string {
 }
 
 export function AssistantScreen({ navigation, route }: { navigation: any; route: any }) {
+  const { hideValues } = usePortfolioPrivacy();
   const {
     portfolios,
     activePortfolioId,
@@ -200,7 +202,7 @@ export function AssistantScreen({ navigation, route }: { navigation: any; route:
   }
 
   async function askAura() {
-    if (sendingRef.current) return;
+    if (sendingRef.current || hideValues) return;
     const normalizedMessage = message.trim();
     if (!selectedPortfolioId) {
       setRequestFailure(null);
@@ -272,6 +274,12 @@ export function AssistantScreen({ navigation, route }: { navigation: any; route:
       }
     }
   }
+
+  if (hideValues) return <SafeAreaView style={styles.safe} edges={['bottom']}><View style={styles.centerState}><Card>
+    <Text style={styles.emptyChatTitle}>AI chat hidden for privacy</Text>
+    <Text style={styles.body}>Questions and replies can contain personal amounts. Turn off Hide portfolio values in Settings to view your chat or send a message.</Text>
+    <Button title="Open Settings" onPress={() => navigation.navigate('MoreTab', { screen: 'Settings' })} />
+  </Card></View></SafeAreaView>;
 
   if ((listStatus === 'idle' || listStatus === 'loading') && !portfolios.length) {
     return <LoadingState message="Loading portfolios for Aura…" />;

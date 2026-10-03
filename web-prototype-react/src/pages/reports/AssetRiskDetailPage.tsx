@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import { useEffect, useState } from 'react';
 import { getPortfolioReport } from '../../api/reportsApi';
 import { go } from '../../app/routes';
@@ -41,6 +42,7 @@ export function AssetRiskDetailPage({
   reportId,
   assetSymbol,
 }: AssetRiskDetailPageProps) {
+  const privateValue = usePrivateValue();
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -164,12 +166,12 @@ export function AssetRiskDetailPage({
           <div className={styles.sectionHeading}><div><h2>Saved Position</h2><p>Snapshot context associated with this asset.</p></div></div>
           <dl>
             {currentHolding && reportV2 ? <>
-              <Detail label="Current value" value={formatPortfolioMoney(currentHolding.current_value, reportV2.valuation.valuation_currency)} />
-              <Detail label="Shares" value={formatPortfolioQuantity(currentHolding.shares)} />
+              <Detail label="Current value" value={privateValue(formatPortfolioMoney(currentHolding.current_value, reportV2.valuation.valuation_currency))} />
+              <Detail label="Shares" value={privateValue(formatPortfolioQuantity(currentHolding.shares))} />
               <Detail label="Saved allocation" value={formatPortfolioAllocation(currentHolding.current_allocation)} />
               <Detail label="Price date" value={currentHolding.price_as_of} />
             </> : plannedHolding && reportV3 ? <>
-              <Detail label="Proposed amount" value={formatPortfolioMoney(plannedHolding.proposed_amount, reportV3.baseline.plan_currency)} />
+              <Detail label="Proposed amount" value={privateValue(formatPortfolioMoney(plannedHolding.proposed_amount, reportV3.baseline.plan_currency))} />
               <Detail label="Target allocation" value={formatPortfolioAllocation(plannedHolding.target_allocation)} />
               <Detail label="Portfolio mode" value="Hypothetical plan" />
             </> : <Detail label="Saved allocation" value={formatPercent(asset.weight)} />}

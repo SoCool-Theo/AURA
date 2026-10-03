@@ -1,4 +1,5 @@
 import React from 'react';
+import { usePrivateText, usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -23,6 +24,8 @@ export function MetricAmountSheet({
   onClose: () => void;
 }) {
   const toneColor = content?.tone === 'danger' ? colors.danger : colors.success;
+  const privateValue = usePrivateValue();
+  const privateText = usePrivateText();
 
   return (
     <Modal
@@ -56,15 +59,15 @@ export function MetricAmountSheet({
             </View>
 
             <Text style={[styles.percentage, { color: toneColor }]}>
-              {content.percentage}
+              {privateText(content.percentage)}
             </Text>
             <Text style={styles.amountLabel}>{content.amountLabel}</Text>
             <Text style={[styles.amount, { color: toneColor }]}>
-              ≈ {content.amount}
+              ≈ {privateValue(content.amount)}
             </Text>
             <View style={styles.explanationCard}>
-              <Text style={styles.reference}>{content.reference}</Text>
-              <Text style={styles.explanation}>{content.explanation}</Text>
+              <Text style={styles.reference}>{privateText(content.reference)}</Text>
+              <Text style={styles.explanation}>{privateText(content.explanation)}</Text>
             </View>
             <Button title="Close" onPress={onClose} />
           </View>

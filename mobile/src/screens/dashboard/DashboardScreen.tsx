@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import React, { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,6 +38,7 @@ import {
 const ranges: DashboardRange[] = ['1M', '3M', '6M', '1Y', 'ALL'];
 
 export function DashboardScreen({ navigation }: { navigation: any }) {
+  const privateValue = usePrivateValue();
   const { user } = useAuth();
   const dashboard = useDashboard();
   const {
@@ -189,9 +191,9 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                 icon="wallet-outline"
                 label={holdingMode === 'planned' ? 'Proposed Investment' : 'Current Value'}
                 value={holdingMode === 'planned' && plannedAllocation
-                  ? formatPortfolioMoney(plannedAllocation.total_proposed_amount, plannedAllocation.plan_currency)
+                  ? privateValue(formatPortfolioMoney(plannedAllocation.total_proposed_amount, plannedAllocation.plan_currency))
                   : valuation
-                  ? formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency)
+                  ? privateValue(formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency))
                   : 'N/A'}
                 meta={holdingMode === 'planned' && plannedAllocation
                   ? 'Hypothetical plan · target weights from proposed amounts'

@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,6 +49,7 @@ export function AnalysisResults({
   onOpenAsset?: (symbol: string) => void;
   onAssetSectionLayout?: (offsetY: number) => void;
 }) {
+  const privateValue = usePrivateValue();
   const analysis = report.analysis;
   const reportV2 = isPortfolioReportV2(report) ? report : null;
   const reportV3 = isPortfolioReportV3(report) ? report : null;
@@ -102,10 +104,10 @@ export function AnalysisResults({
             <View style={{ flex: 1 }}>
               <Text style={styles.overline}>SAVED PLANNED ALLOCATION</Text>
               <Text style={styles.snapshotValue}>
-                {formatPortfolioMoney(
+                {privateValue(formatPortfolioMoney(
                   currencyView?.total_proposed_amount ?? reportV3.baseline.total_proposed_amount,
                   plannedCurrency ?? reportV3.baseline.plan_currency
-                )}
+                ))}
               </Text>
             </View>
             {reportV3.currency_views && reportV3.currency_views.length > 1 ? (
@@ -143,10 +145,10 @@ export function AnalysisResults({
             return <View key={holding.id} style={styles.metadataRow}>
               <Text style={styles.metadataLabel}>{holding.symbol}</Text>
               <Text style={styles.metadataValue}>
-                {formatPortfolioMoney(
+                {privateValue(formatPortfolioMoney(
                   displayedHolding?.proposed_amount ?? holding.proposed_amount,
                   plannedCurrency ?? reportV3.baseline.plan_currency
-                )} · {formatRatioPercent(Number(holding.target_allocation))}
+                ))} · {formatRatioPercent(Number(holding.target_allocation))}
               </Text>
             </View>;
           })}
@@ -165,10 +167,10 @@ export function AnalysisResults({
             <View style={{ flex: 1 }}>
               <Text style={styles.overline}>SAVED PORTFOLIO VALUATION</Text>
               <Text style={styles.snapshotValue}>
-                {formatPortfolioMoney(
+                {privateValue(formatPortfolioMoney(
                   reportV2.valuation.total_current_value,
                   reportV2.valuation.valuation_currency
-                )}
+                ))}
               </Text>
             </View>
             <Tag label={reportV2.valuation.valuation_currency} tone="primary" />
@@ -178,7 +180,7 @@ export function AnalysisResults({
           </Text>
           {historicalValue ? (
             <Text style={styles.cardText}>
-              Same shares at historical prices: {formatPortfolioMoney(historicalValue.starting_value, historicalValue.currency)} on {historicalValue.start_date} → {formatPortfolioMoney(historicalValue.ending_value, historicalValue.currency)} on {historicalValue.end_date}
+              Same shares at historical prices: {privateValue(formatPortfolioMoney(historicalValue.starting_value, historicalValue.currency))} on {historicalValue.start_date} → {privateValue(formatPortfolioMoney(historicalValue.ending_value, historicalValue.currency))} on {historicalValue.end_date}
             </Text>
           ) : null}
           {reportV2.valuation.fx ? (
@@ -201,7 +203,7 @@ export function AnalysisResults({
           <WebKpiCard
             icon="wallet-outline"
             label="Estimated Value at End of Period"
-            value={formatPortfolioMoney(monetary.estimated_ending_value, monetary.currency)}
+            value={privateValue(formatPortfolioMoney(monetary.estimated_ending_value, monetary.currency))}
             meta="Historical estimate · Tap to understand"
             tone={metrics.cumulative_return < 0 ? 'danger' : 'success'}
             onPress={() => setSelectedMetric('endingValue')}
@@ -364,12 +366,12 @@ export function AnalysisResults({
               </View>
             ) : null}
             <Text style={styles.cardText}>
-              {formatPortfolioQuantity(holding.shares)} owned{holding.invested_amount && holding.invested_currency
-                ? ` · invested ${holding.invested_currency} ${formatPortfolioQuantity(holding.invested_amount)}`
+              {privateValue(formatPortfolioQuantity(holding.shares))} owned{holding.invested_amount && holding.invested_currency
+                ? ` · invested ${holding.invested_currency} ${privateValue(formatPortfolioQuantity(holding.invested_amount))}`
                 : ''}{holding.purchase_date ? ` · purchased ${holding.purchase_date}` : ''}
             </Text>
             <View style={styles.dataGrid}>
-              <Metric label="Saved current value" value={formatPortfolioMoney(holding.current_value, reportV2.valuation.valuation_currency)} />
+              <Metric label="Saved current value" value={privateValue(formatPortfolioMoney(holding.current_value, reportV2.valuation.valuation_currency))} />
               <Metric label="USD asset price" value={formatPortfolioMoney(holding.asset_price, 'USD')} />
               <Metric label="Price date" value={holding.price_as_of} />
               <Metric label="Cumulative return" value={formatRatioPercent(holding.asset_metrics.cumulative_return)} />

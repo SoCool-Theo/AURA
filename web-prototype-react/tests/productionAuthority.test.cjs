@@ -29,6 +29,10 @@ function load(file, mocks = {}, globals = {}) {
     Headers,
     Date,
     require: name => {
+      if (!(name in mocks) && name.endsWith('/privacy/PortfolioPrivacy')) return {
+        usePortfolioPrivacy: () => ({ hideValues: false, ready: true, storageError: null, setHideValues: () => {} }),
+        usePrivateValue: () => value => value, usePrivateText: () => value => value,
+      };
       assert.ok(name in mocks, `Unmocked module ${name} in ${file}`);
       return mocks[name];
     },
@@ -40,6 +44,154 @@ function load(file, mocks = {}, globals = {}) {
 function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
+
+function mountWebPrivacy(accountId, storage) {
+  const slots = []; let cursor = 0, wrapper, tree;
+  const react = {
+    createContext: value => ({ Provider: 'PrivacyProvider', initial: value }),
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useContext: () => tree.props.value,
+    useState: initial => {
+      const i = cursor++;
+      if (!(i in slots)) slots[i] = typeof initial === 'function' ? initial() : initial;
+      return [slots[i], next => { slots[i] = next; render(); }];
+    },
+  };
+  const privacy = load('src/privacy/PortfolioPrivacy.tsx', {
+    react, '../auth/useAuth': { useAuth: () => ({ user: accountId ? { id: accountId } : null }) },
+  }, { React: react, localStorage: storage });
+  wrapper = privacy.PortfolioPrivacyProvider({ children: 'content' });
+  function render() { cursor = 0; tree = accountId ? wrapper.type(wrapper.props) : wrapper; }
+  render();
+  return { privacy, get value() { return tree.props.value; }, key: wrapper.props.key };
+}
+
+test('web portfolio privacy defaults Off per account/browser and survives logout/login with both choices', () => {
+  const saved = new Map(), writes = [];
+  const storage = { getItem: key => saved.get(key) ?? null, setItem: (key, value) => { writes.push(key); saved.set(key, value); } };
+  const first = mountWebPrivacy('account-a', storage);
+  assert.equal(first.value.hideValues, false); assert.equal(first.value.ready, true);
+  first.value.setHideValues(true); assert.equal(first.value.hideValues, true);
+  assert.equal(first.privacy.usePrivateValue()('$12,345.67'), '••••');
+  assert.equal(first.privacy.usePrivateText()('Based on ฿12,345.67; USD 987.65. Return +12.34%.'), 'Based on ••••; ••••. Return +12.34%.');
+  assert.equal(mountWebPrivacy(null, storage).value.hideValues, false);
+  assert.equal(writes.length, 1, 'logout must not overwrite the account preference');
+  assert.equal(mountWebPrivacy('account-b', storage).value.hideValues, false);
+  const restored = mountWebPrivacy('account-a', storage);
+  assert.equal(restored.key, 'account-a'); assert.equal(restored.value.hideValues, true);
+  restored.value.setHideValues(false);
+  assert.equal(restored.privacy.usePrivateValue()('$12,345.67'), '$12,345.67');
+  assert.equal(mountWebPrivacy('account-a', storage).value.hideValues, false);
+  first.value.setHideValues(true);
+  assert.equal(mountWebPrivacy('account-a', { getItem: () => null }).value.hideValues, false, 'another browser starts Off');
+  assert.notEqual(first.privacy.privacyStorageKey('account-a'), first.privacy.privacyStorageKey('account-b'));
+});
+
+test('web portfolio privacy fails closed for unreadable/malformed storage and reports save failures with retry', () => {
+  for (const raw of ['bad-json', '{}', '"true"']) {
+    const state = mountWebPrivacy('account-a', { getItem: () => raw });
+    assert.equal(state.value.hideValues, true); assert.match(state.value.storageError, /could not be loaded/);
+  }
+  let fail = true; const saved = new Map();
+  const state = mountWebPrivacy('account-a', {
+    getItem: () => { throw Error('blocked'); },
+    setItem: (key, value) => { if (fail) throw Error('blocked'); saved.set(key, value); },
+  });
+  assert.equal(state.value.hideValues, true);
+  state.value.setHideValues(false); assert.equal(state.value.hideValues, false);
+  assert.match(state.value.storageError, /could not be saved/);
+  fail = false; state.value.setHideValues(false); assert.equal(state.value.storageError, null);
+  assert.equal(saved.get(state.privacy.privacyStorageKey('account-a')), 'false');
+});
+
+test('web real/planned holdings mask personal values and quantities without altering allocation or data', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const types = load('src/types/portfolio.ts');
+  const formatting = load('src/pages/portfolios/portfolioUi.ts', { '../../api/apiClient': { ApiError: Error } });
+  let hidden = true;
+  const { HoldingsTable } = load('src/components/portfolio/HoldingsTable.tsx', {
+    '../../privacy/PortfolioPrivacy': { usePrivateValue: () => value => hidden ? '••••' : value },
+    '../../types/portfolio': types, '../../pages/portfolios/portfolioUi': formatting,
+    '../ui/Card': { Card: 'Card' }, '../ui/SymbolBadge': { SymbolBadge: 'SymbolBadge' },
+  }, { React: react });
+  const portfolio = { portfolio_type: 'CURRENT', holdings: [{ position: 0, symbol: 'AAPL', shares: '123.45', weight: null }] };
+  const valuation = { valuation_currency: 'USD', total_current_value: '24690.00', holdings: [{ symbol: 'AAPL', current_value: '24690.00', current_allocation: '1' }] };
+  const original = JSON.stringify({ portfolio, valuation });
+  let tree = JSON.stringify(HoldingsTable({ portfolio, valuation }));
+  assert.match(tree, /••••/); assert.match(tree, /100.00%/); assert.match(tree, /AAPL/);
+  assert.doesNotMatch(tree, /123.45|24,690/);
+  hidden = false; tree = JSON.stringify(HoldingsTable({ portfolio, valuation }));
+  assert.match(tree, /123.45/); assert.match(tree, /24,690/);
+  hidden = true;
+  const planned = { portfolio_type: 'PLANNED', plan_currency: 'THB', holdings: [{ position: 0, symbol: 'AAPL', proposed_amount: '54321.00', weight: null }] };
+  const plannedPreview = { plan_currency: 'THB', total_proposed_amount: '54321.00', holdings: [{ symbol: 'AAPL', estimate_status: 'AVAILABLE', estimated_shares: '77.77', target_allocation: '1' }] };
+  tree = JSON.stringify(HoldingsTable({ portfolio: planned, plannedPreview }));
+  assert.match(tree, /••••/); assert.doesNotMatch(tree, /54,321|77.77/); assert.match(tree, /100.00%/);
+  assert.equal(JSON.stringify({ portfolio, valuation }), original);
+});
+
+test('web metric details and holding inputs do not render personal amounts or editable hidden values', () => {
+  let hidden = true;
+  const state = mountWebPrivacy('account-a', { getItem: () => 'true' });
+  const privacy = { usePrivateValue: state.privacy.usePrivateValue, usePrivateText: state.privacy.usePrivateText,
+    usePortfolioPrivacy: () => ({ hideValues: hidden }) };
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useRef: value => ({ current: value }), useEffect: () => {},
+    useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
+  };
+  const { MetricAmountDialog } = load('src/pages/analytics/components/MetricAmountDialog.tsx', {
+    react, '../../../privacy/PortfolioPrivacy': privacy, '../AnalyticsIntegration.module.css': {},
+  }, { React: react });
+  const content = { title: 'Return', percentage: '+12.34%', amount: '+$1,523.70', amountLabel: 'Change', reference: 'Based on $12,345.67.', explanation: 'Historical results.', tone: 'positive' };
+  let tree = JSON.stringify(MetricAmountDialog({ content, onClose: () => {} }));
+  assert.match(tree, /\+12.34%/); assert.match(tree, /••••/); assert.doesNotMatch(tree, /1,523|12,345/);
+  content.percentage = '฿54,321.00'; tree = JSON.stringify(MetricAmountDialog({ content, onClose: () => {} }));
+  assert.doesNotMatch(tree, /54,321/);
+  const { HoldingDecimalInput } = load('src/pages/portfolios/components/HoldingDecimalInput.tsx', {
+    react, '../../../privacy/PortfolioPrivacy': privacy,
+    '../portfolioUi': { formatHoldingDecimalInput: value => Number(value).toFixed(2) }, '../PortfolioIntegration.module.css': {},
+  }, { React: react });
+  let edits = 0;
+  let input = HoldingDecimalInput({ value: '12345.67', onValueChange: () => { edits++; } }).children[0];
+  assert.equal(input.props.value, ''); assert.equal(input.props.placeholder, '••••'); assert.equal(input.props.disabled, true);
+  assert.doesNotMatch(JSON.stringify(input), /12345/);
+  input.props.onChange({ target: { value: '222.22' } }); assert.equal(edits, 0);
+  hidden = false; input = HoldingDecimalInput({ value: '12345.67', onValueChange: () => { edits++; } }).children[0];
+  assert.equal(input.props.value, '12345.67'); input.props.onChange({ target: { value: '222.22' } }); assert.equal(edits, 1);
+});
+
+test('web privacy covers result surfaces without masking public prices, FX, or normalized charts', () => {
+  const files = [
+    'src/components/portfolio/HoldingsTable.tsx', 'src/pages/dashboard/components/DashboardKpiGrid.tsx',
+    'src/pages/portfolios/PortfolioDetailView.tsx', 'src/pages/analytics/components/AnalysisResults.tsx',
+    'src/pages/reports/AssetRiskDetailPage.tsx', 'src/pages/simulations/components/SimulationResults.tsx',
+  ];
+  let masked = 0, publicPrices = 0;
+  for (const file of files) {
+    const source = fs.readFileSync(path.join(root, file), 'utf8');
+    assert.match(source, /usePrivateValue/);
+    const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    function visit(node) {
+      if (ts.isCallExpression(node) && node.expression.getText(ast) === 'formatPortfolioMoney') {
+        const publicPrice = node.arguments[0].getText(ast).includes('asset_price');
+        const wrapped = ts.isCallExpression(node.parent) && node.parent.expression.getText(ast) === 'privateValue';
+        assert.equal(wrapped, !publicPrice, `${file}: ${node.getText(ast)}`);
+        if (publicPrice) publicPrices++; else masked++;
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(ast);
+  }
+  assert.ok(masked > 15); assert.ok(publicPrices > 0);
+  const chart = fs.readFileSync(path.join(root, 'src/pages/simulations/components/SimulationTrajectoryChart.tsx'), 'utf8');
+  assert.match(chart, /normalized_value/); assert.doesNotMatch(chart, /formatPortfolioMoney/);
+  const main = fs.readFileSync(path.join(root, 'src/main.tsx'), 'utf8'); assert.match(main, /<PortfolioPrivacyProvider><App \/><\/PortfolioPrivacyProvider>/);
+  const assistant = fs.readFileSync(path.join(root, 'src/pages/assistant/AssistantPage.tsx'), 'utf8');
+  assert.match(assistant, /if \(sendingRef.current \|\| hideValues\) return/);
+  assert.ok(assistant.indexOf('if (hideValues) return') < assistant.indexOf('{messages.map'));
+  assert.match(assistant, /AI chat hidden for privacy/);
+});
 
 test('web profile Sign Out prompts first and only confirmed logout navigates to sign in', async () => {
   const slots = []; let cursor = 0, dirty, tree, logouts = 0, fail = true;
@@ -1335,8 +1487,9 @@ test('web session restoration uses the focused Aura loading screen', () => {
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
-test('web settings enable only About Aura while retaining other privacy/support previews', () => {
+test('web settings enable local privacy and About Aura while retaining other support previews', () => {
   let showAbout = false;
+  let hiddenValues = false;
   const react = {
     createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
     useState: () => [showAbout, value => { showAbout = value; }],
@@ -1346,6 +1499,9 @@ test('web settings enable only About Aura while retaining other privacy/support 
     '../../../components/ui/Card': { Card: 'Card' },
     '../../../components/ui/Icon': { Icon: 'Icon' },
     '../SettingsPage.module.css': {},
+    '../../../privacy/PortfolioPrivacy': { usePortfolioPrivacy: () => ({
+      hideValues: hiddenValues, ready: true, storageError: null, setHideValues: value => { hiddenValues = value; },
+    }) },
   }, { React: react });
   const buttons = [], headings = [], text = [];
   function visit(node) {
@@ -1361,13 +1517,16 @@ test('web settings enable only About Aura while retaining other privacy/support 
   const labels = ['Hide portfolio values', 'App notifications', 'Reset local data', 'Help & Support', 'About Aura'];
   assert.deepEqual(buttons.map(button => button.props['aria-label'] ?? button.children.join('')), labels);
   for (const button of buttons) {
-    const isAbout = button.props['aria-label'] === 'About Aura';
-    assert.equal(Boolean(button.props.disabled), !isAbout);
-    if (!isAbout) assert.equal(button.props.onClick, undefined);
+    const enabled = ['About Aura', 'Hide portfolio values'].includes(button.props['aria-label']);
+    assert.equal(Boolean(button.props.disabled), !enabled);
+    if (!enabled) assert.equal(button.props.onClick, undefined);
     assert.equal(button.props.type, 'button');
     assert.ok(button.props['aria-describedby']);
   }
-  assert.equal(text.filter(value => value === 'Not available yet').length, 4);
+  assert.equal(text.filter(value => value === 'Not available yet').length, 3);
+  assert.equal(buttons[0].props.role, 'switch');
+  assert.equal(buttons[0].props['aria-checked'], false);
+  buttons[0].props.onClick(); assert.equal(hiddenValues, true);
   const about = buttons.at(-1);
   assert.equal(about.props['aria-haspopup'], 'dialog');
   assert.equal(about.children[0].children[0].props.name, 'shield');

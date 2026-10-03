@@ -20,6 +20,10 @@ function load(file, mocks = {}, globals = {}) {
   vm.runInNewContext(code, {
     module, exports: module.exports, URL, Headers, ...globals,
     require: (name) => {
+      if (!(name in mocks) && name.endsWith('/privacy/PortfolioPrivacy')) return {
+        usePortfolioPrivacy: () => ({ hideValues: false, ready: true, storageError: null, setHideValues: () => {} }),
+        usePrivateValue: () => value => value, usePrivateText: () => value => value,
+      };
       assert.ok(name in mocks, `Unmocked module ${name} in ${file}`);
       return mocks[name];
     }
@@ -32,9 +36,10 @@ test('mobile Settings sign out confirms, cancels safely, retries failures, and b
   const user = { email: 'user@example.com' };
   harness.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
   let signOuts = 0, fail = true, pending;
+  let hiddenValues = false;
   const { SettingsScreen } = load('src/screens/settings/SettingsScreen.tsx', {
     react: harness.react,
-    'react-native': { Alert: { alert: () => assert.fail('Sign out must use the themed dialog') }, KeyboardAvoidingView: 'Avoid', Modal: 'Modal', Platform: { OS: 'android' }, Pressable: 'Pressable', ScrollView: 'Scroll', Text: 'Text', TextInput: 'Input', View: 'View', StyleSheet: { create: value => value } },
+    'react-native': { Alert: { alert: () => assert.fail('Sign out must use the themed dialog') }, KeyboardAvoidingView: 'Avoid', Modal: 'Modal', Platform: { OS: 'android' }, Pressable: 'Pressable', ScrollView: 'Scroll', Switch: 'Switch', Text: 'Text', TextInput: 'Input', View: 'View', StyleSheet: { create: value => value } },
     'react-native-safe-area-context': { SafeAreaView: 'Safe' }, '@expo/vector-icons': { Ionicons: 'Icon' },
     '../../components/ui/Button': { Button: 'Button' },
     '../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
@@ -48,6 +53,7 @@ test('mobile Settings sign out confirms, cancels safely, retries failures, and b
     } }) },
     '../../hooks/useAppData': { useAppData: () => ({ resetLocalData: () => assert.fail('Sign out must not reset data') }) },
     '../../preferences/usePreferences': { usePreferences: () => ({ themeMode: 'dark', setThemeMode: () => {}, resetPreferences: () => assert.fail('Sign out must not reset preferences') }) },
+    '../../privacy/PortfolioPrivacy': { usePortfolioPrivacy: () => ({ hideValues: hiddenValues, ready: true, storageError: null, setHideValues: value => { hiddenValues = value; } }) },
     '../../theme/theme': { colors: {}, spacing: {} },
   });
   harness.mount(() => SettingsScreen()); await harness.settle();
@@ -67,6 +73,9 @@ test('mobile Settings sign out confirms, cancels safely, retries failures, and b
   aboutRow.props.onPress();
   await harness.settle(); assert.equal(about().props.visible, true); assert.equal(signOuts, 0);
   about().props.onClose(); await harness.settle(); assert.equal(about().props.visible, false);
+  const privacySwitch = nodes().find(node => node.type === 'Switch' && node.props.accessibilityLabel === 'Hide portfolio values');
+  assert.equal(privacySwitch.props.disabled, false); assert.equal(privacySwitch.props.value, false);
+  privacySwitch.props.onValueChange(true); assert.equal(hiddenValues, true); assert.equal(signOuts, 0);
   assert.equal(dialog().props.visible, false);
   button().props.onPress(); await harness.settle();
   assert.equal(dialog().props.visible, true); assert.equal(signOuts, 0);
@@ -309,10 +318,164 @@ function hookHarness() {
       assert.equal(dirty, false, 'state settled');
       return value;
     },
+    unmount() { for (const slot of slots) slot?.cleanup?.(); },
     get value() { return value; }
   };
 }
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+
+function mountMobilePrivacy(accountId, storage) {
+  const harness = hookHarness();
+  harness.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
+  harness.react.useContext = () => harness.value.props.value;
+  const privacy = load('src/privacy/PortfolioPrivacy.tsx', {
+    react: harness.react, '@react-native-async-storage/async-storage': storage,
+    '../auth/useAuth': { useAuth: () => ({ user: accountId ? { id: accountId } : null }) },
+  });
+  const wrapper = privacy.PortfolioPrivacyProvider({ children: 'content' });
+  harness.mount(() => accountId ? wrapper.type(wrapper.props) : wrapper);
+  return { harness, privacy, get value() { return harness.value.props.value; }, key: wrapper.props.key };
+}
+
+test('mobile local privacy is account-isolated, remembered after login, and hides while preferences load', async () => {
+  const saved = new Map(), writes = [];
+  const storage = { getItem: async key => saved.get(key) ?? null, setItem: async (key, value) => { writes.push(key); saved.set(key, value); } };
+  const first = mountMobilePrivacy('account-a', storage);
+  assert.equal(first.value.hideValues, true); assert.equal(first.value.ready, false);
+  first.value.setHideValues(false); assert.equal(writes.length, 0, 'toggle is disabled during restoration');
+  await first.harness.settle(); assert.equal(first.value.hideValues, false);
+  first.value.setHideValues(true); await first.harness.settle(); assert.equal(first.value.hideValues, true);
+  assert.equal(first.privacy.usePrivateValue()('123.45'), '••••');
+  assert.equal(first.privacy.usePrivateText()('฿12,345.67 and −$987.65; +12.34%'), '•••• and ••••; +12.34%');
+  first.harness.unmount(); assert.equal(mountMobilePrivacy(null, storage).value.hideValues, false);
+  assert.equal(writes.length, 1);
+  const other = mountMobilePrivacy('account-b', storage); await other.harness.settle();
+  assert.equal(other.value.hideValues, false); assert.notEqual(other.key, first.key);
+  const restored = mountMobilePrivacy('account-a', storage); await restored.harness.settle();
+  assert.equal(restored.value.hideValues, true);
+  restored.value.setHideValues(false); await restored.harness.settle(); restored.harness.unmount();
+  const off = mountMobilePrivacy('account-a', storage); await off.harness.settle(); assert.equal(off.value.hideValues, false);
+  assert.equal(off.privacy.usePrivateValue()('123.45'), '123.45');
+  const anotherDevice = mountMobilePrivacy('account-a', { getItem: async () => null });
+  await anotherDevice.harness.settle(); assert.equal(anotherDevice.value.hideValues, false);
+});
+
+test('mobile privacy serializes rapid toggles, retries failures, and ignores stale account restoration', async () => {
+  const saved = new Map(), calls = []; const pendingWrite = deferred(); let firstWrite = true, fail = false;
+  const storage = { getItem: async key => saved.get(key) ?? null, setItem: async (key, value) => {
+    calls.push(value); if (firstWrite) { firstWrite = false; await pendingWrite.promise; }
+    if (fail) throw Error('blocked'); saved.set(key, value);
+  } };
+  const state = mountMobilePrivacy('account-a', storage); await state.harness.settle();
+  state.value.setHideValues(true); state.value.setHideValues(false); await state.harness.settle();
+  assert.deepEqual(calls, ['true']); assert.equal(state.value.hideValues, false);
+  pendingWrite.resolve(); await state.harness.settle(); assert.deepEqual(calls, ['true', 'false']);
+  assert.equal(saved.get(state.privacy.privacyStorageKey('account-a')), 'false');
+  fail = true; state.value.setHideValues(true); await state.harness.settle();
+  assert.equal(state.value.hideValues, true); assert.match(state.value.storageError, /could not be saved/);
+  fail = false; state.value.setHideValues(true); await state.harness.settle(); assert.equal(state.value.storageError, null);
+  const pendingRead = deferred();
+  const stale = mountMobilePrivacy('account-a', { getItem: () => pendingRead.promise });
+  stale.harness.unmount();
+  const next = mountMobilePrivacy('account-b', storage); await next.harness.settle(); assert.equal(next.value.hideValues, false);
+  pendingRead.resolve('true'); await stale.harness.settle(); assert.equal(stale.value.ready, false);
+  assert.equal(next.value.hideValues, false);
+  for (const raw of ['broken', '{}', '"true"']) {
+    const bad = mountMobilePrivacy('account-a', { getItem: async () => raw }); await bad.harness.settle();
+    assert.equal(bad.value.hideValues, true); assert.equal(bad.value.ready, true); assert.match(bad.value.storageError, /could not be loaded/);
+  }
+  const blocked = mountMobilePrivacy('account-a', { getItem: async () => { throw Error('blocked'); } });
+  await blocked.harness.settle(); assert.equal(blocked.value.hideValues, true); assert.match(blocked.value.storageError, /could not be loaded/);
+});
+
+test('mobile real/planned asset rows mask personal amounts and shares while keeping allocations and data', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  let hidden = true;
+  const { AssetRow } = load('src/components/portfolio/AssetRow.tsx', {
+    react, 'react-native': { StyleSheet: { create: value => value }, Text: 'Text', View: 'View' },
+    '../../privacy/PortfolioPrivacy': { usePrivateValue: () => value => hidden ? '••••' : value },
+    '../../types/portfolio': load('src/types/portfolio.ts'),
+    '../../portfolio/portfolioFormatting': load('src/portfolio/portfolioFormatting.ts'),
+    '../../portfolio/portfolioValidation': { decimalWeightToPercent: value => value * 100 },
+    '../../theme/theme': { colors: {}, spacing: {} },
+  });
+  const holding = { symbol: 'AAPL', shares: '123.45', invested_amount: '9876.54', invested_currency: 'USD', position: 0, weight: null };
+  const valuation = { current_value: '24690.00', current_allocation: '1' };
+  const original = JSON.stringify({ holding, valuation });
+  let tree = JSON.stringify(AssetRow({ holding, valuation }));
+  assert.match(tree, /••••/); assert.match(tree, /100.00%/); assert.doesNotMatch(tree, /123.45|9,876|24,690/);
+  hidden = false; tree = JSON.stringify(AssetRow({ holding, valuation })); assert.match(tree, /123.45/); assert.match(tree, /24,690/);
+  hidden = true; tree = JSON.stringify(AssetRow({ holding: { symbol: 'AAPL', proposed_amount: '54321.00', weight: null }, valuationCurrency: 'THB', plannedPreview: { estimate_status: 'AVAILABLE', estimated_shares: '77.77', target_allocation: '1' } }));
+  assert.match(tree, /••••/); assert.doesNotMatch(tree, /54,321|77.77/); assert.match(tree, /100.00%/);
+  assert.equal(JSON.stringify({ holding, valuation }), original);
+});
+
+test('mobile metric sheets and decimal inputs hide amounts without changing percentages or stored input data', async () => {
+  const state = mountMobilePrivacy('account-a', { getItem: async () => 'true' }); await state.harness.settle();
+  let hidden = true;
+  const privacy = { usePrivateValue: state.privacy.usePrivateValue, usePrivateText: state.privacy.usePrivateText,
+    usePortfolioPrivacy: () => ({ hideValues: hidden }) };
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
+    useRef: value => ({ current: value }), useEffect: () => {}, forwardRef: fn => fn,
+  };
+  const { MetricAmountSheet } = load('src/components/analytics/MetricAmountSheet.tsx', {
+    react, '../../privacy/PortfolioPrivacy': privacy,
+    'react-native': { Modal: 'Modal', Pressable: 'Pressable', Text: 'Text', View: 'View', StyleSheet: { create: value => value, absoluteFill: {} } },
+    '@expo/vector-icons': { Ionicons: 'Icon' }, '../../theme/theme': { colors: {}, spacing: {} }, '../ui/Button': { Button: 'Button' },
+  });
+  const content = { title: 'Return', percentage: '+12.34%', amount: '−฿1,523.70', amountLabel: 'Change', reference: 'Based on $12,345.67.', explanation: 'Historical results.', tone: 'danger' };
+  let tree = JSON.stringify(MetricAmountSheet({ content, onClose: () => {} }));
+  assert.match(tree, /\+12.34%/); assert.match(tree, /••••/); assert.doesNotMatch(tree, /1,523|12,345/);
+  content.percentage = '$54,321.00'; tree = JSON.stringify(MetricAmountSheet({ content, onClose: () => {} })); assert.doesNotMatch(tree, /54,321/);
+  const { HoldingDecimalInput } = load('src/components/portfolio/HoldingDecimalInput.tsx', {
+    react, '../../privacy/PortfolioPrivacy': privacy, '../ui/Input': { Input: 'Input' },
+    'react-native': { Text: 'Text' }, '../../theme/theme': { colors: {} },
+    '../../portfolio/portfolioFormatting': load('src/portfolio/portfolioFormatting.ts'),
+  });
+  let edits = 0;
+  let input = HoldingDecimalInput({ label: 'Amount', value: '12345.67', onValueChange: () => { edits++; } }, null).children[0];
+  assert.equal(input.props.value, ''); assert.equal(input.props.placeholder, '••••'); assert.equal(input.props.editable, false);
+  assert.doesNotMatch(JSON.stringify(input), /12345/);
+  input.props.onChangeText('222.22'); assert.equal(edits, 0);
+  hidden = false; input = HoldingDecimalInput({ label: 'Amount', value: '12345.67', onValueChange: () => { edits++; } }, null).children[0];
+  assert.equal(input.props.value, '12345.67'); input.props.onChangeText('222.22'); assert.equal(edits, 1);
+});
+
+test('mobile privacy covers result surfaces while preserving public prices, FX, and normalized charts', () => {
+  const files = ['src/components/portfolio/AssetRow.tsx', 'src/screens/dashboard/DashboardScreen.tsx',
+    'src/screens/portfolios/PortfolioDetailScreen.tsx', 'src/components/analytics/AnalysisResults.tsx',
+    'src/screens/reports/AssetRiskDetailScreen.tsx', 'src/components/simulations/SimulationResults.tsx'];
+  let masked = 0, publicPrices = 0;
+  for (const file of files) {
+    const source = fs.readFileSync(path.join(root, file), 'utf8'); assert.match(source, /usePrivateValue/);
+    const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    function visit(node) {
+      if (ts.isCallExpression(node) && node.expression.getText(ast) === 'formatPortfolioMoney') {
+        const publicPrice = node.arguments[0].getText(ast).includes('asset_price');
+        const wrapped = ts.isCallExpression(node.parent) && node.parent.expression.getText(ast) === 'privateValue';
+        assert.equal(wrapped, !publicPrice, `${file}: ${node.getText(ast)}`);
+        if (publicPrice) publicPrices++; else masked++;
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(ast);
+  }
+  assert.ok(masked > 15); assert.ok(publicPrices > 0);
+  const chart = fs.readFileSync(path.join(root, 'src/components/charts/SimulationTrajectoryChart.tsx'), 'utf8');
+  assert.match(chart, /normalized_value/); assert.doesNotMatch(chart, /formatPortfolioMoney/);
+  const providers = fs.readFileSync(path.join(root, 'src/app/AppProviders.tsx'), 'utf8');
+  assert.ok(providers.indexOf('<AuthProvider>') < providers.indexOf('<PortfolioPrivacyProvider>'));
+  const settings = fs.readFileSync(path.join(root, 'src/screens/settings/SettingsScreen.tsx'), 'utf8');
+  assert.match(settings, /<Switch accessibilityLabel="Hide portfolio values"/);
+  assert.match(settings, /disabled=\{!privacy.ready\}/);
+  assert.match(settings, /onValueChange=\{privacy.setHideValues\}/);
+  const assistant = fs.readFileSync(path.join(root, 'src/screens/assistant/AssistantScreen.tsx'), 'utf8');
+  assert.match(assistant, /if \(sendingRef.current \|\| hideValues\) return/);
+  assert.ok(assistant.indexOf('if (hideValues) return') < assistant.indexOf('{messages.map'));
+  assert.match(assistant, /AI chat hidden for privacy/);
+});
 
 test('account deletion uses authenticated DELETE with a password body and empty 204', async () => {
   const calls = [];

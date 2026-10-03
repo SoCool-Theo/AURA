@@ -2494,3 +2494,35 @@ remain separate follow-on work.
   production build (including TypeScript) passed. No mobile/backend changes,
   dependencies, commits, or pushes were made; browser visual acceptance was
   not performed.
+
+### Completed account-specific local portfolio privacy (2026-10-03)
+
+- Enabled Hide portfolio values in web/mobile Settings with Aura-themed,
+  accessible switches. Separate account-ID keys in browser localStorage and
+  mobile AsyncStorage remember both On and Off across logout/login. New
+  accounts and other devices/browsers default Off; logout never clears the
+  choice. The old unused device-global mobile privacy field was removed.
+- Added privacy providers inside each authentication provider and presentation
+  helpers across Dashboard, current/planned portfolio details and holdings,
+  analysis, asset risk, saved reports, simulations, and money-equivalent popups.
+  Personal amounts, owned/estimated share quantities, and reference amounts
+  render as masked text, not raw values hidden with CSS. Existing percentage/
+  normalized charts, allocations, risk scores, public prices, FX rates, and
+  Learn examples remain visible. Backend data and calculations are unchanged.
+- Monetary/share editor fields show blank masked placeholders while privacy
+  is On, with instructions to turn it Off before editing; underlying form
+  values and payloads are preserved. AI questions, answers, grounding details,
+  and the composer are shielded by a themed privacy notice while On, rather
+  than relying on unreliable redaction of free-form prose. No new chat request
+  can be submitted from the hidden UI.
+- Mobile starts hidden until preference restoration completes, ignores stale
+  account loads, and serializes rapid-toggle writes. Unreadable/malformed
+  preferences fail closed; save failures explain that the choice is temporary
+  and can be retried. This is local screen privacy, not encryption or account
+  security; there is no backend preference, synchronization, or migration.
+- Added account isolation, On/Off persistence, logout, new-device defaults,
+  restoration, malformed/blocked storage, retry, ordered-write, masking,
+  immutable-data, input, switch, and result-surface coverage. Validation:
+  52 web authority tests, 57 mobile authority tests, both TypeScript checks,
+  and web production build passed. Browser/physical-device acceptance was not
+  performed. No dependencies, commits, or pushes were added.

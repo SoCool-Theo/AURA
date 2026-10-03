@@ -13,7 +13,6 @@ export type ThemeMode = 'dark' | 'light';
 type PreferencesState = {
   themeMode: ThemeMode;
   notificationsEnabled: boolean;
-  hidePortfolioValues: boolean;
 };
 
 type PreferencesContextValue = PreferencesState & {
@@ -21,7 +20,6 @@ type PreferencesContextValue = PreferencesState & {
   storageError: string | null;
   setThemeMode: (mode: ThemeMode) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
-  setHidePortfolioValues: (hidden: boolean) => void;
   resetPreferences: () => Promise<void>;
 };
 
@@ -29,8 +27,7 @@ const STORAGE_KEY = 'aura_mobile_preferences_v1';
 
 const defaults: PreferencesState = {
   themeMode: 'dark',
-  notificationsEnabled: true,
-  hidePortfolioValues: false
+  notificationsEnabled: true
 };
 
 export const PreferencesContext =
@@ -56,8 +53,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
           const saved = JSON.parse(raw) as Partial<PreferencesState>;
           const next = {
             themeMode: saved.themeMode === 'light' ? 'light' as const : 'dark' as const,
-            notificationsEnabled: typeof saved.notificationsEnabled === 'boolean' ? saved.notificationsEnabled : defaults.notificationsEnabled,
-            hidePortfolioValues: typeof saved.hidePortfolioValues === 'boolean' ? saved.hidePortfolioValues : defaults.hidePortfolioValues
+            notificationsEnabled: typeof saved.notificationsEnabled === 'boolean' ? saved.notificationsEnabled : defaults.notificationsEnabled
           };
           setPrefs(next);
           applyTheme(next.themeMode);
@@ -94,8 +90,6 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
       },
       setNotificationsEnabled: (enabled) =>
         update({ notificationsEnabled: enabled }),
-      setHidePortfolioValues: (hidden) =>
-        update({ hidePortfolioValues: hidden }),
       resetPreferences: async () => {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
         applyTheme(defaults.themeMode);

@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -405,12 +406,13 @@ export function SimulationResults({
 function BaselineCard({ baseline }: {
   baseline: SimulationBaselineValuationContext | PlannedPortfolioBaselineContext;
 }) {
+  const privateValue = usePrivateValue();
   if ('portfolio_type' in baseline) {
     return (
       <Card style={styles.plannedBaselineCard}>
         <Text style={styles.cardTitle}>Saved planned allocation</Text>
         <Text style={styles.baselineValue}>
-          {formatPortfolioMoney(baseline.total_proposed_amount, baseline.plan_currency)}
+          {privateValue(formatPortfolioMoney(baseline.total_proposed_amount, baseline.plan_currency))}
         </Text>
         <Text style={styles.baselineMeta}>{baseline.hypothetical_notice}</Text>
         {baseline.holdings.map((holding) => (
@@ -418,7 +420,7 @@ function BaselineCard({ baseline }: {
             <View style={{ flex: 1 }}>
               <Text style={styles.allocationSymbol}>{holding.symbol}</Text>
               <Text style={styles.baselineMeta}>
-                Proposed {formatPortfolioMoney(holding.proposed_amount, baseline.plan_currency)}
+                Proposed {privateValue(formatPortfolioMoney(holding.proposed_amount, baseline.plan_currency))}
               </Text>
             </View>
             <Text style={styles.allocationWeight}>
@@ -436,7 +438,7 @@ function BaselineCard({ baseline }: {
     <Card style={styles.baselineCard}>
       <Text style={styles.cardTitle}>Saved current holdings</Text>
       <Text style={styles.baselineValue}>
-        {formatPortfolioMoney(baseline.total_current_value_usd, 'USD')}
+        {privateValue(formatPortfolioMoney(baseline.total_current_value_usd, 'USD'))}
       </Text>
       <Text style={styles.baselineMeta}>
         Valued {baseline.valuation_date} · prices {baseline.oldest_price_as_of} to {baseline.newest_price_as_of}
@@ -446,11 +448,11 @@ function BaselineCard({ baseline }: {
           <View style={{ flex: 1 }}>
             <Text style={styles.allocationSymbol}>{holding.symbol}</Text>
             <Text style={styles.baselineMeta}>
-              {formatPortfolioQuantity(holding.shares)} shares · price {formatPortfolioMoney(holding.asset_price, 'USD')}
+              {privateValue(formatPortfolioQuantity(holding.shares))} shares · price {formatPortfolioMoney(holding.asset_price, 'USD')}
             </Text>
           </View>
           <View style={styles.baselineRight}>
-            <Text style={styles.allocationWeight}>{formatPortfolioMoney(holding.current_value_usd, 'USD')}</Text>
+            <Text style={styles.allocationWeight}>{privateValue(formatPortfolioMoney(holding.current_value_usd, 'USD'))}</Text>
             <Text style={styles.baselineMeta}>{formatCurrentAllocation(holding.current_allocation)}</Text>
           </View>
         </View>

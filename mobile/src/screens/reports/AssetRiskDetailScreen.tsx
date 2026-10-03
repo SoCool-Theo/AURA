@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import React, { useCallback, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -47,6 +48,7 @@ export function AssetRiskDetailScreen({
   route: any;
   navigation: any;
 }) {
+  const privateValue = usePrivateValue();
   const portfolioId = route.params.portfolioId as string;
   const reportId = route.params.reportId as string;
   const assetSymbol = (route.params.assetSymbol as string).toUpperCase();
@@ -219,12 +221,12 @@ export function AssetRiskDetailScreen({
         <Text style={styles.sectionTitle}>Saved Position</Text>
         <Card style={styles.sectionCard}>
           {currentHolding && reportV2 ? <>
-            <Detail label="Current value" value={formatPortfolioMoney(currentHolding.current_value, reportV2.valuation.valuation_currency)} />
-            <Detail label="Shares" value={formatPortfolioQuantity(currentHolding.shares)} />
+            <Detail label="Current value" value={privateValue(formatPortfolioMoney(currentHolding.current_value, reportV2.valuation.valuation_currency))} />
+            <Detail label="Shares" value={privateValue(formatPortfolioQuantity(currentHolding.shares))} />
             <Detail label="Saved allocation" value={formatCurrentAllocation(currentHolding.current_allocation)} />
             <Detail label="Price date" value={currentHolding.price_as_of} />
           </> : plannedHolding && reportV3 ? <>
-            <Detail label="Proposed amount" value={formatPortfolioMoney(plannedHolding.proposed_amount, reportV3.baseline.plan_currency)} />
+            <Detail label="Proposed amount" value={privateValue(formatPortfolioMoney(plannedHolding.proposed_amount, reportV3.baseline.plan_currency))} />
             <Detail label="Target allocation" value={formatCurrentAllocation(plannedHolding.target_allocation)} />
             <Detail label="Portfolio mode" value="Hypothetical plan" />
           </> : <Detail label="Saved allocation" value={formatRatioPercent(asset.weight)} />}

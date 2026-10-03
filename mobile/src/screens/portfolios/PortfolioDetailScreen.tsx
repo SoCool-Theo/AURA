@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -56,6 +57,7 @@ export function PortfolioDetailScreen({
   route: any;
   navigation: any;
 }) {
+  const privateValue = usePrivateValue();
   const {
     getPortfolio,
     getPortfolioValuation,
@@ -303,7 +305,7 @@ export function PortfolioDetailScreen({
             ) : plannedPreview ? (
               <Card style={styles.valueCard}>
                 <Text style={styles.totalValue}>
-                  {formatPortfolioMoney(plannedPreview.total_proposed_amount, plannedPreview.plan_currency)}
+                  {privateValue(formatPortfolioMoney(plannedPreview.total_proposed_amount, plannedPreview.plan_currency))}
                 </Text>
                 <Text style={styles.valueMeta}>
                   Plan currency {plannedPreview.plan_currency} · preview requested {plannedPreview.requested_date}
@@ -355,7 +357,7 @@ export function PortfolioDetailScreen({
               />
             ) : valuation ? (
               <Card style={styles.valueCard}>
-                <Text style={styles.totalValue}>{formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency)}</Text>
+                <Text style={styles.totalValue}>{privateValue(formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency))}</Text>
                 <Text style={styles.valueMeta}>
                   Requested {valuation.requested_date} · prices {valuation.oldest_price_as_of} to {valuation.newest_price_as_of}
                 </Text>

@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../../privacy/PortfolioPrivacy';
 import { useState, type ReactNode } from 'react';
 import type {
   PortfolioPlannedAllocationResponse,
@@ -47,6 +48,7 @@ export function DashboardKpiGrid({
   reportLoading: boolean;
   reportFailed: boolean;
 }) {
+  const privateValue = usePrivateValue();
   const analysis = report?.analysis; const risk = analysis?.risk_classification;
   const monetary = reportMonetaryMetrics(report);
   const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
@@ -67,12 +69,12 @@ export function DashboardKpiGrid({
       : 'Current Value';
   const value = portfolio.portfolio_type === 'PLANNED'
     ? plannedAllocation
-      ? formatPortfolioMoney(plannedAllocation.total_proposed_amount, plannedAllocation.plan_currency)
+      ? privateValue(formatPortfolioMoney(plannedAllocation.total_proposed_amount, plannedAllocation.plan_currency))
       : contextLoading ? 'Loading…' : 'N/A'
     : portfolio.portfolio_type === 'LEGACY'
       ? formatPortfolioAllocation(legacyTotal)
       : valuation
-        ? formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency)
+        ? privateValue(formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency))
         : contextLoading ? 'Loading…' : 'N/A';
   const valueStatus = contextLoading
     ? 'Loading'

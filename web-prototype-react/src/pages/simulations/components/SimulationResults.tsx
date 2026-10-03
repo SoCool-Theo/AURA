@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../../privacy/PortfolioPrivacy';
 import type { PlannedPortfolioBaselineContext, PortfolioHoldingInput } from '../../../types/portfolio';
 import type { PortfolioReportResponse } from '../../../types/report';
 import type {
@@ -221,18 +222,19 @@ function CombinedLatestAnalysisTrajectories({
 function Baseline({ baseline }: {
   baseline: SimulationBaselineValuationContext | PlannedPortfolioBaselineContext;
 }) {
+  const privateValue = usePrivateValue();
   if ('portfolio_type' in baseline) {
     return <Card className={[styles.panel, styles.plannedBaseline].join(' ')}>
-      <div className={styles.baselineHeading}><div><small>SAVED PLANNED ALLOCATION</small><h3>{formatPortfolioMoney(baseline.total_proposed_amount, baseline.plan_currency)}</h3></div><span className={styles.badge}>{baseline.plan_currency}</span></div>
+      <div className={styles.baselineHeading}><div><small>SAVED PLANNED ALLOCATION</small><h3>{privateValue(formatPortfolioMoney(baseline.total_proposed_amount, baseline.plan_currency))}</h3></div><span className={styles.badge}>{baseline.plan_currency}</span></div>
       <p>{baseline.hypothetical_notice}</p>
-      <div className={styles.baselineRows}>{baseline.holdings.map(holding => <div key={holding.id}><strong>{holding.symbol}</strong><span>Proposed {formatPortfolioMoney(holding.proposed_amount, baseline.plan_currency)}</span><b>{formatPortfolioAllocation(holding.target_allocation)}</b></div>)}</div>
+      <div className={styles.baselineRows}>{baseline.holdings.map(holding => <div key={holding.id}><strong>{holding.symbol}</strong><span>Proposed {privateValue(formatPortfolioMoney(holding.proposed_amount, baseline.plan_currency))}</span><b>{formatPortfolioAllocation(holding.target_allocation)}</b></div>)}</div>
       <p className={styles.baselineNote}>Target weights come from proposed amounts. Estimated shares do not affect this simulation.</p>
     </Card>;
   }
   return <Card className={[styles.panel, styles.currentBaseline].join(' ')}>
-    <div className={styles.baselineHeading}><div><small>SAVED CURRENT VALUATION</small><h3>{formatPortfolioMoney(baseline.total_current_value_usd, 'USD')}</h3></div><span className={styles.badge}>USD</span></div>
+    <div className={styles.baselineHeading}><div><small>SAVED CURRENT VALUATION</small><h3>{privateValue(formatPortfolioMoney(baseline.total_current_value_usd, 'USD'))}</h3></div><span className={styles.badge}>USD</span></div>
     <p>Valued {baseline.valuation_date} using prices dated {baseline.oldest_price_as_of} through {baseline.newest_price_as_of}. These values are not updated.</p>
-    <div className={styles.baselineRows}>{baseline.holdings.map(holding => <div key={holding.position + '-' + holding.symbol}><strong>{holding.symbol}</strong><span>{formatPortfolioQuantity(holding.shares)} shares · {formatPortfolioMoney(holding.asset_price, 'USD')}</span><b>{formatPortfolioMoney(holding.current_value_usd, 'USD')} · {formatPortfolioAllocation(holding.current_allocation)}</b></div>)}</div>
+    <div className={styles.baselineRows}>{baseline.holdings.map(holding => <div key={holding.position + '-' + holding.symbol}><strong>{holding.symbol}</strong><span>{privateValue(formatPortfolioQuantity(holding.shares))} shares · {formatPortfolioMoney(holding.asset_price, 'USD')}</span><b>{privateValue(formatPortfolioMoney(holding.current_value_usd, 'USD'))} · {formatPortfolioAllocation(holding.current_allocation)}</b></div>)}</div>
   </Card>;
 }
 
