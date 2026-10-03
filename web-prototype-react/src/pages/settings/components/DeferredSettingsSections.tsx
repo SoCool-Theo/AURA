@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { go } from '../../../app/routes';
 import { usePortfolioPrivacy } from '../../../privacy/PortfolioPrivacy';
 import { useLearnProgress } from '../../../learn/LearnProgress';
 import { ConfirmationDialog } from '../../../components/ui/ConfirmationDialog';
@@ -77,9 +78,10 @@ export function DeferredSettingsSections() {
               <span id="hide-values-description" className={styles.availableDescription}>Hide personal amounts and share quantities. Remembered for this account in this browser only.</span>
             </span>
             <span className={`${styles.privacySwitch} ${hideValues ? styles.privacySwitchOn : ''}`} aria-hidden="true"><i /></span>
-          </button> : item.id === 'about' || item.id === 'reset-data' ? <button key={item.id} type="button"
+          </button> : item.id === 'about' || item.id === 'reset-data' || item.id === 'help' ? <button key={item.id} type="button"
             className={`${styles.deferredRow} ${styles.availableRow}`} aria-label={item.title}
-            aria-describedby={`${item.id}-description`} aria-haspopup="dialog" disabled={item.id === 'reset-data' && (!ready || resetBusy)} onClick={() => item.id === 'about' ? setShowAbout(true) : requestReset()}>
+            aria-describedby={`${item.id}-description`} aria-haspopup={item.id === 'help' ? undefined : 'dialog'} disabled={item.id === 'reset-data' && (!ready || resetBusy)}
+            onClick={() => { if (item.id === 'about') setShowAbout(true); else if (item.id === 'help') go('help'); else requestReset(); }}>
             <span className={styles.deferredIcon}><Icon name={item.icon} size={20} /></span>
             <span className={styles.deferredCopy}>
               <span className={`${styles.deferredLabel} ${styles.availableLabel}`}>{item.title}</span>

@@ -33,6 +33,7 @@ function load(file, mocks = {}, globals = {}) {
 
 test('mobile Settings sign out confirms, cancels safely, retries failures, and blocks duplicate taps', async () => {
   const harness = hookHarness();
+  const navigations = [];
   const user = { email: 'user@example.com' };
   harness.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
   let signOuts = 0, fail = true, pending;
@@ -56,7 +57,7 @@ test('mobile Settings sign out confirms, cancels safely, retries failures, and b
     '../../privacy/PortfolioPrivacy': { usePortfolioPrivacy: () => ({ hideValues: hiddenValues, ready: true, storageError: null, setHideValues: value => { hiddenValues = value; } }) },
     '../../theme/theme': { colors: {}, spacing: {} },
   });
-  harness.mount(() => SettingsScreen()); await harness.settle();
+  harness.mount(() => SettingsScreen({ navigation: { navigate: route => navigations.push(route) } })); await harness.settle();
   const nodes = () => {
     const all = [];
     function visit(node) { if (!node || typeof node !== 'object') return; all.push(node); node.children?.forEach(visit); }
@@ -65,6 +66,10 @@ test('mobile Settings sign out confirms, cancels safely, retries failures, and b
   const button = () => nodes().find(node => node.type === 'Button' && ['Sign out', 'Please wait…'].includes(node.props.title));
   const dialog = () => nodes().find(node => node.type === 'Dialog');
   const about = () => nodes().find(node => node.type === 'AboutDialog');
+  const help = nodes().find(node => node.type === 'Pressable' && node.props.accessibilityLabel === 'Help and support');
+  assert.equal(help.props.accessibilityRole, 'button');
+  assert.equal(help.children.at(-1).props.name, 'chevron-forward');
+  help.props.onPress(); assert.deepEqual(navigations, ['HelpSupport']); assert.equal(signOuts, 0);
   assert.equal(about().props.visible, false);
   const aboutRow = nodes().find(node => node.type === 'Pressable' && node.props.accessibilityLabel === 'About Aura');
   assert.equal(aboutRow.props.accessibilityRole, 'button');
@@ -231,7 +236,8 @@ test('bottom-tab presses return nested stacks to their roots, including cold dee
     ['Simulate', 'Simulations', 'SimulationResult'],
     ['MoreTab', 'More', 'Reports'],
     ['MoreTab', 'More', 'LearnDetail'],
-    ['MoreTab', 'More', 'Settings']
+    ['MoreTab', 'More', 'Settings'],
+    ['MoreTab', 'More', 'HelpSupport']
   ];
   for (const [tab, rootScreen, detail] of cases) {
     for (const focused of [false, true]) {
@@ -2106,4 +2112,68 @@ test('mobile lesson opening does not auto-complete; explicit completion/undo upd
   assert.equal(bar.props.accessibilityValue.now, 9); assert.equal(bar.props.accessibilityValue.max, 9);
   const completedCards = localMobileNodes(h.value).filter(node => node.type === 'Pressable' && /, completed$/.test(node.props.accessibilityLabel));
   assert.equal(completedCards.length, 9);
+});
+test('mobile Help expands/collapses answers, filters body text, clears empty results and keeps local data untouched', async () => {
+  const h = hookHarness(); h.react.createElement = (type, props, ...children) => ({ type, props: props ?? {}, children });
+  const api = load('src/screens/settings/helpContent.ts');
+  const original = JSON.stringify(api.helpSections);
+  const { HelpSupportScreen } = load('src/screens/settings/HelpSupportScreen.tsx', {
+    react: h.react, 'react-native': { Pressable: 'Pressable', StyleSheet: { create: value => value }, Text: 'Text', View: 'View' },
+    'react-native-safe-area-context': { SafeAreaView: 'Safe' }, '@expo/vector-icons': { Ionicons: 'Icon' },
+    '../../components/ui/Button': { Button: 'Button' }, '../../components/ui/Card': { Card: 'Card' },
+    '../../components/ui/Input': { Input: 'Input' }, '../../components/ui/KeyboardAwareScrollView': { KeyboardAwareScrollView: 'Scroll' },
+    '../../components/ui/PageTitle': { PageTitle: 'Title' }, '../../theme/theme': { colors: {}, spacing: {} }, './helpContent': api,
+  });
+  h.mount(() => HelpSupportScreen()); await h.settle();
+  const nodes = () => localMobileNodes(h.value);
+  const questions = () => nodes().filter(node => node.type === 'Pressable');
+  assert.equal(questions().length, 20);
+  assert.ok(questions().every(node => node.props.accessibilityState.expanded === false));
+  const question = api.helpSections[0].articles[0];
+  assert.doesNotMatch(JSON.stringify(h.value), /enter the shares you actually own/);
+  questions()[0].props.onPress(); await h.settle();
+  assert.equal(questions()[0].props.accessibilityState.expanded, true);
+  assert.match(JSON.stringify(h.value), /enter the shares you actually own/);
+  questions()[0].props.onPress(); await h.settle();
+  assert.equal(questions()[0].props.accessibilityState.expanded, false);
+  const search = async value => { nodes().find(node => node.type === 'Input').props.onChangeText(value); await h.settle(); };
+  await search(' Sharpe ratio '); assert.equal(questions().length, 1);
+  assert.equal(questions()[0].props.accessibilityLabel, 'How should I read the risk metrics?');
+  await search('qzx-no-article'); assert.equal(questions().length, 0);
+  assert.match(JSON.stringify(h.value), /No matching help articles/);
+  nodes().find(node => node.type === 'Button' && node.props.title === 'Clear search').props.onPress(); await h.settle();
+  assert.equal(questions().length, 20); assert.equal(questions()[0].props.accessibilityLabel, question.question);
+  assert.equal(JSON.stringify(api.helpSections), original);
+  const source = fs.readFileSync(path.join(root, 'src/screens/settings/HelpSupportScreen.tsx'), 'utf8');
+  assert.doesNotMatch(source, /AsyncStorage|authApi|fetch\(|resetLocalData/);
+  assert.match(source, /colors\.background/); assert.match(source, /colors\.primary/);
+});
+
+test('mobile Help registers in More stack and its themed header returns directly to Settings', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const mocks = {
+    react, '@expo/vector-icons': { Ionicons: 'Icon' },
+    '@react-navigation/bottom-tabs': { createBottomTabNavigator: () => ({ Navigator: 'Tab', Screen: 'TabScreen' }) },
+    '@react-navigation/native-stack': { createNativeStackNavigator: () => ({ Navigator: 'Stack', Screen: 'StackScreen' }) },
+    '../theme/colors': { darkPalette: { text: '#F7FAFF' }, lightPalette: {} },
+    '../preferences/usePreferences': { usePreferences: () => ({ themeMode: 'dark' }) },
+    '../components/ui/HomeHeaderButton': { HomeHeaderButton: 'Home' }, '../components/ui/BackHeaderButton': { BackHeaderButton: 'Back' },
+    './tabRootNavigation': { tabRootAction: () => null },
+  };
+  const source = ts.createSourceFile('navigator.tsx', fs.readFileSync(path.join(root, 'src/navigation/MainTabNavigator.tsx'), 'utf8'), ts.ScriptTarget.Latest, true);
+  for (const node of source.statements) {
+    if (ts.isImportDeclaration(node) && node.moduleSpecifier.text.startsWith('../screens/')) {
+      mocks[node.moduleSpecifier.text] = Object.fromEntries(node.importClause.namedBindings.elements.map(binding => [binding.name.text, binding.name.text]));
+    }
+  }
+  const { MainTabNavigator } = load('src/navigation/MainTabNavigator.tsx', mocks);
+  const more = localMobileNodes(MainTabNavigator()).find(node => node.props.name === 'MoreTab');
+  const help = localMobileNodes(more.props.component()).find(node => node.props.name === 'HelpSupport');
+  assert.equal(help.props.component, 'HelpSupportScreen');
+  const popped = [];
+  const options = help.props.options({ navigation: { popTo: route => popped.push(route) } });
+  assert.equal(options.headerBackVisible, false);
+  const back = options.headerLeft(); assert.equal(back.props.label, 'Back to Settings');
+  assert.equal(back.props.color, '#F7FAFF'); back.props.onPress(); assert.deepEqual(popped, ['Settings']);
+  assert.match(fs.readFileSync(path.join(root, 'src/navigation/navigationTypes.ts'), 'utf8'), /HelpSupport: undefined/);
 });

@@ -16,6 +16,7 @@ import { ReportsPage } from '../pages/reports/ReportsPage';
 import { ReportDetailPage } from '../pages/reports/ReportDetailPage';
 import { AssetRiskDetailPage } from '../pages/reports/AssetRiskDetailPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
+import { HelpSupportPage } from '../pages/help/HelpSupportPage';
 import { SimulationsPage } from '../pages/simulations/SimulationsPage';
 import { SimulationHistoryDetailPage } from '../pages/simulations/SimulationHistoryDetailPage';
 import { WatchlistPage } from '../pages/watchlist/WatchlistPage';
@@ -69,6 +70,7 @@ function App() {
     case 'learn': content = <LearnPage />; break;
     case 'create': content = <CreatePortfolioPage />; break;
     case 'settings': content = <SettingsPage />; break;
+    case 'help': content = <HelpSupportPage />; break;
     case '404': content = <NotFoundPage />; break;
     default: content = <NotFoundPage />;
   }

@@ -21,6 +21,7 @@ import { SimulationHistoryScreen } from '../screens/simulations/SimulationHistor
 import { AssistantScreen } from '../screens/assistant/AssistantScreen';
 import { MoreScreen } from '../screens/settings/MoreScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
+import { HelpSupportScreen } from '../screens/settings/HelpSupportScreen';
 import { ReportsScreen } from '../screens/reports/ReportsScreen';
 import { ReportDetailScreen } from '../screens/reports/ReportDetailScreen';
 import { AssetRiskDetailScreen } from '../screens/reports/AssetRiskDetailScreen';
@@ -196,6 +197,11 @@ function MoreNavigator() {
       <MoreStack.Screen name="Learn" component={LearnScreen} options={{ title: 'Learn' }} />
       <MoreStack.Screen name="LearnDetail" component={LearnDetailScreen} options={{ title: 'Lesson' }} />
       <MoreStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+      <MoreStack.Screen name="HelpSupport" component={HelpSupportScreen} options={({ navigation }) => ({
+        title: 'Help & Support',
+        headerBackVisible: false,
+        headerLeft: () => <BackHeaderButton label="Back to Settings" color={palette.text} onPress={() => navigation.popTo('Settings')} />
+      })} />
     </MoreStack.Navigator>
   );
 }

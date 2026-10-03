@@ -2551,3 +2551,30 @@ remain separate follow-on work.
 - Validation: 57 web and 63 mobile authority regression tests (120 total), both
   TypeScript checks, web production build, and git diff whitespace checks passed.
   Browser/physical-device acceptance was not performed. No commit or push.
+### Completed Help & Support guides — 2026-10-03
+
+- Enabled the full Help & Support row in web Settings and replaced mobile's
+  placeholder native alert with a dedicated Aura-themed guide. Web's protected
+  help route uses the existing app shell; mobile's HelpSupport screen lives in
+  the existing More stack. Both have explicit Back to Settings navigation,
+  and the mobile More tab still returns to its root from Help.
+- Added 20 matching code-owned help articles across Getting started, Portfolio
+  types, Analysis & simulations, AI Assistant, Privacy & local data,
+  Troubleshooting, and Support & safety. Guidance explains current shares
+  versus proposed amounts, latest-analysis reference versus simulation baseline,
+  saved snapshots, exact simulation AI context, local Learn/privacy persistence,
+  reset versus deletion, and safe troubleshooting without investment advice.
+- Search matches section titles, questions, and answer text, with result counts,
+  no-match feedback, and Clear search. Web uses native keyboard-accessible
+  details/summary accordions; mobile uses full-row expandable Pressables with
+  expanded-state accessibility. Existing navy/teal styles, responsive web
+  layout, and mobile theme colors are retained.
+- Support is self-service only. No invented contact details, ticket form, live
+  chat, password recovery, or notification delivery is enabled. Help does not
+  call APIs, alter saved data, reset preferences, or change backend authority.
+  No backend change, migration, dependency, commit, or push was made.
+- Validation: 59 web and 65 mobile authority regression tests (124 total),
+  both TypeScript checks, web production build, and diff whitespace checks
+  passed. The web build reports a non-blocking minified chunk-size warning
+  (507 kB main JS, about 146 kB gzip); code splitting was not changed in this
+  task. Browser/physical-device visual acceptance was not performed.

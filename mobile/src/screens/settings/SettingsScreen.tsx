@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -69,7 +68,7 @@ function profileRequestError(error: unknown, fallback: string): string {
   return apiErrorPresentation(error, { fallbackMessage: fallback }).message;
 }
 
-export function SettingsScreen() {
+export function SettingsScreen({ navigation }: { navigation?: { navigate: (screen: 'HelpSupport') => void } } = {}) {
   const privacy = usePortfolioPrivacy();
   const { user, setCurrentUser, signOut } = useAuth();
   const { resetLocalData, loading: progressLoading, localPending } = useAppData();
@@ -246,10 +245,7 @@ export function SettingsScreen() {
   }
 
   function showHelp() {
-    Alert.alert(
-      'Help & Support',
-      'In-app support messaging is not available yet. Please try again or contact the Aura team.'
-    );
+    navigation?.navigate('HelpSupport');
   }
 
   function showAbout() {

@@ -527,6 +527,7 @@ test('welcome is public only after session restoration and protected pages remai
     '../pages/reports/ReportsPage': 'ReportsPage', '../pages/reports/ReportDetailPage': 'ReportDetailPage',
     '../pages/reports/AssetRiskDetailPage': 'AssetRiskDetailPage',
     '../pages/settings/SettingsPage': 'SettingsPage', '../pages/simulations/SimulationsPage': 'SimulationsPage',
+    '../pages/help/HelpSupportPage': 'HelpSupportPage',
     '../pages/simulations/SimulationHistoryDetailPage': 'SimulationHistoryDetailPage',
     '../pages/watchlist/WatchlistPage': 'WatchlistPage', '../pages/welcome/WelcomePage': 'WelcomePage',
   };
@@ -565,6 +566,11 @@ test('welcome is public only after session restoration and protected pages remai
   assert.equal(report.type, 'ReportDetailPage');
   assert.equal(report.props.portfolioId, 'portfolio-1');
   assert.equal(report.props.reportId, 'report-2');
+  route = { page: 'help' };
+  const help = render();
+  assert.equal(help.type, 'ProtectedRoute');
+  assert.equal(help.children[0].type, 'AppLayout');
+  assert.equal(help.children[0].children[0].type, 'HelpSupportPage');
 });
 
 test('current and planned holding validation preserves facts and never creates weights', () => {
@@ -1487,8 +1493,9 @@ test('web session restoration uses the focused Aura loading screen', () => {
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
-test('web settings enable local reset, privacy and About Aura while retaining other support previews', () => {
+test('web settings enable local reset, privacy, help and About Aura while retaining notification preview', () => {
   let cursor = 0; const slots = [];
+  const navigations = [];
   let hiddenValues = false;
   const react = {
     createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
@@ -1497,6 +1504,7 @@ test('web settings enable local reset, privacy and About Aura while retaining ot
   };
   const { DeferredSettingsSections } = load('src/pages/settings/components/DeferredSettingsSections.tsx', {
     react, './AboutAuraDialog': { AboutAuraDialog: 'AboutDialog' },
+    '../../../app/routes': { go: route => navigations.push(route) },
     '../../../learn/LearnProgress': { useLearnProgress: () => ({ resetLocalData: async () => {} }) },
     '../../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
     '../../../components/ui/Card': { Card: 'Card' },
@@ -1521,15 +1529,19 @@ test('web settings enable local reset, privacy and About Aura while retaining ot
   const labels = ['Hide portfolio values', 'App notifications', 'Reset local data', 'Help & Support', 'About Aura'];
   assert.deepEqual(buttons.map(button => button.props['aria-label'] ?? button.children.join('')), labels);
   for (const button of buttons) {
-    const enabled = ['About Aura', 'Hide portfolio values', 'Reset local data'].includes(button.props['aria-label']);
+    const enabled = ['About Aura', 'Hide portfolio values', 'Reset local data', 'Help & Support'].includes(button.props['aria-label']);
     assert.equal(Boolean(button.props.disabled), !enabled);
     if (!enabled) assert.equal(button.props.onClick, undefined);
     assert.equal(button.props.type, 'button');
     assert.ok(button.props['aria-describedby']);
   }
-  assert.equal(text.filter(value => value === 'Not available yet').length, 2);
+  assert.equal(text.filter(value => value === 'Not available yet').length, 1);
   assert.equal(buttons[0].props.role, 'switch');
   assert.equal(buttons[0].props['aria-checked'], false);
+  const help = buttons.find(button => button.props['aria-label'] === 'Help & Support');
+  assert.equal(help.props['aria-haspopup'], undefined);
+  assert.equal(help.children.at(-1).props.name, 'chevron-right');
+  help.props.onClick(); assert.deepEqual(navigations, ['help']);
   buttons[0].props.onClick(); assert.equal(hiddenValues, true);
   const about = buttons.at(-1);
   assert.equal(about.props['aria-haspopup'], 'dialog');
@@ -1741,6 +1753,7 @@ test('web Learn opens without auto-completion, explicitly marks/undoes and shows
 test('web Reset local data confirms/cancels, blocks duplicates, retries failure and preserves unrelated data', async () => {
   const h = localWebHarness(); let clears = 0, privacyResets = 0, fail = true, release;
   const { DeferredSettingsSections } = load('src/pages/settings/components/DeferredSettingsSections.tsx', {
+    '../../../app/routes': { go: () => {} },
     react: h.react, '../../../components/ui/Card': { Card: 'Card' }, '../../../components/ui/Icon': { Icon: 'Icon' },
     '../../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' }, './AboutAuraDialog': { AboutAuraDialog: 'AboutDialog' }, '../SettingsPage.module.css': {},
     '../../../privacy/PortfolioPrivacy': { usePortfolioPrivacy: () => ({ hideValues: true, ready: true, setHideValues: () => {}, resetPrivacy: async () => { privacyResets++; } }) },
@@ -1775,4 +1788,57 @@ test('web strict privacy reset persists before unmasking and retains other accou
   fail = false; await state.value.resetPrivacy();
   assert.equal(state.value.hideValues, false); assert.equal(saved.get('aura_portfolio_privacy_v1:a'), 'false');
   assert.equal(saved.get('aura_portfolio_privacy_v1:b'), 'true');
+});
+test('web/mobile Help content is identical, searchable by answer/category, and truthful about local data and support', () => {
+  const api = load('src/pages/help/helpContent.ts');
+  const mobileContent = fs.readFileSync(path.join(root, '../mobile/src/screens/settings/helpContent.ts'), 'utf8');
+  assert.equal(mobileContent, fs.readFileSync(path.join(root, 'src/pages/help/helpContent.ts'), 'utf8'));
+  const original = JSON.stringify(api.helpSections);
+  assert.equal(api.helpSections.length, 7);
+  const articles = api.helpSections.flatMap(section => section.articles);
+  assert.equal(articles.length, 20); assert.equal(new Set(articles.map(article => article.id)).size, 20);
+  assert.equal(api.filterHelpSections('   ').length, 7);
+  assert.equal(api.filterHelpSections(' PORTFOLIO TYPES ').flatMap(section => section.articles).length, 2);
+  assert.equal(api.filterHelpSections('Sharpe ratio')[0].articles[0].id, 'risk-metrics');
+  assert.equal(api.filterHelpSections('authentication tokens').flatMap(section => section.articles).length > 0, true);
+  assert.equal(api.filterHelpSections('qzx-no-article').length, 0);
+  assert.equal(JSON.stringify(api.helpSections), original, 'search never mutates content');
+  const answer = id => articles.find(article => article.id === id).answer.join(' ');
+  assert.match(answer('reset-local-data'), /turns Hide portfolio values Off/);
+  assert.match(answer('reset-local-data'), /does not delete your account/);
+  assert.match(answer('reset-local-data'), /Other accounts/);
+  assert.match(answer('assistant-context'), /specific simulation/);
+  assert.match(answer('assistant-context'), /does not automatically analyze every past report/);
+  assert.match(answer('original-comparison'), /latest saved analysis/);
+  assert.match(answer('contact-support'), /not available yet/);
+  assert.doesNotMatch(original, /mailto:|https?:\/\/|buy this|guaranteed return/i);
+});
+
+test('web Help uses native expandable questions, searches answers, clears empty results and returns to Settings', () => {
+  const h = localWebHarness(), navigations = [];
+  const { HelpSupportPage } = load('src/pages/help/HelpSupportPage.tsx', {
+    react: h.react, '../../app/routes': { go: route => navigations.push(route) },
+    '../../components/ui/Card': { Card: 'Card' }, '../../components/ui/Icon': { Icon: 'Icon' },
+    './helpContent': load('src/pages/help/helpContent.ts'), './HelpSupportPage.module.css': {},
+  }, { React: h.react });
+  h.mount(() => HelpSupportPage());
+  const nodes = () => localWebNodes(h.tree);
+  const search = value => { nodes().find(node => node.type === 'input').props.onChange({ target: { value } }); h.render(); };
+  assert.equal(nodes().filter(node => node.type === 'details').length, 20);
+  assert.equal(nodes().filter(node => node.type === 'summary').length, 20);
+  assert.ok(nodes().filter(node => node.type === 'details').every(node => node.props.open === undefined), 'collapsed until native activation');
+  search(' Sharpe ratio ');
+  assert.equal(nodes().filter(node => node.type === 'details').length, 1);
+  assert.equal(nodes().find(node => node.type === 'summary').children[0], 'How should I read the risk metrics?');
+  search('qzx-no-article'); assert.equal(nodes().filter(node => node.type === 'details').length, 0);
+  assert.match(JSON.stringify(h.tree), /No matching help articles/);
+  nodes().find(node => node.type === 'button' && node.children[0] === 'Clear search').props.onClick(); h.render();
+  assert.equal(nodes().filter(node => node.type === 'details').length, 20);
+  nodes().find(node => node.type === 'button' && node.children.includes(' Back to Settings')).props.onClick();
+  assert.deepEqual(navigations, ['settings']);
+  const source = fs.readFileSync(path.join(root, 'src/pages/help/HelpSupportPage.tsx'), 'utf8');
+  assert.doesNotMatch(source, /fetch\(|localStorage|sessionStorage|authApi|resetLocalData/);
+  const css = fs.readFileSync(path.join(root, 'src/pages/help/HelpSupportPage.module.css'), 'utf8');
+  assert.match(css, /summary:focus-visible/); assert.match(css, /var\(--teal-primary\)/);
+  assert.match(css, /@media \(max-width: 600px\)/);
 });
