@@ -53,7 +53,7 @@ export function NotificationsScreen({ route, navigation }: NativeStackScreenProp
             else navigation.getParent<BottomTabNavigationProp<MainTabParamList>>()?.navigate('Simulate', { screen: 'SimulationResult', params: { portfolioId: item.portfolio_id, simulationId: item.resource_id } });
           })} />
           {!item.read_at && <Pressable accessibilityRole="button" accessibilityLabel="Mark as read" disabled={disabled} onPress={() => void center.markRead(item)} style={styles.read}><Text style={styles.notice}>Mark as read</Text></Pressable>}
-          <Button title="Clear notification" variant="danger" disabled={disabled} onPress={() => center.requestClear(item)} />
+          <Button title="Delete" variant="danger" disabled={disabled} onPress={() => center.requestClear(item)} />
         </Card>)}
         <View style={styles.pagination}>
           <Button title="Previous" variant="secondary" disabled={disabled || center.offset === 0} onPress={center.previous} />
@@ -62,10 +62,10 @@ export function NotificationsScreen({ route, navigation }: NativeStackScreenProp
         </View>
       </>}
     </ScrollView>
-    {center.clearTarget && <ConfirmationDialog visible title={center.clearTarget === 'all' ? 'Clear all notifications?' : 'Clear notification?'}
+    {center.clearTarget && <ConfirmationDialog visible title={center.clearTarget === 'all' ? 'Clear all notifications?' : 'Delete notification?'}
       tone="danger" description="This permanently removes the selected notification messages from your account’s inbox on web and mobile. Your portfolios, reports, simulations, and notification preferences stay unchanged. This cannot be undone."
       subject={center.clearTarget === 'all' ? 'All notifications, including other pages' : center.clearTarget.title}
-      subjectLabel="NOTIFICATIONS ONLY" confirmLabel={center.clearTarget === 'all' ? 'Clear all notifications' : 'Clear notification'}
+      subjectLabel="NOTIFICATIONS ONLY" confirmLabel={center.clearTarget === 'all' ? 'Clear all notifications' : 'Delete'}
       busy={center.busy} errorMessage={center.error} onCancel={center.cancelClear} onConfirm={() => void center.confirmClear()} />}
   </SafeAreaView>;
 }

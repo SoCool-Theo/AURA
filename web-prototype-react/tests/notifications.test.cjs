@@ -211,7 +211,7 @@ test('web notification page renders theme switches, exact result links, empty/er
     react: h.react, '../../app/routes': { go: route => paths.push(route) }, '../../components/ui/Card': { Card: 'Card' }, '../../components/ui/Icon': { Icon: 'Icon' },
     '../../components/ui/ConfirmationDialog': { ConfirmationDialog: 'Dialog' },
     '../../notifications/useNotifications': { useNotificationCenter: () => center, notificationPreferenceRows: [] },
-    '../../notifications/notificationForeground': { watchNotificationForeground: () => () => {} }, './NotificationsPage.module.css': {},
+    '../../notifications/notificationForeground': { watchNotificationForeground: () => () => {} }, './NotificationsPage.module.css': { clearAll: 'clearAll' },
   }, { React: h.react, window: { scrollTo() {} } });
   const nodes = [];
   const visit = node => { if (Array.isArray(node)) return node.forEach(visit); if (!node || typeof node !== 'object') return; nodes.push(node); node.children?.forEach(visit); };
@@ -219,9 +219,14 @@ test('web notification page renders theme switches, exact result links, empty/er
   nodes.find(node => node.type === 'button' && node.children.join('').startsWith('View simulation')).props.onClick();
   assert.deepEqual(paths, ['simulations/p/exact-simulation']); assert.deepEqual(opened, ['exact-simulation']);
   assert.ok(nodes.some(node => node.type === 'time')); assert.ok(nodes.some(node => node.children?.join('') === 'Mark all as read'));
-  nodes.find(node => node.type === 'button' && node.children.join('') === 'Clear notification').props.onClick(); h.render();
+  const clearAll = nodes.find(node => node.type === 'button' && node.children.join('') === 'Clear all notifications');
+  assert.equal(clearAll.props.className, 'clearAll');
+  const css = fs.readFileSync(path.join(webRoot, 'src/pages/notifications/NotificationsPage.module.css'), 'utf8');
+  assert.match(css, /\.clearAll \{[^}]*border: 1px solid var\(--red-primary\)[^}]*background: var\(--red-dark\)/);
+  nodes.find(node => node.type === 'button' && node.children.join('') === 'Delete').props.onClick(); h.render();
   let dialog = descendants(h.value).find(node => node.type === 'Dialog');
   assert.equal(dialog.props.tone, 'danger'); assert.equal(dialog.props.subject, 'Simulation saved');
+  assert.equal(dialog.props.title, 'Delete notification?'); assert.equal(dialog.props.confirmLabel, 'Delete');
   assert.match(dialog.props.description, /reports, simulations, and notification preferences stay unchanged/);
   assert.equal(confirms, 0); dialog.props.onCancel(); h.render(); assert.ok(!descendants(h.value).some(node => node.type === 'Dialog'));
   descendants(h.value).find(node => node.type === 'button' && node.children.join('') === 'Clear all notifications').props.onClick(); h.render();
@@ -257,9 +262,11 @@ test('mobile notification screen opens exact report/simulation and disables cate
   nodes.find(node => node.props.title === 'View report →').props.onPress();
   nodes.find(node => node.props.title === 'View simulation →').props.onPress();
   assert.deepEqual(plain(routes), [['ReportDetail', { portfolioId: 'p', reportId: 'exact-analysis' }], ['Simulate', { screen: 'SimulationResult', params: { portfolioId: 'p', simulationId: 'exact-simulation' } }]]);
-  nodes.find(node => node.props.title === 'Clear notification').props.onPress(); h.render();
+  assert.equal(nodes.find(node => node.props.title === 'Clear all notifications').props.variant, 'danger');
+  nodes.find(node => node.props.title === 'Delete').props.onPress(); h.render();
   let dialog = descendants(h.value).find(node => node.type === 'Dialog');
   assert.equal(dialog.props.visible, true); assert.equal(dialog.props.tone, 'danger'); assert.equal(dialog.props.subject, 'analysis saved');
+  assert.equal(dialog.props.title, 'Delete notification?'); assert.equal(dialog.props.confirmLabel, 'Delete');
   assert.equal(confirms, 0); dialog.props.onCancel(); h.render(); assert.ok(!descendants(h.value).some(node => node.type === 'Dialog'));
   descendants(h.value).find(node => node.props.title === 'Clear all notifications').props.onPress(); h.render();
   dialog = descendants(h.value).find(node => node.type === 'Dialog'); assert.match(dialog.props.subject, /including other pages/);

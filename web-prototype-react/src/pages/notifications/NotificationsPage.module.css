@@ -29,7 +29,10 @@
 .error { padding: 20px; margin-bottom: 20px; color: var(--red); }
 .notice { color: var(--teal-primary); }
 .danger { color: var(--red-primary); font-weight: 700; }
-.link:disabled { opacity: .5; cursor: default; }
+.clearAll { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; border: 1px solid var(--red-primary); border-radius: 10px; background: var(--red-dark); color: var(--red-primary); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.clearAll:hover:not(:disabled) { background: color-mix(in srgb, var(--red-primary) 12%, var(--red-dark)); }
+.clearAll:focus-visible { outline: 2px solid var(--red-primary); outline-offset: 4px; }
+.link:disabled, .clearAll:disabled { opacity: .5; cursor: default; }
 .pagination { margin-top: 22px; }
 .back:focus-visible, .link:focus-visible, .preference:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 4px; border-radius: 8px; }
 @media (max-width: 600px) { .item { flex-wrap: wrap; padding: 18px; } .actions { width: 100%; flex-direction: row; flex-wrap: wrap; } .preferences { padding: 18px; } }

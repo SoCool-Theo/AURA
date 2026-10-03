@@ -2671,3 +2671,19 @@ remain separate follow-on work.
   Live PostgreSQL and browser/physical-device visual acceptance were not run.
   No dependencies, deployed migrations, commits, pushes, push delivery, or
   financial calculation changes were added.
+
+### Compact notification actions — 2026-10-03
+
+- Updated web NotificationsPage and mobile NotificationsScreen to label each
+  single-notification removal action "Delete", including its confirmation
+  button; the dialog still identifies the notification being deleted.
+- Web notification CSS now gives Clear all notifications a dark-red box,
+  red border, rounded corners, hover/focus styling, and disabled state.
+  Mobile retains its existing boxed danger Button for that action.
+- Updated shared notification UI regression tests to verify labels, boxed
+  styling, and unchanged confirmation behavior on both clients. Backend,
+  account isolation, saved resources, and deletion behavior are unchanged.
+- Validation: 86 web/shared-client tests, mobile TypeScript check, web
+  TypeScript/production build, and whitespace checks passed. Existing web
+  bundle-size warning remains; browser/device visual acceptance was not run.
+  No dependencies, migrations, commits, or pushes were added.
