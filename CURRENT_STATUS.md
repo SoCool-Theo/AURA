@@ -2578,3 +2578,30 @@ remain separate follow-on work.
   passed. The web build reports a non-blocking minified chunk-size warning
   (507 kB main JS, about 146 kB gzip); code splitting was not changed in this
   task. Browser/physical-device visual acceptance was not performed.
+
+### AI help capability audit and answer table rendering — 2026-10-03
+
+- Checked the existing agent prompt, orchestration, request schema, and public
+  contract. Aura receives portfolio, selected/latest report, and optional exact
+  saved simulation context; it does not receive the Help & Support articles.
+  The API still requires a portfolio ID. General risk concepts overlap, but
+  local reset/privacy/support workflows are not grounded in the approved guide.
+  This was a capability check only: no backend, prompt, contract, or Help
+  knowledge integration was changed.
+- Extended matching code-owned answer parsers on web/mobile to recognize
+  Markdown tables with headers and valid delimiter rows, optional outer pipes,
+  alignment markers, bold text, escaped pipes, and code-span pipes. Fenced
+  examples and incomplete/malformed table rows remain literal text rather than
+  losing or shifting values. Existing headings, paragraphs, and bullets remain.
+- Web answers now render semantic tables with column headers and a themed,
+  keyboard-focusable horizontal scroll region. Mobile answers use themed,
+  horizontally swipeable tables with selectable text, header accessibility,
+  and per-cell column/value labels. HTML is rendered as text; no HTML injection
+  or WebView was added. Answers, request/history payloads, backend financial
+  calculations, AI safety boundaries, and local privacy behavior are unchanged.
+- Validation: 61 web and 67 mobile authority regression tests (128 total),
+  25 existing backend agent/prompt tests, both TypeScript checks, web production
+  build, and diff whitespace checks passed. Existing non-blocking main-bundle
+  size warning remains (about 509 kB minified / 147 kB gzip). Browser/device
+  visual acceptance and live-provider checks were not performed. No dependency,
+  migration, commit, or push was added.

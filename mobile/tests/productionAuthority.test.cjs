@@ -2177,3 +2177,32 @@ test('mobile Help registers in More stack and its themed header returns directly
   assert.equal(back.props.color, '#F7FAFF'); back.props.onPress(); assert.deepEqual(popped, ['Settings']);
   assert.match(fs.readFileSync(path.join(root, 'src/navigation/navigationTypes.ts'), 'utf8'), /HelpSupport: undefined/);
 });
+test('mobile answer formatting preserves aligned Markdown tables, escaped pipes, missing values and surrounding text', () => {
+  const { formatAgentAnswer } = load('src/agent/answerFormatting.ts');
+  const blocks = formatAgentAnswer('Before.\r\n\r\n| Metric | Value |\r\n| :--- | ---: |\r\n| **Drawdown** | -18.50% |\r\n| A \\| B | N/A |\r\n| Empty | |\r\n\r\n- After.');
+  assert.deepEqual(plain(blocks.map(block => block.type)), ['paragraph', 'table', 'bullets']);
+  const table = blocks[1];
+  assert.deepEqual(plain(table.alignments), ['left', 'right']);
+  assert.equal(table.rows[0][0][0].bold, true); assert.equal(table.rows[0][1][0].text, '-18.50%');
+  assert.equal(table.rows[1][0][0].text, 'A | B'); assert.equal(table.rows[1][1][0].text, 'N/A');
+  assert.deepEqual(plain(table.rows[2][1]), []);
+  assert.equal(formatAgentAnswer('|asda|asdf|')[0].type, 'paragraph');
+  assert.ok(formatAgentAnswer('~~~\n| A | B |\n| --- | --- |\n~~~').every(block => block.type !== 'table'));
+});
+
+test('mobile AI answer tables use themed horizontal scrolling and accessible column labels without raw HTML', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const { AnswerContent } = load('src/components/assistant/AnswerContent.tsx', {
+    react, 'react-native': { StyleSheet: { create: value => value }, ScrollView: 'Scroll', Text: 'Text', View: 'View' },
+    '../../agent/answerFormatting': load('src/agent/answerFormatting.ts'), '../../theme/theme': { colors: { primary: 'teal' }, spacing: {} },
+  });
+  const nodes = localMobileNodes(AnswerContent({ answer: '| Metric | Value |\n| --- | ---: |\n| **Return** | -2.50% |\n| Literal | <script>alert(1)</script> |' }));
+  const scroll = nodes.find(node => node.type === 'Scroll');
+  assert.equal(scroll.props.horizontal, true); assert.equal(scroll.props.accessibilityLabel, 'Aura answer table');
+  assert.equal(nodes.filter(node => node.props.accessibilityRole === 'header').length, 2);
+  assert.ok(nodes.some(node => node.props.accessibilityLabel === 'Value: -2.50%'));
+  assert.ok(nodes.some(node => node.props.parts?.some(part => part.text === '<script>alert(1)</script>')));
+  assert.ok(nodes.some(node => node.props.parts?.some(part => part.text === 'Return' && part.bold)));
+  assert.ok(nodes.some(node => node.props.style?.textAlign === 'right'));
+  assert.equal(nodes.filter(node => node.type === 'WebView').length, 0);
+});

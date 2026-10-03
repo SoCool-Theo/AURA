@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   formatAgentAnswer,
@@ -50,6 +50,28 @@ export function AnswerContent({ answer }: { answer: string }) {
             />
           );
         }
+        if (block.type === 'table') {
+          return <View key={`table-${blockIndex}`} style={styles.tableFrame}>
+            <Text style={styles.tableHint}>Swipe horizontally to view all columns.</Text>
+            <ScrollView horizontal style={styles.tableScroll} accessibilityLabel="Aura answer table"
+              showsHorizontalScrollIndicator>
+              <View style={styles.table}>
+                <View style={[styles.tableRow, styles.tableHeader]}>
+                  {block.headers.map((parts, column) => <View key={column} style={styles.tableCell} accessibilityRole="header" accessible
+                    accessibilityLabel={parts.map(part => part.text).join('')}>
+                    <FormattedText parts={parts} style={{ ...styles.tableHeaderText, textAlign: block.alignments[column] }} />
+                  </View>)}
+                </View>
+                {block.rows.map((row, rowIndex) => <View key={rowIndex} style={styles.tableRow}>
+                  {row.map((parts, column) => <View key={column} style={styles.tableCell} accessible
+                    accessibilityLabel={`${block.headers[column].map(part => part.text).join('')}: ${parts.map(part => part.text).join('')}`}>
+                    <FormattedText parts={parts} style={{ ...styles.paragraph, textAlign: block.alignments[column] }} />
+                  </View>)}
+                </View>)}
+              </View>
+            </ScrollView>
+          </View>;
+        }
         return (
           <View key={`bullets-${blockIndex}`} style={styles.bulletList}>
             {block.items.map((parts, itemIndex) => (
@@ -67,6 +89,14 @@ export function AnswerContent({ answer }: { answer: string }) {
 
 const styles = StyleSheet.create({
   content: { gap: spacing.md },
+  tableFrame: { minWidth: 0, gap: spacing.sm },
+  tableHint: { color: colors.muted, fontSize: 11, lineHeight: 17 },
+  tableScroll: { width: '100%', borderWidth: 1, borderColor: colors.border, borderRadius: 10 },
+  table: { backgroundColor: colors.surface },
+  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
+  tableHeader: { backgroundColor: colors.surfaceAlt },
+  tableCell: { width: 180, padding: spacing.md },
+  tableHeaderText: { color: colors.primary, fontSize: 13, lineHeight: 22, fontWeight: '900' },
   heading: { color: colors.text, fontSize: 15, fontWeight: '900', lineHeight: 21 },
   paragraph: { color: colors.textSecondary, fontSize: 13, lineHeight: 22 },
   bold: { color: colors.text, fontWeight: '900' },

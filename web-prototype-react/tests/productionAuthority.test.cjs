@@ -1842,3 +1842,57 @@ test('web Help uses native expandable questions, searches answers, clears empty 
   assert.match(css, /summary:focus-visible/); assert.match(css, /var\(--teal-primary\)/);
   assert.match(css, /@media \(max-width: 600px\)/);
 });
+test('web/mobile answer parsers recognize real Markdown tables without dropping values or parsing literal pipes', () => {
+  const web = load('src/pages/assistant/answerFormatting.ts');
+  const mobile = load('../mobile/src/agent/answerFormatting.ts');
+  assert.equal(fs.readFileSync(path.join(root, 'src/pages/assistant/answerFormatting.ts'), 'utf8'), fs.readFileSync(path.join(root, '../mobile/src/agent/answerFormatting.ts'), 'utf8'));
+  const samples = [
+    '## Comparison\r\n\r\nBefore.\r\n| Metric | Original | Modified |\r\n| :--- | :---: | ---: |\r\n| **Return** | -2.50% | 0 |\r\n| Sharpe | Unavailable | 1.20 |\r\n\r\n- After.',
+    'Name | Value\n--- | ---:\nAlpha | -$1,234.56\nBeta | N/A',
+    '| Label | Value |\n| --- | --- |\n| A \\| B | `x|y` |\n| C |  |',
+    '| A | B |\n| --- | --- |\n| 1 | 2 |\n\nOther text\n\n| C | D |\n| --- | --- |\n| 3 | 4 |',
+    '| One column |\n| --- |\n| unchanged |',
+    '```markdown\n| Literal | Example |\n| --- | --- |\n| a | b |\n```',
+    '|asda|asdf|\nNot a complete table.',
+    '| A | B |\n| --- | not-a-separator |\n| 10 | 20 |',
+    '| A | B |\n| --- | --- |\n| 10 | 20 | 30 |',
+  ];
+  for (const input of samples) assert.deepEqual(plain(web.formatAgentAnswer(input)), plain(mobile.formatAgentAnswer(input)));
+  const blocks = web.formatAgentAnswer(samples[0]);
+  assert.deepEqual(plain(blocks.map(block => block.type)), ['heading', 'paragraph', 'table', 'bullets']);
+  const table = blocks[2];
+  assert.deepEqual(plain(table.alignments), ['left', 'center', 'right']);
+  assert.equal(table.rows[0][0][0].bold, true);
+  assert.equal(table.rows[0][1][0].text, '-2.50%'); assert.equal(table.rows[0][2][0].text, '0');
+  assert.equal(table.rows[1][1][0].text, 'Unavailable');
+  const escaped = web.formatAgentAnswer(samples[2])[0];
+  assert.equal(escaped.rows[0][0][0].text, 'A | B'); assert.equal(escaped.rows[0][1][0].text, '`x|y`');
+  assert.deepEqual(plain(escaped.rows[1][1]), []);
+  assert.equal(web.formatAgentAnswer(samples[3]).filter(block => block.type === 'table').length, 2);
+  assert.equal(web.formatAgentAnswer(samples[4])[0].headers.length, 1);
+  for (const input of samples.slice(5, 8)) assert.ok(web.formatAgentAnswer(input).every(block => block.type !== 'table'));
+  assert.match(JSON.stringify(web.formatAgentAnswer(samples[8])), /30/, 'malformed extra cells are preserved as text, not truncated');
+});
+
+test('web AI answer tables use semantic headers, keyboard scrolling, escaped text and keep existing formatting', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const { AnswerContent } = load('src/pages/assistant/components/AnswerContent.tsx', {
+    '../answerFormatting': load('src/pages/assistant/answerFormatting.ts'), '../AssistantPage.module.css': { answerTable: 'answerTable' },
+  }, { React: react });
+  const answer = '## Results\n\n| Metric | Value |\n| --- | ---: |\n| **Return** | -2.50% |\n| <img src=x onerror=alert(1)> | 0 |\n\n- Preserved bullet\n\nAfter the table.';
+  const tree = AnswerContent({ answer });
+  const nodes = localWebNodes(tree);
+  assert.equal(nodes.filter(node => node.type === 'table').length, 1);
+  assert.equal(nodes.filter(node => node.type === 'th' && node.props.scope === 'col').length, 2);
+  assert.equal(nodes.find(node => node.props.role === 'region').props.tabIndex, 0);
+  assert.equal(nodes.find(node => node.type === 'td' && node.props.style.textAlign === 'right').children[0][0].children[0], '-2.50%');
+  assert.ok(nodes.some(node => node.type === 'strong' && node.children[0] === 'Return'));
+  assert.ok(nodes.some(node => node.type === 'span' && node.children[0] === '<img src=x onerror=alert(1)>'));
+  assert.equal(nodes.filter(node => node.type === 'img').length, 0);
+  assert.equal(nodes.filter(node => node.type === 'h3').length, 1); assert.equal(nodes.filter(node => node.type === 'ul').length, 1);
+  assert.equal(answer.includes('-2.50%'), true, 'formatting never mutates the source answer');
+  const source = fs.readFileSync(path.join(root, 'src/pages/assistant/components/AnswerContent.tsx'), 'utf8');
+  assert.doesNotMatch(source, /dangerouslySetInnerHTML|eval\(|fetch\(/);
+  const css = fs.readFileSync(path.join(root, 'src/pages/assistant/AssistantPage.module.css'), 'utf8');
+  assert.match(css, /overflow-x: auto/); assert.match(css, /answerTableWrap:focus-visible/);
+});

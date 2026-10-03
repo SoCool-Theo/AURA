@@ -1,68 +1,30 @@
 import type { ReactNode } from 'react';
+import { formatAgentAnswer, type AnswerInlinePart } from '../answerFormatting';
 import styles from '../AssistantPage.module.css';
 
-function inlineContent(text: string): ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
-  return parts.map((part, index) => part.startsWith('**') && part.endsWith('**')
-    ? <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>
-    : <span key={`${part}-${index}`}>{part}</span>);
+function inlineContent(parts: AnswerInlinePart[]): ReactNode[] {
+  return parts.map((part, index) => part.bold
+    ? <strong key={index}>{part.text}</strong>
+    : <span key={index}>{part.text}</span>);
 }
 
 export function AnswerContent({ answer }: { answer: string }) {
-  const lines = answer.replace(/\r\n/g, '\n').trim().split('\n');
-  const blocks: ReactNode[] = [];
-  let paragraph: string[] = [];
-  let bullets: string[] = [];
-
-  const flushParagraph = () => {
-    if (!paragraph.length) return;
-    const text = paragraph.join(' ').trim();
-    if (text) blocks.push(<p key={`p-${blocks.length}`}>{inlineContent(text)}</p>);
-    paragraph = [];
-  };
-
-  const flushBullets = () => {
-    if (!bullets.length) return;
-    blocks.push(<ul key={`ul-${blocks.length}`}>{bullets.map((item, index) => <li key={`${item}-${index}`}>{inlineContent(item)}</li>)}</ul>);
-    bullets = [];
-  };
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) {
-      flushParagraph();
-      flushBullets();
-      continue;
-    }
-
-    const heading = line.match(/^#{1,3}\s+(.+)$/);
-    if (heading) {
-      flushParagraph();
-      flushBullets();
-      blocks.push(<h3 key={`h-${blocks.length}`}>{inlineContent(heading[1])}</h3>);
-      continue;
-    }
-
-    const bullet = line.match(/^[-*]\s+(.+)$/);
-    if (bullet) {
-      flushParagraph();
-      bullets.push(bullet[1]);
-      continue;
-    }
-
-    const numbered = line.match(/^\d+[.)]\s+(.+)$/);
-    if (numbered) {
-      flushParagraph();
-      bullets.push(numbered[1]);
-      continue;
-    }
-
-    flushBullets();
-    paragraph.push(line);
-  }
-
-  flushParagraph();
-  flushBullets();
-
-  return <div className={styles.answerContent}>{blocks}</div>;
+  return <div className={styles.answerContent}>
+    {formatAgentAnswer(answer).map((block, index) => {
+      if (block.type === 'heading') return <h3 key={index}>{inlineContent(block.parts)}</h3>;
+      if (block.type === 'paragraph') return <p key={index}>{inlineContent(block.parts)}</p>;
+      if (block.type === 'table') return <div key={index} className={styles.answerTableWrap}
+        role="region" aria-label="Aura answer table" tabIndex={0}>
+        <table className={styles.answerTable}>
+          <caption className="sr-only">Aura answer table</caption>
+          <thead><tr>{block.headers.map((parts, column) =>
+            <th key={column} scope="col" style={{ textAlign: block.alignments[column] }}>{inlineContent(parts)}</th>)}</tr></thead>
+          <tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>
+            {row.map((parts, column) => <td key={column} style={{ textAlign: block.alignments[column] }}>{inlineContent(parts)}</td>)}
+          </tr>)}</tbody>
+        </table>
+      </div>;
+      return <ul key={index}>{block.items.map((parts, itemIndex) => <li key={itemIndex}>{inlineContent(parts)}</li>)}</ul>;
+    })}
+  </div>;
 }
