@@ -2757,3 +2757,19 @@ remain separate follow-on work.
   whitespace checks passed. Existing bundle warning remains; browser visual
   acceptance was not run. Mobile, backend, dependencies, migrations, commits,
   and pushes were unchanged.
+
+### Portfolio return table date sorting — 2026-10-05
+
+- Web AnalysisResults now defaults the saved portfolio-return table to newest
+  dates first. The Date header toggles ascending/descending order with a visible
+  arrow and Newest first/Oldest first label, keyboard focus, and aria-sort.
+  Changing order scrolls the table to the top; opening another report resets
+  to newest first. The existing stylesheet supplies compact themed styling.
+- Sorting uses a copy of saved observations, preserving date/return pairs,
+  negative-value formatting, and the chronological graph. Mobile has a graph
+  but no equivalent observations table, so mobile and backend are unchanged.
+- Added a regression for both orders, report changes, scroll reset, immutable
+  saved data, unchanged chart points, and empty/single-observation reports.
+  Validation: 92 web/shared-client tests, TypeScript/production build, and
+  whitespace checks passed. Existing bundle warning remains; browser visual
+  acceptance was not run. No dependencies, migrations, commits, or pushes.

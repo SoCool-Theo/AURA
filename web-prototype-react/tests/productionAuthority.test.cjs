@@ -45,6 +45,79 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+test('web portfolio return table defaults newest first, toggles dates without changing returns or the graph, and resets for another report', () => {
+  const h = localWebHarness(), effectDeps = [], pendingEffects = [];
+  let effectCursor = 0;
+  h.react.useEffect = (fn, deps) => {
+    const i = effectCursor++;
+    if (!effectDeps[i] || deps.some((value, index) => value !== effectDeps[i][index])) {
+      pendingEffects.push(fn); effectDeps[i] = deps;
+    }
+  };
+  const points = Object.freeze([
+    Object.freeze({ date: '2025-12-31', portfolio_return: -0.00758 }),
+    Object.freeze({ date: '2026-01-02', portfolio_return: 0.004274 }),
+    Object.freeze({ date: '2026-02-02', portfolio_return: -0.000032 }),
+  ]);
+  let report = { id: 'first', portfolio_id: 'p', analysis: {
+    portfolio_metrics: { cumulative_return: 0, annualized_return: 0, annualized_volatility: 0, sharpe_ratio: null },
+    max_drawdown: { max_drawdown: 0 },
+    diversification: { overall_score: null, average_pairwise_correlation: null, weight_score: 0, correlation_score: null },
+    concentration: { largest_weight: 0, top_n: 3, top_n_weight: 0, effective_number_of_assets: 0, hhi: 0 },
+    asset_metrics: [], risk_drivers: {}, correlation_matrix: {}, correlation_pairs: [],
+    portfolio_returns: points, metadata: {},
+  } };
+  const { AnalysisResults } = load('src/pages/analytics/components/AnalysisResults.tsx', {
+    react: h.react, '../../../components/ui/Card': { Card: 'Card' }, '../../../components/ui/Icon': { Icon: 'Icon' },
+    '../../../app/routes': { go() {}, replace() {} },
+    '../../../types/report': { isPortfolioReportV2: () => false, isPortfolioReportV3: () => false },
+    '../../portfolios/portfolioUi': {},
+    '../analyticsUi': load('src/pages/analytics/analyticsUi.ts', { '../../api/apiClient': { ApiError: Error } }),
+    '../reportMetricDetails': { reportMonetaryMetrics: () => null, reportMetricAmountContent: () => null },
+    '../returnSeriesRange': load('src/pages/analytics/returnSeriesRange.ts'),
+    '../AnalyticsIntegration.module.css': { dateSortButton: 'sort', signedNegative: 'negative' },
+    './AnalysisSummary': { AnalysisSummary: 'Summary' }, './AssetAnalysisCard': { AssetAnalysisCard: 'Asset' },
+    './CorrelationHeatmap': { CorrelationHeatmap: 'Correlation' }, './MetricAmountDialog': { MetricAmountDialog: 'Dialog' },
+    './RiskDriverTable': { RiskDriverTable: 'Drivers' },
+    '../../dashboard/components/PortfolioReturnChart': { PortfolioReturnChart: 'ReturnChart' },
+  }, { React: h.react });
+  h.mount(() => { effectCursor = 0; return AnalysisResults({ report }); });
+  const render = () => { h.render(); pendingEffects.splice(0).forEach(fn => fn()); h.render(); };
+  const nodes = () => localWebNodes(h.tree);
+  const sortButton = () => nodes().find(node => node.type === 'button' && node.props.className === 'sort');
+  const rows = () => localWebNodes(nodes().find(node => node.type === 'tbody')).filter(node => node.type === 'tr')
+    .map(row => row.children.map(cell => [cell.children[0], cell.props.className ?? '']));
+  const chartPoints = () => plain(nodes().find(node => node.type === 'ReturnChart').props.points);
+  const scrollBox = { scrollTop: 200 };
+  nodes().find(node => node.props['aria-label'] === 'Scrollable portfolio return observations').props.ref.current = scrollBox;
+  render();
+  const ascendingRows = [
+    [['2025-12-31', ''], ['-0.7580%', 'negative']],
+    [['2026-01-02', ''], ['0.4274%', '']],
+    [['2026-02-02', ''], ['-0.0032%', 'negative']],
+  ];
+  assert.deepEqual(plain(rows()), [...ascendingRows].reverse());
+  assert.equal(nodes().find(node => node.type === 'th').props['aria-sort'], 'descending');
+  assert.match(sortButton().props['aria-label'], /newest first\. Sort oldest first/);
+  assert.deepEqual(chartPoints(), plain(points)); assert.equal(scrollBox.scrollTop, 0);
+  scrollBox.scrollTop = 200; sortButton().props.onClick(); render();
+  assert.deepEqual(plain(rows()), ascendingRows);
+  assert.equal(nodes().find(node => node.type === 'th').props['aria-sort'], 'ascending');
+  assert.match(sortButton().props['aria-label'], /oldest first\. Sort newest first/);
+  assert.equal(scrollBox.scrollTop, 0); assert.deepEqual(chartPoints(), plain(points));
+  sortButton().props.onClick(); render(); assert.deepEqual(plain(rows()), [...ascendingRows].reverse());
+  sortButton().props.onClick(); render();
+  report = { ...report, id: 'second' }; scrollBox.scrollTop = 100; render();
+  assert.deepEqual(plain(rows()), [...ascendingRows].reverse()); assert.equal(scrollBox.scrollTop, 0);
+  assert.deepEqual(plain(points).map(point => point.date), ascendingRows.map(row => row[0][0]), 'saved observations retain chronological order');
+  for (const remaining of [points.slice(0, 1), []]) {
+    report = { ...report, id: `report-${remaining.length}`, analysis: { ...report.analysis, portfolio_returns: remaining } }; render();
+    assert.equal(rows().length, remaining.length);
+    sortButton().props.onClick(); render(); assert.equal(rows().length, remaining.length);
+    if (!remaining.length) assert.equal(nodes().some(node => node.type === 'ReturnChart'), false);
+  }
+});
+
 test('web Top Risk Drivers opens the exact saved report section, retaining setup when no report exists', () => {
   const routes = [], react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
   const { RiskDrivers } = load('src/pages/dashboard/components/RiskDrivers.tsx', {

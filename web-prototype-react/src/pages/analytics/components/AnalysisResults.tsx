@@ -1,5 +1,5 @@
 import { usePrivateValue } from '../../../privacy/PortfolioPrivacy';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Icon } from '../../../components/ui/Icon';
 import { go, replace } from '../../../app/routes';
@@ -57,6 +57,11 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
   );
   const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
   const [returnViewRange, setReturnViewRange] = useState<ReturnViewRange>('1Y');
+  const [returnDateOrder, setReturnDateOrder] = useState<'ascending' | 'descending'>('descending');
+  const returnTableRef = useRef<HTMLDivElement>(null);
+  const sortedReturns = useMemo(() => [...analysis.portfolio_returns].sort((left, right) =>
+    returnDateOrder === 'ascending' ? left.date.localeCompare(right.date) : right.date.localeCompare(left.date),
+  ), [analysis.portfolio_returns, returnDateOrder]);
   const metrics = analysis.portfolio_metrics;
   const drawdown = analysis.max_drawdown;
   const diversification = analysis.diversification;
@@ -76,6 +81,11 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
   useEffect(() => {
     if (reportV3) setSelectedPlanCurrency(reportV3.baseline.plan_currency);
   }, [reportV3?.id, reportV3?.baseline.plan_currency]);
+
+  useEffect(() => { setReturnDateOrder('descending'); }, [report.id]);
+  useEffect(() => {
+    if (returnTableRef.current) returnTableRef.current.scrollTop = 0;
+  }, [returnDateOrder, report.id]);
 
   function openAssetDetail(symbol: string) {
     replace(`reports/${report.portfolio_id}/${report.id}/assets`);
@@ -206,10 +216,14 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
           <PortfolioReturnChart points={visibleReturns} />
           <p className={styles.returnRangeSummary}>Showing {visibleReturns.length} of {analysis.portfolio_returns.length} saved observations · through {analysis.portfolio_returns[analysis.portfolio_returns.length - 1].date}</p>
         </div>}
-        <div className={`${styles.tableWrap} ${styles.returnSeriesScroll}`} tabIndex={0} aria-label="Scrollable portfolio return observations">
+        <div ref={returnTableRef} className={`${styles.tableWrap} ${styles.returnSeriesScroll}`} tabIndex={0} aria-label="Scrollable portfolio return observations">
           <table className={styles.dataTable}>
-            <thead><tr><th>Date</th><th>Portfolio return</th></tr></thead>
-            <tbody>{analysis.portfolio_returns.map(point => (
+            <thead><tr><th scope="col" aria-sort={returnDateOrder}><button type="button" className={styles.dateSortButton}
+              onClick={() => setReturnDateOrder(order => order === 'descending' ? 'ascending' : 'descending')}
+              aria-label={`Date, ${returnDateOrder === 'descending' ? 'newest' : 'oldest'} first. Sort ${returnDateOrder === 'descending' ? 'oldest' : 'newest'} first`}>
+              Date <span aria-hidden="true">{returnDateOrder === 'descending' ? '↓' : '↑'}</span><span className={styles.dateSortOrder}>{returnDateOrder === 'descending' ? 'Newest first' : 'Oldest first'}</span>
+            </button></th><th scope="col">Portfolio return</th></tr></thead>
+            <tbody>{sortedReturns.map(point => (
               <tr key={point.date}><td>{point.date}</td><td className={point.portfolio_return < 0 ? styles.signedNegative : ''}>{formatPercent(point.portfolio_return, 4)}</td></tr>
             ))}</tbody>
           </table>
