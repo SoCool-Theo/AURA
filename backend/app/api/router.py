@@ -9,6 +9,7 @@ from app.api.routes.reporting import router as reporting_router
 from app.api.routes.simulation import router as simulation_router
 from app.api.routes.watchlist import router as watchlist_router
 from app.api.routes.notifications import router as notifications_router
+from app.api.routes.market_data import router as market_data_router
 
 
 api_router = APIRouter()
@@ -21,3 +22,4 @@ api_router.include_router(reporting_router)
 api_router.include_router(simulation_router)
 api_router.include_router(watchlist_router)
 api_router.include_router(notifications_router)
+api_router.include_router(market_data_router)

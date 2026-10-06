@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 
 from ..core.instruments import MARKET_UPDATE_SYMBOLS
-from ..services.market_data_update_service import update_market_data_and_persist
+from ..services.market_data_refresh_service import run_market_data_refresh as update_market_data_and_persist
+from .market_data_lock import MarketDataRefreshBusyError
 
 
 logger = logging.getLogger(__name__)
@@ -18,8 +19,11 @@ def run_scheduled_market_data_update() -> None:
         persisted_result = update_market_data_and_persist(
             symbols=MARKET_UPDATE_SYMBOLS
         )
+    except MarketDataRefreshBusyError:
+        logger.info("Scheduled market-data update skipped: another update is active.")
+        return
     except Exception:
-        logger.exception("Scheduled market-data update failed.")
+        logger.error("Scheduled market-data update failed.")
         raise
 
     update_result = persisted_result.update_result
@@ -40,3 +44,11 @@ def run_scheduled_market_data_update() -> None:
             "Scheduled market-data update completed with provider failures: %s.",
             ", ".join(update_result.failed_symbols),
         )
+
+
+def catch_up_market_data() -> None:
+    """One refresh covers missed slots; do not replay every missed day."""
+    try:
+        update_market_data_and_persist(symbols=MARKET_UPDATE_SYMBOLS, only_if_due=True)
+    except MarketDataRefreshBusyError:
+        logger.info("Market-data catch-up skipped: another update is active.")

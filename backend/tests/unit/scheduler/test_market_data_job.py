@@ -106,3 +106,12 @@ def test_helper_failure_is_logged_and_original_exception_is_reraised_once(
     assert raised.value is failure
     update.assert_called_once_with(symbols=job_module.MARKET_UPDATE_SYMBOLS)
     assert "Scheduled market-data update failed" in caplog.text
+
+
+def test_duplicate_daily_or_catchup_jobs_skip_without_error():
+    from backend.app.scheduler.market_data_lock import MarketDataRefreshBusyError
+    with patch.object(job_module, "update_market_data_and_persist", side_effect=MarketDataRefreshBusyError()) as update:
+        job_module.run_scheduled_market_data_update()
+        job_module.catch_up_market_data()
+    assert update.call_args_list[0].kwargs == {"symbols": job_module.MARKET_UPDATE_SYMBOLS}
+    assert update.call_args_list[1].kwargs == {"symbols": job_module.MARKET_UPDATE_SYMBOLS, "only_if_due": True}

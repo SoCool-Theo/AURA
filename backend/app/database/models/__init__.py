@@ -3,6 +3,7 @@
 from .analysis import Analysis
 from .holding import Holding
 from .market_data import MarketData
+from .market_data_refresh import MarketDataRefreshState
 from .portfolio import Portfolio, PortfolioType
 from .simulation import Simulation
 from .user import User
@@ -13,6 +14,7 @@ __all__ = [
     "Analysis",
     "Holding",
     "MarketData",
+    "MarketDataRefreshState",
     "Portfolio",
     "PortfolioType",
     "Simulation",

@@ -2773,3 +2773,61 @@ remain separate follow-on work.
   Validation: 92 web/shared-client tests, TypeScript/production build, and
   whitespace checks passed. Existing bundle warning remains; browser visual
   acceptance was not run. No dependencies, migrations, commits, or pushes.
+
+### AURA Senior Project 1 report outline — 2026-10-06
+
+- Added `docs/report/AURA_Senior_Project_1_Report_Outline.md` with the supplied
+  VMES template's front matter and six-chapter structure, References, and
+  supporting appendices, using one-sentence content placeholders.
+- Reviewed the supplied AU Document Wallet and Libby-bot reports, AURA proposal,
+  current implementation records, contracts, and relevant source code to define
+  the report scope around AURA's delivered portfolio risk education workflows.
+- Included 30-day asset and portfolio forecasting in the report's implemented
+  feature scope at the user's request. The backend is implemented; the user is
+  completing its frontend, and final UI screenshots and integration evidence
+  will be incorporated when the complete report is drafted.
+- The outline separates recorded verification from pending user, device, live
+  database, and deployment acceptance, without inventing results or feedback.
+- Documentation structure and placeholder checks passed. No application code,
+  dependencies, migrations, commits, or pushes were changed by this report task.
+
+### Deployment-ready backend market-data refresh — 2026-10-06
+
+- Added tracked refresh orchestration around the existing fetch/clean/validate
+  pipeline and MarketDataService. Scheduled, startup/hourly catch-up, and the
+  persisting manual CLI share a dedicated PostgreSQL session advisory lock.
+  Bounded transient/partial retries use capped backoff; invalid data does not
+  retry. Lost locks abort before price writes without silent reconnection.
+  Explicit unlock and non-pooled connection closure protect session cleanup.
+- Automatic/default coverage ends yesterday UTC. Unexpected symbols or dates
+  are rejected. Valid partial results preserve existing observations for failed
+  symbols; prices and final run state commit together, with rollback on failure.
+  Complete daily markers survive failures/subset backfills. Missed schedules
+  recover in one refresh instead of replaying each missed day.
+- Added a separate worker-leader lease, 60-second heartbeat, immediate/hourly
+  catch-up, graceful interruption, and nonzero exit after heartbeat loss for
+  future supervisor restart. The daily default remains 02:00 UTC (09:00 Thailand).
+  Imports and FastAPI startup never launch the worker. Runtime hosting/restart
+  configuration and Windows Task Scheduler installation are not included.
+- Added MarketDataRefreshState, repository, strict status schemas/service, and
+  authenticated read-only GET /api/market-data/status. Liveness, fetch outcome,
+  and observation freshness are independent; no customer update trigger exists.
+  Status uses completed-date checks, daily crypto coverage, and the existing
+  four-day tolerance elsewhere without changing valuation/forecasting rules.
+  Runtime/API/configuration errors hide credential-bearing details.
+- Added migration d6e8f0a2b4c6 after c3d5e7f9a2b4, example settings, public
+  contract updates (31 paths / 42 operations), and the deployment worker guide.
+  Apply the migration before using status or the tracked worker/manual updater;
+  it has not been applied to the application/Supabase database.
+- Validation: 3,359 unit/non-live API tests passed; 9 environment-dependent
+  tests skipped. Six guarded PostgreSQL acceptance tests passed in temporary
+  UUID-named local schemas, validating migration DDL, real locks, transaction
+  rollback, partial preservation, heartbeat, and killed-session recovery.
+  All fixture schemas were cleaned up; existing application tables/data were
+  unchanged. Migration/model parity and whitespace checks passed. Existing
+  short-JWT-fixture warnings remain unrelated.
+- No real-provider download, production migration, worker activation, Windows
+  task, deployment, frontend change, analytics-formula change, production model training,
+  artifact regeneration, dependency, commit, or push was performed. Real-provider
+  and chosen-host acceptance remain deployment prerequisites. Unrelated report
+  outline/documentation edits in the shared workspace were preserved.

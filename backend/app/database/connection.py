@@ -8,6 +8,7 @@ from pydantic import PostgresDsn
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from ..core.config import settings
 
@@ -37,11 +38,18 @@ def _resolve_database_url(database_url: DatabaseUrl | None) -> URL:
 
 def create_database_engine(
     database_url: DatabaseUrl | None = None,
+    *,
+    isolated: bool = False,
 ) -> Engine:
     """Create a PostgreSQL engine without opening a network connection."""
+    options = {
+        "poolclass": NullPool,
+        "connect_args": {"connect_timeout": 10},
+    } if isolated else {}
     return create_engine(
         _resolve_database_url(database_url),
         pool_pre_ping=True,
+        **options,
     )
 
 
