@@ -3,6 +3,7 @@ import { ProtectedRoute } from '../auth/ProtectedRoute';
 import { useAuth } from '../auth/useAuth';
 import { useHashRoute } from '../hooks/useHashRoute';
 import { AnalyticsPage } from '../pages/analytics/AnalyticsPage';
+import { ForecastingPage } from '../pages/forecasting/ForecastingPage';
 import { AssistantPage } from '../pages/assistant/AssistantPage';
 import { LoginPage } from '../pages/auth/LoginPage';
 import { RegisterPage } from '../pages/auth/RegisterPage';
@@ -27,7 +28,7 @@ import { go } from './routes';
 
 function App() {
   const route = useHashRoute();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const isPublicAuthRoute = route.page === 'login' || route.page === 'signup';
   const isWelcomeRoute = route.page === 'welcome';
 
@@ -52,6 +53,9 @@ function App() {
     case 'portfolios': content = <PortfoliosPage />; break;
     case 'portfolio': content = <PortfolioDetailPage key={route.id} portfolioId={route.id} />; break;
     case 'analytics': content = <AnalyticsPage key={route.id} portfolioId={route.id} />; break;
+    case 'forecasting': content = !route.id || route.id === 'portfolio' || route.id === 'asset'
+      ? <ForecastingPage key={`${user?.id ?? ''}:${route.id ?? ''}:${route.reportId ?? ''}`} scope={route.id === 'asset' ? 'asset' : 'portfolio'} selection={route.reportId} />
+      : <NotFoundPage />; break;
     case 'simulations': content = route.id && route.reportId
       ? <SimulationHistoryDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} simulationId={route.reportId} />
       : <SimulationsPage key={route.id} portfolioId={route.id} />; break;

@@ -214,6 +214,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
         </div>
         <div className="detail-header-actions">
           <button className="primary-btn" onClick={() => go(`analytics/${portfolio.id}`)} disabled={busy}>Analyze Portfolio</button>
+          <button type="button" className="secondary-btn" onClick={() => go(`forecasting/portfolio/${portfolio.id}`)} disabled={busy}>View 30-Day Outlook</button>
           {latestReport && <button className="secondary-btn" onClick={() => go(`reports/${portfolio.id}/${latestReport.id}`)} disabled={busy}>View Latest Report</button>}
           <button className="secondary-btn" onClick={() => setTab('Holdings')} disabled={busy}>Edit Holdings</button>
           <div className="relative">

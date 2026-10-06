@@ -11,6 +11,7 @@ import type { PortfolioSummaryResponse } from '../../types/portfolio';
 import type { PortfolioReportResponse } from '../../types/report';
 import { analysisErrorMessage, formatReportTimestamp } from './analyticsUi';
 import styles from './AnalyticsIntegration.module.css';
+import forecastStyles from '../forecasting/Forecasting.module.css';
 import { AnalysisResults } from './components/AnalysisResults';
 
 interface AnalyticsPageProps {
@@ -134,6 +135,7 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
 
   return (
     <div className="page analytics-page">
+      <nav className={forecastStyles.analysisNav} aria-label="Analysis views"><button type="button" className={forecastStyles.active} aria-current="page">Historical Analysis</button><button type="button" onClick={() => go(selectedPortfolioId ? `forecasting/portfolio/${selectedPortfolioId}` : 'forecasting')}>30-Day Outlook</button></nav>
       <header className="analytics-header">
         <div><h1>Portfolio Analysis</h1><p>Explore historical risk and save an immutable report snapshot.</p></div>
         <div>

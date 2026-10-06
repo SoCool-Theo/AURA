@@ -2862,3 +2862,49 @@ remain separate follow-on work.
   Migration d6e8f0a2b4c6 and separately supervised worker activation are still
   runtime prerequisites; client Refresh reads saved data only. Unrelated
   docs/report files were preserved.
+
+### Academic report first draft — 2026-10-07
+
+- Created `docs/report/AURA_Senior_Project_1_Report_V1.docx`, a 41-page report
+  using the supplied university template and the user's revised chapter scope.
+- Updated the companion outline to place the overview first, combine the
+  existing-system review/comparison, shorten methodology, remove the requested
+  standalone design and feedback sections, and retain two supporting appendices.
+- Included recorded implementation and verification evidence, verified external
+  references, illustrative calculation examples, and the complete forecasting
+  selection table without inventing final-test performance or feedback results.
+- Preserved 15 labeled visual placeholders and student, advisor, committee, and
+  academic-detail placeholders. Refreshed the contents and figure/table indexes.
+- Verified all 41 rendered pages, native equations, structure, pagination, table
+  layout, and preservation of the original template geometry and opaque parts.
+- No application code, dependencies, database records, commits, or pushes changed.
+
+### Web forecasting V1 outlook preview — 2026-10-07
+
+- Added an authenticated Forecasting page under Analytics, with portfolio and
+  standalone asset views using the existing GET-only forecasting endpoints.
+  Portfolio details, dashboard Core Workflows, and Watchlist list/grid now have
+  contextual outlook links. The existing top-bar structure remains unchanged.
+- Added typed transport, scoped/cancellable/timeout-aware loading, response
+  checks, and sanitized errors. Account/selection changes suppress old estimates;
+  no saved reports, forecasts, simulations, or financial mutations are created.
+- Added themed return/volatility cards, asset nominal 80% ranges, actual model/
+  origin metadata, backend limitations, portfolio component tables, and signed
+  contribution bars. Current/planned/legacy use one screen with truthful baseline
+  labels. No client forecast calculations, monetary estimates, or risk levels.
+- The 7/14/21/30-day horizon layout is present, but only 30 days is enabled.
+  V1 supplies a single chart marker and asset range bars, not a daily trajectory
+  or a four-horizon line. Explicit multi-point chart support uses a dashed visual
+  guide for a later backend integration; no weekly estimates or portfolio ranges
+  are interpolated or fabricated. Return/volatility have separate chart views.
+- Added 13 forecasting regressions and the web integration/acceptance report at
+  docs/development/web-forecasting-v1.md. Full web/shared-client runner: 121 passed,
+  one pre-existing branding failure on unrelated report-outline wording retained
+  unchanged. TypeScript, production build, and whitespace checks passed; the
+  existing bundle-size warning remains. Browser confirmed the protected route
+  redirects to login; authenticated real-data/responsive visual acceptance is
+  pending because no signed-in session was available.
+- Mobile, backend, frozen artifacts, dependencies, migrations, model training,
+  provider downloads, commits, pushes, and deployments are unchanged. Unrelated
+  report files and concurrent report status entries were preserved. Weekly model
+  support and forecast-specific AI/persistence remain separate follow-on work.

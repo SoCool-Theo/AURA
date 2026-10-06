@@ -682,6 +682,7 @@ test('welcome is public only after session restoration and protected pages remai
   const components = {
     '../auth/ProtectedRoute': 'ProtectedRoute', './AppLayout': 'AppLayout',
     '../pages/analytics/AnalyticsPage': 'AnalyticsPage',
+    '../pages/forecasting/ForecastingPage': 'ForecastingPage',
     '../pages/assistant/AssistantPage': 'AssistantPage',
     '../pages/auth/LoginPage': 'LoginPage', '../pages/auth/RegisterPage': 'RegisterPage',
     '../pages/dashboard/DashboardPage': 'DashboardPage', '../pages/learn/LearnPage': 'LearnPage',

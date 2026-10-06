@@ -14,6 +14,7 @@ export function TopNavigation({ route }: TopNavigationProps) {
     route.page === key
     || (key === 'portfolios' && ['portfolio', 'create'].includes(route.page))
     || (key === 'reports' && route.page === 'asset')
+    || (key === 'analytics' && route.page === 'forecasting')
   );
 
   return (

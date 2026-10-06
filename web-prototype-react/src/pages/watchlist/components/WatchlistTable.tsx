@@ -1,4 +1,6 @@
 import { Icon } from '../../../components/ui/Icon';
+import { go } from '../../../app/routes';
+import forecastStyles from '../../forecasting/Forecasting.module.css';
 import { SymbolBadge } from '../../../components/ui/SymbolBadge';
 import type { WatchlistItemResponse } from '../../../types/watchlist';
 import { supportedAssets } from '../../portfolios/supportedAssetSymbols';
@@ -60,6 +62,7 @@ export function WatchlistTable({
                   </td>
                   <td><span className={asset.ytd_change_percent === null ? '' : asset.ytd_change_percent >= 0 ? 'green-text' : 'red-text'}>{formatWatchlistPercent(asset.ytd_change_percent)}</span></td>
                   <td>
+                    <button type="button" className={forecastStyles.watchlistLink} onClick={() => go(`forecasting/asset/${encodeURIComponent(asset.symbol)}`)} aria-label={`View ${asset.symbol} outlook`}>View Outlook →</button>
                     <button
                       className="watchlist-remove"
                       onClick={() => onRemove(asset.symbol)}
@@ -89,6 +92,7 @@ export function WatchlistTable({
                 <div><small>Daily Change</small><strong className={asset.daily_change_percent === null ? '' : asset.daily_change_percent >= 0 ? 'green-text' : 'red-text'}>{formatWatchlistPercent(asset.daily_change_percent)}</strong></div>
                 <div><small>YTD Change</small><strong className={asset.ytd_change_percent === null ? '' : asset.ytd_change_percent >= 0 ? 'green-text' : 'red-text'}>{formatWatchlistPercent(asset.ytd_change_percent)}</strong></div>
               </div>
+              <button type="button" className={forecastStyles.watchlistLink} onClick={() => go(`forecasting/asset/${encodeURIComponent(asset.symbol)}`)} aria-label={`View ${asset.symbol} outlook`}>View Outlook →</button>
             </article>;
           })}
         </div>
