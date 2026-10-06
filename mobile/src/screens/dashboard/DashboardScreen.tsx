@@ -1,5 +1,7 @@
 import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import React, { useMemo, useState } from 'react';
+import { MarketDataStatus } from '../../marketData/MarketDataStatus';
+import { useMarketDataRefresh } from '../../marketData/useMarketDataRefresh';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -60,6 +62,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
   const selected = portfolios.find((item) => item.id === selectedId);
   const displayName = accountDisplayName(user);
   const holdingMode = portfolio ? portfolioHoldingMode(portfolio.holdings) : 'empty';
+  const market = useMarketDataRefresh(dashboard.refreshCurrentValue, holdingMode === 'real' && portfolio?.portfolio_type === 'CURRENT');
   const marketDataUnavailable = isPortfolioMarketDataUnavailable(dashboard.valuationError);
   const analyze = () => navigation.navigate('MoreTab', { screen: 'Analytics', params: { portfolioId: selectedId } });
   const openReport = (focusRiskDrivers = false) => {
@@ -90,7 +93,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content} refreshControl={
-        <RefreshControl refreshing={dashboard.refreshing} onRefresh={() => void dashboard.refresh()} tintColor={colors.primary} />
+        <RefreshControl refreshing={dashboard.refreshing || market.refreshing} onRefresh={() => { market.refresh(); void dashboard.refresh(); }} tintColor={colors.primary} />
       }>
         <PageTitle eyebrow="AURA" title={`Welcome back, ${displayName}`} subtitle="Your portfolios and latest saved analysis." />
 
@@ -170,6 +173,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
             ) : null}
 
             {dashboard.valuationLoading ? <Text style={styles.notice}>{holdingMode === 'planned' ? 'Loading planned target allocation…' : 'Loading current portfolio value…'}</Text> : null}
+            {holdingMode === 'real' && portfolio?.portfolio_type === 'CURRENT' ? <MarketDataStatus market={market} symbols={[...portfolio.holdings.map(holding => holding.symbol), ...(dashboard.valuationCurrency === 'THB' ? ['THB=X'] : [])]} /> : null}
             {dashboard.valuationError ? (
               <InlineErrorCard
                 error={dashboard.valuationError}

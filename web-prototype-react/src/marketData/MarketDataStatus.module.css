@@ -1,0 +1,12 @@
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border-card); border-radius: 12px; background: var(--bg-card); }
+.copy { min-width: 0; display: grid; gap: 4px; }
+.copy span { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; }
+.copy i { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
+.copy small { color: var(--text-muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.success { color: var(--green-bright); }
+.warning { color: var(--amber-bright); }
+.muted { color: var(--text-secondary); }
+.refresh { flex-shrink: 0; padding: 6px 11px; min-height: 32px; border-radius: 8px; border: 1px solid var(--border-control); background: var(--control-bg); color: var(--purple-light); font-size: 11px; cursor: pointer; }
+.refresh:disabled { opacity: .6; cursor: default; }
+.refresh:focus-visible { outline: 2px solid var(--purple-primary); outline-offset: 2px; }
+@media (max-width: 480px) { .row { align-items: flex-start; } }

@@ -1,6 +1,8 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { MarketDataStatus } from '../../marketData/MarketDataStatus';
+import { useMarketDataRefresh } from '../../marketData/useMarketDataRefresh';
 import {
   Pressable,
   RefreshControl,
@@ -41,15 +43,20 @@ export function WatchlistScreen() {
   const [removingSymbol, setRemovingSymbol] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [symbolToRemove, setSymbolToRemove] = useState<string | null>(null);
+  const read = useRef<AbortController | null>(null);
+  const mutation = useRef(false);
+  const market = useMarketDataRefresh(() => { if (!mutation.current) setReloadKey(value => value + 1); });
 
   useFocusEffect(useCallback(() => {
     const controller = new AbortController();
+    read.current = controller;
     setLoading(true);
+    setRefreshing(true);
     setLoadError(null);
     void watchlistApi.list({ signal: controller.signal })
-      .then((response) => setItems(response.items))
+      .then((response) => { if (!controller.signal.aborted) setItems(response.items); })
       .catch((error) => { if (!controller.signal.aborted) setLoadError(error); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      .finally(() => { if (!controller.signal.aborted) { setLoading(false); setRefreshing(false); } });
     return () => controller.abort();
   }, [reloadKey]));
 
@@ -64,20 +71,13 @@ export function WatchlistScreen() {
   }, [items, query]);
 
   async function refresh() {
-    setRefreshing(true);
-    setLoadError(null);
-    try {
-      const response = await watchlistApi.list();
-      setItems(response.items);
-    } catch (error) {
-      setLoadError(error);
-    } finally {
-      setRefreshing(false);
-    }
+    market.refresh();
   }
 
   async function add(symbol: string) {
-    if (addingSymbol) return;
+    if (mutation.current) return;
+    mutation.current = true;
+    read.current?.abort();
     setAddingSymbol(symbol);
     setActionError(null);
     try {
@@ -88,12 +88,16 @@ export function WatchlistScreen() {
     } catch (error) {
       setActionError(watchlistErrorMessage(error, 'add'));
     } finally {
+      mutation.current = false;
+      setReloadKey(value => value + 1);
       setAddingSymbol(null);
     }
   }
 
   async function remove(symbol: string) {
-    if (removingSymbol) return;
+    if (mutation.current) return;
+    mutation.current = true;
+    read.current?.abort();
     setRemovingSymbol(symbol);
     setActionError(null);
     try {
@@ -103,6 +107,8 @@ export function WatchlistScreen() {
     } catch (error) {
       setActionError(watchlistErrorMessage(error, 'remove'));
     } finally {
+      mutation.current = false;
+      setReloadKey(value => value + 1);
       setRemovingSymbol(null);
     }
   }
@@ -149,6 +155,7 @@ export function WatchlistScreen() {
           )}
         />
 
+        <MarketDataStatus market={market} symbols={items.map(item => item.symbol)} />
         {actionError ? <View accessibilityRole="alert"><Card style={styles.actionError}><Text style={styles.actionErrorText}>{actionError}</Text></Card></View> : null}
         {loadError && items.length ? (
           <InlineErrorCard

@@ -2831,3 +2831,34 @@ remain separate follow-on work.
   artifact regeneration, dependency, commit, or push was performed. Real-provider
   and chosen-host acceptance remain deployment prerequisites. Unrelated report
   outline/documentation edits in the shared workspace were preserved.
+
+### Web/mobile daily market-data integration — 2026-10-06
+
+- Added matching typed GET-only marketDataApi adapters, foreground refresh hooks,
+  scoped freshness presentation, and compact themed MarketDataStatus components
+  in both clients. Watchlist and current-portfolio dashboard/detail screens show
+  saved daily price freshness, last-check time, worker connectivity, and partial/
+  failed update warnings. Only displayed instruments affect the freshness label;
+  THB valuation includes the internal FX observation. A persisted running flag
+  is not presented as proof of an active provider download.
+- Existing page loaders read prices on entry. Return-to-foreground and five-minute
+  active polling reload persisted Watchlist/current values. Web has a compact
+  Refresh button; mobile keeps/adds pull-to-refresh. Polling stops in hidden tabs,
+  background apps, or blurred mobile screens. Status reads abort/timeout and guard
+  late account/unmounted responses; status failure does not block price APIs.
+- Watchlist refreshes preserve rows after failed reads and abort pre-mutation
+  reads so they cannot restore deleted assets. Current-value refresh remains
+  independent from saved analysis; planned allocations and immutable report/
+  simulation history are unchanged. No client financial calculations were added.
+- Added shared market-data tests to the web authority runner and updated the
+  market-data contract/integration backlog. Validation: 17 new shared regressions,
+  91 existing web/shared regressions, and 69 mobile regressions passed (177 total).
+  One pre-existing branding regression fails on the unrelated report-outline entry
+  in this file, preserved unchanged. Both TypeScript checks, web production build,
+  and whitespace checks passed; the existing bundle-size warning remains.
+- Browser/device and authenticated runtime acceptance remain pending. No backend
+  code, migration application, worker activation, deployment, Windows task,
+  provider download, forecasting artifact, dependency, commit, or push was added.
+  Migration d6e8f0a2b4c6 and separately supervised worker activation are still
+  runtime prerequisites; client Refresh reads saved data only. Unrelated
+  docs/report files were preserved.

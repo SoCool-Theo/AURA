@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { MarketDataStatus } from '../../marketData/MarketDataStatus';
+import { useMarketDataRefresh } from '../../marketData/useMarketDataRefresh';
 import {
   getPlannedPortfolioAllocation,
   getPortfolio,
@@ -55,6 +57,7 @@ export function DashboardPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [reportReloadKey, setReportReloadKey] = useState(0);
   const [contextReloadKey, setContextReloadKey] = useState(0);
+  const market = useMarketDataRefresh(() => setContextReloadKey(value => value + 1), portfolio?.id === selectedId && portfolio?.portfolio_type === 'CURRENT' && Boolean(portfolio.holdings.length));
 
   useEffect(() => {
     const controller = new AbortController(); setListLoading(true); setListError(null); setPortfolios([]); setSelectedId('');
@@ -89,9 +92,9 @@ export function DashboardPage() {
     setContextLoading(true);
     const request = portfolio.portfolio_type === 'PLANNED'
       ? getPlannedPortfolioAllocation(portfolio.id, { signal: controller.signal })
-        .then(setPlannedAllocation)
+        .then(value => { if (!controller.signal.aborted) setPlannedAllocation(value); })
       : getPortfolioValuation(portfolio.id, valuationCurrency, { signal: controller.signal })
-        .then(setValuation);
+        .then(value => { if (!controller.signal.aborted) setValuation(value); });
 
     void request
       .catch(error => {
@@ -137,6 +140,7 @@ export function DashboardPage() {
           </div>
         )}
       </div>
+      {portfolio.portfolio_type === 'CURRENT' && portfolio.holdings.length > 0 && <MarketDataStatus market={market} symbols={[...portfolio.holdings.map(holding => holding.symbol), ...(valuationCurrency === 'THB' ? ['THB=X'] : [])]} busy={contextLoading} />}
       {Boolean(contextError) && <InlineErrorCard
         error={contextError}
         fallbackMessage={portfolio.portfolio_type === 'PLANNED' ? 'Unable to load the planned target allocation.' : 'Unable to load the current portfolio value.'}

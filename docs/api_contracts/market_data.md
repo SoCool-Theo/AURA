@@ -103,4 +103,25 @@ Market observation dates are not the timestamps when Aura downloaded data.
 
 Missing authentication returns `401`; status retrieval failures return safe
 `503`. There is no customer POST/refresh endpoint and no application-startup
-scheduler. Web/mobile presentation is a subsequent task.
+scheduler.
+
+## Web and mobile integration
+
+Both clients read status on Watchlist and current-portfolio dashboard/detail
+screens. Freshness labels use only the displayed symbols (including internal
+USD/THB when THB valuation is selected), not the entire market universe.
+Worker connectivity and partial/failed attempts remain separate from price
+freshness. A persisted running flag is not described as proof of an active update.
+
+Existing loaders read prices on entry; foreground return and five-minute active
+polling reload persisted Watchlist/current valuation data. Web offers a compact
+Refresh button, while mobile uses pull-to-refresh. Hidden browser tabs,
+background apps, and blurred mobile screens do not poll. Status reads have a
+20-second timeout, abort on inactivity/cleanup, and ignore late account responses.
+Status failures show an unavailable label without blocking existing price APIs.
+These are GET reads, never provider downloads or automatic report creation.
+Planned allocations, saved reports, and saved simulations are not revalued.
+
+Apply the migration before using status. Automatic provider updates still
+require separately starting/supervising the backend worker; client refresh
+alone does not make the updater run.

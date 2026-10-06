@@ -32,6 +32,7 @@ export function useDashboard() {
   const [historyRefreshing, setHistoryRefreshing] = useState(false);
   const focused = useIsFocused();
   const [revision, setRevision] = useState(0);
+  const [marketRevision, setMarketRevision] = useState(0);
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioError, setPortfolioError] = useState<unknown>(null);
@@ -148,7 +149,7 @@ export function useDashboard() {
       if (current) setValuationLoading(false);
     });
     return () => { current = false; };
-  }, [focused, getPlannedAllocation, getPortfolioValuation, revision, selectedPortfolio, valuationCurrency]);
+  }, [focused, getPlannedAllocation, getPortfolioValuation, revision, marketRevision, selectedPortfolio, valuationCurrency]);
 
   // ReportProvider already orders by created_at descending with deterministic ties.
   const newest = history?.portfolioId === selectedId ? history.reports[0] : undefined;
@@ -211,6 +212,7 @@ export function useDashboard() {
     newest,
     refreshing,
     refresh,
-    retryDetails: () => setRevision((value) => value + 1)
+    retryDetails: () => setRevision((value) => value + 1),
+    refreshCurrentValue: () => setMarketRevision(value => value + 1)
   };
 }

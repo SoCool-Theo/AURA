@@ -1,10 +1,13 @@
 import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import React, { useCallback, useRef, useState } from 'react';
+import { MarketDataStatus } from '../../marketData/MarketDataStatus';
+import { useMarketDataRefresh } from '../../marketData/useMarketDataRefresh';
 import {
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -142,6 +145,7 @@ export function PortfolioDetailScreen({
       setLoadStatus('error');
     }
   }, [currency, getPlannedPreview, getPortfolio, getPortfolioValuation, portfolioId, selectPortfolio]);
+  const market = useMarketDataRefresh(() => { if (!actionPendingRef.current) void loadPortfolio(); }, portfolio?.id === portfolioId && portfolio?.portfolio_type === 'CURRENT' && Boolean(portfolio.holdings.length));
 
   useFocusEffect(useCallback(() => {
     void loadPortfolio();
@@ -246,7 +250,7 @@ export function PortfolioDetailScreen({
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={portfolio.portfolio_type === 'CURRENT' && portfolio.holdings.length > 0 ? <RefreshControl refreshing={market.refreshing || valuationStatus === 'loading'} onRefresh={market.refresh} tintColor={colors.primary} /> : undefined}>
         <PageTitle
           eyebrow={portfolio.portfolio_type === 'PLANNED'
             ? 'PLANNED · HYPOTHETICAL'
@@ -341,6 +345,7 @@ export function PortfolioDetailScreen({
                 })}
               </View>
             </View>
+            <MarketDataStatus market={market} symbols={[...portfolio.holdings.map(holding => holding.symbol), ...(currency === 'THB' ? ['THB=X'] : [])]} />
             {valuationStatus === 'loading' ? (
               <Card><Text style={styles.stateText}>Loading current portfolio value…</Text></Card>
             ) : valuationStatus === 'error' ? (

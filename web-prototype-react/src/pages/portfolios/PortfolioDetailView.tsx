@@ -1,5 +1,7 @@
 import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import { useEffect, useState } from 'react';
+import { MarketDataStatus } from '../../marketData/MarketDataStatus';
+import { useMarketDataRefresh } from '../../marketData/useMarketDataRefresh';
 import {
   deletePortfolio,
   duplicatePortfolio,
@@ -61,6 +63,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   const [dialogAction, setDialogAction] = useState<PortfolioAction | null>(null);
   const [dialogName, setDialogName] = useState('');
   const [tab, setTab] = useState<DetailTab>('Overview');
+  const market = useMarketDataRefresh(() => { if (!busy) setContextReloadKey(value => value + 1); }, portfolio?.id === portfolioId && portfolio?.portfolio_type === 'CURRENT' && Boolean(portfolio.holdings.length));
 
   useEffect(() => {
     if (!portfolioId) {
@@ -111,9 +114,9 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
     setContextLoading(true);
     const request = portfolio.portfolio_type === 'PLANNED'
       ? getPlannedPortfolioPreview(portfolio.id, { signal: controller.signal })
-        .then(setPlannedPreview)
+        .then(value => { if (!controller.signal.aborted) setPlannedPreview(value); })
       : getPortfolioValuation(portfolio.id, valuationCurrency, { signal: controller.signal })
-        .then(setValuation);
+        .then(value => { if (!controller.signal.aborted) setValuation(value); });
 
     void request
       .catch(error => {
@@ -233,6 +236,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
       </nav>
 
       {tab === 'Overview' && <div className="detail-tab-panel">
+        {portfolio.portfolio_type === 'CURRENT' && portfolio.holdings.length > 0 && <MarketDataStatus market={market} symbols={[...portfolio.holdings.map(holding => holding.symbol), ...(valuationCurrency === 'THB' ? ['THB=X'] : [])]} busy={busy || contextLoading} />}
         {portfolio.portfolio_type === 'CURRENT' && portfolio.holdings.length > 0 && (
           <div className={styles.valuationToolbar}>
             <div><strong>Current value currency</strong><span>Choose how current values are displayed.</span></div>
