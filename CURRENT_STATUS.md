@@ -2934,3 +2934,31 @@ remain separate follow-on work.
 - Backend, frozen artifacts, models, migrations, web production code, dependencies,
   provider data, commits, pushes and deployments remain unchanged. Concurrent
   report content was preserved. Weekly model support remains follow-on work.
+
+### Multi-horizon forecasting offline selection foundation — 2026-10-07
+
+- Added isolated, horizon-aware 7/14/21-day label construction and feature joins,
+  reusing V1 feature/model families through an explicit private candidate bridge.
+  Returns and non-annualized volatility use actual horizon observations, not
+  scaled 30-day estimates. Calendar endpoints retain the four-day slippage cap.
+- Added a manual selection-only evaluator with explicit local snapshot/URL-key
+  selection, required fingerprint/row-count verification, read-only database
+  transactions, safe errors, strict correctly labeled JSON and new-output guards.
+  Database resources close before estimator fitting. Evidence cannot overwrite
+  frozen V1 files or be treated as deployable weekly artifacts.
+- Selection preserves V1 policy and chronological training purges, adding an
+  isolated scoring-endpoint boundary so labels do not cross into later folds or
+  reserved calibration/final-test periods. Missing fold/model availability is
+  reported, not silently replaced. The original V1 evaluation is unchanged.
+- Added synthetic/mocked regressions and a manual rollout guide at
+  docs/development/multi-horizon-forecasting.md. Tests, builds and all real-data
+  evaluation/training were deliberately not run, per the user's manual-terminal
+  instruction. Verification and selection results await the user's commands.
+- This is the first rollout checkpoint only. Selection freeze, separate horizon
+  calibration/final testing/artifact training, runtime APIs, portfolio composition
+  and client horizon activation remain pending. Weekly controls stay disabled.
+- Frozen 30-day artifacts, original forecasting source/tests/APIs, database data,
+  provider data, frontend code, dependencies, architecture files, commits and
+  pushes remain unchanged. Unrelated report work is preserved. The recorded
+  frozen snapshot is reusable for comparisons, not a new untouched project-level
+  final holdout; fresh-period acceptance must be distinguished from that reuse.
