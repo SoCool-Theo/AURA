@@ -3278,3 +3278,14 @@ remain separate follow-on work.
   AI grounding, dependency, architecture, staging, commit or push changes.
   Unrelated untracked docs/report content is preserved and excluded from Git
   staging guidance.
+
+### Compact web forecast graphs — 2026-10-08
+
+- Capped the shared forecast SVG at 1,100px and centered it, preventing its
+  proportional height, labels and markers from becoming oversized on wide
+  screens. Selected-horizon and comparison charts share this styling; their
+  existing aspect ratio and narrow-screen scrolling remain unchanged.
+- Added a scoped sizing regression. Forecast values, axes, ranges, models,
+  APIs, mobile and unrelated report files are unchanged. Whitespace checks
+  passed; tests/build and signed-in visual acceptance remain for the user's
+  manual verification. No staging, commit or push was performed.

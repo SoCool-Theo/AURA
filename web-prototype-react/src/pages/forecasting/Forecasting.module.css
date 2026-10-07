@@ -52,7 +52,7 @@
 .sectionHeading p { color: var(--text-muted); font-size: 11px; line-height: 1.6; margin: 6px 0 0; }
 .figure { margin: 0; }
 .chartScroll, .tableScroll { overflow: auto; border: 1px solid var(--border-divider); border-radius: 10px; }
-.chart { display: block; width: 100%; min-width: 530px; }
+.chart { display: block; width: 100%; max-width: 1100px; min-width: 530px; height: auto; margin-inline: auto; }
 .chart text { fill: var(--text-muted); font-size: 11px; }
 .grid { stroke: var(--border-divider); stroke-width: 1; }
 .zero { stroke: var(--text-muted); stroke-dasharray: 4 5; opacity: .5; }

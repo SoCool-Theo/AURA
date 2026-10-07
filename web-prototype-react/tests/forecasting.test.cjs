@@ -148,6 +148,17 @@ test('unauthenticated/empty selections never request a forecast', async () => {
   c.select('portfolio', ''); await c.h.settle(); assert.equal(c.h.value.loading, false); assert.equal(c.calls.length, count);
   c.account(null); c.select('asset', 'AAPL'); await c.h.settle(); assert.equal(c.calls.length, count); assert.equal(c.h.value.result, null); c.h.unmount();
 });
+test('forecast chart stays compact on wide screens without distorting axes or changing narrow-screen scrolling', () => {
+  const stylesheet = fs.readFileSync(path.join(root, 'src/pages/forecasting/Forecasting.module.css'), 'utf8');
+  const chart = stylesheet.match(/\.chart\s*\{([^}]+)\}/)[1];
+  assert.match(chart, /width:\s*100%/);
+  assert.match(chart, /max-width:\s*1100px/);
+  assert.match(chart, /min-width:\s*530px/);
+  assert.match(chart, /height:\s*auto/);
+  assert.match(chart, /margin-inline:\s*auto/);
+  assert.match(stylesheet, /\.chartScroll,\s*\.tableScroll\s*\{[^}]*overflow:\s*auto/);
+});
+
 test('chart has labeled axes, a single actual point, asset range bars and no invented V1 line', () => {
   const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
   const { OutlookChart } = load('src/pages/forecasting/components/OutlookChart.tsx', { '../forecastingUi': ui, '../Forecasting.module.css': css }, { React: react });
