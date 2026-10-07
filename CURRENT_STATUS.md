@@ -3023,3 +3023,227 @@ remain separate follow-on work.
 - Original 30-day source/package, runtime APIs, clients, environment files,
   databases and dependencies remain unchanged. Weekly controls stay disabled.
   Unrelated report work was preserved; no commit, push or deployment occurred.
+
+### Verified weekly freeze and prepared manual calibration — 2026-10-07
+
+- The user ran the targeted forecasting/schema/API suite: 627 passed. The
+  weekly freezer completed 102 selections and retained the QQQ 21-day volatility
+  convergence warning. Read-only inspection verified original-data provenance,
+  unchanged source evidence and canonical manifest SHA-256:
+  `829b5f9616643c3969cbd1cf220ce25b113d1b494b88c0693e376d5c43292a5c`.
+- Added isolated weekly calibration orchestration and a manual command. The
+  pinned manifest is reconciled against its original source report before DB
+  access; the explicit local training snapshot is verified in a read-only
+  transaction and closed before selected-candidate fitting.
+- Calibration removes final-test prices before feature/label construction,
+  purges training/scored endpoints at both calibration boundaries and requires
+  756 training origins plus 60 residual observations. It reuses actual-minus-
+  prediction q10/q90 calculations and volatility clipping, without rescaling
+  30-day ranges, changing winners, fallback, or creating portfolio intervals.
+- Separate, checksum-bound calibration evidence records all 102 target/horizon
+  identities, source/provenance, quantiles, metrics, counts and boundaries.
+  Selection warnings and new fit warnings remain distinct. Existing output,
+  frozen V1 evidence and model-artifact folders are protected from writes.
+- Added synthetic/mocked regressions and updated the manual guide. The 627-pass
+  result predates these additions; new tests and calibration execution await the
+  user's commands. No agent-run calibration, final test, deployment fitting,
+  database operation or provider request occurred in this checkpoint.
+- Original V1 source/models, APIs, clients, dependencies and environment files
+  remain unchanged. Final testing, artifacts, runtime support and weekly client
+  activation remain pending. No commit or push; unrelated report work preserved.
+
+### Report Version 3 comments and scope — 2026-10-07
+
+- Created `docs/report/AURA_Senior_Project_1_Report_V3.docx` from the six saved
+  Version 2 comments, preserving the commented source document unchanged.
+- Revised forecasting wording to explain its practical value, expanded the
+  LEGACY definition with an allocation example, explained FR identifiers, and
+  distinguished the 90-day historical averaging window from forecast horizons.
+- Included the 7/14/21-day extension in methodology and scope while retaining
+  the established 30-day results and separate verification boundaries. No
+  weekly predictive-performance or authenticated-runtime results were invented.
+- Added the user-confirmed admin scope: Dashboard, Users, Market Data, AI
+  Monitoring, System Health, and Audit Log. Requirements, diagrams, UI, audit
+  design, and acceptance placeholders reflect these modules. Forecasting
+  Monitoring and analysis/simulation dashboard statistics remain recommendations.
+- Updated the companion outline. Kept two appendices, 15 visual placeholders,
+  editable equations, and student, advisor, and committee-name fields.
+- Refreshed Word indexes and checked all 41 final rendered pages. Structure,
+  comments, source preservation, template geometry and opaque parts, field
+  references, tables, page breaks, and text bounds passed document verification.
+- No application code, dependencies, database data, commits, or pushes changed
+  in this report task; concurrent forecasting development was preserved.
+
+### Verified weekly calibration and prepared guarded final test — 2026-10-07
+
+- The user ran 661 targeted forecasting/schema/API tests and calibrated all
+  102 frozen weekly selections. Read-only review verified provenance, selection
+  matches, finite ordered ranges, endpoint boundaries and the canonical checksum:
+  `0f42993972269884b160ff9983555abad865ddd07483c574205b37f15a9a2ab1`.
+  Minimum residual count is 113; minimum training count is 2,413. One selection
+  warning remains; no new calibration fit warnings were recorded.
+- Added an isolated strict calibration reader and final-fold scoring workflow.
+  Manifest/source and calibration hashes/contracts are pinned before DB access;
+  the original snapshot is read-only and verified, then closed before fitting
+  the frozen candidates on labels completed before the test fold starts.
+- Final scoring preserves the existing winners and q10/q90, records errors,
+  direction accuracy, clipping, inclusive empirical coverage, widths and date
+  boundaries. Empty clipped volatility intervals are flagged and count as
+  misses, without widening ranges or hiding finite poor performance.
+- Added fixed, exclusive, ignored one-run start/completion markers per weekly
+  release. Once scoring starts, failures remain consumed and changing report
+  filenames cannot retry the final test. Bad pre-run inputs/provenance do not
+  consume it. No automatic reset or force option is provided.
+- Added synthetic/mocked regressions and updated the manual guide. The 661-pass
+  result predates these additions; new tests and final evaluation await user
+  commands. No final scoring, model fitting, DB/provider operation or run-marker
+  creation was performed by the agent in this implementation checkpoint.
+- No original 30-day source/models, APIs, clients, dependencies or environment
+  files changed. Deployment-artifact fitting, acceptance review, runtime support
+  and weekly UI activation remain pending. No commit or push; unrelated report
+  content and concurrent status work preserved.
+
+### Report visuals and source links — 2026-10-07
+
+- Updated the existing V3 Word report in `docs/report/` in place. Added all
+  15 numbered figures with 31 panels: project diagrams, authenticated web
+  screenshots, and a graph of the recorded 30-day selection-fold MAE values.
+- Added 13 underlined Source links. Ten point to verified external sources;
+  three point to actual local project files. Student, advisor, and committee
+  names remain placeholders. Admin visuals are labelled as design evidence,
+  and final admin access verification remains pending.
+- With user authorization, created `Report Example Current` (five AAPL shares
+  and twenty BND shares) and `Report Example Planned` (USD 1,500 SPY and
+  USD 1,000 BND). Saved one historical analysis and one Combined Simulation
+  for the Current example, and captured real asset/portfolio 30-day outlooks
+  and an actual grounded AI explanation. These examples remain in the account.
+- Recorded the completed local web demonstration in the report. Weekly
+  controls remain disabled in the captured runtime. No weekly performance
+  results, admin statistics, or device-acceptance claims were invented.
+- Refreshed Word indexes and reviewed all 62 rendered pages, including the
+  changed pages after corrections. Verified image sources, 13 hyperlink
+  targets, equations, table structure, name fields, template geometry and
+  preserved parts. Updated the companion outline and retained visual sources
+  and capture notes under `docs/report/assets/`.
+- No application code, dependencies, forecasting artifacts, architecture,
+  commits, or pushes changed. Concurrent forecasting work was preserved.
+
+### Reviewed weekly final test and prepared experimental artifact training — 2026-10-07
+
+- The user ran 721 targeted forecasting/schema/API tests and completed all
+  102 weekly final-test selections once. Read-only review independently verified
+  canonical SHA-256 `e2aeb387fa10376f2f925d74138f194c4ce102494a64bafb0e6703fbc22d7193`,
+  original provenance, frozen ranges/identities and recorded date/count boundaries.
+  Minimum final observation/training counts are 237/2,597. No new fit warnings
+  or empty intervals; the original QQQ selection warning remains preserved.
+- Pooled return coverage is 79.03%/70.15%/72.33% at 7/14/21 days, and volatility
+  coverage is 77.30%/77.95%/81.73%. Return direction accuracy is about 51%.
+  Individual quality can be weak (BTC-USD 14-day volatility coverage 15.38%; SLV
+  21-day return coverage 29.96%). This is not predictive-quality approval or a
+  new untouched project-level holdout. Final evidence and guard markers stay frozen.
+- Added a separate manual weekly artifact-training workflow requiring explicit
+  experimental-quality acknowledgement, pinned selection/calibration/final
+  evidence and matching completed final-run markers before DB access. Original
+  snapshot provenance is verified read-only; DB resources close before fitting.
+- Frozen candidates/parameters fit actual 7/14/21-day completed labels through
+  the approved cutoff, using the unchanged fitter privately. Actual-horizon
+  serialized wrappers, per-record quality/warnings/ranges, source/revision/library
+  provenance, reload checks and hashes form a new-only 102-model weekly package.
+  A completion manifest is written last; partial output cannot overwrite or
+  automatically retry. No final scoring, recalibration, reselection or activation.
+- Added synthetic/mocked regressions and updated the manual rollout guide.
+  The 721-pass result predates these additions; new tests and actual deployment
+  fitting await the user's commands. No agent-run tests, DB/provider operations,
+  model fitting, artifact creation, commits or pushes occurred in this checkpoint.
+- Original 30-day V1 source/package, APIs, portfolio composition, web/mobile,
+  dependencies, environment files and architecture remain unchanged. Weekly
+  runtime validation and client activation remain pending. Unrelated report
+  files/status were preserved; generated evidence/artifacts remain ignored.
+
+### Report V3 formatting and exhibition feedback — 2026-10-07
+
+- Updated the existing V3 document in place. Applied grayscale formatting to
+  30 visual panels and kept Figure 5.7 in its original colors, following the
+  new reviewer comment. Removed 15 figure source notes and placed all ten
+  numbered table captions below their tables.
+- Added 46 clickable citation numbers, including bibliography numbers, with
+  targets matching the existing 13 Source links. References 1–10 use external
+  source pages; references 11–13 use actual local project source files.
+- Added Section 5.6 Student and Exhibition Feedback from the team's reported
+  positive verbal comments. The section clearly identifies the feedback as
+  informal. No survey, ratings, participant counts, or quotations were invented.
+  Figure 5.8 remains a photograph placeholder. Renumbered Achievements and
+  Limitations to 5.7 and refreshed the contents and figure/table indexes.
+- Updated the companion outline and visual evidence notes. Verified source
+  targets, table-caption order, picture effects, equations, template parts,
+  and name placeholders. Reviewed all 62 rendered pages; after the final
+  photograph-caption alignment adjustment, reviewed its page again and
+  confirmed the other 61 page images were unchanged.
+- No application code, architecture, dependencies, model artifacts, commits,
+  or pushes changed. Concurrent forecasting work was preserved.
+
+### Weekly artifact test checksum false-positive correction — 2026-10-07
+
+- The user-run targeted suite reported 791 passed and one failure. The bundle
+  test's blanket JSON substring check matched `30d` inside a valid model SHA-256,
+  not an incorrect horizon or target declaration. No training output was supplied.
+- Replaced that check with exact artifact schema, target/version, calendar-horizon
+  and nested selection/calibration/final identity assertions. Added a deterministic
+  synthetic checksum containing `30d` to retain regression coverage of this case.
+- Only the test and this status entry changed. Training code, models, frozen
+  evidence, APIs and clients remain unchanged. New verification awaits the user's
+  manual test rerun; no agent-run test, training, DB access, commit or push occurred.
+
+### Report V3 future work and limitation revision — 2026-10-07
+
+- Edited the user's latest manually revised V3 document in place and applied
+  reviewer comment 55. Updated Section 5.7 and Sections 6.2–6.5 to remove weekly
+  runtime, admin access, and deployment from the concluding limitations and
+  future-work priorities, without asserting that pending work was completed.
+- Future Work now discusses custom stress testing, transaction-aware analysis,
+  forecasting-model improvements, portfolio prediction intervals, and evaluation
+  of user learning and AI explanation quality. Retained simple academic wording
+  and updated the related outline placeholders.
+- Preserved 325 other non-index paragraphs, all tables, pictures, equations,
+  section geometry, external hyperlinks, styles, headers, and other package
+  parts from the user's saved version. Refreshed only the Word index blocks
+  through a working copy and kept the original navigation bookmarks.
+- Verified the 62-page final render. Inspected all six changed page images;
+  the other 56 images matched the previously inspected report exactly. The
+  user's removals and formatting edits were preserved. A backup of the latest
+  user-edited document and internal QA files are retained outside the report folder.
+- No application code, models, architecture, dependencies, commits, or pushes
+  changed. Concurrent forecasting work was preserved.
+
+### Experimental weekly backend runtime preparation — 2026-10-07
+
+- Reviewed the user-trained `forecast-weekly-v1-20260917` bundle read-only:
+  102 models, all 204 model/metadata checksums, five evidence checksums and
+  original 69,928-row snapshot bindings match. The approved root canonical hash
+  is `5b604af0c7e965cfcebdc0ae38a9570b64464ffc2c8d8adee230a19b2aaf95fe`.
+  Zero deployment-fit warnings, 48 below-nominal final-coverage warning records
+  and the QQQ 21-day volatility selection convergence warning remain retained.
+- Added a separately pinned weekly registry, strict JSON/path/identity gates,
+  complete 102-pair validation before joblib loading and selected-byte rechecks.
+  Only trusted immutable local deployment artifacts are accepted; request inputs
+  cannot choose another package, path, checksum or model. Build evidence and
+  experimental/not-predictive-quality-approved flags remain unchanged.
+- Added current persisted-data weekly inference and portfolio composition for
+  actual 7/14/21-calendar-day targets. Reused V1 features, observation-indexed
+  ARIMA alignment, four-day freshness, authoritative CURRENT/PLANNED/LEGACY
+  weights, common-date correlations and existing D R D/Euler risk formulas.
+  Mixed horizons/provenance or any missing component fail the complete outlook;
+  no scaled 30-day output, fallback, provider request, fitting or write occurs.
+- Registered two additive authenticated `/horizons/{horizon_days}/outlook`
+  asset/owner-scoped portfolio routes and neutral-field response schemas/mappers.
+  Public responses retain per-target warnings and educational experimental
+  caveats; no private residual/evidence metric, daily path or portfolio interval
+  is exposed. Original 30-day source files, endpoints and packages are unchanged.
+- Added synthetic/mocked registry, inference/composition/schema and API tests;
+  extended the existing OpenAPI inventory assertion for the additive paths.
+  Updated the public contract and manual rollout guide. New tests, the runtime
+  integrity command and fresh-data authenticated smoke checks await the user.
+  No updated passing test count or verified live runtime is claimed.
+- No migrations, dependencies, training/evaluation reruns, environment changes,
+  frontend activation, AI grounding, staging, commits or pushes were performed.
+  Concurrent report work and pre-existing status edits were preserved.
