@@ -2,21 +2,25 @@
 
 Date: 2026-10-07
 
-## Current checkpoint: reviewed selection and manual freeze
+## Current checkpoint: reviewed final test and prepared experimental training
 
 The new offline workflow constructs true 7-, 14-, and 21-calendar-day return
 and non-annualized realized-volatility labels. It reuses V1 features, baseline/
 model families, chronological folds, minimum training history and selection
 policy. The original 30-day target builder, deployment workflow, inference,
 APIs, frozen `forecast-v1-20260917` package and customer clients are unchanged.
-Weekly buttons remain disabled. This checkpoint does not claim trained weekly
-artifacts, calibrated ranges, final-test performance or runtime readiness.
+Weekly buttons remain disabled. Selection, calibration and final testing are
+completed and reviewed. A separate experimental deployment-training command is
+prepared, but no weekly deployment artifacts or runtime readiness are claimed.
 
 Training/evaluation, tests and builds are user-run only for this task. The user
 completed the selection run on the verified original snapshot; Codex reviewed
 the local JSON without rerunning evaluation or accessing the database/provider.
-The new freezer and regression tests are prepared. Their execution, including
-creation of the frozen manifest, awaits the user's terminal commands.
+The user ran 627 targeted tests successfully and created the frozen manifest.
+Its canonical checksum and provenance were verified read-only. The user then ran
+661 targeted tests and completed all 102 calibrations, followed by 721 passing
+tests and the one-run final evaluation. The new artifact-training regressions
+and real deployment fitting remain user-run and pending.
 
 ## Files and responsibilities
 
@@ -39,6 +43,32 @@ creation of the frozen manifest, awaits the user's terminal commands.
 - `backend/tests/unit/forecasting/test_horizon_selection_manifest.py`: synthetic
   report/manifest validation, policy and warning consistency, checksum changes,
   full coverage, strict JSON, source preservation and protected-output checks.
+- `backend/app/forecasting/horizon_calibration.py`: calibration-only horizon
+  orchestration, reused empirical residual quantiles, strict endpoint purges and
+  final-period exclusion before feature/label construction.
+- `backend/scripts/calibrate_forecasting_horizons.py`: pinned manifest/source
+  reconciliation before DB access, read-only original-snapshot verification,
+  selected-candidate calibration and new-file evidence output only.
+- `backend/tests/unit/forecasting/test_horizon_calibration.py`: synthetic/mocked
+  residual calculations, clipping, boundary isolation, frozen identity, warning
+  retention, no fallback, cache reuse, source binding and database/output guards.
+- `backend/app/forecasting/horizon_final_test.py`: strict pinned calibration
+  reader, frozen-candidate final-fold scoring, inclusive empirical asset interval
+  coverage, explicit empty-interval misses and checksum-bound evidence.
+- `backend/scripts/evaluate_forecasting_horizon_final_test.py`: manual, pinned
+  selection/calibration/provenance gates, one-run markers and final scoring only.
+- `backend/tests/unit/forecasting/test_horizon_final_test.py`: synthetic coverage,
+  frozen ranges, clipping, boundary isolation, bad evidence, poor finite results,
+  source preservation, database lifecycle and consumed-run/retry protection.
+- `backend/app/forecasting/horizon_artifacts.py`: pinned final-evidence validation,
+  actual-horizon serialized wrappers, frozen-candidate deployment fitting and
+  new-only experimental packages with reload checks, hashes and quality evidence.
+- `backend/scripts/train_forecasting_horizons.py`: explicit experimental-quality
+  acknowledgement, existing final-run completion checks, verified read-only
+  snapshot access, revision/source-byte recording and fixed weekly output only.
+- `backend/tests/unit/forecasting/test_horizon_artifacts.py`: synthetic/mocked
+  evidence gates, true-horizon completed labels, frozen families/parameters,
+  wrapper identity, 102-model packaging, partial/reload failures and DB/CLI guards.
 - `CURRENT_STATUS.md` and this guide: checkpoint and manual next steps.
 
 No dependency, architecture-file move, migration, server task, commit or push
@@ -76,9 +106,9 @@ reported explicitly; the command does not fabricate a winner or deploy fallback.
 ## Manual commands
 
 Run from the repository root in PowerShell. Every command is a single line.
-Run tests first; stop and share any failure before freezing. The selection command
-below is retained for provenance/reference: the approved run already completed.
-Do not rerun it or overwrite its evidence for this checkpoint.
+Run tests first; stop and share any failure before artifact training. Selection,
+freeze, calibration and final-test commands below are retained for reference:
+approved runs already completed. Do not rerun them or overwrite their evidence.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend/tests/unit/forecasting backend/tests/unit/schemas/test_forecasting.py backend/tests/unit/schemas/test_portfolio_forecasting.py backend/tests/integration/api/test_forecasting_api.py backend/tests/integration/api/test_portfolio_forecasting_api.py -q -p no:cacheprovider
@@ -122,10 +152,10 @@ and frozen models were not replaced by these commands.
 
 The small database-selector addition has regression tests for explicit routing,
 credential/endpoint preservation, unchanged environment files, safe failures,
-invalid names and remote rejection. Those new tests await the user's manual run;
-the earlier 526-pass result does not verify this subsequent addition. Selection
-fitting is now completed and reviewed, but calibration, final testing and artifact
-generation remain pending. Keep the training database separate from
+invalid names and remote rejection. The later 627-pass run verifies selection
+and freeze regressions; the 661-pass run also verifies calibration and the later
+721-pass run includes final-test regressions. Selection, calibration and final
+testing are completed and reviewed; artifact fitting remains pending. Keep the training database separate from
 the application's daily updater for the remainder of this run.
 
 If the snapshot fingerprint differs, stop; do not replace the expected hash
@@ -157,9 +187,9 @@ was reviewed read-only. Its byte SHA-256 is
   fit; preserve the warning without silently changing the winner. This selection
   is not evidence of calibrated intervals or final-test acceptance.
 
-## Next manual command: freeze reviewed selections
+## Completed manual selection freeze (reference command)
 
-Run the test command above first. After it passes, run this single line:
+The user successfully ran the following single line; do not overwrite its output:
 
 ```powershell
 .\.venv\Scripts\python.exe -m backend.scripts.freeze_forecasting_horizons --selection-report .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection.json --expected-selection-report-sha256 9579936f543c20a9b7adf117bba982375cb518ea22378b9f831c9379d60fea06 --expected-market-data-fingerprint dd8cfbe6963ffad4cb3f64034e834d324c7981426704193c00256c9add504e99 --expected-row-count 69928 --output .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection-manifest.json
@@ -179,23 +209,204 @@ The manifest reader validates the complete contract, ordering and digest. A
 self-contained digest is an integrity check, not proof of an approved decision:
 later training must pin the reviewed manifest hash and verify its source binding.
 
-Share the command's summary and manifest before calibration. No frozen weekly
-manifest has been produced by the agent; final-test results, trained models,
-runtime APIs and client activation are not claimed by this checkpoint.
+The completed manifest has 102 records and one selected-model warning. Its
+verified canonical SHA-256 is
+`829b5f9616643c3969cbd1cf220ce25b113d1b494b88c0693e376d5c43292a5c`.
+The source report is unchanged. Neither the manifest nor the 627-pass test run
+constitutes calibration, final-test evidence or weekly deployment readiness.
+
+## Completed manual calibration (reference command)
+
+The user successfully ran this command after 661 targeted tests passed:
+
+```powershell
+.\.venv\Scripts\python.exe -m backend.scripts.calibrate_forecasting_horizons --env-file .\.env.test-database --database-url-key TEST_DATABASE_URL --database-name aura_forecast_training_20260917 --selection-manifest .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection-manifest.json --selection-report .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection.json --expected-manifest-sha256 829b5f9616643c3969cbd1cf220ce25b113d1b494b88c0693e376d5c43292a5c --output .\forecasting-evidence\forecast-multihorizon-selection-20260917\calibration.json
+```
+
+The manifest's canonical hash is pinned, its source bytes are checked, and all
+frozen records are reproduced from that reviewed source before reading the
+environment file or opening a database. The command requires an explicit isolated
+training-database name. Dataset hash, row count and cutoff come from the pinned
+manifest: there is no separate flag that can silently override that provenance.
+The full snapshot is read once in a read-only transaction and verified, then
+database resources close before any selected estimator is fitted.
+
+Calibration uses `calibration-01`: origins from 2025-03-18 through 2025-09-17
+(exclusive end 2025-09-18). Prices on/after that end are removed before feature
+and label construction. Training endpoints must precede 2025-03-18, and scored
+endpoints must precede 2025-09-18. Origins near the end whose targets complete in
+the final-test period are excluded. The 756 training-origin requirement remains
+unchanged, and at least 60 usable calibration observations are required per
+asset/horizon/target. Insufficient data or an unavailable frozen candidate stops
+the run; there is no fallback or winner change.
+
+Only the 102 frozen candidates are fitted for calibration, not all competing
+models. Each horizon gets its own actual-minus-prediction residual quantiles
+(q10/q90, linear interpolation) using the existing V1 calculation. Volatility
+point predictions are clipped to zero before calculating residuals, and remain
+non-annualized. These are nominal 80% empirical asset intervals: overlapping
+labels mean residuals are not independent, and coverage is not guaranteed.
+No portfolio intervals or daily predicted path are fabricated.
+
+The new report schema is `forecast-horizon-calibration-v1`, stage
+`calibration_only_not_deployable`. It records 102 horizon-aware results, the
+manifest/source hashes, approved and verified dataset provenance, metrics,
+residual quantiles, training/evaluation counts and endpoint boundaries. The
+original selection warning and any new calibration fit warning are separate.
+Its canonical `calibration_sha256` binds the evidence for the next checkpoint.
+Pure history-based calls explicitly retain unverified persisted provenance;
+only the successfully verified database orchestration sets it to true.
+
+Read-only review confirmed all 102 unique records, the original provenance,
+selection/warning matches, finite ordered quantiles and strict endpoint boundaries.
+Minimum calibration count is 113; minimum training count is 2,413. One selection
+warning is retained, with zero new calibration fit warnings. The verified
+canonical calibration SHA-256 is
+`0f42993972269884b160ff9983555abad865ddd07483c574205b37f15a9a2ab1`.
+No final testing or deployment-artifact training occurred in that command.
+
+## Completed guarded final scoring (reference command only)
+
+The user successfully ran this command once after 721 tests passed. Do not
+rerun it, change its evidence or remove/reset its guard markers:
+
+```powershell
+.\.venv\Scripts\python.exe -m backend.scripts.evaluate_forecasting_horizon_final_test --env-file .\.env.test-database --database-url-key TEST_DATABASE_URL --database-name aura_forecast_training_20260917 --selection-manifest .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection-manifest.json --selection-report .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection.json --expected-manifest-sha256 829b5f9616643c3969cbd1cf220ce25b113d1b494b88c0693e376d5c43292a5c --calibration .\forecasting-evidence\forecast-multihorizon-selection-20260917\calibration.json --expected-calibration-sha256 0f42993972269884b160ff9983555abad865ddd07483c574205b37f15a9a2ab1 --output .\forecasting-evidence\forecast-multihorizon-selection-20260917\final-test.json
+```
+
+The manifest/source reconciliation remains unchanged. Calibration's canonical
+checksum, full 102-record contract, provenance, versions, frozen winners and
+warnings, observation counts, clipping and date boundaries are checked before
+database access. No calibration or selection fitting is repeated. The full
+snapshot is read-only, verified, and closed before final scoring.
+
+Final-test origins lie in `final-test-01`, from 2025-09-18 through 2026-09-17
+(exclusive end 2026-09-18). Selected candidates fit only labels completed before
+2025-09-18, including eligible calibration-period history. The family/parameters
+remain frozen; calibration q10/q90 are carried over unchanged. Features at each
+test origin are past-only; outcomes are read for scoring after prediction. Labels
+whose endpoints reach the exclusive end are omitted. Only the frozen candidates
+are evaluated, with no competitor tournament, fallback or retuning.
+
+Each of the 102 records reports MAE/RMSE, return direction accuracy where
+applicable, clipping, observation/training counts, endpoint bounds, frozen
+quantiles, and empirical interval coverage. Coverage includes observations on
+either interval boundary. Counts distinguish covered observations, misses below/
+above, and empty intervals. Some calibrated volatility upper residual quantiles
+are negative. When the existing zero-lower-bound rule gives lower > upper, that
+interval is empty: count a miss, retain an explicit warning, and exclude it only
+from the mean *valid* interval width. Do not widen frozen ranges, clip the upper
+bound to disguise the issue, or claim 80% achieved coverage without evidence.
+
+The fixed one-run guard folder is
+`forecasting-evidence/forecast-weekly-v1-20260917/`. It is not selected by the
+output filename. `final-test-started.json` is created exclusively after all input
+and DB provenance gates pass, before constructing or scoring test targets. A
+failure after that point keeps the run consumed; different output filenames
+cannot rerun it. On success, the new report is written exclusively and
+`final-test-completed.json` binds its hash to the original run marker. Never
+delete/reset either marker to retry or tune this release. Share any failure for
+review. Failures before the run starts (for example wrong input hashes or data
+provenance) do not consume it. No reset/force/retry flag is provided.
+
+The output schema is `forecast-horizon-final-test-v1`, stage
+`final_test_only_not_deployable`. Its canonical `final_test_sha256` binds the
+scoring evidence and run identity to the pinned inputs. Pure history-based
+calls retain unverified persisted-data provenance; only the DB orchestration
+sets it verified. Finite poor errors/coverage and all warning stages are retained,
+not silently rejected or replaced. Successful completion is not predictive-
+quality acceptance. Review the results before creating a separate weekly model
+package or enabling clients. No deployment models, provider downloads, API
+changes, portfolio intervals, or UI activation occur in this command.
+
+## Final-test evidence review
+
+Read-only review independently recomputed canonical final-test SHA-256:
+`e2aeb387fa10376f2f925d74138f194c4ce102494a64bafb0e6703fbc22d7193`.
+All 102 unique records match frozen candidates, warnings, ranges and recorded
+endpoint boundaries. Provenance remains the original 69,928-row, 17-asset
+snapshot. Minimum final observation count is 237 and minimum training count
+is 2,597. No new calibration/final fit warnings or empty intervals were recorded;
+the QQQ 21-day volatility selection warning remains preserved.
+
+| Horizon | Pooled return coverage | Pooled volatility coverage | Pooled return direction accuracy |
+| --- | ---: | ---: | ---: |
+| 7 calendar days | 79.03% | 77.30% | 51.18% |
+| 14 calendar days | 70.15% | 77.95% | 51.29% |
+| 21 calendar days | 72.33% | 81.73% | 51.40% |
+
+Coverage pools covered observations / all observations across assets, not an
+independence claim or evidence that every asset achieves the nominal 80%.
+BTC-USD 14-day volatility coverage is 15.38%; SLV 21-day return coverage is
+29.96%. Quality is mixed. This review supports an experimental educational
+training checkpoint, not predictive-quality approval or production activation.
+The reused original snapshot is not a new untouched project-level holdout.
+Do not retune this release from final outcomes or rescore the consumed holdout.
+
+## Next manual command: separate experimental weekly artifact training
+
+Run the test command at the start of this guide again to include the new
+artifact-training regressions. After it passes, run this single line:
+
+```powershell
+.\.venv\Scripts\python.exe -m backend.scripts.train_forecasting_horizons --env-file .\.env.test-database --database-url-key TEST_DATABASE_URL --database-name aura_forecast_training_20260917 --selection-manifest .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection-manifest.json --selection-report .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection.json --expected-manifest-sha256 829b5f9616643c3969cbd1cf220ce25b113d1b494b88c0693e376d5c43292a5c --calibration .\forecasting-evidence\forecast-multihorizon-selection-20260917\calibration.json --expected-calibration-sha256 0f42993972269884b160ff9983555abad865ddd07483c574205b37f15a9a2ab1 --final-test .\forecasting-evidence\forecast-multihorizon-selection-20260917\final-test.json --expected-final-test-sha256 e2aeb387fa10376f2f925d74138f194c4ce102494a64bafb0e6703fbc22d7193 --accept-experimental-quality
+```
+
+The flag explicitly acknowledges the reviewed limitations; it does not approve
+predictive quality, suppress warnings or enable inference. All three evidence
+hashes, the source selection report and completed fixed final-run markers are
+validated before environment/DB access. Only the isolated loopback PostgreSQL
+snapshot is read, in a read-only transaction, and resources close before fitting.
+No candidate competition, calibration, final scoring or provider calls occur.
+
+Each selected candidate fits actual horizon labels whose endpoints complete on
+or before 2026-09-17, including completed final-period labels after evaluation
+is frozen. This is deployment fitting, not new out-of-sample scoring. Historical
+averages use all eligible labels; moving averages keep their frozen 90-calendar-
+day completed-label window. Other families/parameters/random seeds are unchanged.
+Frozen per-horizon calibration q10/q90 and all final quality evidence are copied,
+not recomputed. The unchanged V1 fitter is used privately as an algorithm bridge;
+the new serialized outer wrapper always carries the actual horizon/target.
+
+The fixed ignored destination is
+`backend/artifacts/forecasting/forecast-weekly-v1-20260917/`. It is never the
+original `forecast-v1-20260917` folder and has no CLI output override. Layout:
+`<7d|14d|21d>/<SYMBOL>/<actual_target>/model.joblib` with adjacent `metadata.json`.
+All 102 models are reload/prediction-checked. Metadata records actual versions,
+training counts/dates, parameters, clipping, warning stages, frozen quantiles,
+full per-record final coverage and hashes. Below-nominal coverage remains an
+explicit advisory warning, not an excuse for fallback or interval widening.
+
+Selection/calibration/final evidence copies, source bytes and a training-start
+record remain inside the new bundle. The checksum-bound root `manifest.json` is
+written last after model/metadata hashes are rechecked. A valid complete manifest
+plus all matching checksums is required for later readiness review. Partial output
+is preserved and existing folders refuse overwrite or automatic retry. If fitting
+fails, share the error; do not delete the folder or reset final-test markers.
+
+This experimental build records Git HEAD, actual forecasting source-file byte
+hashes, tracked-worktree cleanliness and runtime-library versions. It permits a
+dirty working tree without claiming a clean official release; prefer committing
+reviewed source first. Unlike official 30-day artifact generation, this does not
+require committing unrelated concurrent document work. Credentials/environment
+files are excluded. No dependency or .gitignore change is needed. Joblib loading
+is restricted to newly written trusted local output; checksums are not signatures
+and do not make externally supplied pickle/joblib files safe.
+
+No model package has been generated by Codex. New tests and the command above
+await the user's execution. Runtime loading/integrity gates, API/portfolio
+composition and web/mobile activation remain separate follow-on checkpoints.
 
 ## Subsequent checkpoints, not yet implemented or activated
 
-1. Run tests and the prepared freezer, then review its manifest and checksum.
-   Keep the weekly evidence separate and do not overwrite V1.
-2. Implement/run horizon-specific calibration, a guarded final test and
-   deployment-artifact training. Preserve separate test evidence and interval
-   coverage per horizon; do not reuse the 30-day residual ranges.
-3. Validate/load the new package through horizon-aware runtime contracts while
+1. Run new regressions and the prepared training command; review the separate
+   102-model package, reload checks, checksums and deployment fit warnings.
+2. Validate/load the new package through horizon-aware runtime contracts while
    preserving the original 30-day endpoints and package behavior. Portfolio
    composition must use component forecasts for the same selected horizon.
-4. Integrate backend-supported horizons on both clients, enabling only verified
+3. Integrate backend-supported horizons on both clients, enabling only verified
    horizons. Plot actual horizon estimates and asset ranges; connecting lines
    are visual guides, not a predicted daily price trajectory. Do not invent
    portfolio prediction intervals or forecast AI grounding.
 
-Suggested checkpoint commit: `feat(forecasting): freeze validated weekly model selections`
+Suggested checkpoint commit: `feat(forecasting): add guarded experimental weekly artifact training`
