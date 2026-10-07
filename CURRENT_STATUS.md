@@ -3289,3 +3289,11 @@ remain separate follow-on work.
   APIs, mobile and unrelated report files are unchanged. Whitespace checks
   passed; tests/build and signed-in visual acceptance remain for the user's
   manual verification. No staging, commit or push was performed.
+
+### Watchlist list action alignment — 2026-10-08
+
+- Grouped View Outlook and the remove X in a single non-wrapping, vertically
+  centered row with an 8px gap. Existing navigation, removal/loading behavior,
+  grid view, mobile and APIs are unchanged.
+- Added a scoped layout regression. Tests/build await the user's manual
+  commands; no staging, commit or push was performed.

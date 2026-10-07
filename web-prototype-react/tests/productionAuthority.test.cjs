@@ -1074,6 +1074,20 @@ test('web Watchlist has real states, supported-asset search, and no mock authori
   assert.ok(!/fetch\(['"]https?:|OPENAI_API_KEY|ALPHA_VANTAGE|YAHOO/i.test(`${page}\n${table}`));
 });
 
+test('Watchlist list actions keep Outlook and remove side by side', () => {
+  const table = fs.readFileSync(path.join(root, 'src/pages/watchlist/components/WatchlistTable.tsx'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'src/styles.css'), 'utf8');
+  const actions = table.match(/<div className="watchlist-row-actions">([\s\S]*?)<\/div>/)?.[1];
+
+  assert.ok(actions, 'List actions share a horizontal wrapper');
+  assert.equal((actions.match(/<button\b/g) ?? []).length, 2);
+  assert.match(actions, /View Outlook →[\s\S]*className="watchlist-remove"/);
+  assert.match(actions, /onClick=\{\(\) => onRemove\(asset.symbol\)\}/);
+  assert.match(actions, /disabled=\{removingSymbol === asset.symbol\}/);
+  assert.match(css, /\.watchlist-row-actions\{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;white-space:nowrap\}/);
+  assert.match(css, /\.watchlist-row-actions>button\{flex-shrink:0;margin-right:0\}/);
+});
+
 test('error presentation distinguishes required statuses and sanitizes server failures', () => {
   class ApiError extends Error {
     constructor(options) {

@@ -62,14 +62,17 @@ export function WatchlistTable({
                   </td>
                   <td><span className={asset.ytd_change_percent === null ? '' : asset.ytd_change_percent >= 0 ? 'green-text' : 'red-text'}>{formatWatchlistPercent(asset.ytd_change_percent)}</span></td>
                   <td>
-                    <button type="button" className={forecastStyles.watchlistLink} onClick={() => go(`forecasting/asset/${encodeURIComponent(asset.symbol)}`)} aria-label={`View ${asset.symbol} outlook`}>View Outlook →</button>
-                    <button
-                      className="watchlist-remove"
-                      onClick={() => onRemove(asset.symbol)}
-                      disabled={removingSymbol === asset.symbol}
-                      aria-label={`Remove ${asset.symbol} from watchlist`}
-                      title="Remove from watchlist"
-                    >{removingSymbol === asset.symbol ? '…' : '×'}</button>
+                    <div className="watchlist-row-actions">
+                      <button type="button" className={forecastStyles.watchlistLink} onClick={() => go(`forecasting/asset/${encodeURIComponent(asset.symbol)}`)} aria-label={`View ${asset.symbol} outlook`}>View Outlook →</button>
+                      <button
+                        type="button"
+                        className="watchlist-remove"
+                        onClick={() => onRemove(asset.symbol)}
+                        disabled={removingSymbol === asset.symbol}
+                        aria-label={`Remove ${asset.symbol} from watchlist`}
+                        title="Remove from watchlist"
+                      >{removingSymbol === asset.symbol ? '…' : '×'}</button>
+                    </div>
                   </td>
                 </tr>
                 );
