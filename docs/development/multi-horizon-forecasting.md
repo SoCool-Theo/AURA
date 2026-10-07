@@ -2,16 +2,18 @@
 
 Date: 2026-10-07
 
-## Current checkpoint: reviewed final test and prepared experimental training
+## Current checkpoint: trained package reviewed; backend runtime prepared
 
 The new offline workflow constructs true 7-, 14-, and 21-calendar-day return
 and non-annualized realized-volatility labels. It reuses V1 features, baseline/
 model families, chronological folds, minimum training history and selection
 policy. The original 30-day target builder, deployment workflow, inference,
-APIs, frozen `forecast-v1-20260917` package and customer clients are unchanged.
+endpoints, frozen `forecast-v1-20260917` package and customer clients are unchanged.
 Weekly buttons remain disabled. Selection, calibration and final testing are
-completed and reviewed. A separate experimental deployment-training command is
-prepared, but no weekly deployment artifacts or runtime readiness are claimed.
+completed and reviewed. The user trained the separate experimental weekly bundle
+and its 102 model/metadata pairs were reviewed read-only. Additive weekly runtime
+and API code is now prepared; its new regressions and real runtime smoke checks
+remain user-run, not a claim of verified deployment readiness.
 
 Training/evaluation, tests and builds are user-run only for this task. The user
 completed the selection run on the verified original snapshot; Codex reviewed
@@ -19,8 +21,10 @@ the local JSON without rerunning evaluation or accessing the database/provider.
 The user ran 627 targeted tests successfully and created the frozen manifest.
 Its canonical checksum and provenance were verified read-only. The user then ran
 661 targeted tests and completed all 102 calibrations, followed by 721 passing
-tests and the one-run final evaluation. The new artifact-training regressions
-and real deployment fitting remain user-run and pending.
+tests and the one-run final evaluation. A later run reported 791 passed and one
+test false positive caused by `30d` inside a valid checksum; that assertion was
+corrected. The user completed training afterwards, but an updated passing test
+count has not been supplied. No agent-run test result is claimed.
 
 ## Files and responsibilities
 
@@ -69,6 +73,20 @@ and real deployment fitting remain user-run and pending.
 - `backend/tests/unit/forecasting/test_horizon_artifacts.py`: synthetic/mocked
   evidence gates, true-horizon completed labels, frozen families/parameters,
   wrapper identity, 102-model packaging, partial/reload failures and DB/CLI guards.
+- `backend/app/forecasting/weekly_registry.py`: externally pinned, read-only
+  deployment loader with full-package integrity and actual-horizon identity gates.
+- `backend/app/forecasting/weekly_inference.py` and `weekly_portfolio.py`:
+  past-only current asset estimates and same-horizon authoritative composition.
+- `backend/app/schemas/weekly_forecasting.py`,
+  `backend/app/services/weekly_forecasting_response_mapper.py`, and
+  `backend/app/api/routes/weekly_forecasting.py`: additive neutral-field weekly
+  contracts and authenticated, owner-safe read-only endpoints. The existing
+  API router registers the new routes alongside unchanged 30-day routes.
+- `backend/tests/unit/forecasting/test_weekly_registry.py`,
+  `test_weekly_inference.py`, and
+  `backend/tests/integration/api/test_weekly_forecasting_api.py`: synthetic
+  loading, composition, contracts and access-control regressions. The existing
+  forecasting OpenAPI inventory assertion also includes the two additive paths.
 - `CURRENT_STATUS.md` and this guide: checkpoint and manual next steps.
 
 No dependency, architecture-file move, migration, server task, commit or push
@@ -106,9 +124,10 @@ reported explicitly; the command does not fabricate a winner or deploy fallback.
 ## Manual commands
 
 Run from the repository root in PowerShell. Every command is a single line.
-Run tests first; stop and share any failure before artifact training. Selection,
-freeze, calibration and final-test commands below are retained for reference:
-approved runs already completed. Do not rerun them or overwrite their evidence.
+Run the current runtime verification command near the end of this guide.
+Selection, freeze, calibration, final-test and training commands below are
+retained for reference: approved runs already completed. Do not rerun them or
+overwrite their evidence.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest backend/tests/unit/forecasting backend/tests/unit/schemas/test_forecasting.py backend/tests/unit/schemas/test_portfolio_forecasting.py backend/tests/integration/api/test_forecasting_api.py backend/tests/integration/api/test_portfolio_forecasting_api.py -q -p no:cacheprovider
@@ -155,8 +174,8 @@ credential/endpoint preservation, unchanged environment files, safe failures,
 invalid names and remote rejection. The later 627-pass run verifies selection
 and freeze regressions; the 661-pass run also verifies calibration and the later
 721-pass run includes final-test regressions. Selection, calibration and final
-testing are completed and reviewed; artifact fitting remains pending. Keep the training database separate from
-the application's daily updater for the remainder of this run.
+testing were completed and reviewed before the later user-run artifact fitting.
+Keep the training database separate from the application's daily updater.
 
 If the snapshot fingerprint differs, stop; do not replace the expected hash
 simply to bypass the guard. Confirm the intended dataset and cutoff first.
@@ -343,10 +362,10 @@ training checkpoint, not predictive-quality approval or production activation.
 The reused original snapshot is not a new untouched project-level holdout.
 Do not retune this release from final outcomes or rescore the consumed holdout.
 
-## Next manual command: separate experimental weekly artifact training
+## Completed manual experimental weekly artifact training (reference only)
 
-Run the test command at the start of this guide again to include the new
-artifact-training regressions. After it passes, run this single line:
+The user completed the command below. Preserve its output; do not rerun fitting,
+final testing, or overwrite this package to verify the new runtime code:
 
 ```powershell
 .\.venv\Scripts\python.exe -m backend.scripts.train_forecasting_horizons --env-file .\.env.test-database --database-url-key TEST_DATABASE_URL --database-name aura_forecast_training_20260917 --selection-manifest .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection-manifest.json --selection-report .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection.json --expected-manifest-sha256 829b5f9616643c3969cbd1cf220ce25b113d1b494b88c0693e376d5c43292a5c --calibration .\forecasting-evidence\forecast-multihorizon-selection-20260917\calibration.json --expected-calibration-sha256 0f42993972269884b160ff9983555abad865ddd07483c574205b37f15a9a2ab1 --final-test .\forecasting-evidence\forecast-multihorizon-selection-20260917\final-test.json --expected-final-test-sha256 e2aeb387fa10376f2f925d74138f194c4ce102494a64bafb0e6703fbc22d7193 --accept-experimental-quality
@@ -393,20 +412,84 @@ files are excluded. No dependency or .gitignore change is needed. Joblib loading
 is restricted to newly written trusted local output; checksums are not signatures
 and do not make externally supplied pickle/joblib files safe.
 
-No model package has been generated by Codex. New tests and the command above
-await the user's execution. Runtime loading/integrity gates, API/portfolio
-composition and web/mobile activation remain separate follow-on checkpoints.
+No model package was generated by Codex. Read-only review confirmed the user-run
+package's 102 distinct models, all 204 model/metadata file hashes, five evidence
+file hashes, frozen source bindings and training provenance. The root canonical
+SHA-256 is `5b604af0c7e965cfcebdc0ae38a9570b64464ffc2c8d8adee230a19b2aaf95fe`.
+There are zero deployment-fit warnings, 48 below-nominal final-coverage warning
+records, and the preserved QQQ 21-day volatility selection convergence warning.
+The original 30-day package's 34 model pairs remain unchanged.
 
-## Subsequent checkpoints, not yet implemented or activated
+## Prepared backend runtime: manual verification required
 
-1. Run new regressions and the prepared training command; review the separate
-   102-model package, reload checks, checksums and deployment fit warnings.
-2. Validate/load the new package through horizon-aware runtime contracts while
-   preserving the original 30-day endpoints and package behavior. Portfolio
-   composition must use component forecasts for the same selected horizon.
-3. Integrate backend-supported horizons on both clients, enabling only verified
+Two additive routes support only 7/14/21 calendar days:
+
+- `GET /api/forecasting/assets/{symbol}/horizons/{horizon_days}/outlook`
+- `GET /api/forecasting/portfolios/{portfolio_id}/horizons/{horizon_days}/outlook`
+
+Continue to use the original `/outlook` routes for 30 days. Their response names,
+configured registry, behavior and customer clients are unchanged. Weekly fields
+are `expected_return` and `forecast_realized_volatility`, never misleading `_30d`
+names. The response identifies its horizon, experimental quality, lack of
+predictive-quality approval, nominal intervals and retained per-target warning
+codes. It exposes no artifact path, private residual or final-test metrics.
+
+The weekly registry has an external code-owned approval pin for this reviewed
+root manifest. Recomputing the package's self-digest cannot approve another
+bundle. Before any joblib load it verifies all 102 unique symbol/horizon/target
+pairs, all model/metadata bytes, evidence hashes, strict JSON, exact relative
+paths, versions, candidate identities and frozen quantile bindings. Selected
+bytes are rechecked before their first deserialization. The serialized wrapper
+must carry the actual requested horizon/target and frozen candidate family.
+Models, not predictions, are cached. Storage remains trusted immutable local
+deployment input; checksums do not make externally supplied pickle files safe.
+Constructor pin/path overrides are only explicit trusted test/deployment wiring,
+not request inputs or automatically accepted package settings.
+
+Importing the serialized wrapper loads its existing module definitions but does
+not invoke offline fitting/evaluation/calibration functions or any CLI. Runtime
+uses the existing application session and latest persisted prices, V1 past-only
+features and four-day freshness gate. ARIMA counts stored observations from the
+training cutoff rather than calendar-day gaps. There is no provider fetch,
+training, recalibration, horizon scaling, fallback or database write.
+
+Portfolio weights still come from the existing CURRENT/PLANNED/LEGACY baseline
+resolver. All components use the requested horizon and correct target version;
+one unavailable component fails the entire outlook. Weighted returns and D R D
+volatility reuse the original numerical helpers, with non-annualized same-horizon
+volatilities and past common-date correlations capped at the earliest component
+origin. Signed contributions remain intact. No portfolio interval is fabricated.
+
+The package's `runtime_activated=false` field remains immutable historical build
+evidence. Runtime preparation does not change that field or mark predictive
+quality approved. Web/mobile weekly controls and AI grounding remain unchanged.
+
+Run this single line manually; share any failure before client integration:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests/unit/forecasting backend/tests/unit/schemas/test_forecasting.py backend/tests/unit/schemas/test_portfolio_forecasting.py backend/tests/integration/api/test_forecasting_api.py backend/tests/integration/api/test_portfolio_forecasting_api.py backend/tests/integration/api/test_weekly_forecasting_api.py -q -p no:cacheprovider
+```
+
+After tests pass, validate package integrity without deserialization, fitting,
+provider calls or DB access (must run from the repository root):
+
+```powershell
+.\.venv\Scripts\python.exe -c "import sys; sys.path.insert(0, 'backend'); from app.forecasting.weekly_registry import WeeklyArtifactRegistry; r = WeeklyArtifactRegistry(); r._validate(); print('Weekly runtime integrity verified:', len(r._records), 'model pairs')"
+```
+
+Restart the backend after verification, then manually request a weekly asset
+and owned portfolio route using the existing authenticated API interface. A
+successful forecast additionally requires fresh current application market data,
+sufficient features and portfolio correlation history; snapshot training dates
+do not bypass freshness. No migration or retraining is needed for this step.
+
+## Remaining checkpoints
+
+1. User-run new regressions and read-only runtime integrity check, then manual
+   authenticated asset/portfolio smoke checks on fresh application data.
+2. Integrate backend-supported horizons on both clients, enabling only verified
    horizons. Plot actual horizon estimates and asset ranges; connecting lines
    are visual guides, not a predicted daily price trajectory. Do not invent
    portfolio prediction intervals or forecast AI grounding.
 
-Suggested checkpoint commit: `feat(forecasting): add guarded experimental weekly artifact training`
+Suggested checkpoint commit: `feat(forecasting): serve experimental weekly asset and portfolio outlooks`
