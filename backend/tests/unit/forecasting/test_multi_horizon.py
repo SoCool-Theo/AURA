@@ -284,3 +284,57 @@ def test_new_selection_workflow_is_not_on_api_inference_path_and_has_no_artifact
     assert "train_deployment_artifact" not in source
     assert "calibrate_frozen_selection" not in source
     assert "evaluate_frozen_final_test" not in source
+
+
+def test_training_database_override_preserves_credentials_endpoint_and_options():
+    original = "postgresql+psycopg://aura:p%40ss%2Fword@127.0.0.1:5433/aura_test?sslmode=disable"
+    resolved = script.make_url(script.resolve_training_database_url(original, "aura_forecast_training_20260917"))
+    assert resolved.database == "aura_forecast_training_20260917"
+    source = script.make_url(original)
+    for field in ["drivername", "host", "port", "username", "password", "query"]:
+        assert getattr(resolved, field) == getattr(source, field)
+    assert resolved.password == "p@ss/word"
+    assert script.resolve_training_database_url(original, None) == original
+
+
+@pytest.mark.parametrize("name", ["aura_test", "postgres", "", "../snapshot", "aura_forecast_training_",
+    "aura_forecast_training_X", "aura_forecast_training_x;DROP", "aura_forecast_training_" + "x" * 64, 123])
+def test_training_database_override_rejects_application_or_invalid_names_safely(name):
+    with pytest.raises(script.SelectionProvenanceError) as error:
+        script.resolve_training_database_url("postgresql+psycopg://aura:private@127.0.0.1:5433/aura_test", name)
+    assert "private" not in str(error.value)
+
+
+def test_training_database_override_cannot_redirect_a_remote_connection():
+    with pytest.raises(script.SelectionProvenanceError):
+        script.resolve_training_database_url("postgresql+psycopg://aura:private@remote.example:5433/aura_test", "aura_forecast_training_20260917")
+
+
+def test_manual_main_passes_explicit_training_database_without_editing_env_file(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(script, "REPOSITORY_ROOT", tmp_path)
+    env_file = tmp_path / "selected.env"
+    contents = "TEST_DATABASE_URL=postgresql+psycopg://aura:private@127.0.0.1:5433/aura_test\n"
+    env_file.write_text(contents, encoding="utf-8")
+    output = tmp_path / "forecasting-evidence/new-run/selection.json"
+    run = MagicMock(return_value={"stage": "selection_only_not_deployable"})
+    monkeypatch.setattr(script, "run_persisted_evaluation", run)
+    script.main(["--env-file", str(env_file), "--database-name", "aura_forecast_training_20260917",
+                 "--evaluation-cutoff", "2026-09-17", "--expected-market-data-fingerprint", "0" * 64,
+                 "--expected-row-count", "17", "--output", str(output)])
+    assert script.make_url(run.call_args.kwargs["database_url"]).database == "aura_forecast_training_20260917"
+    assert env_file.read_text(encoding="utf-8") == contents
+    assert "private" not in capsys.readouterr().out
+
+
+def test_invalid_training_database_override_stops_before_evaluation_and_output(tmp_path, monkeypatch):
+    monkeypatch.setattr(script, "REPOSITORY_ROOT", tmp_path)
+    monkeypatch.setattr(script, "database_url_from_env_file", lambda *args, **kwargs: "postgresql+psycopg://aura:private@127.0.0.1:5433/aura_test")
+    run = MagicMock()
+    monkeypatch.setattr(script, "run_persisted_evaluation", run)
+    output = tmp_path / "forecasting-evidence/new-run/selection.json"
+    with pytest.raises(SystemExit, match="aura_forecast_training_"):
+        script.main(["--env-file", "selected.env", "--database-name", "aura_test",
+                     "--evaluation-cutoff", "2026-09-17", "--expected-market-data-fingerprint", "0" * 64,
+                     "--expected-row-count", "17", "--output", str(output)])
+    run.assert_not_called()
+    assert not output.exists()

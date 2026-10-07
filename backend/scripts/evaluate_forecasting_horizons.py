@@ -13,6 +13,7 @@ from dataclasses import asdict
 from datetime import date, timedelta
 import json
 from pathlib import Path
+import re
 import sys
 
 from sqlalchemy import text
@@ -64,6 +65,21 @@ def validate_local_database_url(database_url: str) -> None:
         valid = False
     if not valid:
         raise SelectionProvenanceError("use the explicit local PostgreSQL snapshot on port 5433")
+
+
+def resolve_training_database_url(database_url: str, database_name: str | None) -> str:
+    """Optionally select an isolated snapshot without editing connection files.
+
+    Reuse only the explicit file's local credentials/endpoint. Overrides cannot
+    select an application database, change hosts, or bypass provenance checks.
+    """
+    if database_name is None:
+        return database_url
+    if (not isinstance(database_name, str) or len(database_name) > 63
+        or re.fullmatch(r"aura_forecast_training_[a-z0-9_]+", database_name) is None):
+        raise SelectionProvenanceError("database override must name an aura_forecast_training_ snapshot")
+    validate_local_database_url(database_url)
+    return make_url(database_url).set(database=database_name).render_as_string(hide_password=False)
 
 
 def validate_output_path(path: Path) -> Path:
@@ -229,6 +245,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evaluate new forecast horizons offline; do not activate models.")
     parser.add_argument("--env-file", type=Path, required=True)
     parser.add_argument("--database-url-key", default="TEST_DATABASE_URL")
+    parser.add_argument("--database-name", help="Optional isolated aura_forecast_training_ database; connection files remain unchanged.")
     parser.add_argument("--evaluation-cutoff", type=_parse_date, required=True)
     parser.add_argument("--horizons", type=int, choices=SUPPORTED_HORIZONS, nargs="+", default=NEW_HORIZONS)
     parser.add_argument("--expected-market-data-fingerprint", required=True)
@@ -242,7 +259,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         output = validate_output_path(args.output)
         report = run_persisted_evaluation(
-            database_url=database_url_from_env_file(args.env_file, database_url_key=args.database_url_key),
+            database_url=resolve_training_database_url(
+                database_url_from_env_file(args.env_file, database_url_key=args.database_url_key),
+                args.database_name,
+            ),
             evaluation_cutoff=args.evaluation_cutoff, horizons=args.horizons,
             expected_market_data_fingerprint=args.expected_market_data_fingerprint,
             expected_row_count=args.expected_row_count,

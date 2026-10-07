@@ -2962,3 +2962,42 @@ remain separate follow-on work.
   pushes remain unchanged. Unrelated report work is preserved. The recorded
   frozen snapshot is reusable for comparisons, not a new untouched project-level
   final holdout; fresh-period acceptance must be distinguished from that reuse.
+
+### Verified isolated V1 training snapshot and explicit selector — 2026-10-07
+
+- The user ran the targeted suite: 526 passed. The initial real selection attempt
+  correctly stopped at provenance validation before fitting; the ordinary Docker
+  snapshot had 95,488 rows, while current Supabase matched the original counts but
+  not its canonical fingerprint.
+- At the user's explicit choice, manual commands created the isolated local
+  `aura_forecast_training_20260917` database and market-data table and restored
+  the original data-only backup in a single transaction. The user then reported
+  69,928 rows and the exact original V1 SHA-256, confirming the intended dataset.
+- Added an optional, narrowly validated `--database-name` to the new horizon
+  evaluator. It reuses the explicit local connection's credentials/host/port and
+  selects only an `aura_forecast_training_` database in memory, without editing
+  environment files or relaxing the fingerprint gate. Default behavior remains
+  unchanged. Added selector regressions and updated the manual command guide.
+- This subsequent selector change awaits user-run tests. No agent-run tests,
+  training, provider requests or database operations occurred. New-horizon model
+  fitting, selection review, calibration, final testing, deployment artifacts
+  and client activation remain pending. Original V1 models and application
+  databases were not replaced; unrelated report status/content was preserved.
+
+### Report Version 2 review and wording — 2026-10-07
+
+- Created `docs/report/AURA_Senior_Project_1_Report_V2.docx` from the saved
+  report and its two reviewer comments; Version 1 remains unchanged.
+- Removed the abstract's final paragraph and all of Appendix B.2, including
+  its table. Rewrote the main prose with shorter sentences, simpler wording,
+  and necessary technical terms, while preserving formulas and evidence limits.
+- Updated forecasting descriptions to include the implemented web and mobile
+  outlook screens, their recorded checks, the active 30-day horizon, and pending
+  authenticated runtime and device acceptance. No weekly runtime capability
+  or user feedback results are claimed.
+- Updated the companion outline to match revised headings and appendix scope.
+  Retained 15 visual placeholders and student, advisor, and committee fields.
+- Refreshed the contents and figure/table indexes in Word and visually checked
+  all 40 rendered pages. Structure, equations, template fidelity, comment removal,
+  source preservation, text bounds, and document field checks passed.
+- No application code, dependencies, database data, commits, or pushes changed.

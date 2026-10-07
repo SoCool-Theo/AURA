@@ -71,22 +71,49 @@ Run tests first; stop and share any failure before expensive selection fitting.
 .\.venv\Scripts\python.exe -m pytest backend/tests/unit/forecasting backend/tests/unit/schemas/test_forecasting.py backend/tests/unit/schemas/test_portfolio_forecasting.py backend/tests/integration/api/test_forecasting_api.py backend/tests/integration/api/test_portfolio_forecasting_api.py -q -p no:cacheprovider
 ```
 
-After tests pass, the following command deliberately selects the previously
-verified frozen 2026-09-17 local snapshot: 69,928 rows, 17 assets, and the recorded
-fingerprint. It does not silently switch to current application data, another
+After tests pass, the following command deliberately selects the separately
+restored `aura_forecast_training_20260917` local snapshot: 69,928 rows, 17 assets,
+and the original V1 fingerprint, verified by the user's manual run. It does not
+silently switch to current application data, another
 database URL key, or a new cutoff. The environment file is read without variable
 interpolation. Only a PostgreSQL loopback connection on port 5433 is accepted;
 remote URLs and connection-query overrides are rejected. No credentials appear
-in evidence or expected error messages.
+in evidence or expected error messages. `--database-name` changes only the
+database component of that explicit local URL in memory; credentials, host,
+port and allowed options are preserved. Overrides require a lowercase
+`aura_forecast_training_` name and cannot select `aura_test` or a remote server.
+Omitting this option preserves the previous command's URL behavior.
 
 ```powershell
-.\.venv\Scripts\python.exe -m backend.scripts.evaluate_forecasting_horizons --env-file .\.env.test-database --database-url-key TEST_DATABASE_URL --evaluation-cutoff 2026-09-17 --horizons 7 14 21 --expected-market-data-fingerprint dd8cfbe6963ffad4cb3f64034e834d324c7981426704193c00256c9add504e99 --expected-row-count 69928 --output .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection.json
+.\.venv\Scripts\python.exe -m backend.scripts.evaluate_forecasting_horizons --env-file .\.env.test-database --database-url-key TEST_DATABASE_URL --database-name aura_forecast_training_20260917 --evaluation-cutoff 2026-09-17 --horizons 7 14 21 --expected-market-data-fingerprint dd8cfbe6963ffad4cb3f64034e834d324c7981426704193c00256c9add504e99 --expected-row-count 69928 --output .\forecasting-evidence\forecast-multihorizon-selection-20260917\selection.json
 ```
 
 The command may take a substantial amount of time: it compares five candidates
 over five selection folds, two targets, three horizons and 17 assets. It prints
 progress per symbol/target/horizon. It performs offline selection fitting only,
 not deployment-artifact training. All database resources close before fitting.
+
+### Original-snapshot recovery checkpoint
+
+The user's first targeted test run passed 526 checks. Initial evaluation stopped
+before fitting because the ordinary Docker database contained 95,488 rows ending
+on 2026-08-21. The current Supabase slice had the original counts/date ranges but
+a different canonical fingerprint; neither was approved as the frozen V1 input.
+
+The user selected the original backup and manually created a separate database
+and matching market-data table, then restored the data-only archive using an
+all-or-nothing transaction. The user reported 69,928 rows and the exact original
+fingerprint `dd8cfbe6963ffad4cb3f64034e834d324c7981426704193c00256c9add504e99`
+from `aura_forecast_training_20260917`. Application databases, environment files
+and frozen models were not replaced by these commands.
+
+The small database-selector addition has regression tests for explicit routing,
+credential/endpoint preservation, unchanged environment files, safe failures,
+invalid names and remote rejection. Those new tests await the user's manual run;
+the earlier 526-pass result does not verify this subsequent addition. No real
+candidate fitting, calibration, final testing or artifact generation has yet
+been reported for the new horizons. Keep the training database separate from
+the application's daily updater for the remainder of this run.
 
 If the snapshot fingerprint differs, stop; do not replace the expected hash
 simply to bypass the guard. Confirm the intended dataset and cutoff first.
