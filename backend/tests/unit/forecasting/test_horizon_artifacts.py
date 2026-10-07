@@ -21,7 +21,7 @@ from app.forecasting.evaluation import ForecastTargetType
 from app.forecasting.features import FEATURE_NAMES, ForecastFeatureRow
 from app.forecasting.finalization import ForecastArtifactModel, ForecastFinalizationError
 from app.forecasting.fingerprints import canonical_json_bytes, sha256_bytes, sha256_file
-from app.forecasting.multi_horizon import HorizonDataset, HorizonDatasetRow, HorizonTargetRow, target_name
+from app.forecasting.multi_horizon import HorizonDataset, HorizonDatasetRow, HorizonTargetRow, target_name, target_version
 from app.forecasting.selection_manifest import OFFICIAL_EVALUATION_CUTOFF
 from backend.tests.unit.forecasting.test_horizon_selection_manifest import evidence_template
 from backend.tests.unit.forecasting.test_horizon_calibration import manifest, _frozen
@@ -240,6 +240,10 @@ def test_bundle_has_102_reload_checked_models_actual_horizons_and_frozen_evidenc
     final_report["records"][0]["interval_coverage"].update(covered_count=50, missed_count=50, above_interval_count=50, empirical_coverage=.5)
     final_report = _rehash_final(final_report)
     args = _writer_args(tmp_path, manifest, evidence_template, calibration_report, final_report)
+    # Legitimate hexadecimal checksums can contain "30d". Check horizon
+    # declarations structurally, never search arbitrary serialized JSON text.
+    source_digest = "30d" + "0" * 61
+    args["source_file_sha256"]["backend/app/forecasting/horizon_artifacts.py"] = source_digest
     originals = canonical_json_bytes([calibration_report, final_report])
     result = artifacts.write_weekly_bundle(_histories(), **args)
     root = args["artifact_root"]
@@ -259,7 +263,18 @@ def test_bundle_has_102_reload_checked_models_actual_horizons_and_frozen_evidenc
         assert sha256_file(root / record["model_path"]) == record["model_sha256"]
         assert sha256_file(root / record["metadata_path"]) == record["metadata_sha256"]
         assert metadata["eligible_training_endpoint_max"] == "2026-09-17"
-        assert "30d" not in json.dumps(metadata)
+        horizon = record["horizon_days"]
+        expected_target = target_name(model._model.target_type, horizon)
+        assert metadata["artifact_schema_version"] == artifacts.MODEL_SCHEMA
+        assert metadata["target_type"] == expected_target
+        assert metadata["target_version"] == target_version(horizon)
+        assert metadata["horizon_definition"]["calendar_days"] == horizon
+        assert metadata["selection_evidence"]["target_type"] == expected_target
+        for evidence_key in ("calibration_evidence", "final_test_evidence"):
+            assert metadata[evidence_key]["target_type"] == expected_target
+            assert metadata[evidence_key]["horizon_days"] == horizon
+            assert metadata[evidence_key]["target_set_version"] == target_version(horizon)
+        assert metadata["source_file_sha256"]["backend/app/forecasting/horizon_artifacts.py"] == source_digest
     first = json.loads((root / result["generated_artifacts"][0]["metadata_path"]).read_text())
     assert "final_interval_coverage_below_nominal" in first["warning_codes"]
     assert first["final_test_evidence"]["interval_coverage"]["empirical_coverage"] == .5
