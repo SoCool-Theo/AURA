@@ -14,6 +14,7 @@ import { useNotificationBadge } from '../../notifications/useNotifications';
 
 const items = [
   { label: 'Analytics', description: 'Detailed risk metrics', icon: 'analytics-outline', color: colors.primary, bg: colors.cyanBackground, route: 'Analytics' },
+  { label: 'Forecasting', description: '30-day portfolio and asset outlooks · V1 Preview', icon: 'trending-up-outline', color: colors.primary, bg: colors.cyanBackground, route: 'Forecasting' },
   { label: 'Reports', description: 'Saved analysis results', icon: 'document-text-outline', color: colors.purpleSoft, bg: colors.purpleBackground, route: 'Reports' },
   { label: 'Watchlist', description: 'Follow supported assets', icon: 'eye-outline', color: colors.primary, bg: colors.cyanBackground, route: 'Watchlist' },
   { label: 'Learn', description: 'Portfolio-risk education', icon: 'school-outline', color: colors.blue, bg: colors.blueBackground, route: 'Learn' },
@@ -51,6 +52,10 @@ export function MoreScreen({ navigation }: { navigation: any }) {
   }, [listStatus, portfolios, refreshReportHistory, refreshSimulationHistory]));
 
   function open(route: (typeof items)[number]['route']) {
+    if (route === 'Forecasting') {
+      navigation.navigate('Forecasting', { portfolioId: activePortfolioId ?? undefined, returnToHome: false });
+      return;
+    }
     if (route === 'Analytics') {
       navigation.navigate('Analytics', {
         portfolioId: activePortfolioId ?? undefined

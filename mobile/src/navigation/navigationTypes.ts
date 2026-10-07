@@ -5,6 +5,13 @@ export type AuthStackParamList = {
   Register: undefined;
 };
 
+export type ForecastingParams = {
+  scope?: 'portfolio' | 'asset';
+  portfolioId?: string;
+  symbol?: string;
+  returnToHome?: boolean;
+};
+
 export type PortfolioStackParamList = {
   Portfolios: undefined;
   PortfolioDetail: { portfolioId: string };
@@ -12,6 +19,7 @@ export type PortfolioStackParamList = {
   AddAsset: { portfolioId: string };
   EditHoldings: { portfolioId: string };
   PortfolioAnalysis: { portfolioId?: string };
+  Forecasting: ForecastingParams | undefined;
   ReportDetail: { portfolioId: string; reportId: string; focusAssetSection?: boolean; focusRiskDrivers?: boolean };
   AssetRiskDetail: { portfolioId: string; reportId: string; assetSymbol: string };
 };
@@ -28,6 +36,7 @@ export type SimulationStackParamList = {
 export type MoreStackParamList = {
   More: undefined;
   Analytics: { portfolioId?: string };
+  Forecasting: ForecastingParams | undefined;
   Reports: undefined;
   ReportDetail: { portfolioId: string; reportId: string; focusAssetSection?: boolean; focusRiskDrivers?: boolean };
   AssetRiskDetail: { portfolioId: string; reportId: string; assetSymbol: string };

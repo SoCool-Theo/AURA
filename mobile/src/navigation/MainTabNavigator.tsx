@@ -10,6 +10,7 @@ import { CreatePortfolioScreen } from '../screens/portfolios/CreatePortfolioScre
 import { AddAssetScreen } from '../screens/portfolios/AddAssetScreen';
 import { EditHoldingsScreen } from '../screens/portfolios/EditHoldingsScreen';
 import { PortfolioAnalysisScreen } from '../screens/analytics/PortfolioAnalysisScreen';
+import { ForecastingScreen } from '../screens/forecasting/ForecastingScreen';
 
 import { SimulationsScreen } from '../screens/simulations/SimulationsScreen';
 import { HistoricalScenarioScreen } from '../screens/simulations/HistoricalScenarioScreen';
@@ -104,6 +105,10 @@ function PortfolioNavigator() {
         })}
       />
       <PortfolioStack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ title: 'Report Detail' }} />
+      <PortfolioStack.Screen name="Forecasting" component={ForecastingScreen} options={({ navigation }) => ({
+        title: 'Forecasting', headerBackVisible: false,
+        headerLeft: () => <BackHeaderButton label="Back from Forecasting" color={palette.text} onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Portfolios')} />
+      })} />
       <PortfolioStack.Screen name="AssetRiskDetail" component={AssetRiskDetailScreen} options={{ title: 'Asset Risk' }} />
     </PortfolioStack.Navigator>
   );
@@ -195,6 +200,10 @@ function MoreNavigator() {
       />
       <MoreStack.Screen name="AssetRiskDetail" component={AssetRiskDetailScreen} options={{ title: 'Asset Risk' }} />
       <MoreStack.Screen name="Watchlist" component={WatchlistScreen} options={{ title: 'Watchlist' }} />
+      <MoreStack.Screen name="Forecasting" component={ForecastingScreen} options={({ navigation, route }) => ({
+        title: 'Forecasting', headerBackVisible: false,
+        headerLeft: () => <BackHeaderButton label={route.params?.returnToHome ? 'Back to Dashboard' : 'Back from Forecasting'} color={palette.text} onPress={() => route.params?.returnToHome ? navigation.getParent()?.navigate('Home') : navigation.canGoBack() ? navigation.goBack() : navigation.navigate('More')} />
+      })} />
       <MoreStack.Screen name="Learn" component={LearnScreen} options={{ title: 'Learn' }} />
       <MoreStack.Screen name="LearnDetail" component={LearnDetailScreen} options={{ title: 'Lesson' }} />
       <MoreStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />

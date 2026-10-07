@@ -2908,3 +2908,29 @@ remain separate follow-on work.
   provider downloads, commits, pushes, and deployments are unchanged. Unrelated
   report files and concurrent report status entries were preserved. Weekly model
   support and forecast-specific AI/persistence remain separate follow-on work.
+
+### Mobile forecasting V1 outlook preview — 2026-10-07
+
+- Added authenticated portfolio and standalone asset outlooks in the existing
+  Portfolio/More stacks, with entry points from More, Analytics, portfolio
+  details, Home and Watchlist. The five bottom tabs and root behavior remain
+  unchanged; contextual header Back and component drill-down are covered.
+- Added typed GET transport, account/selection-scoped loading, focus cancellation,
+  response checks, timeouts, manual/pull refresh and sanitized errors. Portfolio
+  list failures do not block standalone assets; no report or forecast is saved.
+- Added themed return/volatility cards, asset nominal 80% ranges, native SVG axes
+  and actual 30-day markers, signed contributor bars, component allocations,
+  model metadata and limitations. Current/planned/legacy labels remain accurate.
+  Weekly controls stay disabled; no weekly estimates, price paths, portfolio
+  intervals, risk classifications or client financial forecasts are invented.
+- Mobile TypeScript and 84 regressions passed (15 new forecasting checks).
+  Shared market-data/notifications and web forecasting: 56 passed. Full web
+  runner: 121 passed with the same unrelated report-wording branding failure
+  preserved. Android Hermes export passed after approved compiler execution;
+  ignored build output stays under mobile/.expo/. Whitespace checks passed.
+- Added docs/development/mobile-forecasting-v1.md with file purposes, verification
+  and phone acceptance steps. Device visual/authenticated real-model acceptance
+  is pending; Node orchestration tests and export are not device E2E checks.
+- Backend, frozen artifacts, models, migrations, web production code, dependencies,
+  provider data, commits, pushes and deployments remain unchanged. Concurrent
+  report content was preserved. Weekly model support remains follow-on work.

@@ -31,7 +31,7 @@ import {
   watchlistErrorMessage
 } from '../../watchlist/watchlistUi';
 
-export function WatchlistScreen() {
+export function WatchlistScreen({ navigation }: { navigation: any }) {
   const [items, setItems] = useState<WatchlistItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -243,6 +243,7 @@ export function WatchlistScreen() {
                     <View><Text style={styles.metricLabel}>Daily</Text><Text style={[styles.metricValue, item.daily_change_percent !== null && (item.daily_change_percent >= 0 ? styles.positive : styles.negative)]}>{formatWatchlistPercent(item.daily_change_percent)}</Text></View>
                     <View><Text style={styles.metricLabel}>YTD</Text><Text style={[styles.metricValue, item.ytd_change_percent !== null && (item.ytd_change_percent >= 0 ? styles.positive : styles.negative)]}>{formatWatchlistPercent(item.ytd_change_percent)}</Text></View>
                   </View>
+                  <Button title="View Outlook" accessibilityLabel={`View ${item.symbol} outlook`} variant="secondary" onPress={() => navigation.navigate('Forecasting', { scope: 'asset', symbol: item.symbol, returnToHome: false })} />
                 </Card>
               );
             })}

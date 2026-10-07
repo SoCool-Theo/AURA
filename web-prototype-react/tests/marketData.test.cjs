@@ -222,7 +222,7 @@ for (const root of roots) {
     }
     const file = mobile ? 'src/screens/watchlist/WatchlistScreen.tsx' : 'src/pages/watchlist/WatchlistPage.tsx';
     const page = load(root, file, mocks, { React: h.react });
-    h.mount(mobile ? page.WatchlistScreen : page.WatchlistPage); await h.settle();
+    h.mount(mobile ? () => page.WatchlistScreen({ navigation: {} }) : page.WatchlistPage); await h.settle();
     const remove = () => {
       const nodes = descendants(h.value);
       if (mobile) nodes.find(node => node.props.accessibilityLabel === 'Remove AAPL from Watchlist').props.onPress();
@@ -242,7 +242,7 @@ for (const root of roots) {
     if (mobile) mocks['@react-navigation/native'].useFocusEffect = fn => fresh.react.useEffect(fn, [fn]);
     calls = 0; fail = false;
     const second = load(root, file, mocks, { React: fresh.react });
-    fresh.mount(mobile ? second.WatchlistScreen : second.WatchlistPage); await fresh.settle();
+    fresh.mount(mobile ? () => second.WatchlistScreen({ navigation: {} }) : second.WatchlistPage); await fresh.settle();
     fail = true; foreground(); await fresh.settle();
     const nodes = descendants(fresh.value); assert.ok(nodes.some(node => node.type === 'InlineErrorCard'));
     if (mobile) assert.ok(nodes.some(node => node.props.accessibilityLabel === 'Remove AAPL from Watchlist'));

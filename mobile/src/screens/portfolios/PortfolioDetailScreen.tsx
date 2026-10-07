@@ -292,6 +292,8 @@ export function PortfolioDetailScreen({
           />
         </View>
 
+        <Button title="View 30-Day Outlook" variant="secondary" onPress={() => navigation.navigate('Forecasting', { portfolioId: portfolio.id })} disabled={pendingAction !== null} />
+
         {portfolio.portfolio_type === 'PLANNED' ? (
           <>
             <View style={styles.valuationHeader}>
