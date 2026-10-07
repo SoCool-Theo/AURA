@@ -20,16 +20,21 @@ export function OutlookChart({ points, metric }: { points: OutlookPoint[]; metri
         })}
         <line x1="70" x2="600" y1={y(0)} y2={y(0)} className={styles.zero} />
         {forecastHorizons.map(day => <g key={day}><line x1={x(day)} x2={x(day)} y1="40" y2="210" className={styles.grid} /><text x={x(day)} y="232" textAnchor="middle">{day} days</text></g>)}
-        {ordered.length > 1 && <polyline points={ordered.map(point => `${x(point.horizonDays)},${y(point.estimate)}`).join(' ')} className={styles.guide} />}
+        {ordered.slice(1).map((point, index) => {
+          const previous = ordered[index];
+          // Never bridge a failed horizon or imply a common origin when dates differ.
+          if (forecastHorizons.indexOf(point.horizonDays as typeof forecastHorizons[number]) - forecastHorizons.indexOf(previous.horizonDays as typeof forecastHorizons[number]) !== 1 || point.dataDate !== previous.dataDate) return null;
+          return <polyline key={`guide-${point.horizonDays}`} points={`${x(previous.horizonDays)},${y(previous.estimate)} ${x(point.horizonDays)},${y(point.estimate)}`} className={styles.guide} />;
+        })}
         {ordered.map(point => <g key={point.horizonDays}>
           {point.interval && <g className={styles.interval}><line x1={x(point.horizonDays)} x2={x(point.horizonDays)} y1={y(point.interval.lower)} y2={y(point.interval.upper)} /><line x1={x(point.horizonDays) - 7} x2={x(point.horizonDays) + 7} y1={y(point.interval.lower)} y2={y(point.interval.lower)} /><line x1={x(point.horizonDays) - 7} x2={x(point.horizonDays) + 7} y1={y(point.interval.upper)} y2={y(point.interval.upper)} /></g>}
-          <circle cx={x(point.horizonDays)} cy={y(point.estimate)} r="6" className={styles.marker} />
+          <circle cx={x(point.horizonDays)} cy={y(point.estimate)} r="6" className={point.experimental ? styles.weeklyMarker : styles.marker}><title>{point.horizonDays}-day estimate{point.experimental ? ' · experimental' : ''}{point.dataDate ? ` · market data ${point.dataDate}` : ''}</title></circle>
           <text x={x(point.horizonDays) - 12} y={y(point.estimate) - 10} textAnchor="end" className={styles.pointLabel}>{forecastPercent(point.estimate, metric === 'return')}</text>
         </g>)}
         <text x="330" y="260" textAnchor="middle">Calendar days ahead from each forecast origin</text>
         <text x="70" y="20">{label}</text>
       </svg>
     </div>
-    <figcaption>V1 provides one 30-day estimate. 7-, 14-, and 21-day estimates are not available yet. {ordered.some(point => point.interval) ? 'Range bars show nominal 80% asset prediction ranges.' : 'No calibrated portfolio prediction range is provided.'} Connecting lines, when multiple estimates are available, are visual guides only. This is not a daily price path.</figcaption>
+    <figcaption>Only actual backend horizon estimates are plotted. {ordered.some(point => point.interval) ? 'Range bars show nominal 80% asset prediction ranges, not guaranteed achieved coverage.' : 'No calibrated portfolio prediction range is provided.'} Connecting lines are visual guides only. This is not a daily price path. Volatility is non-annualized.</figcaption>
   </figure>;
 }

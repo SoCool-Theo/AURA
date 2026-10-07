@@ -13,7 +13,7 @@ export function PortfolioAnalysisCard({ portfolioId, report, loading, failed }: 
       <button className="secondary-btn" onClick={() => go(`portfolio/${portfolioId}`)}>Open Portfolio</button>
       <button className="primary-btn" onClick={() => go(`analytics/${portfolioId}`)}>{report ? 'Analyze Again' : 'Analyze Portfolio'}</button>
       {report && <button className="secondary-btn" onClick={() => go(`reports/${portfolioId}/${report.id}`)}>View Latest Report</button>}
-      <button type="button" className="secondary-btn" onClick={() => go(`forecasting/portfolio/${portfolioId}`)}>View 30-Day Outlook</button>
+      <button type="button" className="secondary-btn" onClick={() => go(`forecasting/portfolio/${portfolioId}`)}>View Forecast Outlook</button>
       <button className="secondary-btn" onClick={() => go('reports')}>View Reports</button>
       <button className="secondary-btn" onClick={() => go(`simulations/${portfolioId}`)}>Simulate</button>
     </div>

@@ -3247,3 +3247,34 @@ remain separate follow-on work.
 - No migrations, dependencies, training/evaluation reruns, environment changes,
   frontend activation, AI grounding, staging, commits or pushes were performed.
   Concurrent report work and pre-existing status edits were preserved.
+
+### Experimental weekly web integration — 2026-10-08
+
+- The user reported 954 passing backend forecasting/schema/API regressions and
+  read-only registry integrity validation of all 102 weekly model pairs. After
+  restart, 25/25 authenticated GET-only local smoke checks passed: AAPL/QQQ at
+  7/14/21/30 days, two CURRENT and two PLANNED portfolios at all four horizons,
+  and unsupported 8-day rejection. QQQ 21-day ARIMA warnings remain intact.
+  Runtime success is not predictive-quality approval or a fresh holdout result.
+- Enabled actual 7/14/21-day web asset and portfolio outlooks through separate
+  typed weekly contracts/adapters; unchanged 30-day APIs remain the default.
+  Horizon-aware cards and breakdowns retain backend weights, intervals and
+  signed contributions. Calendar-day, experimental/not-quality-approved and
+  per-target warning checks reject malformed or mixed-horizon responses.
+- Added optional Compare all horizons with independent requests/timeouts and
+  failures. Available points and date/status rows remain visible when another
+  horizon fails. No stale selection/account results or scaled-value fallback.
+  Lines are visual guides only and do not bridge missing horizons or different
+  market-data dates; no daily path or portfolio prediction interval is invented.
+- Weekly notices, amber points, friendly target-specific warnings and complete
+  backend limitations retain the experimental quality boundary. Updated web
+  entry labels, scoped theme styles, regressions and rollout documentation.
+  Signed-in browser checks confirmed current/planned four-horizon comparisons,
+  return/volatility switching, immediate loaded-horizon selection and QQQ's
+  21-day asset ranges/ARIMA warning. Compact web controls/chart were inspected.
+  Terminal tests/build await the user's manual commands; no new passing client
+  count is claimed. Mobile weekly parity remains the next checkpoint.
+- No backend, model/artifact, database, migration, training/evaluation, provider,
+  AI grounding, dependency, architecture, staging, commit or push changes.
+  Unrelated untracked docs/report content is preserved and excluded from Git
+  staging guidance.

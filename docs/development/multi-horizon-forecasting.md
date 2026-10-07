@@ -485,11 +485,24 @@ do not bypass freshness. No migration or retraining is needed for this step.
 
 ## Remaining checkpoints
 
-1. User-run new regressions and read-only runtime integrity check, then manual
-   authenticated asset/portfolio smoke checks on fresh application data.
-2. Integrate backend-supported horizons on both clients, enabling only verified
-   horizons. Plot actual horizon estimates and asset ranges; connecting lines
-   are visual guides, not a predicted daily price trajectory. Do not invent
-   portfolio prediction intervals or forecast AI grounding.
+Backend verification completed: the user reported 954 passing regressions and
+102 model pairs passing read-only runtime integrity validation. Authenticated
+GET-only localhost checks passed 25/25: AAPL/QQQ at all four horizons, two CURRENT
+and two PLANNED portfolios at all four horizons, and unsupported 8-day rejection.
+The QQQ 21-day volatility convergence warning remained in the response. This
+does not approve predictive quality or constitute a new untouched holdout.
+
+Web integration is implemented at the 2026-10-08 checkpoint. Weekly selectors
+use actual backend estimates; the original 30-day contract stays unchanged and
+default. Optional all-horizon comparison has independent failure handling,
+explicit unavailable rows, date-aware gaps, nominal asset ranges and educational
+experimental/warning presentation. See [web integration report](web-forecasting-v1.md)
+for manual tests and acceptance. Mobile remains unchanged for this checkpoint.
+
+1. User-run web regressions and production build, then review authenticated
+   web rendering and compact layouts before mobile parity.
+2. Integrate the same verified horizons on mobile. Plot actual horizon estimates
+   and asset ranges; connecting lines are visual guides, not a predicted daily
+   trajectory. Do not invent portfolio intervals or forecast AI grounding.
 
 Suggested checkpoint commit: `feat(forecasting): serve experimental weekly asset and portfolio outlooks`

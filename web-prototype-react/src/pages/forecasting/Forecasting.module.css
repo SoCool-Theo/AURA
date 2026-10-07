@@ -20,6 +20,15 @@
 .field small { font-size: 10px; color: var(--text-muted); font-weight: 400; }
 .horizons button { flex: 1; min-width: 75px; }
 .horizons small { display: block; margin-top: 4px; font-size: 9px; }
+.compareControl { display: flex; align-items: center; gap: 8px; margin-top: 14px; min-height: 36px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+.compareControl input { accent-color: var(--teal-primary); width: 16px; height: 16px; }
+.compareControl input:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 3px; }
+.qualityNotice { padding: 12px 15px; border: 1px solid var(--amber-bright); border-radius: 10px; background: var(--warning-background); color: var(--text-secondary); font-size: 11px; line-height: 1.7; }
+.qualityNotice strong { color: var(--amber-bright); }
+.qualityNotice p { margin: 5px 0 0; }
+.qualityNotice ul { padding-left: 18px; margin-bottom: 0; }
+.comparisonTable { min-width: 650px; }
+.comparisonWarnings { margin-top: 14px; }
 .note, .figure figcaption { margin: 12px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.65; }
 .education { margin: 0; padding: 12px 15px; background: var(--cyan-background); border: 1px solid var(--border-card); border-radius: 12px; color: var(--text-secondary); font-size: 11px; line-height: 1.7; }
 .results { display: grid; gap: 16px; }
@@ -49,6 +58,7 @@
 .zero { stroke: var(--text-muted); stroke-dasharray: 4 5; opacity: .5; }
 .guide { fill: none; stroke: var(--teal-primary); stroke-width: 2; stroke-dasharray: 7 5; }
 .marker { fill: var(--teal-primary); stroke: var(--bg-card); stroke-width: 2; }
+.weeklyMarker { fill: var(--amber-bright); stroke: var(--bg-card); stroke-width: 2; }
 .interval { stroke: var(--teal-bright); stroke-width: 2; opacity: .75; }
 .chart .pointLabel { fill: var(--text-primary); font-weight: 700; }
 .drivers { display: grid; gap: 14px; }
