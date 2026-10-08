@@ -13,6 +13,7 @@ from ..database.models import Portfolio
 from ..services.market_data_service import MarketDataService
 from ..services.portfolio_baseline_resolver import PortfolioBaselineResolutionService
 from .inference_errors import ForecastMarketDataUnavailableError, ForecastPredictionError
+from .monetary_projection import PortfolioMonetaryProjection, build_monetary_projection
 from .portfolio import validated_weights, aligned_log_returns, historical_correlation, compose_volatility
 from .weekly_inference import WeeklyAssetForecast, WeeklyForecastInferenceService
 from .weekly_registry import WEEKLY_VERSION, validate_weekly_horizon
@@ -40,6 +41,7 @@ class WeeklyPortfolioForecast:
     market_data_as_of: date
     artifact_version: str
     components: tuple[WeeklyPortfolioComponent, ...]
+    monetary_projection: PortfolioMonetaryProjection | None = None
 
 
 def _validate_component(forecast: WeeklyAssetForecast, symbol: str, horizon: int, today: date):
@@ -100,4 +102,5 @@ class WeeklyPortfolioForecastService:
             expected_return, sigma, as_of, len(returns), min(f.market_data_as_of for f in forecasts),
             WEEKLY_VERSION, tuple(WeeklyPortfolioComponent(f, float(w), float(rc), float(share))
                 for f, w, rc, share in zip(forecasts, weights, contributions, shares)),
+            monetary_projection=build_monetary_projection(baseline, expected_return),
         )

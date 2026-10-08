@@ -1,7 +1,9 @@
 """Finite JSON and provenance invariants for portfolio forecast responses."""
 
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import date
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -9,6 +11,7 @@ from pydantic import ValidationError
 
 from backend.app.forecasting.inference import AssetForecast
 from backend.app.forecasting.portfolio import PortfolioForecast, PortfolioForecastComponent
+from backend.app.forecasting.monetary_projection import PortfolioMonetaryProjection
 from backend.app.schemas.forecasting import PortfolioOutlookResponse
 from backend.app.services.forecasting_response_mapper import map_portfolio_outlook
 
@@ -74,3 +77,44 @@ def test_unknown_fields_and_duplicate_components_rejected():
     body = payload(); body["components"] *= 2
     with pytest.raises(ValidationError):
         PortfolioOutlookResponse.model_validate(body)
+
+
+def monetary_payload(kind="current"):
+    body = payload()
+    day = date(2026,10,1)
+    body["baseline_kind"] = kind
+    body["monetary_projection"] = asdict(PortfolioMonetaryProjection(
+        "USD", "current_market_value", Decimal("10000"), Decimal("300"), Decimal("10300"),
+        False, False, day, day, day))
+    return body
+
+
+def test_money_schema_round_trip_and_input_nonmutation():
+    body = monetary_payload()
+    before = deepcopy(body)
+    response = PortfolioOutlookResponse.model_validate(body)
+    assert PortfolioOutlookResponse.model_validate_json(response.model_dump_json()) == response
+    assert body == before
+
+
+@pytest.mark.parametrize("kind", ["current", "planned"])
+def test_actual_amount_portfolios_require_money_context(kind):
+    body = payload()
+    body["baseline_kind"] = kind
+    with pytest.raises(ValidationError):
+        PortfolioOutlookResponse.model_validate(body)
+
+
+@pytest.mark.parametrize("field,value", [("expected_change_amount","299.99"),
+    ("estimated_ending_value","10301"), ("baseline_amount","9999")])
+def test_amounts_must_match_portfolio_return(field, value):
+    body = monetary_payload()
+    body["monetary_projection"][field] = value
+    with pytest.raises(ValidationError):
+        PortfolioOutlookResponse.model_validate(body)
+
+
+@pytest.mark.parametrize("kind", ["legacy", "planned"])
+def test_money_source_must_match_portfolio_kind(kind):
+    with pytest.raises(ValidationError):
+        PortfolioOutlookResponse.model_validate(monetary_payload(kind))

@@ -19,6 +19,7 @@ from ..services.portfolio_baseline_resolver import (
 )
 from .data import ForecastDataError, build_price_histories
 from .inference import AssetForecast, ForecastInferenceService
+from .monetary_projection import PortfolioMonetaryProjection, build_monetary_projection
 from .inference_errors import (
     ForecastHistoryInsufficientError,
     ForecastMarketDataUnavailableError, ForecastPredictionError,
@@ -58,6 +59,7 @@ class PortfolioForecast:
     market_data_as_of: date
     artifact_version: str
     components: tuple[PortfolioForecastComponent, ...]
+    monetary_projection: PortfolioMonetaryProjection | None = None
 
 
 def validated_weights(
@@ -257,4 +259,5 @@ class PortfolioForecastService:
             forecasts[0].artifact_version,
             tuple(PortfolioForecastComponent(f, float(w), float(rc), float(share))
                   for f, w, rc, share in zip(forecasts, weights, contributions, shares)),
+            monetary_projection=build_monetary_projection(baseline, expected_return),
         )

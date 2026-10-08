@@ -1,5 +1,7 @@
 """Copy weekly model-owned numbers and retained warnings into public contracts."""
 
+from dataclasses import asdict
+
 from ..forecasting.weekly_inference import WeeklyAssetForecast
 from ..forecasting.weekly_portfolio import WeeklyPortfolioForecast
 from ..schemas.weekly_forecasting import (
@@ -47,5 +49,6 @@ def map_weekly_portfolio_outlook(forecast: WeeklyPortfolioForecast) -> WeeklyPor
             forecast_volatility_contribution=component.forecast_volatility_contribution,
             forecast_volatility_contribution_share=component.forecast_volatility_contribution_share,
         ) for component in forecast.components],
+        monetary_projection=asdict(forecast.monetary_projection) if forecast.monetary_projection is not None else None,
         limitations=list(WEEKLY_PORTFOLIO_LIMITATIONS), **QUALITY_FIELDS,
     )

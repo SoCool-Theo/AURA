@@ -1,5 +1,7 @@
 """Pure mapping of internal forecasts to the public asset outlook contract."""
 
+from dataclasses import asdict
+
 from ..forecasting.inference import AssetForecast
 from ..forecasting.portfolio import PortfolioForecast
 from ..schemas.forecasting import (
@@ -62,5 +64,6 @@ def map_portfolio_outlook(forecast: PortfolioForecast) -> PortfolioOutlookRespon
             )
             for component in forecast.components
         ],
+        monetary_projection=asdict(forecast.monetary_projection) if forecast.monetary_projection is not None else None,
         limitations=list(PORTFOLIO_FORECAST_LIMITATIONS),
     )

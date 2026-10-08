@@ -3329,3 +3329,24 @@ remain separate follow-on work.
 - Added single-string/centered tick regressions for asset, portfolio and comparison
   graphs. Whitespace checks passed; tests/typecheck and phone verification remain
   for the user's manual run. No staging, commit or push was performed.
+
+### Portfolio Outlook monetary projection backend — 2026-10-09
+
+- Added a portfolio-only `monetary_projection` to 7/14/21/30-day Outlook responses:
+  baseline, expected change, ending estimate, currency and baseline provenance.
+  CURRENT reuses the already resolved USD market value (latest persisted prices
+  times shares), not purchase cost or saved analysis. PLANNED reuses the entered
+  proposed total in USD/THB and is explicitly hypothetical. LEGACY remains
+  percentage-only with a null projection; asset Outlooks/components are unchanged.
+- One shared pure Decimal helper preserves existing forecast ratios and amount
+  precision without rounding, compounding, clamping, extra valuation queries or
+  FX fetching. THB assumes unchanged exchange rates. Volatility is not presented
+  as monetary loss, and no portfolio monetary prediction interval is introduced.
+- Added strict monetary context/arithmetic contracts and synthetic calculation,
+  schema, all-horizon composition and authenticated API regressions. Updated the
+  public contract. Whitespace/source review completed; tests remain pending the
+  user's manual command, and no new passing count is claimed.
+- No frontend, database/migrations, models/artifacts, provider, training,
+  dependencies or AI-context changes. No staging, commit or push; unrelated
+  untracked docs/report content is preserved. Web/mobile money presentation is
+  the next integration step after backend tests pass.

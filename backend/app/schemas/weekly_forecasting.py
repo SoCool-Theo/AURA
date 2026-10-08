@@ -9,6 +9,7 @@ from pydantic import Field, field_validator, model_validator
 
 from ..core.instruments import USER_ASSET_SYMBOLS
 from .common import AssetSymbol, AuraBaseModel
+from .forecasting_monetary import PortfolioMonetaryProjectionResponse, validate_monetary_projection
 from .forecasting import (
     FORECAST_LIMITATIONS, PORTFOLIO_FORECAST_LIMITATIONS,
     ForecastPredictionInterval, VolatilityPredictionInterval,
@@ -111,6 +112,7 @@ class WeeklyPortfolioOutlookResponse(AuraBaseModel):
     predictive_quality_approved: Literal[False]
     quality_status: Literal["experimental_educational_not_predictive_quality_approved"]
     components: Annotated[list[WeeklyPortfolioOutlookComponent], Field(min_length=1)]
+    monetary_projection: PortfolioMonetaryProjectionResponse | None = None
     limitations: list[str]
 
     @field_validator("horizon_days", mode="before")
@@ -127,6 +129,7 @@ class WeeklyPortfolioOutlookResponse(AuraBaseModel):
 
     @model_validator(mode="after")
     def composition_context(self) -> Self:
+        validate_monetary_projection(self.monetary_projection, self.baseline_kind, self.expected_return)
         if len({c.symbol for c in self.components}) != len(self.components):
             raise ValueError("portfolio components must be unique")
         if not math.isclose(math.fsum(c.current_weight for c in self.components), 1., rel_tol=0, abs_tol=1e-10):

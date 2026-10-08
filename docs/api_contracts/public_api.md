@@ -211,6 +211,54 @@ No forecast is persisted and no model is fitted, updated, recalibrated, or
 reselected. One unavailable component fails the whole outlook; no fallback or
 partial reweighting is performed.
 
+### Portfolio monetary projection (all four horizons)
+
+Both the 30-day portfolio route and the 7/14/21-day portfolio routes add
+`monetary_projection`. CURRENT and PLANNED responses require this object;
+LEGACY responses return `null` because saved weights do not establish a money
+baseline. Standalone asset responses and asset components have no monetary
+projection. No request inputs, database migration or model retraining are added.
+
+The object contains:
+
+- `currency`: CURRENT is `USD`; PLANNED preserves the saved `USD` or `THB` plan
+  currency. This is not a caller-selected display-currency conversion.
+- `baseline_source`: `current_market_value` or `planned_investment`.
+- `baseline_amount`: CURRENT uses the same resolved valuation's
+  `total_current_value_usd` (sum of saved latest adjusted-close prices times
+  shares), not purchase cost or an old saved analysis. PLANNED uses the same
+  resolved allocation's `total_proposed_amount`, without purchasing assets or
+  fetching prices/FX for its monetary baseline.
+- `expected_change_amount = baseline_amount * expected_return` and
+  `estimated_ending_value = baseline_amount + expected_change_amount`. The ratio
+  is the unchanged portfolio `expected_return_30d` or weekly `expected_return`,
+  never annualized, compounded or scaled from another horizon. For example,
+  a USD 10,000 baseline and a 0.03 estimate give USD 300 change and USD 10,300
+  ending value. Negative and zero estimates are preserved without clipping.
+- `hypothetical`: false for CURRENT, true for PLANNED.
+- `assumes_unchanged_fx`: true for THB, false for USD. Applying USD asset-return
+  estimates to a THB plan assumes unchanged exchange rates; it is not an FX
+  forecast or a conversion using a fabricated rate.
+- `valuation_requested_date`, `oldest_price_as_of`, `newest_price_as_of`: CURRENT
+  copies the valuation's reference date and actual price-date range. These dates
+  are separate from forecast-origin/correlation dates. PLANNED sets all three to
+  null because its proposed amount is not a market valuation.
+- `limitations`: fixed educational wording about uncertain arithmetic estimates,
+  unchanged allocation/holdings, excluded fees/taxes/cash flows, hypothetical
+  plans, FX assumptions, and the absence of a portfolio monetary prediction
+  interval. Volatility is not converted into a monetary loss estimate. Model
+  returns below -100% are not clamped; any negative ending estimate is an
+  arithmetic illustration, not a realizable long-only balance.
+
+All three money amounts are finite Decimals serialized as JSON strings to retain
+precision. Calculation uses a local high-precision Decimal context, does not
+round to cents, and reuses the one authoritative baseline already resolved for
+the request; it adds no valuation lookup. Display rounding belongs to clients.
+Schemas reject baseline/currency/date mismatches or amounts inconsistent with
+the portfolio ratio. Malformed projection outputs use the existing safe `503`
+response. Ownership, component completeness, model-quality caveats and all
+existing return/volatility/interval fields remain unchanged.
+
 Missing and wrong-owner portfolios return identical `404 Portfolio not found`
 responses. Unusable allocations/holding states and unsupported assets return
 safe `409` responses. Insufficient common history, stale market data, artifact
@@ -221,8 +269,9 @@ residuals, and training metadata are never public.
 ## Experimental weekly forecasting
 
 The two additive `/horizons/{horizon_days}/outlook` routes above accept only
-`7`, `14` or `21`; other horizons return `422`. Use the unchanged original
-`/outlook` routes and contracts for 30 days. Bearer authentication, 17-asset
+`7`, `14` or `21`; other horizons return `422`. Use the original `/outlook`
+routes for 30 days; their portfolio response has the additive monetary object
+described above, while their existing model fields are unchanged. Bearer authentication, 17-asset
 symbol normalization and owner-safe portfolio lookup are unchanged. There is
 no request body, user-supplied weights, model selection, historical date or
 provider-refresh input. Requests read current persisted observations only.

@@ -163,6 +163,11 @@ def portfolio_service(kind="current"):
     instance = portfolio_module.WeeklyPortfolioForecastService(MagicMock())
     instance._baseline = MagicMock()
     instance._baseline.resolve.return_value = SimpleNamespace(baseline_kind=SimpleNamespace(value=kind),
+        valuation=SimpleNamespace(total_current_value_usd=Decimal("10000"), requested_date=TODAY,
+            oldest_price_as_of=TODAY, newest_price_as_of=TODAY) if kind == "current" else None,
+        valuation_as_of=TODAY if kind == "current" else None,
+        planned_allocation=SimpleNamespace(total_proposed_amount=Decimal("10000"), plan_currency="THB")
+            if kind == "planned" else None,
         resolved_weights=(ResolvedPortfolioWeight("AAPL", Decimal(".6")), ResolvedPortfolioWeight("MSFT", Decimal(".4"))))
     instance._market_data = MagicMock()
     instance._market_data.get_range.return_value = portfolio_prices()
@@ -192,6 +197,26 @@ def test_authoritative_baseline_same_horizon_composition(horizon, kind):
     assert not any("interval" in key for key in public)
     assert {row["horizon_days"] for row in public["components"]} == {horizon}
     WeeklyPortfolioOutlookResponse.model_validate(public)
+    if kind == "legacy":
+        assert public["monetary_projection"] is None
+    else:
+        money = public["monetary_projection"]
+        assert money["baseline_amount"] == Decimal("10000")
+        assert money["expected_change_amount"] == Decimal(str(result.expected_return)) * 10000
+        assert money["currency"] == ("USD" if kind == "current" else "THB")
+        assert money["hypothetical"] == (kind == "planned")
+        assert money["assumes_unchanged_fx"] == (kind == "planned")
+
+
+@pytest.mark.parametrize("horizon", [7,14,21])
+def test_weekly_monetary_contract_rejects_inconsistent_amounts(horizon):
+    instance, portfolio = portfolio_service()
+    with patch.object(portfolio_module, "WeeklyForecastInferenceService") as constructor:
+        constructor.return_value.predict.side_effect = (asset(horizon=horizon), asset("MSFT", horizon=horizon))
+        public = map_weekly_portfolio_outlook(instance.predict(portfolio, horizon_days=horizon)).model_dump()
+    public["monetary_projection"]["estimated_ending_value"] = Decimal("1")
+    with pytest.raises(ValidationError):
+        WeeklyPortfolioOutlookResponse.model_validate(public)
 
 
 @pytest.mark.parametrize("changes", [{"horizon_days":14}, {"target_version":"forecast-targets-30d-v1"},
