@@ -10,8 +10,10 @@ import pytest
 from pydantic import ValidationError
 
 from backend.app.forecasting.inference_errors import ForecastPredictionError
-from backend.app.forecasting.monetary_projection import build_monetary_projection, projection_amounts
-from backend.app.schemas.forecasting_monetary import PortfolioMonetaryProjectionResponse
+from backend.app.forecasting.monetary_projection import (
+    build_monetary_projection, projection_amounts, build_component_monetary_projections,
+)
+from backend.app.schemas.forecasting_monetary import PortfolioMonetaryProjectionResponse, validate_monetary_breakdown
 from backend.app.services.portfolio_baseline_resolver import PortfolioBaselineKind, PortfolioBaselineResolution
 
 
@@ -129,3 +131,111 @@ def test_planned_thb_disclosure_without_fabricated_market_dates(field, value):
     payload[field] = value
     with pytest.raises(ValidationError):
         PortfolioMonetaryProjectionResponse.model_validate(payload)
+
+
+def component_baseline(kind="current", currency="USD"):
+    source = baseline(kind, currency=currency)
+    if source.valuation is not None:
+        source.valuation.holdings = (
+            SimpleNamespace(symbol="MSFT", current_value_usd=Decimal("4000"), price_as_of=DAY-timedelta(days=1)),
+            SimpleNamespace(symbol="AAPL", current_value_usd=Decimal("6000"), price_as_of=DAY-timedelta(days=2)),
+        )
+    if source.planned_allocation is not None:
+        source.planned_allocation.holdings = (
+            SimpleNamespace(symbol="MSFT", proposed_amount=Decimal("4000")),
+            SimpleNamespace(symbol="AAPL", proposed_amount=Decimal("6000")),
+        )
+    return source
+
+
+@pytest.mark.parametrize("kind,currency", [("current","USD"), ("planned","USD"), ("planned","THB")])
+def test_breakdown_uses_exact_symbol_matched_amounts_and_each_assets_return(kind, currency):
+    source = component_baseline(kind, currency)
+    before = deepcopy(source)
+    parent = build_monetary_projection(source, .04)
+    returns = (("AAPL", .1), ("MSFT", -.05))
+    projections = build_component_monetary_projections(source, returns, parent)
+    assert list(projections) == ["AAPL", "MSFT"]  # Valuation/allocation order is intentionally reversed.
+    assert projections["AAPL"].baseline_amount == Decimal("6000")
+    assert projections["MSFT"].baseline_amount == Decimal("4000")
+    assert projections["AAPL"].expected_change_amount == Decimal("600")
+    assert projections["MSFT"].expected_change_amount == Decimal("-200")
+    assert projections["AAPL"].estimated_ending_value == Decimal("6600")
+    assert projections["MSFT"].estimated_ending_value == Decimal("3800")
+    assert all(p.currency == currency and p.hypothetical == (kind == "planned") for p in projections.values())
+    assert projections["AAPL"].oldest_price_as_of == (DAY-timedelta(days=2) if kind == "current" else None)
+    assert projections["MSFT"].newest_price_as_of == (DAY-timedelta(days=1) if kind == "current" else None)
+    assert source == before
+    validate_monetary_breakdown(PortfolioMonetaryProjectionResponse.model_validate(asdict(parent)),
+        [(PortfolioMonetaryProjectionResponse.model_validate(asdict(projections[symbol])), rate, weight)
+         for (symbol, rate), weight in zip(returns, (.6, .4))])
+
+
+def test_legacy_breakdown_remains_percentage_only():
+    assert build_component_monetary_projections(baseline("legacy"), (("AAPL", .1), ("MSFT", -.05)), None) == {
+        "AAPL": None, "MSFT": None}
+
+
+@pytest.mark.parametrize("returns", [(), (("AAPL",.1),), (("AAPL",.1),("AAPL",.2)),
+    (("AAPL",.1),("GOOGL",.2))])
+def test_missing_extra_or_duplicate_component_symbols_never_drop_holdings(returns):
+    source = component_baseline()
+    with pytest.raises(ForecastPredictionError):
+        build_component_monetary_projections(source, returns, build_monetary_projection(source, .04))
+
+
+@pytest.mark.parametrize("kind", ["current", "planned"])
+def test_inconsistent_holding_total_is_controlled(kind):
+    source = component_baseline(kind)
+    row = source.valuation.holdings[0] if kind == "current" else source.planned_allocation.holdings[0]
+    setattr(row, "current_value_usd" if kind == "current" else "proposed_amount", Decimal("4001"))
+    with pytest.raises(ForecastPredictionError):
+        build_component_monetary_projections(source, (("AAPL",.1),("MSFT",-.05)), build_monetary_projection(source, .04))
+
+
+def test_high_precision_proposed_amounts_are_not_reconstructed_from_rounded_weights():
+    source = component_baseline("planned", "THB")
+    msft, aapl = source.planned_allocation.holdings
+    aapl.proposed_amount = Decimal("6000.000000000001")
+    msft.proposed_amount = Decimal("4000.000000000002")
+    source.planned_allocation.total_proposed_amount = Decimal("10000.000000000003")
+    with localcontext() as context:
+        context.prec = 200
+        expected_change = aapl.proposed_amount * Decimal("0.01234567890123456")
+    with localcontext() as context:
+        context.prec = 2
+        parent = build_monetary_projection(source, .04)
+        result = build_component_monetary_projections(source, (("AAPL", .01234567890123456), ("MSFT", 0.)), parent)
+        assert result["AAPL"].baseline_amount == aapl.proposed_amount
+        assert result["MSFT"].baseline_amount == msft.proposed_amount
+        assert result["AAPL"].expected_change_amount == expected_change
+        assert result["MSFT"].expected_change_amount == 0
+        assert context.prec == 2
+
+
+@pytest.mark.parametrize("mutation", ["missing", "return", "weight", "sum", "currency", "price_range", "reference_date"])
+def test_public_breakdown_validates_amount_currency_allocation_and_provenance(mutation):
+    source = component_baseline("planned" if mutation == "currency" else "current")
+    parent = PortfolioMonetaryProjectionResponse.model_validate(asdict(build_monetary_projection(source, .04)))
+    result = build_component_monetary_projections(source, (("AAPL",.1),("MSFT",-.05)),
+        build_monetary_projection(source, .04))
+    first = PortfolioMonetaryProjectionResponse.model_validate(asdict(result["AAPL"]))
+    second = PortfolioMonetaryProjectionResponse.model_validate(asdict(result["MSFT"]))
+    rate, weight = .1, .6
+    if mutation == "missing":
+        first = None
+    elif mutation == "return":
+        rate = .2
+    elif mutation == "weight":
+        weight = .4
+    elif mutation == "sum":
+        first = first.model_copy(update={"baseline_amount":Decimal("6001"),
+            "expected_change_amount":Decimal("600.1"), "estimated_ending_value":Decimal("6601.1")})
+    elif mutation == "currency":
+        first = first.model_copy(update={"currency":"THB", "assumes_unchanged_fx":True})
+    elif mutation == "price_range":
+        first = first.model_copy(update={"oldest_price_as_of":DAY-timedelta(days=3), "newest_price_as_of":DAY-timedelta(days=3)})
+    else:
+        first = first.model_copy(update={"valuation_requested_date":DAY+timedelta(days=1)})
+    with pytest.raises(ValueError):
+        validate_monetary_breakdown(parent, [(first,rate,weight),(second,-.05,.4)])

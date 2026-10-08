@@ -187,7 +187,9 @@ def composition():
     service._baseline.resolve.return_value = SimpleNamespace(
         resolved_weights=weights(.6,.4), baseline_kind=SimpleNamespace(value="current"),
         valuation=SimpleNamespace(total_current_value_usd=Decimal("10000"), requested_date=TODAY,
-            oldest_price_as_of=TODAY-timedelta(days=2), newest_price_as_of=TODAY),
+            oldest_price_as_of=TODAY-timedelta(days=2), newest_price_as_of=TODAY,
+            holdings=(SimpleNamespace(symbol="AAPL", current_value_usd=Decimal("6000"), price_as_of=TODAY),
+                SimpleNamespace(symbol="MSFT", current_value_usd=Decimal("4000"), price_as_of=TODAY-timedelta(days=2)))),
         valuation_as_of=TODAY, planned_allocation=None)
     service._market_data = MagicMock()
     service._market_data.get_range.return_value = prices()
@@ -223,6 +225,10 @@ def test_authoritative_weights_arithmetic_return_origins_and_reused_inference(co
     assert response.monetary_projection.expected_change_amount == Decimal(str(result.expected_return_30d)) * 10000
     assert response.monetary_projection.valuation_requested_date == TODAY
     assert response.monetary_projection.oldest_price_as_of == TODAY-timedelta(days=2)
+    assert [c.monetary_projection.baseline_amount for c in response.components] == [Decimal("6000"), Decimal("4000")]
+    assert [c.monetary_projection.expected_change_amount for c in response.components] == [Decimal("600"), Decimal("-200")]
+    assert [c.monetary_projection.estimated_ending_value for c in response.components] == [Decimal("6600"), Decimal("3800")]
+    assert response.components[1].monetary_projection.oldest_price_as_of == TODAY-timedelta(days=2)
     assert response.components[0].return_prediction_interval.lower == -.2
     assert not any("interval" in key for key in response.model_dump())
     for name in ("commit","add","delete","execute"):
@@ -277,6 +283,7 @@ def test_real_baseline_infrastructure_preserves_supported_modes(mode, currency):
     assert valuation.call_count == (1 if mode=="CURRENT" else 0)
     if mode == "LEGACY":
         assert result.monetary_projection is None
+        assert all(c.monetary_projection is None for c in result.components)
     else:
         money = result.monetary_projection
         assert money.baseline_amount == Decimal("100")  # Shares x latest price, not purchase cost.
@@ -285,6 +292,8 @@ def test_real_baseline_infrastructure_preserves_supported_modes(mode, currency):
         assert money.estimated_ending_value == Decimal("110")
         assert money.hypothetical == (mode == "PLANNED")
         assert money.assumes_unchanged_fx == (currency == "THB")
+        assert [c.monetary_projection.baseline_amount for c in result.components] == [Decimal("60"), Decimal("40")]
+        assert [c.monetary_projection.expected_change_amount for c in result.components] == [Decimal("6"), Decimal("4")]
     map_portfolio_outlook(result)  # Validate production resolver provenance as well as the calculation.
 
 

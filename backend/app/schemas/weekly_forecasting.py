@@ -9,7 +9,9 @@ from pydantic import Field, field_validator, model_validator
 
 from ..core.instruments import USER_ASSET_SYMBOLS
 from .common import AssetSymbol, AuraBaseModel
-from .forecasting_monetary import PortfolioMonetaryProjectionResponse, validate_monetary_projection
+from .forecasting_monetary import (
+    PortfolioMonetaryProjectionResponse, validate_monetary_projection, validate_monetary_breakdown,
+)
 from .forecasting import (
     FORECAST_LIMITATIONS, PORTFOLIO_FORECAST_LIMITATIONS,
     ForecastPredictionInterval, VolatilityPredictionInterval,
@@ -94,6 +96,7 @@ class WeeklyPortfolioOutlookComponent(WeeklyAssetOutlookResponse):
     current_weight: Annotated[float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)]
     forecast_volatility_contribution: FiniteValue
     forecast_volatility_contribution_share: FiniteValue
+    monetary_projection: PortfolioMonetaryProjectionResponse | None = None
 
 
 class WeeklyPortfolioOutlookResponse(AuraBaseModel):
@@ -130,6 +133,8 @@ class WeeklyPortfolioOutlookResponse(AuraBaseModel):
     @model_validator(mode="after")
     def composition_context(self) -> Self:
         validate_monetary_projection(self.monetary_projection, self.baseline_kind, self.expected_return)
+        validate_monetary_breakdown(self.monetary_projection,
+            [(c.monetary_projection, c.expected_return, c.current_weight) for c in self.components])
         if len({c.symbol for c in self.components}) != len(self.components):
             raise ValueError("portfolio components must be unique")
         if not math.isclose(math.fsum(c.current_weight for c in self.components), 1., rel_tol=0, abs_tol=1e-10):

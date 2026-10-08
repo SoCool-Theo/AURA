@@ -164,9 +164,13 @@ def portfolio_service(kind="current"):
     instance._baseline = MagicMock()
     instance._baseline.resolve.return_value = SimpleNamespace(baseline_kind=SimpleNamespace(value=kind),
         valuation=SimpleNamespace(total_current_value_usd=Decimal("10000"), requested_date=TODAY,
-            oldest_price_as_of=TODAY, newest_price_as_of=TODAY) if kind == "current" else None,
+            oldest_price_as_of=TODAY, newest_price_as_of=TODAY,
+            holdings=(SimpleNamespace(symbol="MSFT", current_value_usd=Decimal("4000"), price_as_of=TODAY),
+                SimpleNamespace(symbol="AAPL", current_value_usd=Decimal("6000"), price_as_of=TODAY))) if kind == "current" else None,
         valuation_as_of=TODAY if kind == "current" else None,
-        planned_allocation=SimpleNamespace(total_proposed_amount=Decimal("10000"), plan_currency="THB")
+        planned_allocation=SimpleNamespace(total_proposed_amount=Decimal("10000"), plan_currency="THB",
+            holdings=(SimpleNamespace(symbol="MSFT", proposed_amount=Decimal("4000")),
+                SimpleNamespace(symbol="AAPL", proposed_amount=Decimal("6000"))))
             if kind == "planned" else None,
         resolved_weights=(ResolvedPortfolioWeight("AAPL", Decimal(".6")), ResolvedPortfolioWeight("MSFT", Decimal(".4"))))
     instance._market_data = MagicMock()
@@ -199,6 +203,7 @@ def test_authoritative_baseline_same_horizon_composition(horizon, kind):
     WeeklyPortfolioOutlookResponse.model_validate(public)
     if kind == "legacy":
         assert public["monetary_projection"] is None
+        assert all(c["monetary_projection"] is None for c in public["components"])
     else:
         money = public["monetary_projection"]
         assert money["baseline_amount"] == Decimal("10000")
@@ -206,6 +211,9 @@ def test_authoritative_baseline_same_horizon_composition(horizon, kind):
         assert money["currency"] == ("USD" if kind == "current" else "THB")
         assert money["hypothetical"] == (kind == "planned")
         assert money["assumes_unchanged_fx"] == (kind == "planned")
+        assert [c["monetary_projection"]["baseline_amount"] for c in public["components"]] == [Decimal("6000"), Decimal("4000")]
+        assert [c["monetary_projection"]["expected_change_amount"] for c in public["components"]] == [Decimal("600"), Decimal("-200")]
+        assert all(c["monetary_projection"]["currency"] == money["currency"] for c in public["components"])
 
 
 @pytest.mark.parametrize("horizon", [7,14,21])
@@ -248,6 +256,8 @@ def test_correlation_cutoff_uses_oldest_component_origin():
         result = instance.predict(portfolio, horizon_days=7)
     assert result.market_data_as_of == result.correlation_as_of_date == oldest
     instance._market_data.get_range.assert_called_once_with(("AAPL","MSFT"), date.min, oldest)
+    assert result.components[1].monetary_projection.oldest_price_as_of == TODAY
+    assert result.components[1].monetary_projection.valuation_requested_date == TODAY
 
 
 def test_failed_component_is_not_dropped_or_reweighted():

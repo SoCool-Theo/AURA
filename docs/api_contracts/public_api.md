@@ -216,8 +216,10 @@ partial reweighting is performed.
 Both the 30-day portfolio route and the 7/14/21-day portfolio routes add
 `monetary_projection`. CURRENT and PLANNED responses require this object;
 LEGACY responses return `null` because saved weights do not establish a money
-baseline. Standalone asset responses and asset components have no monetary
-projection. No request inputs, database migration or model retraining are added.
+baseline. Portfolio components also include their holding-specific monetary
+projection, as described below. Standalone asset responses remain independent
+and have no monetary projection. No request inputs, database migration or model
+retraining are added.
 
 The object contains:
 
@@ -258,6 +260,29 @@ Schemas reject baseline/currency/date mismatches or amounts inconsistent with
 the portfolio ratio. Malformed projection outputs use the existing safe `503`
 response. Ownership, component completeness, model-quality caveats and all
 existing return/volatility/interval fields remain unchanged.
+
+Each item in portfolio `components` adds its own `monetary_projection` with the
+same fields. CURRENT uses that symbol's exact `current_value_usd` from the
+already resolved holding valuation (shares times latest persisted price);
+PLANNED uses that symbol's exact `proposed_amount` in the plan currency. These
+are not purchase costs or totals reconstructed from rounded allocation weights.
+The component's own horizon-specific expected return determines its change and
+ending estimate, not the overall portfolio return. Its CURRENT price-date range
+contains one holding price date (`oldest_price_as_of == newest_price_as_of`);
+the reference date remains the same valuation request date as the portfolio.
+PLANNED keeps all three dates null and retains hypothetical/THB FX disclosures.
+
+Components are matched by symbol, independent of source row order, and all
+holdings must be present. Their baseline amounts sum exactly to the portfolio
+baseline and agree with the resolved allocations within the existing `1e-10`
+allocation tolerance. The response checks each component's arithmetic,
+currency/source and date provenance. Missing/mismatched component monetary
+outputs fail safely instead of displaying a partial breakdown. Legacy
+components explicitly return a null projection. Aggregate changes can differ
+by tiny float/weight rounding from the sum of component changes; neither the
+existing portfolio forecast nor the exact holding amounts are rewritten to
+force a match. No monetary volatility contribution or prediction range is
+invented. Opening the standalone Asset Outlook still has no user amount.
 
 Missing and wrong-owner portfolios return identical `404 Portfolio not found`
 responses. Unusable allocations/holding states and unsupported assets return

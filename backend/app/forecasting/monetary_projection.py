@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, DecimalException, localcontext
 import math
@@ -94,3 +95,49 @@ def build_monetary_projection(
         currency, source, amount, change, ending, kind == "planned", currency == "THB",
         requested, oldest, newest,
     )
+
+
+def sum_baseline_amounts(amounts: Sequence[Decimal]) -> Decimal:
+    """Sum exact positive holding amounts independently of caller precision."""
+    if not amounts or any(not isinstance(a, Decimal) or not a.is_finite() or a <= 0 for a in amounts):
+        raise ForecastPredictionError("invalid component monetary baselines")
+    with localcontext() as context:
+        context.prec = max(80, max(a.adjusted() for a in amounts)
+                           - min(a.as_tuple().exponent for a in amounts) + len(str(len(amounts))) + 8)
+        return sum(amounts, Decimal(0))
+
+
+def build_component_monetary_projections(
+    baseline: PortfolioBaselineResolution,
+    component_returns: Sequence[tuple[str, float]],
+    portfolio_projection: PortfolioMonetaryProjection | None,
+) -> dict[str, PortfolioMonetaryProjection | None]:
+    """Use each holding's exact amount and its own model return, keyed by symbol."""
+    symbols = tuple(symbol for symbol, _ in component_returns)
+    if not symbols or len(set(symbols)) != len(symbols):
+        raise ForecastPredictionError("invalid monetary component symbols")
+    if baseline.baseline_kind.value == "legacy":
+        if portfolio_projection is not None:
+            raise ForecastPredictionError("legacy monetary baseline is unavailable")
+        return dict.fromkeys(symbols)
+    if portfolio_projection is None:
+        raise ForecastPredictionError("missing portfolio monetary context")
+    current = baseline.baseline_kind.value == "current"
+    rows = baseline.valuation.holdings if current else baseline.planned_allocation.holdings
+    if len(rows) != len(symbols) or {row.symbol for row in rows} != set(symbols):
+        raise ForecastPredictionError("monetary holdings must match all forecast components")
+    amounts = {row.symbol: row.current_value_usd if current else row.proposed_amount for row in rows}
+    if sum_baseline_amounts(tuple(amounts.values())) != portfolio_projection.baseline_amount:
+        raise ForecastPredictionError("component monetary baselines must sum to portfolio baseline")
+    prices = {row.symbol: row.price_as_of for row in rows} if current else {}
+    projections = {}
+    for symbol, rate in component_returns:
+        price_date = prices.get(symbol)
+        if current and (type(price_date) is not date or not
+                portfolio_projection.oldest_price_as_of <= price_date <= portfolio_projection.newest_price_as_of):
+            raise ForecastPredictionError("invalid component monetary price date")
+        change, ending = projection_amounts(amounts[symbol], rate)
+        projections[symbol] = replace(portfolio_projection, baseline_amount=amounts[symbol],
+            expected_change_amount=change, estimated_ending_value=ending,
+            oldest_price_as_of=price_date, newest_price_as_of=price_date)
+    return projections

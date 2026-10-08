@@ -13,7 +13,9 @@ from ..database.models import Portfolio
 from ..services.market_data_service import MarketDataService
 from ..services.portfolio_baseline_resolver import PortfolioBaselineResolutionService
 from .inference_errors import ForecastMarketDataUnavailableError, ForecastPredictionError
-from .monetary_projection import PortfolioMonetaryProjection, build_monetary_projection
+from .monetary_projection import (
+    PortfolioMonetaryProjection, build_monetary_projection, build_component_monetary_projections,
+)
 from .portfolio import validated_weights, aligned_log_returns, historical_correlation, compose_volatility
 from .weekly_inference import WeeklyAssetForecast, WeeklyForecastInferenceService
 from .weekly_registry import WEEKLY_VERSION, validate_weekly_horizon
@@ -26,6 +28,7 @@ class WeeklyPortfolioComponent:
     current_weight: float
     forecast_volatility_contribution: float
     forecast_volatility_contribution_share: float
+    monetary_projection: PortfolioMonetaryProjection | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,10 +100,14 @@ class WeeklyPortfolioForecastService:
             raise ForecastPredictionError("invalid weekly portfolio return") from None
         if not math.isfinite(expected_return):
             raise ForecastPredictionError("invalid weekly portfolio return")
+        monetary_projection = build_monetary_projection(baseline, expected_return)
+        component_money = build_component_monetary_projections(
+            baseline, tuple((f.symbol, f.expected_return) for f in forecasts), monetary_projection,
+        )
         return WeeklyPortfolioForecast(
             portfolio.id, portfolio.name, baseline.baseline_kind.value, horizon_days,
             expected_return, sigma, as_of, len(returns), min(f.market_data_as_of for f in forecasts),
-            WEEKLY_VERSION, tuple(WeeklyPortfolioComponent(f, float(w), float(rc), float(share))
+            WEEKLY_VERSION, tuple(WeeklyPortfolioComponent(f, float(w), float(rc), float(share), component_money[f.symbol])
                 for f, w, rc, share in zip(forecasts, weights, contributions, shares)),
-            monetary_projection=build_monetary_projection(baseline, expected_return),
+            monetary_projection=monetary_projection,
         )

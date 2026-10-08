@@ -48,6 +48,7 @@ def map_weekly_portfolio_outlook(forecast: WeeklyPortfolioForecast) -> WeeklyPor
             current_weight=component.current_weight,
             forecast_volatility_contribution=component.forecast_volatility_contribution,
             forecast_volatility_contribution_share=component.forecast_volatility_contribution_share,
+            monetary_projection=asdict(component.monetary_projection) if component.monetary_projection is not None else None,
         ) for component in forecast.components],
         monetary_projection=asdict(forecast.monetary_projection) if forecast.monetary_projection is not None else None,
         limitations=list(WEEKLY_PORTFOLIO_LIMITATIONS), **QUALITY_FIELDS,

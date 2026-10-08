@@ -1,12 +1,14 @@
 """Additive portfolio-only monetary estimate contract shared by all horizons."""
 
+from collections.abc import Sequence
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, localcontext
+import math
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
-from ..forecasting.monetary_projection import MONETARY_PROJECTION_LIMITATIONS, projection_amounts
+from ..forecasting.monetary_projection import MONETARY_PROJECTION_LIMITATIONS, projection_amounts, sum_baseline_amounts
 from .common import AuraBaseModel
 
 
@@ -61,3 +63,38 @@ def validate_monetary_projection(
     change, ending = projection_amounts(projection.baseline_amount, expected_return)
     if projection.expected_change_amount != change or projection.estimated_ending_value != ending:
         raise ValueError("monetary amounts must match the unchanged portfolio expected return")
+
+
+def validate_monetary_breakdown(
+    portfolio_projection: PortfolioMonetaryProjectionResponse | None,
+    components: Sequence[tuple[PortfolioMonetaryProjectionResponse | None, float, float]],
+) -> None:
+    """Require complete, individually calculated money context only inside portfolios."""
+    if portfolio_projection is None:
+        if any(money is not None for money, _, _ in components):
+            raise ValueError("percentage-only portfolios cannot have component money")
+        return
+    projections = []
+    kind = "current" if portfolio_projection.baseline_source == "current_market_value" else "planned"
+    for money, expected_return, weight in components:
+        if money is None:
+            raise ValueError("every holding must include its monetary projection")
+        validate_monetary_projection(money, kind, expected_return)
+        if money.currency != portfolio_projection.currency:
+            raise ValueError("component monetary currency must match the portfolio")
+        if (money.valuation_requested_date != portfolio_projection.valuation_requested_date
+                or money.oldest_price_as_of != money.newest_price_as_of):
+            raise ValueError("component monetary dates must identify one holding price in the same valuation")
+        with localcontext() as context:
+            context.prec = 80
+            allocation = float(money.baseline_amount / portfolio_projection.baseline_amount)
+        if not math.isclose(allocation, weight, rel_tol=0, abs_tol=1e-10):
+            raise ValueError("component money must match its resolved allocation")
+        projections.append(money)
+    if sum_baseline_amounts(tuple(money.baseline_amount for money in projections)) != portfolio_projection.baseline_amount:
+        raise ValueError("component monetary baselines must sum to the portfolio baseline")
+    if kind == "current" and (
+        min(money.oldest_price_as_of for money in projections) != portfolio_projection.oldest_price_as_of
+        or max(money.newest_price_as_of for money in projections) != portfolio_projection.newest_price_as_of
+    ):
+        raise ValueError("portfolio monetary price range must cover its component prices")

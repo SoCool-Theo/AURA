@@ -47,13 +47,13 @@ def headers(user=OWNER):
 
 def portfolio_forecast(portfolio, *, horizon_days):
     component = asset(horizon=horizon_days)
+    money = PortfolioMonetaryProjection("USD", "current_market_value", Decimal("10000"),
+        Decimal("1000"), Decimal("11000"), False, False,
+        component.origin_date, component.origin_date, component.origin_date)
     return WeeklyPortfolioForecast(portfolio.id, portfolio.name, "current", horizon_days,
         component.expected_return, component.forecast_realized_volatility, component.origin_date,
         60, component.market_data_as_of, component.artifact_version,
-        (WeeklyPortfolioComponent(component, 1., component.forecast_realized_volatility, 1.),),
-        PortfolioMonetaryProjection("USD", "current_market_value", Decimal("10000"),
-            Decimal("1000"), Decimal("11000"), False, False,
-            component.origin_date, component.origin_date, component.origin_date))
+        (WeeklyPortfolioComponent(component, 1., component.forecast_realized_volatility, 1., money),), money)
 
 
 @pytest.fixture
@@ -109,7 +109,7 @@ def test_owner_weekly_portfolio_full_contract_and_no_portfolio_interval(harness,
     assert not any("interval" in key for key in body)
     assert Decimal(body["monetary_projection"]["expected_change_amount"]) == 1000
     assert Decimal(body["monetary_projection"]["estimated_ending_value"]) == 11000
-    assert "monetary_projection" not in body["components"][0]
+    assert body["components"][0]["monetary_projection"] == body["monetary_projection"]
     construct.assert_called_once_with(session)
     assert portfolios.predict.call_args.kwargs == {"horizon_days": horizon}
     repository.assert_called_once_with(PORTFOLIO)
@@ -188,9 +188,11 @@ def test_weekly_planned_and_legacy_money_contract(harness, horizon, currency):
     client, _, _, _, portfolios, _, _ = harness
     def planned(portfolio, *, horizon_days):
         original = portfolio_forecast(portfolio, horizon_days=horizon_days)
-        return replace(original, baseline_kind="planned", monetary_projection=PortfolioMonetaryProjection(
+        money = PortfolioMonetaryProjection(
             currency, "planned_investment", Decimal("10000"), Decimal("1000"), Decimal("11000"),
-            True, currency == "THB", None, None, None))
+            True, currency == "THB", None, None, None)
+        return replace(original, baseline_kind="planned", monetary_projection=money,
+            components=(replace(original.components[0], monetary_projection=money),))
     portfolios.predict.side_effect = planned
     response = client.get(portfolio_url(horizon), headers=headers())
     assert response.status_code == 200
@@ -198,10 +200,30 @@ def test_weekly_planned_and_legacy_money_contract(harness, horizon, currency):
     assert money["currency"] == currency and money["hypothetical"] is True
     assert money["assumes_unchanged_fx"] == (currency == "THB")
     assert money["oldest_price_as_of"] is None
-    portfolios.predict.side_effect = lambda portfolio, *, horizon_days: replace(
-        portfolio_forecast(portfolio, horizon_days=horizon_days), baseline_kind="legacy", monetary_projection=None)
+    assert response.json()["components"][0]["monetary_projection"] == money
+    def legacy(portfolio, *, horizon_days):
+        original = portfolio_forecast(portfolio, horizon_days=horizon_days)
+        return replace(original, baseline_kind="legacy", monetary_projection=None,
+            components=(replace(original.components[0], monetary_projection=None),))
+    portfolios.predict.side_effect = legacy
     response = client.get(portfolio_url(horizon), headers=headers())
     assert response.status_code == 200 and response.json()["monetary_projection"] is None
+    assert response.json()["components"][0]["monetary_projection"] is None
+
+
+@pytest.mark.parametrize("horizon", [7,14,21])
+@pytest.mark.parametrize("missing", [True, False])
+def test_weekly_invalid_component_money_is_sanitized(harness, horizon, missing):
+    client, _, _, _, portfolios, _, _ = harness
+    def invalid(portfolio, *, horizon_days):
+        original = portfolio_forecast(portfolio, horizon_days=horizon_days)
+        money = None if missing else replace(original.components[0].monetary_projection,
+            expected_change_amount=Decimal("1"))
+        return replace(original, components=(replace(original.components[0], monetary_projection=money),))
+    portfolios.predict.side_effect = invalid
+    response = client.get(portfolio_url(horizon), headers=headers())
+    assert response.status_code == 503
+    assert response.json() == {"detail":"Forecast is currently unavailable."}
 
 
 @pytest.mark.parametrize("horizon", [7,14,21])
@@ -239,6 +261,7 @@ def test_weekly_openapi_is_read_only_authenticated_and_neutral_fields():
     properties = schema["components"]["schemas"]["WeeklyAssetOutlookResponse"]["properties"]
     assert "monetary_projection" not in properties
     assert "monetary_projection" in schema["components"]["schemas"]["WeeklyPortfolioOutlookResponse"]["properties"]
+    assert "monetary_projection" in schema["components"]["schemas"]["WeeklyPortfolioOutlookComponent"]["properties"]
     assert "expected_return" in properties and "expected_return_30d" not in properties
     assert properties["horizon_days"]["enum"] == [7,14,21]
     assert not {"model_path", "final_test_evidence", "calibration_residual_q10"} & set(properties)

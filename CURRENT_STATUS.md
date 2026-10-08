@@ -3350,3 +3350,20 @@ remain separate follow-on work.
   dependencies or AI-context changes. No staging, commit or push; unrelated
   untracked docs/report content is preserved. Web/mobile money presentation is
   the next integration step after backend tests pass.
+
+### Portfolio Outlook per-asset monetary breakdown backend — 2026-10-09
+
+- Extended portfolio components for all 7/14/21/30-day horizons with their own
+  `monetary_projection`. CURRENT uses each holding's exact resolved USD current
+  value, not purchase cost; PLANNED uses each entered proposed amount in USD/THB.
+  Each holding's own model return determines its gain/loss and ending estimate.
+- Reused the same baseline and overall projection context without extra queries
+  or valuations. Symbol matching preserves correct amounts even when source
+  rows are reordered; component baseline totals, allocation, arithmetic, currency
+  and valuation provenance are validated. Legacy component projections are null.
+  Standalone asset Outlook responses remain user-independent and unchanged.
+- Added exact-amount, negative/zero-return, precision, all-mode/all-horizon,
+  schema and API safety regressions; updated the public contract. Source and
+  whitespace review completed; user-run tests are pending, with no passing count
+  claimed. No frontend, migration, dependency, model/artifact, training or AI
+  changes. No staging/commit/push; unrelated docs/report content is preserved.

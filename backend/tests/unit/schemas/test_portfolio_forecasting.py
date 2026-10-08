@@ -86,6 +86,7 @@ def monetary_payload(kind="current"):
     body["monetary_projection"] = asdict(PortfolioMonetaryProjection(
         "USD", "current_market_value", Decimal("10000"), Decimal("300"), Decimal("10300"),
         False, False, day, day, day))
+    body["components"][0]["monetary_projection"] = deepcopy(body["monetary_projection"])
     return body
 
 
@@ -118,3 +119,20 @@ def test_amounts_must_match_portfolio_return(field, value):
 def test_money_source_must_match_portfolio_kind(kind):
     with pytest.raises(ValidationError):
         PortfolioOutlookResponse.model_validate(monetary_payload(kind))
+
+
+@pytest.mark.parametrize("field,value", [("monetary_projection",None),
+    ("expected_return_30d",.04), ("current_weight",.5)])
+def test_component_money_is_required_and_matches_its_own_return_and_allocation(field, value):
+    body = monetary_payload()
+    body["components"][0][field] = value
+    with pytest.raises(ValidationError):
+        PortfolioOutlookResponse.model_validate(body)
+
+
+def test_legacy_cannot_expose_component_money():
+    body = monetary_payload()
+    body["baseline_kind"] = "legacy"
+    body["monetary_projection"] = None
+    with pytest.raises(ValidationError):
+        PortfolioOutlookResponse.model_validate(body)
