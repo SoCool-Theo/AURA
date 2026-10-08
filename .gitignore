@@ -3,9 +3,9 @@
 # ==========================================
 
 .env
-backend/.env.example
 .env.*
 !.env.example
+.local-secrets/
 
 
 # ==========================================
@@ -31,11 +31,12 @@ htmlcov/
 
 
 # ==========================================
-# WEB FRONTEND
+# REACT WEB FRONTEND
 # ==========================================
 
-web/node_modules/
-web/dist/
+web-prototype-react/dist/
+web-prototype-react/coverage/
+web-prototype-react/.vite/
 
 
 # ==========================================
@@ -70,3 +71,30 @@ desktop.ini
 *.tmp
 *.temp
 ~$*
+
+# Shared Node dependencies
+node_modules/
+*.tsbuildinfo
+.eslintcache
+
+# ==========================================
+# GENERATED MARKET DATA
+# ==========================================
+
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Offline forecasting model artifacts and run state
+backend/artifacts/forecasting/
+# Local forecasting evidence reports
+forecasting-evidence/
+# Root-level manual evaluation/provenance outputs and local snapshot backups
+/forecasting-*.json
+/supabase-market-data-*.dump
+/forecast-v*-backup.zip
+
+mobile/.expo/
+
+docs/report/assets/

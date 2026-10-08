@@ -1,0 +1,22 @@
+.page { max-width: 1120px; margin: 0 auto; }
+.header { margin-bottom: 18px; }
+.header span { display: block; margin-bottom: 6px; color: var(--purple-light); font-size: 12px; font-weight: 750; letter-spacing: .12em; }
+.header h1 { margin: 0; font-size: 31px; }
+.header p { margin: 8px 0 0; color: var(--text-secondary); }
+.card { min-height: 280px; padding: 34px; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
+.icon { width: 58px; height: 58px; border-radius: 17px; background: rgba(53, 215, 192, .15); display: grid; place-items: center; color: var(--purple-light); }
+.warningIcon { background: var(--warning-background); color: var(--amber-primary); }
+.neutralIcon { background: var(--bg-card-hover); color: var(--text-secondary); }
+.badge { margin-top: 17px; padding: 6px 9px; border: 1px solid var(--border-control); border-radius: 99px; color: var(--amber-bright); font-size: 11px; }
+.card h2 { margin: 13px 0 7px; }
+.card > p { max-width: 650px; margin: 0; color: var(--text-muted); line-height: 1.65; }
+.facts { width: min(650px, 100%); margin-top: 22px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; text-align: left; }
+.facts div { padding: 13px; border: 1px solid var(--border-divider); border-radius: 10px; background: var(--control-bg); }
+.facts strong, .facts small { display: block; }
+.facts strong { color: var(--text-primary); font-size: 13px; }
+.facts small { margin-top: 5px; color: var(--text-muted); font-size: 11px; line-height: 1.45; }
+.preferenceGrid { width: min(650px, 100%); margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; }
+.preferenceGrid label { color: var(--text-secondary); font-size: 13px; }
+.preferenceGrid select { width: 100%; margin-top: 7px; padding: 11px; border: 1px solid var(--border-control); border-radius: 9px; background: var(--control-bg); color: var(--text-primary); }
+.localNote { margin-top: 13px !important; font-size: 11px; }
+@media (max-width: 650px) { .card { padding: 25px 17px; } .facts, .preferenceGrid { grid-template-columns: 1fr; } }

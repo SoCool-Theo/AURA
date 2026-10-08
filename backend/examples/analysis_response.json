@@ -1,0 +1,267 @@
+{
+  "start_date": "2026-01-01",
+  "end_date": "2026-01-31",
+  "portfolio_name": "Synthetic Balanced Portfolio",
+  "metadata": {
+    "analysis_start": "2026-01-02",
+    "analysis_end": "2026-01-06",
+    "price_observation_count": 4,
+    "return_observation_count": 3,
+    "asset_count": 3
+  },
+  "portfolio_metrics": {
+    "cumulative_return": 0.040094,
+    "annualized_return": 0.2,
+    "annualized_volatility": 0.18,
+    "sharpe_ratio": 0.75
+  },
+  "max_drawdown": {
+    "max_drawdown": -0.01,
+    "peak_date": "2026-01-03",
+    "trough_date": "2026-01-05"
+  },
+  "concentration": {
+    "largest_weight": 0.5,
+    "top_n_weight": 0.8,
+    "hhi": 0.38,
+    "effective_number_of_assets": 2.6315789473684212,
+    "top_n": 2
+  },
+  "diversification": {
+    "active_asset_count": 3,
+    "effective_number_of_assets": 2.6315789473684212,
+    "weight_score": 81.57894736842105,
+    "average_pairwise_correlation": 0.1,
+    "correlation_score": 90.0,
+    "overall_score": 73.42105263157895,
+    "level": "Strong",
+    "defined_pair_count": 3,
+    "total_pair_count": 3
+  },
+  "risk_classification": {
+    "risk_score": 21.666666666666664,
+    "risk_level": "Low",
+    "volatility_points": 1,
+    "drawdown_points": 0,
+    "concentration_points": 2,
+    "diversification_points": 0,
+    "metrics_used": [
+      "volatility",
+      "maximum_drawdown",
+      "concentration",
+      "diversification"
+    ],
+    "reasons": [
+      "Large single-asset concentration"
+    ]
+  },
+  "risk_drivers": {
+    "portfolio_volatility": 0.18,
+    "top_driver": "AAPL",
+    "entries": [
+      {
+        "rank": 1,
+        "symbol": "AAPL",
+        "weight": 0.5,
+        "annualized_asset_volatility": 0.22,
+        "marginal_volatility_contribution": 0.24,
+        "component_volatility_contribution": 0.12,
+        "percentage_volatility_contribution": 0.6666666666666666
+      },
+      {
+        "rank": 2,
+        "symbol": "MSFT",
+        "weight": 0.3,
+        "annualized_asset_volatility": 0.19,
+        "marginal_volatility_contribution": 0.23333333333333334,
+        "component_volatility_contribution": 0.07,
+        "percentage_volatility_contribution": 0.3888888888888889
+      },
+      {
+        "rank": 3,
+        "symbol": "BND",
+        "weight": 0.2,
+        "annualized_asset_volatility": 0.08,
+        "marginal_volatility_contribution": -0.05,
+        "component_volatility_contribution": -0.01,
+        "percentage_volatility_contribution": -0.0555555555555556
+      }
+    ]
+  },
+  "asset_metrics": [
+    {
+      "symbol": "AAPL",
+      "weight": 0.5,
+      "cumulative_return": 0.08,
+      "annualized_return": 0.24,
+      "annualized_volatility": 0.22,
+      "max_drawdown": -0.02,
+      "sharpe_ratio": 0.9,
+      "risk_classification": {
+        "risk_score": 33.33333333333333,
+        "risk_level": "Moderate",
+        "volatility_points": 2,
+        "drawdown_points": 0,
+        "metrics_used": [
+          "volatility",
+          "maximum_drawdown"
+        ],
+        "reasons": [
+          "Elevated historical volatility"
+        ]
+      }
+    },
+    {
+      "symbol": "MSFT",
+      "weight": 0.3,
+      "cumulative_return": 0.06,
+      "annualized_return": 0.18,
+      "annualized_volatility": 0.19,
+      "max_drawdown": -0.03,
+      "sharpe_ratio": 0.7,
+      "risk_classification": {
+        "risk_score": 16.666666666666664,
+        "risk_level": "Low",
+        "volatility_points": 1,
+        "drawdown_points": 0,
+        "metrics_used": [
+          "volatility",
+          "maximum_drawdown"
+        ],
+        "reasons": [
+          "No major risk flags under Aura's current asset thresholds"
+        ]
+      }
+    },
+    {
+      "symbol": "BND",
+      "weight": 0.2,
+      "cumulative_return": 0.01,
+      "annualized_return": 0.04,
+      "annualized_volatility": 0.08,
+      "max_drawdown": -0.01,
+      "sharpe_ratio": null,
+      "risk_classification": {
+        "risk_score": 0.0,
+        "risk_level": "Low",
+        "volatility_points": 0,
+        "drawdown_points": 0,
+        "metrics_used": [
+          "volatility",
+          "maximum_drawdown"
+        ],
+        "reasons": [
+          "No major risk flags under Aura's current asset thresholds"
+        ]
+      }
+    }
+  ],
+  "correlation_matrix": {
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "BND"
+    ],
+    "values": [
+      [
+        1.0,
+        0.35,
+        -0.1
+      ],
+      [
+        0.35,
+        1.0,
+        0.05
+      ],
+      [
+        -0.1,
+        0.05,
+        1.0
+      ]
+    ]
+  },
+  "correlation_pairs": [
+    {
+      "asset_a": "AAPL",
+      "asset_b": "MSFT",
+      "correlation": 0.35
+    },
+    {
+      "asset_a": "AAPL",
+      "asset_b": "BND",
+      "correlation": -0.1
+    },
+    {
+      "asset_a": "MSFT",
+      "asset_b": "BND",
+      "correlation": 0.05
+    }
+  ],
+  "portfolio_returns": [
+    {
+      "date": "2026-01-03",
+      "portfolio_return": 0.02
+    },
+    {
+      "date": "2026-01-05",
+      "portfolio_return": -0.01
+    },
+    {
+      "date": "2026-01-06",
+      "portfolio_return": 0.03
+    }
+  ],
+  "asset_returns": [
+    {
+      "symbol": "AAPL",
+      "points": [
+        {
+          "date": "2026-01-03",
+          "asset_return": 0.03
+        },
+        {
+          "date": "2026-01-05",
+          "asset_return": -0.02
+        },
+        {
+          "date": "2026-01-06",
+          "asset_return": 0.04
+        }
+      ]
+    },
+    {
+      "symbol": "MSFT",
+      "points": [
+        {
+          "date": "2026-01-03",
+          "asset_return": 0.02
+        },
+        {
+          "date": "2026-01-05",
+          "asset_return": -0.01
+        },
+        {
+          "date": "2026-01-06",
+          "asset_return": 0.03
+        }
+      ]
+    },
+    {
+      "symbol": "BND",
+      "points": [
+        {
+          "date": "2026-01-03",
+          "asset_return": 0.005
+        },
+        {
+          "date": "2026-01-05",
+          "asset_return": -0.002
+        },
+        {
+          "date": "2026-01-06",
+          "asset_return": 0.007
+        }
+      ]
+    }
+  ]
+}

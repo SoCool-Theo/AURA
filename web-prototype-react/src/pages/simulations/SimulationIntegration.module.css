@@ -1,0 +1,106 @@
+.error { margin: 12px 0; padding: 12px 14px; border: 1px solid rgba(255, 91, 118, .45); border-radius: 10px; background: rgba(255, 91, 118, .1); color: #ff9aad; }
+.state { padding: 24px; text-align: center; }
+.state h2 { margin: 0 0 7px; }
+.state p { margin: 0 0 14px; color: var(--text-muted); }
+.saved { margin: 14px 0; padding: 12px 15px; border: 1px solid rgba(53, 215, 192, .4); border-radius: 10px; background: rgba(53, 215, 192, .1); color: var(--text-secondary); }
+.saved strong { color: var(--green-bright); }
+.modeContext { margin: 14px 0; padding: 12px 15px; border: 1px solid rgba(53, 215, 192, .3); border-radius: 10px; background: rgba(53, 215, 192, .07); }
+.modeContext strong, .modeContext span { display: block; }
+.modeContext strong { color: var(--text-primary); font-size: 12px; }
+.modeContext span { margin-top: 5px; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.plannedContext { border-color: rgba(140, 120, 255, .4); background: rgba(140, 120, 255, .08); }
+.dateFields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dateFields label { color: var(--text-secondary); font-size: 12px; }
+.dateFields input { width: 100%; margin-top: 5px; padding: 10px; border: 1px solid var(--border-control); border-radius: 9px; background: var(--control-bg); color: var(--text-primary); }
+.portfolioSelect { height: 46px; margin-top: 8px; }
+.metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.metric { padding: 15px; }
+.metric small, .metric span { display: block; color: var(--text-muted); font-size: 11px; }
+.metric .metricLabel { display: flex; align-items: center; gap: 9px; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.metricIcon { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 10px; display: grid; place-items: center; font-style: normal; }
+.successIcon { background: var(--positive-background); color: var(--green-primary); }
+.warningIcon { background: var(--warning-background); color: var(--amber-primary); }
+.dangerIcon { background: var(--negative-background); color: var(--red-bright); }
+.blueIcon { background: var(--blue-background); color: var(--blue-primary); }
+.metric strong { display: block; margin: 7px 0 5px; color: var(--text-primary); font-size: 20px; }
+.negative { color: #ff7188 !important; }
+.resultGrid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, .8fr); gap: 14px; margin-bottom: 14px; }
+.panel { padding: 20px; overflow: auto; }
+.panel h3 { margin: 0 0 5px; }
+.panel > p { margin: 0 0 14px; color: var(--text-muted); font-size: 12px; }
+.details { margin: 0; }
+.details div { display: flex; justify-content: space-between; gap: 18px; padding: 9px 0; border-bottom: 1px solid var(--border-divider); }
+.details dt { color: var(--text-muted); font-size: 12px; }
+.details dd { margin: 0; color: var(--text-primary); font-size: 12px; text-align: right; }
+.chart { width: 100%; min-width: 480px; height: 260px; }
+.chart polyline { fill: none; stroke-width: 2.25; }
+.chart line { stroke: var(--border-divider); stroke-width: 1; }
+.axisLabel { fill: var(--text-muted); font-size: 10px; }
+.axisTitle { fill: var(--text-secondary); font-size: 9px; font-weight: 700; letter-spacing: .03em; }
+.legend { display: flex; gap: 16px; color: var(--text-muted); font-size: 11px; }
+.legend i { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border-radius: 50%; }
+.seriesControls { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 10px; }
+.seriesControls button { min-height: 32px; padding: 6px 10px; border: 1px solid var(--border-control); border-radius: 9px; background: var(--control-bg); color: var(--text-muted); cursor: pointer; font: inherit; font-size: 11px; }
+.seriesControls button:hover, .seriesControls button:focus-visible, .seriesControls .activeSeriesControl { border-color: var(--purple-primary); background: var(--control-hover); color: var(--text-primary); outline: none; }
+.seriesControls i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; }
+.historicalMetricsComparison { margin: 16px 0 10px; border: 1px solid var(--border-divider); border-radius: 11px; overflow: hidden; }
+.historicalMetricsHeader, .historicalMetricsRow { display: grid; grid-template-columns: minmax(150px, 1.15fr) repeat(2, minmax(120px, 1fr)); gap: 12px; align-items: center; padding: 10px 12px; }
+.historicalMetricsHeader { background: rgba(139, 92, 246, .11); color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.historicalMetricsRow { border-top: 1px solid var(--border-divider); }
+.historicalMetricsRow span { color: var(--text-muted); font-size: 11px; }
+.historicalMetricsRow strong { color: var(--text-primary); font-size: 12px; }
+.historicalMetricsRow strong:last-child { color: var(--green-bright); }
+.referenceNote { margin: 0 0 14px; color: var(--text-muted); font-size: 10px; line-height: 1.5; }
+.referenceContext { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 14px; padding: 13px 14px; border: 1px solid rgba(53, 215, 192, .3); border-radius: 10px; background: rgba(53, 215, 192, .06); }
+.referenceContext p { width: 100%; margin: 0; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.referenceContext div { display: grid; gap: 3px; }
+.referenceContext span { color: var(--text-muted); font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.referenceContext strong { color: var(--text-primary); font-size: 11px; }
+.referenceContext button { margin-left: auto; }
+.referenceMetricGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.referenceMetricGrid div { padding: 11px; border: 1px solid var(--border-divider); border-radius: 9px; background: var(--control-bg); }
+.referenceMetricGrid span, .referenceMetricGrid strong { display: block; }
+.referenceMetricGrid span { color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
+.referenceMetricGrid strong { margin-top: 5px; color: var(--text-primary); font-size: 14px; }
+.table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.table th, .table td { padding: 10px 8px; border-bottom: 1px solid var(--border-divider); text-align: left; }
+.table th { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.table td { color: var(--text-secondary); }
+.table button { border: 0; background: transparent; color: var(--purple-light); cursor: pointer; }
+.history { margin-top: 18px; padding: 20px; }
+.historyHeader { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 10px; }
+.historyHeader h2 { margin: 0; }
+.historyHeader p { margin: 5px 0 0; color: var(--text-muted); font-size: 12px; }
+.allocationList { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.allocationList span { padding: 6px 8px; border: 1px solid var(--border-divider); border-radius: 7px; color: var(--text-secondary); font-size: 11px; }
+.detailHeader { display: flex; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.detailHeader h1 { margin: 0; }
+.detailHeader p { color: var(--text-muted); }
+.badge { display: inline-block; padding: 6px 9px; border: 1px solid rgba(53, 215, 192, .4); border-radius: 99px; color: var(--green-bright); font-size: 11px; white-space: nowrap; }
+.assistantCard { margin-top: 16px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.assistantCard small { color: var(--purple-light); font-size: 9px; font-weight: 800; letter-spacing: .1em; }
+.assistantCard h2 { margin: 5px 0; color: var(--text-primary); font-size: 17px; }
+.assistantCard p { margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.assistantCard button { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.plannedBaseline { border-color: rgba(140, 120, 255, .42); background: rgba(140, 120, 255, .08); }
+.currentBaseline { border-color: rgba(53, 215, 192, .3); background: rgba(53, 215, 192, .06); }
+.baselineHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.baselineHeading small { color: var(--purple-light); font-size: 9px; font-weight: 800; letter-spacing: .1em; }
+.baselineHeading h3 { margin-top: 6px; color: var(--text-primary); font-size: 23px; }
+.baselineRows { border: 1px solid var(--border-divider); border-radius: 10px; overflow: hidden; }
+.baselineRows > div { min-height: 45px; padding: 0 13px; border-bottom: 1px solid var(--border-divider); display: grid; grid-template-columns: minmax(80px, .5fr) minmax(150px, 1fr) minmax(190px, 1fr); align-items: center; gap: 12px; }
+.baselineRows > div:last-child { border-bottom: 0; }
+.baselineRows strong { color: var(--text-primary); font-size: 12px; }
+.baselineRows span { color: var(--text-muted); font-size: 11px; }
+.baselineRows b { color: var(--text-secondary); font-size: 11px; text-align: right; }
+.baselineNote { margin-top: 12px !important; }
+@media (max-width: 1000px) { .metrics, .referenceMetricGrid { grid-template-columns: repeat(2, 1fr); } .resultGrid { grid-template-columns: 1fr; } }
+@media (max-width: 650px) { .metrics, .dateFields, .referenceMetricGrid { grid-template-columns: 1fr; } .detailHeader, .historyHeader, .baselineHeading, .assistantCard { align-items: flex-start; flex-direction: column; } .assistantCard button, .referenceContext button { width: 100%; justify-content: center; margin-left: 0; } .baselineRows > div { grid-template-columns: 1fr 1fr; padding-top: 10px; } .baselineRows b { grid-column: 1/-1; padding-bottom: 10px; text-align: left; } .historicalMetricsHeader, .historicalMetricsRow { grid-template-columns: minmax(110px, 1.2fr) repeat(2, minmax(90px, 1fr)); gap: 8px; padding-left: 9px; padding-right: 9px; } }
+.historyActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.historyTable { min-width: 900px; }
+.historyTable th:last-child { text-align: right; }
+.historyTable td:last-child { width: 1%; white-space: nowrap; }
+.historyTable .historyActions { justify-content: flex-end; flex-wrap: nowrap; }
+.deleteButton, .table button.deleteButton { min-height: 44px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--red-primary); color: var(--red-primary); background: rgba(255, 77, 109, .08); font-weight: 700; cursor: pointer; }
+.deleteButton:hover { background: rgba(255, 77, 109, .16); }
+.deleteButton:disabled { opacity: .55; cursor: wait; }

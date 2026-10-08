@@ -1,0 +1,254 @@
+import json
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+import httpx2
+import pytest
+from fastapi import HTTPException
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    AuthenticationError,
+    InternalServerError,
+    RateLimitError,
+)
+from pydantic import SecretStr, ValidationError
+
+import app.api.routes.agent as route_module
+import app.agents.groq_provider as provider_module
+from app.agents.groq_provider import GROQ_OPENAI_BASE_URL, GroqProvider
+from app.agents.openai_provider import OpenAIProvider
+from app.agents.provider import (
+    LLMProvider,
+    LLMProviderResponseError,
+    LLMProviderTimeoutError,
+    LLMProviderUnavailableError,
+    ProviderRequest,
+)
+from app.core.config import Settings
+
+
+_API_KEY = "test-groq-key-not-a-production-secret"
+_MODEL = "llama-3.3-70b-versatile"
+
+
+def _request() -> ProviderRequest:
+    return ProviderRequest(
+        system_instructions="Explain only supplied Aura results.",
+        user_message="Why is my portfolio risky?",
+        grounded_context={
+            "portfolio": {"name": "Core", "weight": 0.0},
+            "report": {
+                "max_drawdown": -0.25,
+                "sharpe_ratio": None,
+                "comparison_delta": -0.1,
+            },
+            "simulation": None,
+        },
+    )
+
+
+def _provider(client: MagicMock) -> GroqProvider:
+    return GroqProvider(
+        api_key=_API_KEY,
+        model=_MODEL,
+        timeout_seconds=30,
+        max_output_tokens=1200,
+        client=client,
+    )
+
+
+def _request_error() -> httpx2.Request:
+    return httpx2.Request("POST", "https://api.groq.invalid/openai/v1/responses")
+
+
+def _status_error(
+    error_type: type[AuthenticationError] | type[RateLimitError] | type[InternalServerError],
+    status: int,
+) -> Exception:
+    return error_type(
+        "provider-secret-detail",
+        response=httpx2.Response(status, request=_request_error()),
+        body={"secret": "provider-secret-detail"},
+    )
+
+
+def test_groq_provider_implements_contract_and_constructs_compatible_client() -> None:
+    with patch.object(provider_module, "OpenAI") as client_type:
+        provider = GroqProvider(
+            api_key=_API_KEY,
+            model=_MODEL,
+            timeout_seconds=25,
+            max_output_tokens=1000,
+        )
+
+    assert isinstance(provider, LLMProvider)
+    client_type.assert_called_once_with(
+        api_key=_API_KEY,
+        base_url=GROQ_OPENAI_BASE_URL,
+        timeout=25,
+        max_retries=0,
+    )
+
+
+@pytest.mark.parametrize("api_key,model", [("", _MODEL), (_API_KEY, "  ")])
+def test_groq_provider_rejects_incomplete_construction(api_key: str, model: str) -> None:
+    with pytest.raises(ValueError, match="configuration is incomplete"):
+        GroqProvider(
+            api_key=api_key,
+            model=model,
+            timeout_seconds=30,
+            max_output_tokens=1200,
+            client=MagicMock(),
+        )
+
+
+def test_responses_api_maps_only_grounded_data_without_store_or_tools() -> None:
+    client = MagicMock()
+    client.responses.create.return_value = SimpleNamespace(output_text="Grounded explanation.")
+    request = _request()
+
+    response = _provider(client).generate(request)
+
+    assert response.text == "Grounded explanation."
+    client.responses.create.assert_called_once()
+    arguments = client.responses.create.call_args.kwargs
+    assert arguments == {
+        "model": _MODEL,
+        "instructions": request.system_instructions,
+        "input": arguments["input"],
+        "max_output_tokens": 1200,
+    }
+    input_data = json.loads(arguments["input"])
+    assert input_data == {
+        "aura_grounding_context": request.grounded_context,
+        "conversation_history": [],
+        "user_question": request.user_message,
+    }
+    context = input_data["aura_grounding_context"]
+    assert context["report"]["max_drawdown"] == -0.25
+    assert context["report"]["comparison_delta"] == -0.1
+    assert context["report"]["sharpe_ratio"] is None
+    assert context["portfolio"]["weight"] == 0.0
+    serialized = arguments["input"].casefold()
+    for forbidden in (
+        "jwt",
+        "email",
+        "database_url",
+        "password",
+        "session",
+        "repository",
+        _API_KEY,
+    ):
+        assert forbidden not in serialized
+    for disabled_parameter in (
+        "store",
+        "tools",
+        "web_search",
+        "browser_search",
+        "file_search",
+        "mcp",
+    ):
+        assert disabled_parameter not in arguments
+
+
+@pytest.mark.parametrize("output_text", [None, "", " \t\n "])
+def test_blank_or_missing_output_text_is_rejected(output_text: object) -> None:
+    client = MagicMock()
+    client.responses.create.return_value = SimpleNamespace(output_text=output_text)
+
+    with pytest.raises(LLMProviderResponseError):
+        _provider(client).generate(_request())
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (APITimeoutError(request=_request_error()), LLMProviderTimeoutError),
+        (
+            APIConnectionError(
+                message="provider-secret-detail",
+                request=_request_error(),
+            ),
+            LLMProviderUnavailableError,
+        ),
+        (_status_error(AuthenticationError, 401), LLMProviderUnavailableError),
+        (_status_error(RateLimitError, 429), LLMProviderUnavailableError),
+        (_status_error(InternalServerError, 500), LLMProviderUnavailableError),
+    ],
+)
+def test_vendor_failures_map_to_safe_provider_errors(
+    error: Exception,
+    expected: type[Exception],
+) -> None:
+    client = MagicMock()
+    client.responses.create.side_effect = error
+
+    with pytest.raises(expected) as raised:
+        _provider(client).generate(_request())
+
+    assert "provider-secret-detail" not in str(raised.value)
+    assert client.responses.create.call_count == 1
+
+
+def test_settings_keep_groq_secret_hidden_and_validate_provider() -> None:
+    configured = Settings(
+        _env_file=None,
+        aura_llm_provider="  GROQ  ",
+        groq_api_key=_API_KEY,
+        aura_llm_model="  llama-3.3-70b-versatile  ",
+    )
+
+    assert configured.aura_llm_provider == "groq"
+    assert isinstance(configured.groq_api_key, SecretStr)
+    assert configured.groq_api_key.get_secret_value() == _API_KEY
+    assert _API_KEY not in repr(configured)
+    assert configured.aura_llm_model == _MODEL
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, aura_llm_provider="unsupported")
+
+
+def test_agent_provider_dependency_selects_groq_or_openai_and_requires_complete_config() -> None:
+    with (
+        patch.object(route_module.settings, "aura_llm_provider", "groq"),
+        patch.object(route_module.settings, "groq_api_key", SecretStr(_API_KEY)),
+        patch.object(route_module.settings, "aura_llm_model", _MODEL),
+        patch.object(route_module.settings, "aura_llm_timeout_seconds", 25),
+        patch.object(route_module.settings, "aura_llm_max_output_tokens", 1000),
+        patch.object(route_module, "GroqProvider") as groq_provider_type,
+    ):
+        groq_provider = route_module.get_agent_provider()
+
+    assert groq_provider is groq_provider_type.return_value
+    groq_provider_type.assert_called_once_with(
+        api_key=_API_KEY,
+        model=_MODEL,
+        timeout_seconds=25,
+        max_output_tokens=1000,
+    )
+
+    with (
+        patch.object(route_module.settings, "aura_llm_provider", "openai"),
+        patch.object(route_module.settings, "openai_api_key", SecretStr("test-openai-key")),
+        patch.object(route_module.settings, "aura_llm_model", _MODEL),
+        patch.object(route_module, "OpenAIProvider") as openai_provider_type,
+    ):
+        openai_provider = route_module.get_agent_provider()
+
+    assert openai_provider is openai_provider_type.return_value
+    openai_provider_type.assert_called_once()
+
+    for provider_name, api_key, model in (
+        (None, None, _MODEL),
+        ("groq", None, _MODEL),
+        ("groq", SecretStr(_API_KEY), None),
+    ):
+        with (
+            patch.object(route_module.settings, "aura_llm_provider", provider_name),
+            patch.object(route_module.settings, "groq_api_key", api_key),
+            patch.object(route_module.settings, "aura_llm_model", model),
+        ):
+            with pytest.raises(HTTPException) as missing:
+                route_module.get_agent_provider()
+        assert missing.value.status_code == 503
+        assert missing.value.detail == "AI explanation service is currently unavailable."
