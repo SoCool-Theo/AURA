@@ -32,7 +32,7 @@ export function OutlookChart({ points, metric }: { points: OutlookPoint[]; metri
           return <G key={tick}><Line x1={68} x2={348} y1={y(value)} y2={y(value)} stroke={colors.borderSoft} /><SvgText x={60} y={y(value) + 4} textAnchor="end" fontSize={10} fill={colors.muted}>{forecastPercent(value)}</SvgText></G>;
         })}
         <Line x1={68} x2={348} y1={y(0)} y2={y(0)} stroke={colors.muted} strokeDasharray="4 5" opacity={0.5} />
-        {forecastHorizons.map(day => <G key={day}><Line x1={x(day)} x2={x(day)} y1={25} y2={170} stroke={colors.borderSoft} /><SvgText x={x(day)} y={191} textAnchor="middle" fontSize={10} fill={colors.muted}>{day} days</SvgText></G>)}
+        {forecastHorizons.map(day => <G key={day}><Line x1={x(day)} x2={x(day)} y1={25} y2={170} stroke={colors.borderSoft} /><SvgText x={x(day)} y={191} textAnchor="middle" fontSize={10} fill={colors.muted}>{`${day} days`}</SvgText></G>)}
         {segments.map(segment => <Polyline key={segment[0].horizonDays} points={segment.map(point => `${x(point.horizonDays)},${y(point.estimate)}`).join(' ')} fill="none" stroke={colors.primary} strokeWidth={2} strokeDasharray="7 5" />)}
         {ordered.map(point => <G key={point.horizonDays}>
           {point.interval && <G><Line x1={x(point.horizonDays)} x2={x(point.horizonDays)} y1={y(point.interval.lower)} y2={y(point.interval.upper)} stroke={colors.primarySoft} strokeWidth={2} /><Line x1={x(point.horizonDays) - 6} x2={x(point.horizonDays) + 6} y1={y(point.interval.lower)} y2={y(point.interval.lower)} stroke={colors.primarySoft} strokeWidth={2} /><Line x1={x(point.horizonDays) - 6} x2={x(point.horizonDays) + 6} y1={y(point.interval.upper)} y2={y(point.interval.upper)} stroke={colors.primarySoft} strokeWidth={2} /></G>}

@@ -181,6 +181,14 @@ test('native chart labels axes, renders only actual estimates, and has asset-onl
   const port = OutlookChart({ points: ui.forecastPoints(portfolio, 'volatility'), metric: 'volatility' });
   assert.equal(nodes(port).filter(n => n.type === 'Line' && n.props.strokeWidth === 2).length, 0);
   assert.match(text(port), /non-annualized/);
+  const comparison = OutlookChart({ points: ui.comparisonPoints([weekly(asset, 7), asset], 'return'), metric: 'return' });
+  for (const chart of [tree, port, comparison]) {
+    const ticks = nodes(chart).filter(node => node.type === 'SvgText' && node.props.y === 191);
+    // One string avoids separate centered native SVG spans for number/unit.
+    assert.deepEqual(ticks.map(node => node.children), [['7 days'], ['14 days'], ['21 days'], ['30 days']]);
+    assert.ok(ticks.every(node => node.props.textAnchor === 'middle'));
+    assert.ok(ticks.every((node, index) => index === 0 || node.props.x > ticks[index - 1].props.x));
+  }
 });
 test('native results retain planned baseline, negative shares, ranges, metadata and asset drill-down', async () => {
   const h = harness(), destinations = [];

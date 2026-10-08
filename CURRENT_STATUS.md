@@ -3319,3 +3319,13 @@ remain separate follow-on work.
 - Backend, models/artifacts, evidence, database, provider updates, AI, web,
   dependencies and navigation architecture are unchanged. No staging, commit or
   push; unrelated untracked docs/report content is preserved.
+
+### Mobile Outlook x-axis label formatting — 2026-10-09
+
+- Render each horizon tick as one SVG string (7 days, 14 days, 21 days, 30 days)
+  rather than separate number/unit children, preventing native SVG text-span
+  overlap. Selected and comparison charts share the fix; graph size, positions,
+  forecast values, backend and web are unchanged.
+- Added single-string/centered tick regressions for asset, portfolio and comparison
+  graphs. Whitespace checks passed; tests/typecheck and phone verification remain
+  for the user's manual run. No staging, commit or push was performed.
