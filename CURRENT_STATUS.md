@@ -3297,3 +3297,25 @@ remain separate follow-on work.
   grid view, mobile and APIs are unchanged.
 - Added a scoped layout regression. Tests/build await the user's manual
   commands; no staging, commit or push was performed.
+
+### Experimental weekly mobile integration — 2026-10-08
+
+- Enabled actual 7/14/21-day asset and portfolio GET outlooks with separate
+  weekly contracts. The original 30-day routes/default remain unchanged;
+  CURRENT/PLANNED/LEGACY baselines, signed contributions and asset ranges stay
+  backend-owned. Entry labels now describe Forecast Outlook rather than only 30 days.
+- Added accessible horizon selection and optional all-horizon comparison with
+  compact native date/status/metric cards, Return/Volatility charts, amber weekly
+  markers and date-aware gaps. No scaled estimates, daily path, portfolio interval
+  or fallback result is invented. Successful horizons survive individual failures.
+- Focus-aware requests cancel on blur, unmount and account/selection changes,
+  with independent timeout/error handling, manual/pull refresh and no late-result
+  display. Weekly calendar/package/experimental-quality flags and component
+  horizons are validated; retained warnings and full limitations remain visible.
+- Expanded mobile forecasting regressions and the integration guide. Source
+  review/whitespace checks completed; tests, TypeScript, Android export and phone
+  acceptance await the user's manual commands. Prior passing counts predate this
+  change; no new verification success or predictive-quality approval is claimed.
+- Backend, models/artifacts, evidence, database, provider updates, AI, web,
+  dependencies and navigation architecture are unchanged. No staging, commit or
+  push; unrelated untracked docs/report content is preserved.

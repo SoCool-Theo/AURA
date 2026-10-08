@@ -33,4 +33,28 @@ export type PortfolioOutlookResponse = {
   components: PortfolioOutlookComponent[];
   limitations: string[];
 };
-export type OutlookResponse = AssetOutlookResponse | PortfolioOutlookResponse;
+export type WeeklyHorizon = 7 | 14 | 21;
+export type ForecastHorizon = WeeklyHorizon | 30;
+type WeeklyQuality = {
+  horizon_days: WeeklyHorizon;
+  horizon_unit: 'calendar_days';
+  expected_return: number;
+  forecast_realized_volatility: number;
+  artifact_version: 'forecast-weekly-v1-20260917';
+  experimental: true;
+  predictive_quality_approved: false;
+  quality_status: 'experimental_educational_not_predictive_quality_approved';
+};
+export type WeeklyAssetOutlookResponse = Omit<AssetOutlookResponse,
+  'horizon_days' | 'expected_return_30d' | 'forecast_realized_volatility_30d' | 'artifact_version'> & WeeklyQuality & {
+  return_warning_codes: string[];
+  volatility_warning_codes: string[];
+};
+export type WeeklyPortfolioOutlookComponent = WeeklyAssetOutlookResponse & Pick<PortfolioOutlookComponent,
+  'current_weight' | 'forecast_volatility_contribution' | 'forecast_volatility_contribution_share'>;
+export type WeeklyPortfolioOutlookResponse = Omit<PortfolioOutlookResponse,
+  'horizon_days' | 'expected_return_30d' | 'forecast_realized_volatility_30d' | 'artifact_version' | 'components'> & WeeklyQuality & {
+  components: WeeklyPortfolioOutlookComponent[];
+};
+export type AnyAssetOutlookResponse = AssetOutlookResponse | WeeklyAssetOutlookResponse;
+export type OutlookResponse = AnyAssetOutlookResponse | PortfolioOutlookResponse | WeeklyPortfolioOutlookResponse;

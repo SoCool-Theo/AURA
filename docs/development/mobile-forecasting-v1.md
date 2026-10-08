@@ -1,8 +1,8 @@
 # Mobile forecasting V1 integration report
 
-Date: 2026-10-07
+Date: 2026-10-07; weekly mobile integration checkpoint: 2026-10-08
 
-## Delivered scope
+## Original 30-day delivered scope
 
 Added an authenticated mobile 30-Day Outlook screen using the existing read-only
 forecasting endpoints. The screen retains Aura's navy/teal cards, themed stack
@@ -35,13 +35,14 @@ Asset outlooks show both estimates and nominal 80% prediction ranges, model
 identifiers, origin/data date and age, and limitations. Search filters the
 supported asset catalog without replacing the selected asset when no match exists.
 
-The horizon controls show one, two, three weeks and 30 calendar days. Only 30 days
-is enabled because V1 has no validated weekly estimates or daily trajectory.
+At the original checkpoint, the horizon controls showed one, two, three weeks
+and 30 calendar days. Only 30 days was enabled pending weekly backend models.
 The chart plots a single actual 30-day marker with asset interval whiskers;
 portfolio prediction ranges are not invented. Return and Volatility have separate
 chart views, labeled axes, and an accessible spoken estimate/range description.
-Multiple-point chart support remains a visual guide for future backend horizons,
-not an enabled feature or interpolated forecast.
+Multiple-point chart support was a visual guide for future backend horizons,
+not an enabled feature or interpolated forecast. The weekly checkpoint below
+supersedes these original horizon-control and chart limitations.
 
 Signed contribution bars retain negative offsets and shares above 100%. Only
 chart geometry and percentage display are calculated locally; model estimates,
@@ -73,7 +74,7 @@ fabricated. Educational wording distinguishes estimates from guarantees.
   No web production code changed.
 - `CURRENT_STATUS.md` and this report: delivery and verification record.
 
-## Verification
+## Original 30-day verification (predates weekly integration)
 
 - Mobile TypeScript: passed (`npm run typecheck`).
 - Mobile forecasting and existing authority tests: 84 passed (15 new, 69 existing).
@@ -98,8 +99,11 @@ session was available. Unrelated report work was left unchanged.
    market data. Start the existing Expo app and sign in from your phone.
 2. Open More > Forecasting. Try current and planned portfolios, then an asset
    without a portfolio. Confirm contextual entry selection from other pages.
-3. Switch Expected Return / Volatility; check axes, one actual 30-day point,
-   asset-only ranges, disabled weekly controls and contribution offsets.
+3. Switch 7/14/21/30 calendar days (30 is default), then Expected Return /
+   Volatility. Check actual horizon-specific values, asset-only ranges,
+   weekly experimental notices/warnings and signed contribution offsets.
+   Enable Compare all horizons and review all four data dates/statuses. Missing
+   horizons and different data dates must break the dashed visual guide.
 4. Search/select assets, expand model details, and refresh or pull to refresh.
    Refresh does not fetch provider data, retrain models or save reports.
 5. Verify Back from Watchlist, Analytics, portfolio details and Dashboard;
@@ -108,3 +112,66 @@ session was available. Unrelated report work was left unchanged.
    controls. Review stale-data, missing-artifact and unusable-portfolio errors.
 
 Suggested commit: `feat(mobile): add forecasting v1 outlook preview`
+
+## Experimental weekly integration — 2026-10-08
+
+Enabled the verified additive weekly GET endpoints for both standalone assets
+and CURRENT/PLANNED/LEGACY portfolios. Original 30-day endpoints and `_30d`
+contracts remain unchanged and the default; weekly responses use neutral fields.
+No weekly output is scaled from a 30-day result. Entry points now say Forecast
+Outlook and More describes the 7–30-day offering.
+
+The existing screen now has accessible 7/14/21/30-day radio controls and a
+Compare all horizons checkbox. Optional comparison requests have independent
+60-second timeouts/errors. Successful horizons remain visible even if the
+selected horizon fails. Refresh, account/selection/horizon changes, leaving the
+screen and unmount cancel relevant requests and suppress late responses;
+returning to the screen reloads the current selection. Changing the selected
+horizon during comparison uses its already loaded response without a refetch.
+
+ForecastHorizonComparison adds compact native date/return/volatility/status
+cards rather than a wide desktop table. Its Return / Volatility chart plots only
+real response points. Amber marks weekly models; teal marks 30 days. Dashed
+guides join only adjacent supported horizons with matching market-data dates;
+missing horizons or different dates break them. Asset range whiskers are kept,
+but portfolio ranges and daily trajectories are never invented. The comparison
+chart replaces the single-point chart while comparison is enabled.
+
+Weekly validation requires matching calendar-day horizons, package identity,
+experimental/not-predictive-quality-approved flags and target warning arrays,
+including every portfolio component. Model-quality warnings are shown with
+their symbol/target/horizon; unknown warnings get safe generic wording. Model
+identifiers, component origins and the full returned limitations remain available
+for each successful comparison, not only the selected horizon. Planned baselines
+remain hypothetical and signed contributions stay backend-owned.
+
+Changed existing types/API adapters, focus-aware loader/UI helpers, result/chart
+components, styles, screen controls and contextual entry labels. Added one native
+comparison component and expanded the existing forecasting tests for transport,
+validation, neutral values, races, independent failures/timeouts, focus/account
+cancellation, line gaps/date separation, warnings, controls and metadata.
+
+Verification: source review and Git whitespace checks completed. No new passing
+test count, TypeScript/export success or physical-device acceptance is claimed.
+Run these commands manually from the repository root:
+
+```powershell
+npm --prefix .\mobile test
+npm --prefix .\mobile run typecheck
+```
+
+Optional Android bundling check using installed tooling (no new dependencies):
+
+```powershell
+Set-Location .\mobile; npx --no-install expo export --platform android --output-dir .expo/forecast-weekly-v1-export; Set-Location ..
+```
+
+On a signed-in phone, check AAPL and QQQ at every horizon, QQQ's retained 21-day
+ARIMA warning, CURRENT/PLANNED/LEGACY baselines, comparison partial failure,
+pull-to-refresh, account switching, back/blur return, both themes and large text.
+Client tests and bundling do not replace device acceptance or predictive-quality
+evaluation. Backend, models, evidence, database, provider refresh, AI grounding,
+web production code, navigation architecture and dependencies are unchanged.
+No training, migrations, staging, commit or push was performed.
+
+Suggested weekly checkpoint commit: `feat(mobile): integrate experimental weekly forecast horizons`

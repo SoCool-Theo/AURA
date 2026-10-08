@@ -59,17 +59,41 @@ const portfolio = {
     { ...asset, symbol: 'MSFT', forecast_origin_date: '2026-10-05', current_weight: 0.6, forecast_volatility_contribution: 0.072, forecast_volatility_contribution_share: 1.2 },
   ], limitations: ['No calibrated portfolio prediction interval is provided.'],
 };
+function weekly(value, days) {
+  const { expected_return_30d, forecast_realized_volatility_30d, components, ...rest } = value;
+  const result = {
+    ...rest, horizon_days: days, horizon_unit: 'calendar_days',
+    expected_return: expected_return_30d, forecast_realized_volatility: forecast_realized_volatility_30d,
+    artifact_version: 'forecast-weekly-v1-20260917', experimental: true, predictive_quality_approved: false,
+    quality_status: 'experimental_educational_not_predictive_quality_approved',
+  };
+  if (components) result.components = components.map(item => weekly(item, days));
+  else Object.assign(result, { market_data_as_of: result.forecast_origin_date, return_warning_codes: [], volatility_warning_codes: [] });
+  return result;
+}
+
 function mountHook(options = {}) {
   const h = harness(), calls = [], timers = new Map();
   let focused = true;
-  let account = 'a', scope = 'asset', selection = 'AAPL', operation = options.operation ?? (async (kind, id) => kind === 'asset' ? { ...asset, symbol: id } : { ...portfolio, portfolio_id: id });
+  let account = 'a', scope = 'asset', selection = 'AAPL', horizon = options.horizon ?? 30, compare = options.compare ?? false;
+  let operation = options.operation ?? (async (kind, id, days) => {
+    const value = kind === 'asset' ? { ...asset, symbol: id } : { ...portfolio, portfolio_id: id };
+    return days === 30 ? value : weekly(value, days);
+  });
   const auth = { useAuth: () => ({ status: account ? 'authenticated' : 'unauthenticated', user: account ? { id: account } : null }) };
-  const api = { getAssetOutlook: (id, opts) => { calls.push(['asset', id, opts]); return operation('asset', id); }, getPortfolioOutlook: (id, opts) => { calls.push(['portfolio', id, opts]); return operation('portfolio', id); } };
+  const request = (kind, id, opts, days) => { calls.push([kind, id, opts, days]); return operation(kind, id, days); };
+  const api = {
+    getAssetOutlook: (id, opts) => request('asset', id, opts, 30),
+    getPortfolioOutlook: (id, opts) => request('portfolio', id, opts, 30),
+    getWeeklyAssetOutlook: (id, days, opts) => request('asset', id, opts, days),
+    getWeeklyPortfolioOutlook: (id, days, opts) => request('portfolio', id, opts, days),
+  };
   const { useForecasting } = load('src/forecasting/useForecasting.ts', { react: h.react, '@react-navigation/native': { useFocusEffect: cb => h.react.useEffect(() => focused ? cb() : undefined, [cb, focused]) }, '../auth/useAuth': auth, '../api/forecastingApi': api, './forecastingUi': ui },
     { setTimeout: (fn, delay) => { assert.equal(delay, 60000); const key = Symbol(); timers.set(key, fn); return key; }, clearTimeout: key => timers.delete(key) });
-  h.mount(() => useForecasting(scope, selection));
+  h.mount(() => useForecasting(scope, selection, horizon, compare));
   return { h, calls, timers, auth, useForecasting, setOperation(value) { operation = value; },
     focus(value) { focused = value; h.render(); },
+    horizon(value) { horizon = value; h.render(); }, compare(value) { compare = value; h.render(); },
     select(kind, id) { scope = kind; selection = id; h.render(); }, account(value) { account = value; h.render(); } };
 }
 test('forecast API uses authenticated read-only endpoints, encoded IDs, no horizon/weights/provider requests', async () => {
@@ -163,6 +187,7 @@ test('native results retain planned baseline, negative shares, ranges, metadata 
   const { ForecastingResults } = load('src/components/forecasting/ForecastingResults.tsx', {
     react: h.react, 'react-native': native, '../ui/Card': { Card: 'Card' }, '../ui/Button': { Button: 'Button' },
     './OutlookChart': { OutlookChart: 'Chart' }, '../../forecasting/forecastingUi': ui,
+    './ForecastHorizonComparison': { ForecastQualityNotice: 'Quality' },
     '../../forecasting/forecastingStyles': { forecastingStyles: styles },
   });
   let result = { ...portfolio, baseline_kind: 'planned' };
@@ -184,9 +209,9 @@ test('native results retain planned baseline, negative shares, ranges, metadata 
   h.unmount();
 });
 function mountScreen(params = {}, operation = async () => ({ portfolios: [] })) {
-  const h = harness(), selections = [], destinations = [];
+  const h = harness(), selections = [], destinations = [], requests = [];
   let refreshed = 0;
-  const forecast = { result: null, error: null, loading: false, refresh: () => refreshed++ };
+  const forecast = { result: null, error: null, loading: false, outlooks: [], comparisonLoading: false, unavailableHorizons: [], refresh: () => refreshed++ };
   const { AccountForecasting } = load('src/screens/forecasting/ForecastingScreen.tsx', {
     react: h.react, '@react-navigation/native': { useFocusEffect: cb => h.react.useEffect(cb, [cb]) },
     'react-native': native, 'react-native-safe-area-context': { SafeAreaView: 'Safe' },
@@ -196,7 +221,8 @@ function mountScreen(params = {}, operation = async () => ({ portfolios: [] })) 
     '../../components/ui/PageTitle': { PageTitle: 'Title' }, '../../components/ui/ErrorState': { InlineErrorCard: 'ErrorCard' },
     '../../components/simulations/PortfolioSelector': { PortfolioSelector: 'PortfolioSelector' },
     '../../components/forecasting/ForecastingResults': { ForecastingResults: 'Results' },
-    '../../forecasting/useForecasting': { useForecasting: (scope, selection) => { selections.push([scope, selection]); return forecast; } },
+    '../../components/forecasting/ForecastHorizonComparison': { ForecastHorizonComparison: 'Comparison' },
+    '../../forecasting/useForecasting': { useForecasting: (scope, selection, horizon, compare) => { selections.push([scope, selection]); requests.push([scope, selection, horizon, compare]); return forecast; } },
     '../../forecasting/forecastingUi': ui, '../../forecasting/forecastingStyles': { forecastingStyles: styles },
     '../../portfolio/supportedAssetSymbols': { supportedAssets: [{ symbol: 'AAPL', name: 'Apple' }, { symbol: 'MSFT', name: 'Microsoft' }] },
   });
@@ -206,13 +232,14 @@ function mountScreen(params = {}, operation = async () => ({ portfolios: [] })) 
     getParent: () => ({ navigate: (...args) => destinations.push(args) }),
   };
   h.mount(() => AccountForecasting({ route: { params }, navigation }));
-  return { h, selections, forecast, destinations, get refreshed() { return refreshed; } };
+  return { h, selections, forecast, destinations, requests, get refreshed() { return refreshed; } };
 }
-test('mobile screen offers asset access without portfolios, keeps search selection and disables weekly horizons', async () => {
+test('mobile screen offers asset access without portfolios, keeps search selection and enables all horizons', async () => {
   const c = mountScreen(); await c.h.settle();
   assert.match(text(c.h.value), /No portfolios yet/);
   const horizons = nodes(c.h.value).filter(n => /calendar days/.test(n.props.accessibilityLabel ?? ''));
-  assert.deepEqual(horizons.map(n => n.props.disabled), [true, true, true, false]);
+  assert.deepEqual(horizons.map(n => Boolean(n.props.disabled)), [false, false, false, false]);
+  assert.deepEqual(horizons.map(n => n.props.accessibilityState.selected), [false, false, false, true]);
   nodes(c.h.value).find(n => n.props.title === 'Explore Assets').props.onPress(); await c.h.settle();
   assert.deepEqual(c.selections.at(-1), ['asset', 'AAPL']);
   nodes(c.h.value).find(n => n.type === 'TextInput').props.onChangeText('nothing'); await c.h.settle();
@@ -238,6 +265,161 @@ test('portfolio list failure does not block standalone asset outlooks and has re
   nodes(c.h.value).find(n => n.props.accessibilityLabel === 'Asset Outlook').props.onPress(); await c.h.settle();
   assert.deepEqual(c.selections.at(-1), ['asset', 'AAPL']); assert.equal(nodes(c.h.value).filter(n => n.type === 'ErrorCard').length, 0); c.h.unmount();
 });
+test('weekly GET transport preserves 30-day endpoints and forwards cancellation', async () => {
+  const calls = [], signal = new AbortController().signal;
+  const api = load('src/api/forecastingApi.ts', { './apiClient': { apiRequest: async (...args) => { calls.push(args); return weekly(asset, 7); } } });
+  for (const days of [7, 14, 21]) {
+    await api.getWeeklyAssetOutlook('BTC-USD', days, { signal, token: 'test' });
+    await api.getWeeklyPortfolioOutlook('p/id', days, { signal });
+  }
+  assert.deepEqual(calls.map(call => call[0]), [7, 14, 21].flatMap(days => [
+    `/api/forecasting/assets/BTC-USD/horizons/${days}/outlook`, `/api/forecasting/portfolios/p%2Fid/horizons/${days}/outlook`,
+  ]));
+  assert.ok(calls.every(call => call[1].signal === signal && call[1].body === undefined && call[1].method === undefined));
+});
+
+test('weekly contracts retain experimental quality, actual values, and same-horizon components', () => {
+  for (const days of [7, 14, 21]) {
+    const a = { ...weekly(asset, days), expected_return: .017 + days / 10000, forecast_realized_volatility: .025 };
+    assert.equal(ui.validOutlookResponse(a, 'asset', 'AAPL', days), true);
+    assert.equal(ui.forecastPoints(a, 'return')[0].estimate, a.expected_return);
+    assert.equal(ui.forecastPoints(a, 'volatility')[0].estimate, .025);
+    assert.equal(ui.forecastPoints(a, 'return')[0].interval, a.return_prediction_interval);
+    for (const result of [
+      { ...a, experimental: false }, { ...a, predictive_quality_approved: true }, { ...a, quality_status: 'approved' },
+      { ...a, horizon_unit: 'trading_days' }, { ...a, return_warning_codes: undefined }, { ...a, volatility_warning_codes: [42] },
+      { ...a, expected_return: NaN }, { ...a, forecast_realized_volatility: -1 }, { ...a, artifact_version: asset.artifact_version },
+      { ...a, market_data_age_days: 5 }, { ...a, forecast_origin_date: '2026-10-01' }, { ...a, horizon_days: 30 },
+    ]) assert.equal(ui.validOutlookResponse(result, 'asset', 'AAPL', days), false);
+    for (const baseline_kind of ['current', 'planned', 'legacy']) {
+      const p = { ...weekly(portfolio, days), baseline_kind };
+      assert.equal(ui.validOutlookResponse(p, 'portfolio', 'p', days), true);
+      assert.equal(ui.forecastPoints(p, 'return')[0].interval, undefined);
+      assert.equal(ui.validOutlookResponse({ ...p, components: [weekly(portfolio.components[0], days === 7 ? 14 : 7)] }, 'portfolio', 'p', days), false);
+      assert.equal(ui.validOutlookResponse({ ...p, components: [{ ...p.components[0], predictive_quality_approved: true }] }, 'portfolio', 'p', days), false);
+    }
+  }
+});
+
+test('weekly selection races cancel old horizons and never fall back to 30-day estimates', async () => {
+  const late = deferred(), c = mountHook({ horizon: 7, operation: () => late.promise });
+  assert.equal(c.calls[0][3], 7);
+  c.setOperation(async (_, id, days) => weekly({ ...asset, symbol: id }, days));
+  c.horizon(14); await c.h.settle();
+  assert.equal(c.calls[0][2].signal.aborted, true);
+  assert.equal(c.h.value.result.horizon_days, 14);
+  late.resolve(weekly(asset, 7)); await c.h.settle(); assert.equal(c.h.value.result.horizon_days, 14);
+  c.setOperation(async () => asset); c.horizon(21); await c.h.settle();
+  assert.equal(c.h.value.result, null); assert.ok(c.h.value.error);
+  assert.deepEqual(plain(c.h.value.unavailableHorizons), [21]); c.h.unmount();
+});
+
+test('comparison requests fail independently, retain completed horizons, and time out separately', async () => {
+  const late = deferred();
+  const c = mountHook({ compare: true, operation: async (_, id, days) => {
+    if (days === 14) throw new ApiError(503);
+    if (days === 21) return late.promise;
+    return days === 30 ? asset : weekly({ ...asset, symbol: id }, days);
+  } });
+  await c.h.settle();
+  assert.deepEqual(c.calls.map(call => call[3]), [7, 14, 21, 30]);
+  assert.deepEqual(plain(c.h.value.outlooks.map(item => item.horizon_days)), [7, 30]);
+  assert.deepEqual(plain(c.h.value.unavailableHorizons), [14]); assert.equal(c.h.value.comparisonLoading, true);
+  const count = c.calls.length; c.horizon(7); await c.h.settle();
+  assert.equal(c.calls.length, count); assert.equal(c.h.value.result.horizon_days, 7);
+  [...c.timers.values()][0](); await c.h.settle();
+  assert.equal(c.calls.find(call => call[3] === 21)[2].signal.aborted, true);
+  assert.deepEqual(plain(c.h.value.unavailableHorizons), [14, 21]); assert.equal(c.h.value.comparisonLoading, false);
+  late.resolve(weekly(asset, 21)); await c.h.settle();
+  assert.deepEqual(plain(c.h.value.outlooks.map(item => item.horizon_days)), [7, 30]);
+  c.setOperation(async (_, id, days) => days === 30 ? asset : weekly({ ...asset, symbol: id }, days));
+  c.h.value.refresh(); await c.h.settle(); assert.equal(c.h.value.outlooks.length, 4);
+  c.h.unmount(); assert.equal(c.timers.size, 0);
+});
+
+test('comparison cancels every request on blur or account change and rejects late completions', async () => {
+  const old = deferred(), c = mountHook({ compare: true, operation: () => old.promise });
+  c.focus(false); await c.h.settle(); assert.ok(c.calls.every(call => call[2].signal.aborted));
+  c.setOperation(async (_, id, days) => days === 30 ? { ...asset, symbol: id } : weekly({ ...asset, symbol: id }, days));
+  c.focus(true); await c.h.settle(); assert.equal(c.h.value.outlooks.length, 4);
+  c.account(null); await c.h.settle(); assert.equal(c.h.value.outlooks.length, 0);
+  assert.ok(c.calls.every(call => call[2].signal.aborted));
+  old.resolve(asset); await c.h.settle(); assert.equal(c.h.value.outlooks.length, 0); c.h.unmount();
+});
+
+test('native comparison chart does not bridge failed horizons or different data dates', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const { OutlookChart } = load('src/components/forecasting/OutlookChart.tsx', {
+    react, 'react-native': native, 'react-native-svg': { __esModule: true, default: 'Svg', Circle: 'Circle', G: 'G', Line: 'Line', Polyline: 'Polyline', Text: 'SvgText' },
+    '../../theme/theme': { colors: { primary: 'teal', warning: 'amber' } }, '../../forecasting/forecastingUi': ui,
+    '../../forecasting/forecastingStyles': { forecastingStyles: styles },
+  });
+  const results = [weekly(asset, 7), weekly(asset, 14), weekly(asset, 21), asset];
+  const render = values => OutlookChart({ points: ui.comparisonPoints(values, 'return'), metric: 'return' });
+  const full = render(results);
+  assert.equal(nodes(full).filter(node => node.type === 'Polyline').length, 3);
+  assert.deepEqual(nodes(full).filter(node => node.type === 'Circle').map(node => node.props.fill), ['amber', 'amber', 'amber', 'teal']);
+  assert.equal(nodes(render([results[0], results[2], results[3]])).filter(node => node.type === 'Polyline').length, 1);
+  assert.equal(nodes(render([results[0], { ...results[1], market_data_as_of: '2026-10-05' }])).filter(node => node.type === 'Polyline').length, 0);
+  assert.equal(nodes(full).filter(node => node.type === 'Circle').length, 4);
+  assert.match(text(full), /visual guides only/);
+});
+
+test('mobile comparison cards retain unavailable dates/status and model-quality warnings', async () => {
+  const h = harness();
+  const { ForecastHorizonComparison, ForecastQualityNotice } = load('src/components/forecasting/ForecastHorizonComparison.tsx', {
+    react: h.react, 'react-native': native, '../ui/Card': { Card: 'Card' },
+    './OutlookChart': { OutlookChart: 'Chart' }, '../../forecasting/forecastingUi': ui,
+    '../../forecasting/forecastingStyles': { forecastingStyles: styles },
+  });
+  const a = { ...weekly(asset, 7), volatility_warning_codes: ['arima_fit_convergence_warning', 'final_interval_coverage_below_nominal', 'constructor'] };
+  h.mount(() => ForecastHorizonComparison({ results: [a, asset], loading: false, unavailable: [14, 21] }));
+  assert.match(text(h.value), /14\s+days ·\s+Unavailable/); assert.match(text(h.value), /21\s+days ·\s+Unavailable/);
+  assert.match(text(h.value), /2026-10-06/); assert.match(text(h.value), /not approved as reliable/);
+  assert.equal(nodes(h.value).find(node => node.type === 'Chart').props.points.length, 2);
+  nodes(h.value).find(node => node.props.accessibilityLabel === 'Comparison Volatility chart').props.onPress();
+  await h.settle(); assert.equal(nodes(h.value).find(node => node.type === 'Chart').props.points[0].estimate, .08);
+  const notice = ForecastQualityNotice({ results: [a] });
+  assert.match(text(notice), /7-day AAPL volatility.*fit-convergence/);
+  assert.match(text(notice), /below the nominal 80%/); assert.match(text(notice), /additional model-quality warning/);
+  assert.doesNotMatch(text(notice), /function Object/);
+  nodes(h.value).find(node => node.props.accessibilityLabel === 'Comparison model details and limitations').props.onPress();
+  await h.settle(); assert.match(text(h.value), /historical_average/); assert.match(text(h.value), /not guarantees/);
+  h.unmount();
+});
+
+test('mobile horizon selection and comparison controls scope requests and keep successful comparison on selected failure', async () => {
+  const c = mountScreen({ scope: 'asset', symbol: 'AAPL' }); await c.h.settle();
+  assert.deepEqual(c.requests.at(-1), ['asset', 'AAPL', 30, false]);
+  nodes(c.h.value).find(node => node.props.accessibilityLabel === '14 calendar days').props.onPress();
+  await c.h.settle(); assert.deepEqual(c.requests.at(-1), ['asset', 'AAPL', 14, false]);
+  nodes(c.h.value).find(node => node.props.accessibilityLabel === 'Compare all forecast horizons').props.onPress();
+  await c.h.settle(); assert.deepEqual(c.requests.at(-1), ['asset', 'AAPL', 14, true]);
+  c.forecast.error = new ApiError(503); c.forecast.outlooks = [asset]; c.forecast.unavailableHorizons = [14]; c.h.render();
+  assert.ok(nodes(c.h.value).some(node => node.type === 'Comparison'));
+  assert.ok(nodes(c.h.value).some(node => node.type === 'ErrorCard'));
+  assert.equal(nodes(c.h.value).filter(node => node.type === 'Results').length, 0);
+  c.forecast.error = null; c.forecast.result = weekly(asset, 14); c.h.render();
+  assert.equal(nodes(c.h.value).find(node => node.type === 'Results').props.showChart, false);
+  c.h.unmount();
+});
+
+test('native weekly cards and breakdowns use neutral backend values and selected-horizon labels', () => {
+  const h = harness();
+  const { ForecastingResults } = load('src/components/forecasting/ForecastingResults.tsx', {
+    react: h.react, 'react-native': native, '../ui/Card': { Card: 'Card' }, '../ui/Button': { Button: 'Button' },
+    './OutlookChart': { OutlookChart: 'Chart' }, './ForecastHorizonComparison': { ForecastQualityNotice: 'Quality' },
+    '../../forecasting/forecastingUi': ui, '../../forecasting/forecastingStyles': { forecastingStyles: styles },
+  });
+  const result = { ...weekly(portfolio, 21), baseline_kind: 'planned', expected_return: -.04 };
+  h.mount(() => ForecastingResults({ result, onAsset() {} }));
+  assert.match(text(h.value), /Expected\s+21\s*-Day Return/); assert.match(text(h.value), /-4.00%/);
+  assert.match(text(h.value), /hypothetical/); assert.doesNotMatch(text(h.value), /30-Day|80% prediction range/);
+  assert.ok(nodes(h.value).some(node => node.props.label === '21-day expected return'));
+  assert.equal(nodes(h.value).find(node => node.type === 'Quality').props.results[0], result);
+  h.unmount();
+});
+
 test('forecast navigation is within protected stacks, keeps five tabs, and leaves saved history/AI untouched', () => {
   const read = file => fs.readFileSync(path.join(root, file), 'utf8');
   const main = read('src/navigation/MainTabNavigator.tsx');

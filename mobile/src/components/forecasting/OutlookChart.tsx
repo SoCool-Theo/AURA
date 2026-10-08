@@ -7,6 +7,13 @@ import { forecastingStyles as styles } from '../../forecasting/forecastingStyles
 
 export function OutlookChart({ points, metric }: { points: OutlookPoint[]; metric: OutlookMetric }) {
   const ordered = [...points].sort((a, b) => a.horizonDays - b.horizonDays);
+  // Only visual guides between adjacent, same-date estimates. Never bridge gaps.
+  const segments = ordered.flatMap((point, index) => {
+    const next = ordered[index + 1];
+    return next && forecastHorizons.indexOf(next.horizonDays as 7 | 14 | 21 | 30)
+      === forecastHorizons.indexOf(point.horizonDays as 7 | 14 | 21 | 30) + 1
+      && point.dataDate && point.dataDate === next.dataDate ? [[point, next]] : [];
+  });
   const values = [0, ...ordered.flatMap(point => [point.estimate, ...(point.interval ? [point.interval.lower, point.interval.upper] : [])])];
   const minimum = Math.min(...values), maximum = Math.max(...values);
   const padding = Math.max((maximum - minimum) * 0.12, 0.001);
@@ -26,15 +33,15 @@ export function OutlookChart({ points, metric }: { points: OutlookPoint[]; metri
         })}
         <Line x1={68} x2={348} y1={y(0)} y2={y(0)} stroke={colors.muted} strokeDasharray="4 5" opacity={0.5} />
         {forecastHorizons.map(day => <G key={day}><Line x1={x(day)} x2={x(day)} y1={25} y2={170} stroke={colors.borderSoft} /><SvgText x={x(day)} y={191} textAnchor="middle" fontSize={10} fill={colors.muted}>{day} days</SvgText></G>)}
-        {ordered.length > 1 && <Polyline points={ordered.map(point => `${x(point.horizonDays)},${y(point.estimate)}`).join(' ')} fill="none" stroke={colors.primary} strokeWidth={2} strokeDasharray="7 5" />}
+        {segments.map(segment => <Polyline key={segment[0].horizonDays} points={segment.map(point => `${x(point.horizonDays)},${y(point.estimate)}`).join(' ')} fill="none" stroke={colors.primary} strokeWidth={2} strokeDasharray="7 5" />)}
         {ordered.map(point => <G key={point.horizonDays}>
           {point.interval && <G><Line x1={x(point.horizonDays)} x2={x(point.horizonDays)} y1={y(point.interval.lower)} y2={y(point.interval.upper)} stroke={colors.primarySoft} strokeWidth={2} /><Line x1={x(point.horizonDays) - 6} x2={x(point.horizonDays) + 6} y1={y(point.interval.lower)} y2={y(point.interval.lower)} stroke={colors.primarySoft} strokeWidth={2} /><Line x1={x(point.horizonDays) - 6} x2={x(point.horizonDays) + 6} y1={y(point.interval.upper)} y2={y(point.interval.upper)} stroke={colors.primarySoft} strokeWidth={2} /></G>}
-          <Circle cx={x(point.horizonDays)} cy={y(point.estimate)} r={5} fill={colors.primary} stroke={colors.surface} strokeWidth={2} />
-          <SvgText x={x(point.horizonDays) - 11} y={y(point.estimate) - 9} textAnchor="end" fontSize={11} fontWeight="bold" fill={colors.text}>{forecastPercent(point.estimate, metric === 'return')}</SvgText>
+          <Circle cx={x(point.horizonDays)} cy={y(point.estimate)} r={5} fill={point.horizonDays === 30 ? colors.primary : colors.warning} stroke={colors.surface} strokeWidth={2} />
+          <SvgText x={x(point.horizonDays)} y={y(point.estimate) - 9} textAnchor={point.horizonDays === 7 ? 'start' : point.horizonDays === 30 ? 'end' : 'middle'} fontSize={11} fontWeight="bold" fill={colors.text}>{forecastPercent(point.estimate, metric === 'return')}</SvgText>
         </G>)}
         <SvgText x={200} y={214} textAnchor="middle" fontSize={9} fill={colors.muted}>Calendar days ahead from each forecast origin</SvgText>
       </Svg>
     </View>
-    <Text style={styles.note}>V1 provides one 30-day estimate, not a daily price path. Weekly estimates are not available yet. {ordered.some(point => point.interval) ? 'Bars show nominal 80% asset prediction ranges.' : 'No calibrated portfolio prediction range is provided.'} Connecting lines, when multiple estimates are available, are visual guides only.</Text>
+    <Text style={styles.note}>Each marker is an independent calendar-day estimate, not a daily price path. Weekly estimates are experimental. {ordered.some(point => point.interval) ? 'Bars show nominal 80% asset prediction ranges.' : 'No calibrated portfolio prediction range is provided.'} Dashed lines are visual guides only; missing horizons or different data dates break the line.</Text>
   </View>;
 }
