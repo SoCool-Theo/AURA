@@ -3367,3 +3367,27 @@ remain separate follow-on work.
   whitespace review completed; user-run tests are pending, with no passing count
   claimed. No frontend, migration, dependency, model/artifact, training or AI
   changes. No staging/commit/push; unrelated docs/report content is preserved.
+
+### Portfolio Outlook monetary web integration — 2026-10-09
+
+- Integrated backend-owned overall and holding monetary projections across
+  7/14/21/30-day portfolio Outlooks. Compact cards and asset breakdowns show
+  baseline amounts, expected gains/losses and estimated ending values alongside
+  percentages. CURRENT uses saved USD prices times shares, with price-date
+  provenance; PLANNED uses entered USD/THB amounts and is hypothetical with an
+  unchanged-FX disclosure. LEGACY and standalone Asset Outlook remain
+  percentage-only; no browser valuation or forecast arithmetic is introduced.
+- Added an Expected change currency chart view and comparison amounts. Money
+  guides require matching baseline/currency/date context; unsupported chart
+  magnitudes remain in exact formatted cards/tables. Decimal-string display
+  preserves cents. Hide portfolio values masks amounts and removes monetary
+  charts/accessibility values immediately. Malformed money contexts fail safely.
+- With direct test execution now authorized, the backend forecasting/schema/API
+  suite passed 1,061 tests in 52.28 seconds. Web forecasting passed 29 tests;
+  full web/shared-client suite passed 138 with one pre-existing branding failure
+  in unrelated report-outline wording, retained unchanged. TypeScript and the
+  production build passed with the existing bundle-size warning. Signed-in
+  monetary visual acceptance remains pending; mobile is the next integration.
+- Updated the web integration report and focused regression coverage. No backend,
+  mobile, migration, dependency, model/artifact or saved-data changes. No staging,
+  commit or push; unrelated untracked docs/report content remains untouched.
