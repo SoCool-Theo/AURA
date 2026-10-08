@@ -4,6 +4,7 @@ import React, {
   PropsWithChildren,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from 'react';
 import { Appearance } from 'react-native';
@@ -12,28 +13,19 @@ export type ThemeMode = 'dark' | 'light';
 
 type PreferencesState = {
   themeMode: ThemeMode;
-  notificationsEnabled: boolean;
-  hidePortfolioValues: boolean;
-  displayName: string;
 };
 
 type PreferencesContextValue = PreferencesState & {
   ready: boolean;
   storageError: string | null;
   setThemeMode: (mode: ThemeMode) => void;
-  setNotificationsEnabled: (enabled: boolean) => void;
-  setHidePortfolioValues: (hidden: boolean) => void;
-  setDisplayName: (name: string) => void;
   resetPreferences: () => Promise<void>;
 };
 
 const STORAGE_KEY = 'aura_mobile_preferences_v1';
 
 const defaults: PreferencesState = {
-  themeMode: 'dark',
-  notificationsEnabled: true,
-  hidePortfolioValues: false,
-  displayName: ''
+  themeMode: 'dark'
 };
 
 export const PreferencesContext =
@@ -50,6 +42,8 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
   const [prefs, setPrefs] = useState<PreferencesState>(defaults);
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState<string | null>(null);
+  const currentPrefs = useRef(defaults);
+  const writes = useRef(Promise.resolve());
 
   useEffect(() => {
     (async () => {
@@ -58,11 +52,9 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
         if (raw) {
           const saved = JSON.parse(raw) as Partial<PreferencesState>;
           const next = {
-            themeMode: saved.themeMode === 'light' ? 'light' as const : 'dark' as const,
-            notificationsEnabled: typeof saved.notificationsEnabled === 'boolean' ? saved.notificationsEnabled : defaults.notificationsEnabled,
-            hidePortfolioValues: typeof saved.hidePortfolioValues === 'boolean' ? saved.hidePortfolioValues : defaults.hidePortfolioValues,
-            displayName: typeof saved.displayName === 'string' ? saved.displayName : ''
+            themeMode: saved.themeMode === 'light' ? 'light' as const : 'dark' as const
           };
+          currentPrefs.current = next;
           setPrefs(next);
           applyTheme(next.themeMode);
         } else {
@@ -78,13 +70,12 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
   }, []);
 
   function update(patch: Partial<PreferencesState>) {
-    setPrefs((current) => {
-      const next = { ...current, ...patch };
-      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-        .then(() => setStorageError(null))
-        .catch(() => setStorageError('This preference changed for now but could not be saved on this device. Try again.'));
-      return next;
-    });
+    const next = { ...currentPrefs.current, ...patch };
+    currentPrefs.current = next;
+    setPrefs(next);
+    writes.current = writes.current.then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)))
+      .then(() => setStorageError(null))
+      .catch(() => setStorageError('This preference changed for now but could not be saved on this device. Try again.'));
   }
 
   const value = useMemo<PreferencesContextValue>(
@@ -96,14 +87,13 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
         applyTheme(mode);
         update({ themeMode: mode });
       },
-      setNotificationsEnabled: (enabled) =>
-        update({ notificationsEnabled: enabled }),
-      setHidePortfolioValues: (hidden) =>
-        update({ hidePortfolioValues: hidden }),
-      setDisplayName: (name) => update({ displayName: name.trim() }),
       resetPreferences: async () => {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
+        if (!ready) throw new Error('Device preferences are still loading.');
+        const task = writes.current.then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(defaults)));
+        writes.current = task.catch(() => {});
+        await task;
         applyTheme(defaults.themeMode);
+        currentPrefs.current = defaults;
         setPrefs(defaults);
         setStorageError(null);
       }

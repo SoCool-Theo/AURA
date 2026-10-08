@@ -1,6 +1,7 @@
 import type { ApiCallOptions } from '../types/api';
 import type {
   AccessTokenResponse,
+  AccountDeletionRequest,
   AuthenticatedUserResponse,
   LoginRequest,
   PasswordChangeRequest,
@@ -44,6 +45,15 @@ export const authApi = {
       '/api/auth/me',
       { ...options, method: 'PATCH', body: request }
     );
+  },
+
+  deleteAccount(
+    request: AccountDeletionRequest,
+    options: ApiCallOptions = {}
+  ): Promise<void> {
+    return apiRequest<void, AccountDeletionRequest>('/api/auth/me', {
+      ...options, method: 'DELETE', body: request, responseMode: 'none'
+    });
   },
 
   changePassword(

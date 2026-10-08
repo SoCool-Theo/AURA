@@ -2,16 +2,19 @@ import { navItems } from '../../app/navigation';
 import { go, type AppRoute } from '../../app/routes';
 import { Icon } from '../ui/Icon';
 import { ProfileMenu } from './ProfileMenu';
+import { useNotificationBadge } from '../../notifications/useNotifications';
 
 type TopNavigationProps = {
   route: AppRoute;
 };
 
 export function TopNavigation({ route }: TopNavigationProps) {
+  const unread = useNotificationBadge();
   const isActive = (key: string) => (
     route.page === key
     || (key === 'portfolios' && ['portfolio', 'create'].includes(route.page))
     || (key === 'reports' && route.page === 'asset')
+    || (key === 'analytics' && route.page === 'forecasting')
   );
 
   return (
@@ -38,8 +41,9 @@ export function TopNavigation({ route }: TopNavigationProps) {
         </nav>
         <div className="top-nav-actions">
           <button className="nav-action" aria-label="Search unavailable" title="Search is not available yet" disabled><Icon name="search" size={21}/></button>
-          <button className="nav-action notification-button" aria-label="Notifications unavailable" title="Notifications are not available yet" disabled>
+          <button className="nav-action notification-button" aria-label={unread == null ? 'Open notifications' : `Notifications, ${unread} unread`} title="Open notifications" onClick={() => go('notifications')}>
             <Icon name="bell" size={21}/>
+            {unread != null && unread > 0 && <span className="notification-dot" aria-hidden="true" />}
           </button>
           <ProfileMenu />
         </div>

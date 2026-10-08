@@ -2342,3 +2342,958 @@ remain separate follow-on work.
 - No real database connection, ML training/evaluation, calibration/final testing,
   artifact generation, production code/contract change, dependency addition,
   commit, push, merge, PR, history rewrite, or branch switch occurred in this audit.
+
+### Completed public web welcome page (2026-10-01)
+
+- Added a long, responsive welcome page in Aura's existing navy/teal theme:
+  product introduction, current/planned sample preview, workflow, risk analytics,
+  selectable simulation chart lines, AI explanation example, expandable lessons,
+  web/mobile illustrations, methodology, FAQ, and account calls to action.
+- The root URL now opens Welcome for signed-out visitors. Session restoration
+  keeps the focused loading screen, authenticated visitors continue to Dashboard,
+  and existing saved-report/simulation deep links remain protected. Login and
+  signup include a return link to Welcome.
+- Product examples are clearly labelled illustrative, use no live account data,
+  and do not calculate portfolio results. No backend, mobile app, dependencies,
+  financial engine, or authentication contracts changed.
+- Browser checks verified desktop and 390/320-pixel layouts, current/planned
+  switching, single-line chart selection, lesson/FAQ disclosure, mobile menu and
+  Escape handling, and Welcome/Login/Signup navigation. Fixed compact metric
+  overflow and a missing accessible section label during visual review.
+- Validation: production build and 34 web authority tests passed, including new
+  runtime public-entry/session/protected-deep-link regressions. Changes remain
+  uncommitted pending user review and explicit authorization.
+
+### Completed mobile bottom-tab root navigation (2026-10-02)
+
+- Bottom-bar taps now return Portfolio to Portfolios, Simulate to Simulations,
+  and More to More instead of reopening the last detail screen. Each tap resets
+  only the selected child stack, including direct-entry screens with no root in
+  their existing history. Home and AI retain their native single-screen behavior.
+- In-page report, simulation, and Ask Aura links retain their exact context;
+  other tabs, shared portfolio state, and AI conversations are not reset.
+- Added a navigation listener and small scoped action helper. Regression checks
+  use the installed tab/stack routers for focused/unfocused tabs, normal history,
+  cold deep links, empty root back history, and unchanged other-tab state.
+- Validation: mobile TypeScript check and all 43 mobile authority tests passed.
+  Physical-device interaction was not verified. No backend, web, API, dependency,
+  financial calculation, commit, or push changes were made.
+
+### Completed saved-simulation deletion (2026-10-02)
+
+- Added Bearer-authenticated, owner-scoped `DELETE
+  /api/portfolios/{portfolio_id}/simulations/{simulation_id}` returning empty
+  `204`. Missing/unowned parents and missing/wrong-associated snapshots retain
+  safe `404` responses. Failures roll back through the request dependency and
+  expose no internal details; successful requests commit exactly once.
+- Repository/service deletion removes only the selected snapshot without
+  restoring its payload, recalculating results, or changing portfolios, reports,
+  market data, or other simulations. All modes and V1/V2/V3 remain supported;
+  no migration, dependency, or financial calculation change was required.
+- Web Simulation History and Saved Simulation, plus mobile Recent Simulations,
+  Simulation History, and Saved Simulation, now offer red delete actions with
+  the existing Aura-themed confirmation dialogs. Cancel performs no mutation;
+  failures remain visible for retry and duplicate submissions are blocked.
+- Successful deletion removes the history row and returns detail views to
+  history. Mobile shared history filters deleted IDs from in-flight refreshes,
+  preventing stale responses from restoring deleted rows. Web ignores aborted
+  history responses and removes confirmed deletions from its displayed list.
+- Updated the public API contract and added authentication, privacy, transaction,
+  transport/empty-response, confirmation/cancel/retry, duplicate-submission,
+  and stale-history regressions. Verification: 3,237 backend unit/non-live API
+  tests, 37 web authority tests, 46 mobile authority tests, both TypeScript
+  checks, and the web production build passed.
+- Live PostgreSQL and physical-device/browser acceptance were not performed.
+  No user data was deleted, no database migration was run, and no commit or
+  push was made; changes await user review and explicit commit authorization.
+
+### Completed self-service account deletion (2026-10-02)
+
+- Added Bearer-authenticated `DELETE /api/auth/me` with a required current
+  password and empty `204` success. The service verifies the secret before
+  deleting only the authenticated user; the API commits once, and failures
+  roll back through the request dependency with sanitized error responses.
+- Existing database cascades delete owned CURRENT/PLANNED/LEGACY portfolios,
+  holdings, saved analyses/reports, all simulation modes, and watchlist entries.
+  Shared market data and other users remain intact. Deleted-account tokens
+  subsequently fail the persisted-user lookup. No migration is required.
+- Added red Delete Account sections below Data & Support in web Settings and
+  directly above Sign Out in mobile Settings. Both use red-themed confirmation
+  dialogs with password input, permanent-deletion warnings, cancel/error/retry
+  handling, and duplicate-submission guards. Existing web privacy/support
+  previews remain inactive as requested.
+- Both clients clear their sessions after success. Web also clears authenticated
+  UI if token-storage removal fails; mobile retains its existing secure-storage
+  cleanup error/retry flow. A cleanup failure never retries an already completed
+  server deletion. Local Learn progress/preferences and exported files remain.
+- Added API/service/transport/confirmation regressions and synthetic in-memory
+  FK-cascade tests covering both portfolio types, every simulation mode, other
+  users, market data, and rollback. Public API documentation was updated.
+- Validation: backend unit/non-live API suites, both client authority suites,
+  TypeScript checks, and web production build. Live PostgreSQL and physical
+  device/browser account-deletion acceptance were not performed; no actual
+  user accounts/data were deleted and no migrations, commits, or pushes were run.
+
+### Completed sign-out confirmation dialogs (2026-10-02)
+
+- Web profile-menu Sign Out and mobile Settings Sign Out now open the shared
+  Aura red-themed confirmation dialogs before clearing the signed-in session.
+  Mobile's saved-session recovery Sign Out also requires confirmation.
+- Dialogs use sign-out icons, identify the account/device, and clearly state
+  that account and saved portfolio/report/simulation data are not deleted.
+  Cancel/Close perform no sign-out; confirmed actions retain the existing
+  authentication and navigation flows, guarded against duplicate submissions.
+- Mobile cleanup failures retain themed error/retry handling. Automatic session
+  rejection and successful account-deletion cleanup do not prompt again. No
+  backend API, database, dependency, preference, or financial changes were made.
+- Added confirmation/cancel/stale-handler/error/retry/duplicate-tap regressions.
+  Validation: 45 web authority tests, 51 mobile authority tests, both TypeScript
+  checks, and the web production build passed. Browser/device acceptance was
+  not performed; no commit or push was made.
+
+### Completed themed About Aura settings popups (2026-10-02)
+
+- Enabled only About Aura in web Data & Support; the other four web privacy,
+  alerts, reset, and help previews remain disabled. Replaced mobile's native
+  About alert with an Aura navy/teal themed modal opened from the existing row.
+- Both clients show matching current/planned portfolio-risk, what-if simulation,
+  AI Assistant, Watchlist, and Learn overviews. Copy distinguishes saved market
+  observations from live quotes and explains Aura's educational,
+  non-advisory purpose without promising future investment performance.
+- Added themed Close/Done controls, bounded scrollable content, backdrop
+  dismissal, mobile hardware-back dismissal, and web Escape/focus trapping,
+  scroll locking, and focus restoration. No API call, data reset, or new
+  dependency is required; unrelated settings behavior remains unchanged.
+- Added interaction/content-parity/theme/accessibility regressions. Validation:
+  46 web authority tests, 52 mobile authority tests, both TypeScript checks,
+  and the web production build passed. Physical-device/browser visual acceptance
+  was not performed. No backend, migration, commit, or push changes were made.
+
+### Completed About Aura full-row interaction and product wording (2026-10-03)
+
+- Web About Aura is now one full-width native button: icon, title, description,
+  whitespace, and side arrow all open the existing popup. Keyboard activation,
+  teal focus/hover styling, and side-arrow placement at narrow widths are retained.
+  Mobile already uses a whole-row Pressable; regression coverage now verifies
+  that the arrow is inside that same control.
+- Removed academic-project branding from both About popups, the welcome footer,
+  repository guidance, and the earlier status note. Aura is described as a
+  portfolio risk education platform, with professional wording required for
+  future features in AGENTS.md. No remaining wording matches were found in the
+  repository source/documentation scan.
+- Added full-row and branding regressions. Validation: 47 web authority tests,
+  52 mobile authority tests, both TypeScript checks, and web production build
+  passed. Browser/device visual acceptance was not performed. No backend,
+  dependency, migration, commit, or push changes were made.
+
+### Removed About Aura row background highlight (2026-10-03)
+
+- Removed the web About Aura hover background while preserving the full-row
+  click target, popup behavior, pointer cursor, and keyboard-only focus outline.
+- Added a styling regression. Validation: 47 web authority tests and the web
+  production build (including TypeScript) passed. No mobile/backend changes,
+  dependencies, commits, or pushes were made; browser visual acceptance was
+  not performed.
+
+### Completed account-specific local portfolio privacy (2026-10-03)
+
+- Enabled Hide portfolio values in web/mobile Settings with Aura-themed,
+  accessible switches. Separate account-ID keys in browser localStorage and
+  mobile AsyncStorage remember both On and Off across logout/login. New
+  accounts and other devices/browsers default Off; logout never clears the
+  choice. The old unused device-global mobile privacy field was removed.
+- Added privacy providers inside each authentication provider and presentation
+  helpers across Dashboard, current/planned portfolio details and holdings,
+  analysis, asset risk, saved reports, simulations, and money-equivalent popups.
+  Personal amounts, owned/estimated share quantities, and reference amounts
+  render as masked text, not raw values hidden with CSS. Existing percentage/
+  normalized charts, allocations, risk scores, public prices, FX rates, and
+  Learn examples remain visible. Backend data and calculations are unchanged.
+- Monetary/share editor fields show blank masked placeholders while privacy
+  is On, with instructions to turn it Off before editing; underlying form
+  values and payloads are preserved. AI questions, answers, grounding details,
+  and the composer are shielded by a themed privacy notice while On, rather
+  than relying on unreliable redaction of free-form prose. No new chat request
+  can be submitted from the hidden UI.
+- Mobile starts hidden until preference restoration completes, ignores stale
+  account loads, and serializes rapid-toggle writes. Unreadable/malformed
+  preferences fail closed; save failures explain that the choice is temporary
+  and can be retried. This is local screen privacy, not encryption or account
+  security; there is no backend preference, synchronization, or migration.
+- Added account isolation, On/Off persistence, logout, new-device defaults,
+  restoration, malformed/blocked storage, retry, ordered-write, masking,
+  immutable-data, input, switch, and result-surface coverage. Validation:
+  52 web authority tests, 57 mobile authority tests, both TypeScript checks,
+  and web production build passed. Browser/physical-device acceptance was not
+  performed. No dependencies, commits, or pushes were added.
+### Local data reset and Learn completion — 2026-10-03
+
+- Enabled Reset local data in web and replaced mobile's native reset alert with
+  Aura-themed confirmation. Cancel and duplicate-submit guards, retryable
+  partial-failure messages, and success notices are included. The warning
+  explicitly says Hide portfolio values turns Off. Reset clears only the
+  current account's local Learn progress/privacy choice; mobile also restores
+  device appearance/notification preferences and removes obsolete demo keys.
+  Server-owned account/profile, portfolios, holdings, reports, simulations,
+  watchlist, authentication tokens, and signed-in sessions stay unchanged.
+- Added account-scoped browser Learn progress and account-scoped mobile progress
+  using local storage only. Opening lessons or YouTube does not complete them:
+  users explicitly mark lessons completed and can undo completion. Counts,
+  lesson badges, progress bars, and web learning-path groups reflect saved
+  completion; storage failures are explained without claiming a successful
+  save. Logout/login retains each account's choices on the same device/browser.
+  Existing unscoped mobile Learn progress is not assigned to an account because
+  its ownership is unknown; its legacy key is removed only on explicit reset.
+- Strict privacy reset persists Off before revealing values. Mobile preferences
+  serialize reset after earlier writes, and Learn ignores stale pre-reset reads.
+  Other accounts' Learn progress and privacy choices are not cleared. No bulk
+  storage clear, backend change, migration, or dependency was added.
+- Validation: 57 web and 63 mobile authority regression tests (120 total), both
+  TypeScript checks, web production build, and git diff whitespace checks passed.
+  Browser/physical-device acceptance was not performed. No commit or push.
+### Completed Help & Support guides — 2026-10-03
+
+- Enabled the full Help & Support row in web Settings and replaced mobile's
+  placeholder native alert with a dedicated Aura-themed guide. Web's protected
+  help route uses the existing app shell; mobile's HelpSupport screen lives in
+  the existing More stack. Both have explicit Back to Settings navigation,
+  and the mobile More tab still returns to its root from Help.
+- Added 20 matching code-owned help articles across Getting started, Portfolio
+  types, Analysis & simulations, AI Assistant, Privacy & local data,
+  Troubleshooting, and Support & safety. Guidance explains current shares
+  versus proposed amounts, latest-analysis reference versus simulation baseline,
+  saved snapshots, exact simulation AI context, local Learn/privacy persistence,
+  reset versus deletion, and safe troubleshooting without investment advice.
+- Search matches section titles, questions, and answer text, with result counts,
+  no-match feedback, and Clear search. Web uses native keyboard-accessible
+  details/summary accordions; mobile uses full-row expandable Pressables with
+  expanded-state accessibility. Existing navy/teal styles, responsive web
+  layout, and mobile theme colors are retained.
+- Support is self-service only. No invented contact details, ticket form, live
+  chat, password recovery, or notification delivery is enabled. Help does not
+  call APIs, alter saved data, reset preferences, or change backend authority.
+  No backend change, migration, dependency, commit, or push was made.
+- Validation: 59 web and 65 mobile authority regression tests (124 total),
+  both TypeScript checks, web production build, and diff whitespace checks
+  passed. The web build reports a non-blocking minified chunk-size warning
+  (507 kB main JS, about 146 kB gzip); code splitting was not changed in this
+  task. Browser/physical-device visual acceptance was not performed.
+
+### AI help capability audit and answer table rendering — 2026-10-03
+
+- Checked the existing agent prompt, orchestration, request schema, and public
+  contract. Aura receives portfolio, selected/latest report, and optional exact
+  saved simulation context; it does not receive the Help & Support articles.
+  The API still requires a portfolio ID. General risk concepts overlap, but
+  local reset/privacy/support workflows are not grounded in the approved guide.
+  This was a capability check only: no backend, prompt, contract, or Help
+  knowledge integration was changed.
+- Extended matching code-owned answer parsers on web/mobile to recognize
+  Markdown tables with headers and valid delimiter rows, optional outer pipes,
+  alignment markers, bold text, escaped pipes, and code-span pipes. Fenced
+  examples and incomplete/malformed table rows remain literal text rather than
+  losing or shifting values. Existing headings, paragraphs, and bullets remain.
+- Web answers now render semantic tables with column headers and a themed,
+  keyboard-focusable horizontal scroll region. Mobile answers use themed,
+  horizontally swipeable tables with selectable text, header accessibility,
+  and per-cell column/value labels. HTML is rendered as text; no HTML injection
+  or WebView was added. Answers, request/history payloads, backend financial
+  calculations, AI safety boundaries, and local privacy behavior are unchanged.
+- Validation: 61 web and 67 mobile authority regression tests (128 total),
+  25 existing backend agent/prompt tests, both TypeScript checks, web production
+  build, and diff whitespace checks passed. Existing non-blocking main-bundle
+  size warning remains (about 509 kB minified / 147 kB gzip). Browser/device
+  visual acceptance and live-provider checks were not performed. No dependency,
+  migration, commit, or push was added.
+
+### Account-owned in-app notifications V1 — 2026-10-03
+
+- Added notification/preferences ORM models, a scoped repository/service,
+  strict schemas, and five authenticated notification operations using the
+  existing shared FastAPI/PostgreSQL architecture. Account-owned master,
+  analysis, and simulation preferences default On and survive logout/login.
+  Off suppresses future events without deleting old messages; re-enabling
+  does not backfill existing history. Local reset does not change these settings.
+- New report and all three simulation API saves record generic notifications
+  before the same single commit. Errors roll back the save and notification;
+  unique target keys deduplicate repeated recording of the same result. Exact
+  portfolio/resource ownership is checked without reading financial snapshots.
+  Messages contain no portfolio names, balances, holdings, or financial advice.
+  Result/portfolio/account deletion cascades related notifications, and account
+  deletion also removes notification preferences.
+- Added migration `c3d5e7f9a2b4` after `b9e4d2f7c1a6`. The migration has been
+  checked against ORM metadata and generated PostgreSQL upgrade/downgrade SQL
+  without applying it to a deployed database. Apply it before using notification
+  APIs or creating new reports/simulations with the updated backend.
+- Web navigation now has a working unread-count bell and protected, themed
+  inbox/preferences routes. Mobile More has an unread-count Notifications entry,
+  and Settings opens matching account preference controls. Both clients show
+  newest-first paginated updates, exact saved-result links, mark-one/all-read,
+  loading/empty/error/retry states, and guarded writes. Background/hidden polling
+  stops; foreground refresh uses 30-second intervals. Read/settings mutations
+  refresh badges, and stale account/unmounted responses cannot restore old UI.
+- Added matching typed API adapters, state/foreground hooks, web CSS, mobile
+  navigation/screens, persistence/API/interaction tests, and updated public
+  API/backlog/Help guidance. Removed the obsolete unused mobile device-global
+  notification preference so local reset cannot imply resetting account settings.
+- Validation: 3,290 backend unit/non-live API tests; 76 web/shared-client tests
+  and 67 mobile authority tests (143 client tests total); both TypeScript checks;
+  web production build; migration SQL/model parity. Existing short-JWT-fixture
+  warnings and the non-blocking web bundle warning remain.
+- Live PostgreSQL notification acceptance and browser/physical-device visual
+  acceptance are pending. No phone/browser push, email delivery, OS permission
+  prompt, device tokens, price alerts, new dependencies, deployed migration,
+  commit, push, or financial calculation changes were made.
+
+### Unread notification dots and clear inbox actions — 2026-10-03
+
+- Web TopNavigation and mobile More Notifications icons now show a small red
+  top-corner dot only when the account has unread notifications. Accessible
+  labels retain the unread count; zero/unknown counts do not show a dot.
+- Both notification inboxes now offer Clear notification and Clear all
+  notifications with existing red-themed danger confirmations. Clear-all
+  covers every page. Cancel revokes authorization; duplicate confirmations,
+  failed writes/retries, stale accounts, and unmounts are guarded. Already-cleared
+  single entries refresh safely; an emptied late page returns to page one.
+  Successful clears refresh inbox totals and the unread indicator.
+- Updated notification repository/service/routes with authenticated,
+  account-scoped DELETE operations, and both client API adapters/state hooks.
+  Only notification messages are removed; saved reports, simulations,
+  portfolios, and account notification preferences remain unchanged.
+  No extra migration is required beyond notification V1's c3d5e7f9a2b4.
+- Updated public API documentation (30 paths / 41 operations) and added
+  persistence/API/interaction regressions for ownership, rollback, sanitization,
+  confirmation, cancellation, retry, pagination, counts, and red-dot rendering.
+- Validation: 3,301 backend unit/non-live API tests; 86 web/shared-client tests
+  and 67 mobile authority tests (153 client tests total); both TypeScript checks;
+  web production build and whitespace checks passed. Existing short-JWT fixture
+  warnings and the non-blocking web main-bundle warning (about 520 kB) remain.
+  Live PostgreSQL and browser/physical-device visual acceptance were not run.
+  No dependencies, deployed migrations, commits, pushes, push delivery, or
+  financial calculation changes were added.
+
+### Compact notification actions — 2026-10-03
+
+- Updated web NotificationsPage and mobile NotificationsScreen to label each
+  single-notification removal action "Delete", including its confirmation
+  button; the dialog still identifies the notification being deleted.
+- Web notification CSS now gives Clear all notifications a dark-red box,
+  red border, rounded corners, hover/focus styling, and disabled state.
+  Mobile retains its existing boxed danger Button for that action.
+- Updated shared notification UI regression tests to verify labels, boxed
+  styling, and unchanged confirmation behavior on both clients. Backend,
+  account isolation, saved resources, and deletion behavior are unchanged.
+- Validation: 86 web/shared-client tests, mobile TypeScript check, web
+  TypeScript/production build, and whitespace checks passed. Existing web
+  bundle-size warning remains; browser/device visual acceptance was not run.
+  No dependencies, migrations, commits, or pushes were added.
+
+### Smaller web notification cards and controls — 2026-10-03
+
+- Reduced NotificationsPage card padding, icon size, heading/body sizes,
+  button padding/type size, and list/pagination gaps in its scoped CSS.
+  Actions now share a compact horizontal row instead of a tall stack.
+- Actions wrap below the content on narrower screens, with 44px minimum
+  button heights for touch layouts. Red delete/clear-all styling, unread state,
+  confirmations, and all notification behavior are unchanged. Mobile and
+  backend code were not modified.
+- Updated the page icon and added a scoped-layout regression. Validation:
+  87 web/shared-client tests, TypeScript/production build, and whitespace checks
+  passed. Existing bundle-size warning remains. Browser visual acceptance was
+  not run; no dependencies, migration, commit, or push was added.
+
+### Matching risk label and score colors — 2026-10-04
+
+- Web AssetAnalysisCard now colors the combined score/label by its saved
+  classification rather than fixed teal. Low uses green, Moderate amber,
+  and High/Very High red. Analytics summaries, asset-risk detail headings/
+  score cards, dashboard risk KPI values/labels, and gauge numbers match.
+  Added a presentation-only riskColor helper in the existing analyticsUi file.
+- Mobile AnalysisResults, AssetRiskDetailScreen, and DashboardScreen now color
+  scores consistently with their existing RiskBadge/riskTone palette, including
+  current, planned, and legacy asset rows. WebKpiCard accepts an optional value
+  color only used for risk scores; other metric values keep their styling.
+  Missing/legacy classifications remain absent or neutral, never invented.
+- Added client regressions for all four saved levels, label/score consistency,
+  neutral missing data, unchanged unrelated KPIs, and backwards-compatible
+  gauge callers. The same test number is used with different saved labels to
+  ensure the UI does not calculate or override backend classifications.
+- Validation: 89 web/shared-client tests and 68 mobile authority tests (157
+  total), both TypeScript checks, web production build, and whitespace checks
+  passed. Existing web bundle warning remains. Browser/device visual acceptance
+  was not run; backend calculations, dependencies, migrations, commits, and
+  pushes are unchanged.
+
+### Dashboard View analysis jumps to Risk Drivers — 2026-10-04
+
+- Web dashboard RiskDrivers now opens the exact saved report used by the
+  dashboard with a risk-drivers section target instead of the analysis setup
+  page. Loading disables the action; without a report it retains setup navigation.
+- Added the section anchor to AnalysisResults and a matching App/ReportDetailPage
+  focus flag. Scrolling waits until the report is loaded and rendered, preserves
+  the existing per-asset section jump, and does not create a new analysis.
+- Mobile DashboardScreen's corresponding action now says View analysis and
+  opens that saved report with a typed focusRiskDrivers flag. AnalysisResults
+  reports section layout; ReportDetailScreen waits for both offsets and guards
+  scheduled scrolls after blur/unmount. Normal report opening remains unchanged.
+- Updated client regression tests for exact-report navigation, no-report
+  fallback, loading guards, deferred section scrolling, existing asset jumps,
+  and mobile layout/unmount behavior. Validation: 91 web/shared-client tests
+  plus 69 mobile authority tests (160 total), both TypeScript checks, web
+  production build, and whitespace checks passed. Existing bundle warning
+  remains. Browser/device visual acceptance was not run; no backend changes,
+  dependencies, migrations, commits, or pushes were added.
+
+### Keep report section headings visible after jumps — 2026-10-04
+
+- Fixed web ReportDetailPage section jumps hiding Risk Drivers under the sticky
+  top bar. Before scrolling, the target's scroll margin now includes the measured
+  navigation height plus 18px of spacing, instead of only the original 18px.
+  This also protects the existing per-asset jump and adapts to wrapped navigation
+  on narrow browser layouts without changing the report or page structure.
+- Extended the report-jump regression to cover desktop, wrapped/fractional-height,
+  and absent navigation, alongside loading guards and untargeted report opening.
+  Validation: 91 web/shared-client tests, TypeScript/production build, and
+  whitespace checks passed. Existing bundle warning remains; browser visual
+  acceptance was not run. Mobile, backend, dependencies, migrations, commits,
+  and pushes were unchanged.
+
+### Portfolio return table date sorting — 2026-10-05
+
+- Web AnalysisResults now defaults the saved portfolio-return table to newest
+  dates first. The Date header toggles ascending/descending order with a visible
+  arrow and Newest first/Oldest first label, keyboard focus, and aria-sort.
+  Changing order scrolls the table to the top; opening another report resets
+  to newest first. The existing stylesheet supplies compact themed styling.
+- Sorting uses a copy of saved observations, preserving date/return pairs,
+  negative-value formatting, and the chronological graph. Mobile has a graph
+  but no equivalent observations table, so mobile and backend are unchanged.
+- Added a regression for both orders, report changes, scroll reset, immutable
+  saved data, unchanged chart points, and empty/single-observation reports.
+  Validation: 92 web/shared-client tests, TypeScript/production build, and
+  whitespace checks passed. Existing bundle warning remains; browser visual
+  acceptance was not run. No dependencies, migrations, commits, or pushes.
+
+### AURA Senior Project 1 report outline — 2026-10-06
+
+- Added `docs/report/AURA_Senior_Project_1_Report_Outline.md` with the supplied
+  VMES template's front matter and six-chapter structure, References, and
+  supporting appendices, using one-sentence content placeholders.
+- Reviewed the supplied AU Document Wallet and Libby-bot reports, AURA proposal,
+  current implementation records, contracts, and relevant source code to define
+  the report scope around AURA's delivered portfolio risk education workflows.
+- Included 30-day asset and portfolio forecasting in the report's implemented
+  feature scope at the user's request. The backend is implemented; the user is
+  completing its frontend, and final UI screenshots and integration evidence
+  will be incorporated when the complete report is drafted.
+- The outline separates recorded verification from pending user, device, live
+  database, and deployment acceptance, without inventing results or feedback.
+- Documentation structure and placeholder checks passed. No application code,
+  dependencies, migrations, commits, or pushes were changed by this report task.
+
+### Deployment-ready backend market-data refresh — 2026-10-06
+
+- Added tracked refresh orchestration around the existing fetch/clean/validate
+  pipeline and MarketDataService. Scheduled, startup/hourly catch-up, and the
+  persisting manual CLI share a dedicated PostgreSQL session advisory lock.
+  Bounded transient/partial retries use capped backoff; invalid data does not
+  retry. Lost locks abort before price writes without silent reconnection.
+  Explicit unlock and non-pooled connection closure protect session cleanup.
+- Automatic/default coverage ends yesterday UTC. Unexpected symbols or dates
+  are rejected. Valid partial results preserve existing observations for failed
+  symbols; prices and final run state commit together, with rollback on failure.
+  Complete daily markers survive failures/subset backfills. Missed schedules
+  recover in one refresh instead of replaying each missed day.
+- Added a separate worker-leader lease, 60-second heartbeat, immediate/hourly
+  catch-up, graceful interruption, and nonzero exit after heartbeat loss for
+  future supervisor restart. The daily default remains 02:00 UTC (09:00 Thailand).
+  Imports and FastAPI startup never launch the worker. Runtime hosting/restart
+  configuration and Windows Task Scheduler installation are not included.
+- Added MarketDataRefreshState, repository, strict status schemas/service, and
+  authenticated read-only GET /api/market-data/status. Liveness, fetch outcome,
+  and observation freshness are independent; no customer update trigger exists.
+  Status uses completed-date checks, daily crypto coverage, and the existing
+  four-day tolerance elsewhere without changing valuation/forecasting rules.
+  Runtime/API/configuration errors hide credential-bearing details.
+- Added migration d6e8f0a2b4c6 after c3d5e7f9a2b4, example settings, public
+  contract updates (31 paths / 42 operations), and the deployment worker guide.
+  Apply the migration before using status or the tracked worker/manual updater;
+  it has not been applied to the application/Supabase database.
+- Validation: 3,359 unit/non-live API tests passed; 9 environment-dependent
+  tests skipped. Six guarded PostgreSQL acceptance tests passed in temporary
+  UUID-named local schemas, validating migration DDL, real locks, transaction
+  rollback, partial preservation, heartbeat, and killed-session recovery.
+  All fixture schemas were cleaned up; existing application tables/data were
+  unchanged. Migration/model parity and whitespace checks passed. Existing
+  short-JWT-fixture warnings remain unrelated.
+- No real-provider download, production migration, worker activation, Windows
+  task, deployment, frontend change, analytics-formula change, production model training,
+  artifact regeneration, dependency, commit, or push was performed. Real-provider
+  and chosen-host acceptance remain deployment prerequisites. Unrelated report
+  outline/documentation edits in the shared workspace were preserved.
+
+### Web/mobile daily market-data integration — 2026-10-06
+
+- Added matching typed GET-only marketDataApi adapters, foreground refresh hooks,
+  scoped freshness presentation, and compact themed MarketDataStatus components
+  in both clients. Watchlist and current-portfolio dashboard/detail screens show
+  saved daily price freshness, last-check time, worker connectivity, and partial/
+  failed update warnings. Only displayed instruments affect the freshness label;
+  THB valuation includes the internal FX observation. A persisted running flag
+  is not presented as proof of an active provider download.
+- Existing page loaders read prices on entry. Return-to-foreground and five-minute
+  active polling reload persisted Watchlist/current values. Web has a compact
+  Refresh button; mobile keeps/adds pull-to-refresh. Polling stops in hidden tabs,
+  background apps, or blurred mobile screens. Status reads abort/timeout and guard
+  late account/unmounted responses; status failure does not block price APIs.
+- Watchlist refreshes preserve rows after failed reads and abort pre-mutation
+  reads so they cannot restore deleted assets. Current-value refresh remains
+  independent from saved analysis; planned allocations and immutable report/
+  simulation history are unchanged. No client financial calculations were added.
+- Added shared market-data tests to the web authority runner and updated the
+  market-data contract/integration backlog. Validation: 17 new shared regressions,
+  91 existing web/shared regressions, and 69 mobile regressions passed (177 total).
+  One pre-existing branding regression fails on the unrelated report-outline entry
+  in this file, preserved unchanged. Both TypeScript checks, web production build,
+  and whitespace checks passed; the existing bundle-size warning remains.
+- Browser/device and authenticated runtime acceptance remain pending. No backend
+  code, migration application, worker activation, deployment, Windows task,
+  provider download, forecasting artifact, dependency, commit, or push was added.
+  Migration d6e8f0a2b4c6 and separately supervised worker activation are still
+  runtime prerequisites; client Refresh reads saved data only. Unrelated
+  docs/report files were preserved.
+
+### Academic report first draft — 2026-10-07
+
+- Created `docs/report/AURA_Senior_Project_1_Report_V1.docx`, a 41-page report
+  using the supplied university template and the user's revised chapter scope.
+- Updated the companion outline to place the overview first, combine the
+  existing-system review/comparison, shorten methodology, remove the requested
+  standalone design and feedback sections, and retain two supporting appendices.
+- Included recorded implementation and verification evidence, verified external
+  references, illustrative calculation examples, and the complete forecasting
+  selection table without inventing final-test performance or feedback results.
+- Preserved 15 labeled visual placeholders and student, advisor, committee, and
+  academic-detail placeholders. Refreshed the contents and figure/table indexes.
+- Verified all 41 rendered pages, native equations, structure, pagination, table
+  layout, and preservation of the original template geometry and opaque parts.
+- No application code, dependencies, database records, commits, or pushes changed.
+
+### Web forecasting V1 outlook preview — 2026-10-07
+
+- Added an authenticated Forecasting page under Analytics, with portfolio and
+  standalone asset views using the existing GET-only forecasting endpoints.
+  Portfolio details, dashboard Core Workflows, and Watchlist list/grid now have
+  contextual outlook links. The existing top-bar structure remains unchanged.
+- Added typed transport, scoped/cancellable/timeout-aware loading, response
+  checks, and sanitized errors. Account/selection changes suppress old estimates;
+  no saved reports, forecasts, simulations, or financial mutations are created.
+- Added themed return/volatility cards, asset nominal 80% ranges, actual model/
+  origin metadata, backend limitations, portfolio component tables, and signed
+  contribution bars. Current/planned/legacy use one screen with truthful baseline
+  labels. No client forecast calculations, monetary estimates, or risk levels.
+- The 7/14/21/30-day horizon layout is present, but only 30 days is enabled.
+  V1 supplies a single chart marker and asset range bars, not a daily trajectory
+  or a four-horizon line. Explicit multi-point chart support uses a dashed visual
+  guide for a later backend integration; no weekly estimates or portfolio ranges
+  are interpolated or fabricated. Return/volatility have separate chart views.
+- Added 13 forecasting regressions and the web integration/acceptance report at
+  docs/development/web-forecasting-v1.md. Full web/shared-client runner: 121 passed,
+  one pre-existing branding failure on unrelated report-outline wording retained
+  unchanged. TypeScript, production build, and whitespace checks passed; the
+  existing bundle-size warning remains. Browser confirmed the protected route
+  redirects to login; authenticated real-data/responsive visual acceptance is
+  pending because no signed-in session was available.
+- Mobile, backend, frozen artifacts, dependencies, migrations, model training,
+  provider downloads, commits, pushes, and deployments are unchanged. Unrelated
+  report files and concurrent report status entries were preserved. Weekly model
+  support and forecast-specific AI/persistence remain separate follow-on work.
+
+### Mobile forecasting V1 outlook preview — 2026-10-07
+
+- Added authenticated portfolio and standalone asset outlooks in the existing
+  Portfolio/More stacks, with entry points from More, Analytics, portfolio
+  details, Home and Watchlist. The five bottom tabs and root behavior remain
+  unchanged; contextual header Back and component drill-down are covered.
+- Added typed GET transport, account/selection-scoped loading, focus cancellation,
+  response checks, timeouts, manual/pull refresh and sanitized errors. Portfolio
+  list failures do not block standalone assets; no report or forecast is saved.
+- Added themed return/volatility cards, asset nominal 80% ranges, native SVG axes
+  and actual 30-day markers, signed contributor bars, component allocations,
+  model metadata and limitations. Current/planned/legacy labels remain accurate.
+  Weekly controls stay disabled; no weekly estimates, price paths, portfolio
+  intervals, risk classifications or client financial forecasts are invented.
+- Mobile TypeScript and 84 regressions passed (15 new forecasting checks).
+  Shared market-data/notifications and web forecasting: 56 passed. Full web
+  runner: 121 passed with the same unrelated report-wording branding failure
+  preserved. Android Hermes export passed after approved compiler execution;
+  ignored build output stays under mobile/.expo/. Whitespace checks passed.
+- Added docs/development/mobile-forecasting-v1.md with file purposes, verification
+  and phone acceptance steps. Device visual/authenticated real-model acceptance
+  is pending; Node orchestration tests and export are not device E2E checks.
+- Backend, frozen artifacts, models, migrations, web production code, dependencies,
+  provider data, commits, pushes and deployments remain unchanged. Concurrent
+  report content was preserved. Weekly model support remains follow-on work.
+
+### Multi-horizon forecasting offline selection foundation — 2026-10-07
+
+- Added isolated, horizon-aware 7/14/21-day label construction and feature joins,
+  reusing V1 feature/model families through an explicit private candidate bridge.
+  Returns and non-annualized volatility use actual horizon observations, not
+  scaled 30-day estimates. Calendar endpoints retain the four-day slippage cap.
+- Added a manual selection-only evaluator with explicit local snapshot/URL-key
+  selection, required fingerprint/row-count verification, read-only database
+  transactions, safe errors, strict correctly labeled JSON and new-output guards.
+  Database resources close before estimator fitting. Evidence cannot overwrite
+  frozen V1 files or be treated as deployable weekly artifacts.
+- Selection preserves V1 policy and chronological training purges, adding an
+  isolated scoring-endpoint boundary so labels do not cross into later folds or
+  reserved calibration/final-test periods. Missing fold/model availability is
+  reported, not silently replaced. The original V1 evaluation is unchanged.
+- Added synthetic/mocked regressions and a manual rollout guide at
+  docs/development/multi-horizon-forecasting.md. Tests, builds and all real-data
+  evaluation/training were deliberately not run, per the user's manual-terminal
+  instruction. Verification and selection results await the user's commands.
+- This is the first rollout checkpoint only. Selection freeze, separate horizon
+  calibration/final testing/artifact training, runtime APIs, portfolio composition
+  and client horizon activation remain pending. Weekly controls stay disabled.
+- Frozen 30-day artifacts, original forecasting source/tests/APIs, database data,
+  provider data, frontend code, dependencies, architecture files, commits and
+  pushes remain unchanged. Unrelated report work is preserved. The recorded
+  frozen snapshot is reusable for comparisons, not a new untouched project-level
+  final holdout; fresh-period acceptance must be distinguished from that reuse.
+
+### Verified isolated V1 training snapshot and explicit selector — 2026-10-07
+
+- The user ran the targeted suite: 526 passed. The initial real selection attempt
+  correctly stopped at provenance validation before fitting; the ordinary Docker
+  snapshot had 95,488 rows, while current Supabase matched the original counts but
+  not its canonical fingerprint.
+- At the user's explicit choice, manual commands created the isolated local
+  `aura_forecast_training_20260917` database and market-data table and restored
+  the original data-only backup in a single transaction. The user then reported
+  69,928 rows and the exact original V1 SHA-256, confirming the intended dataset.
+- Added an optional, narrowly validated `--database-name` to the new horizon
+  evaluator. It reuses the explicit local connection's credentials/host/port and
+  selects only an `aura_forecast_training_` database in memory, without editing
+  environment files or relaxing the fingerprint gate. Default behavior remains
+  unchanged. Added selector regressions and updated the manual command guide.
+- This subsequent selector change awaits user-run tests. No agent-run tests,
+  training, provider requests or database operations occurred. New-horizon model
+  fitting, selection review, calibration, final testing, deployment artifacts
+  and client activation remain pending. Original V1 models and application
+  databases were not replaced; unrelated report status/content was preserved.
+
+### Report Version 2 review and wording — 2026-10-07
+
+- Created `docs/report/AURA_Senior_Project_1_Report_V2.docx` from the saved
+  report and its two reviewer comments; Version 1 remains unchanged.
+- Removed the abstract's final paragraph and all of Appendix B.2, including
+  its table. Rewrote the main prose with shorter sentences, simpler wording,
+  and necessary technical terms, while preserving formulas and evidence limits.
+- Updated forecasting descriptions to include the implemented web and mobile
+  outlook screens, their recorded checks, the active 30-day horizon, and pending
+  authenticated runtime and device acceptance. No weekly runtime capability
+  or user feedback results are claimed.
+- Updated the companion outline to match revised headings and appendix scope.
+  Retained 15 visual placeholders and student, advisor, and committee fields.
+- Refreshed the contents and figure/table indexes in Word and visually checked
+  all 40 rendered pages. Structure, equations, template fidelity, comment removal,
+  source preservation, text bounds, and document field checks passed.
+- No application code, dependencies, database data, commits, or pushes changed.
+
+### Reviewed weekly selection and prepared offline freeze — 2026-10-07
+
+- Reviewed the user's completed 7/14/21-day selection report read-only: verified
+  original V1 dataset provenance (69,928 rows, 17 assets), all 102 groups and
+  2,550 available candidate/fold results, and independently recomputed leaders.
+  Source report SHA-256:
+  `9579936f543c20a9b7adf117bba982375cb518ea22378b9f831c9379d60fea06`.
+- The evidence contains 57 ARIMA convergence warnings, including one on selected
+  QQQ 21-day volatility in selection fold 05. The existing available-fit policy
+  is preserved; selected warnings remain explicit, with no silent reselection.
+- Added a separate horizon-aware selection manifest validator/freezer and manual
+  CLI. They pin the source checksum and approved dataset, recheck five-fold
+  coverage/policy/versions/counts, preserve selected warnings, validate output
+  round trips and refuse overwrites or writes into frozen V1/artifact folders.
+  Output remains selection-only evidence, not deployable weekly models.
+- Added synthetic regressions and updated the manual rollout guide. Tests and
+  freeze execution await the user's terminal run; no manifest, calibration,
+  final-test evidence or model artifact was generated by the agent.
+- Original 30-day source/package, runtime APIs, clients, environment files,
+  databases and dependencies remain unchanged. Weekly controls stay disabled.
+  Unrelated report work was preserved; no commit, push or deployment occurred.
+
+### Verified weekly freeze and prepared manual calibration — 2026-10-07
+
+- The user ran the targeted forecasting/schema/API suite: 627 passed. The
+  weekly freezer completed 102 selections and retained the QQQ 21-day volatility
+  convergence warning. Read-only inspection verified original-data provenance,
+  unchanged source evidence and canonical manifest SHA-256:
+  `829b5f9616643c3969cbd1cf220ce25b113d1b494b88c0693e376d5c43292a5c`.
+- Added isolated weekly calibration orchestration and a manual command. The
+  pinned manifest is reconciled against its original source report before DB
+  access; the explicit local training snapshot is verified in a read-only
+  transaction and closed before selected-candidate fitting.
+- Calibration removes final-test prices before feature/label construction,
+  purges training/scored endpoints at both calibration boundaries and requires
+  756 training origins plus 60 residual observations. It reuses actual-minus-
+  prediction q10/q90 calculations and volatility clipping, without rescaling
+  30-day ranges, changing winners, fallback, or creating portfolio intervals.
+- Separate, checksum-bound calibration evidence records all 102 target/horizon
+  identities, source/provenance, quantiles, metrics, counts and boundaries.
+  Selection warnings and new fit warnings remain distinct. Existing output,
+  frozen V1 evidence and model-artifact folders are protected from writes.
+- Added synthetic/mocked regressions and updated the manual guide. The 627-pass
+  result predates these additions; new tests and calibration execution await the
+  user's commands. No agent-run calibration, final test, deployment fitting,
+  database operation or provider request occurred in this checkpoint.
+- Original V1 source/models, APIs, clients, dependencies and environment files
+  remain unchanged. Final testing, artifacts, runtime support and weekly client
+  activation remain pending. No commit or push; unrelated report work preserved.
+
+### Report Version 3 comments and scope — 2026-10-07
+
+- Created `docs/report/AURA_Senior_Project_1_Report_V3.docx` from the six saved
+  Version 2 comments, preserving the commented source document unchanged.
+- Revised forecasting wording to explain its practical value, expanded the
+  LEGACY definition with an allocation example, explained FR identifiers, and
+  distinguished the 90-day historical averaging window from forecast horizons.
+- Included the 7/14/21-day extension in methodology and scope while retaining
+  the established 30-day results and separate verification boundaries. No
+  weekly predictive-performance or authenticated-runtime results were invented.
+- Added the user-confirmed admin scope: Dashboard, Users, Market Data, AI
+  Monitoring, System Health, and Audit Log. Requirements, diagrams, UI, audit
+  design, and acceptance placeholders reflect these modules. Forecasting
+  Monitoring and analysis/simulation dashboard statistics remain recommendations.
+- Updated the companion outline. Kept two appendices, 15 visual placeholders,
+  editable equations, and student, advisor, and committee-name fields.
+- Refreshed Word indexes and checked all 41 final rendered pages. Structure,
+  comments, source preservation, template geometry and opaque parts, field
+  references, tables, page breaks, and text bounds passed document verification.
+- No application code, dependencies, database data, commits, or pushes changed
+  in this report task; concurrent forecasting development was preserved.
+
+### Verified weekly calibration and prepared guarded final test — 2026-10-07
+
+- The user ran 661 targeted forecasting/schema/API tests and calibrated all
+  102 frozen weekly selections. Read-only review verified provenance, selection
+  matches, finite ordered ranges, endpoint boundaries and the canonical checksum:
+  `0f42993972269884b160ff9983555abad865ddd07483c574205b37f15a9a2ab1`.
+  Minimum residual count is 113; minimum training count is 2,413. One selection
+  warning remains; no new calibration fit warnings were recorded.
+- Added an isolated strict calibration reader and final-fold scoring workflow.
+  Manifest/source and calibration hashes/contracts are pinned before DB access;
+  the original snapshot is read-only and verified, then closed before fitting
+  the frozen candidates on labels completed before the test fold starts.
+- Final scoring preserves the existing winners and q10/q90, records errors,
+  direction accuracy, clipping, inclusive empirical coverage, widths and date
+  boundaries. Empty clipped volatility intervals are flagged and count as
+  misses, without widening ranges or hiding finite poor performance.
+- Added fixed, exclusive, ignored one-run start/completion markers per weekly
+  release. Once scoring starts, failures remain consumed and changing report
+  filenames cannot retry the final test. Bad pre-run inputs/provenance do not
+  consume it. No automatic reset or force option is provided.
+- Added synthetic/mocked regressions and updated the manual guide. The 661-pass
+  result predates these additions; new tests and final evaluation await user
+  commands. No final scoring, model fitting, DB/provider operation or run-marker
+  creation was performed by the agent in this implementation checkpoint.
+- No original 30-day source/models, APIs, clients, dependencies or environment
+  files changed. Deployment-artifact fitting, acceptance review, runtime support
+  and weekly UI activation remain pending. No commit or push; unrelated report
+  content and concurrent status work preserved.
+
+### Report visuals and source links — 2026-10-07
+
+- Updated the existing V3 Word report in `docs/report/` in place. Added all
+  15 numbered figures with 31 panels: project diagrams, authenticated web
+  screenshots, and a graph of the recorded 30-day selection-fold MAE values.
+- Added 13 underlined Source links. Ten point to verified external sources;
+  three point to actual local project files. Student, advisor, and committee
+  names remain placeholders. Admin visuals are labelled as design evidence,
+  and final admin access verification remains pending.
+- With user authorization, created `Report Example Current` (five AAPL shares
+  and twenty BND shares) and `Report Example Planned` (USD 1,500 SPY and
+  USD 1,000 BND). Saved one historical analysis and one Combined Simulation
+  for the Current example, and captured real asset/portfolio 30-day outlooks
+  and an actual grounded AI explanation. These examples remain in the account.
+- Recorded the completed local web demonstration in the report. Weekly
+  controls remain disabled in the captured runtime. No weekly performance
+  results, admin statistics, or device-acceptance claims were invented.
+- Refreshed Word indexes and reviewed all 62 rendered pages, including the
+  changed pages after corrections. Verified image sources, 13 hyperlink
+  targets, equations, table structure, name fields, template geometry and
+  preserved parts. Updated the companion outline and retained visual sources
+  and capture notes under `docs/report/assets/`.
+- No application code, dependencies, forecasting artifacts, architecture,
+  commits, or pushes changed. Concurrent forecasting work was preserved.
+
+### Reviewed weekly final test and prepared experimental artifact training — 2026-10-07
+
+- The user ran 721 targeted forecasting/schema/API tests and completed all
+  102 weekly final-test selections once. Read-only review independently verified
+  canonical SHA-256 `e2aeb387fa10376f2f925d74138f194c4ce102494a64bafb0e6703fbc22d7193`,
+  original provenance, frozen ranges/identities and recorded date/count boundaries.
+  Minimum final observation/training counts are 237/2,597. No new fit warnings
+  or empty intervals; the original QQQ selection warning remains preserved.
+- Pooled return coverage is 79.03%/70.15%/72.33% at 7/14/21 days, and volatility
+  coverage is 77.30%/77.95%/81.73%. Return direction accuracy is about 51%.
+  Individual quality can be weak (BTC-USD 14-day volatility coverage 15.38%; SLV
+  21-day return coverage 29.96%). This is not predictive-quality approval or a
+  new untouched project-level holdout. Final evidence and guard markers stay frozen.
+- Added a separate manual weekly artifact-training workflow requiring explicit
+  experimental-quality acknowledgement, pinned selection/calibration/final
+  evidence and matching completed final-run markers before DB access. Original
+  snapshot provenance is verified read-only; DB resources close before fitting.
+- Frozen candidates/parameters fit actual 7/14/21-day completed labels through
+  the approved cutoff, using the unchanged fitter privately. Actual-horizon
+  serialized wrappers, per-record quality/warnings/ranges, source/revision/library
+  provenance, reload checks and hashes form a new-only 102-model weekly package.
+  A completion manifest is written last; partial output cannot overwrite or
+  automatically retry. No final scoring, recalibration, reselection or activation.
+- Added synthetic/mocked regressions and updated the manual rollout guide.
+  The 721-pass result predates these additions; new tests and actual deployment
+  fitting await the user's commands. No agent-run tests, DB/provider operations,
+  model fitting, artifact creation, commits or pushes occurred in this checkpoint.
+- Original 30-day V1 source/package, APIs, portfolio composition, web/mobile,
+  dependencies, environment files and architecture remain unchanged. Weekly
+  runtime validation and client activation remain pending. Unrelated report
+  files/status were preserved; generated evidence/artifacts remain ignored.
+
+### Report V3 formatting and exhibition feedback — 2026-10-07
+
+- Updated the existing V3 document in place. Applied grayscale formatting to
+  30 visual panels and kept Figure 5.7 in its original colors, following the
+  new reviewer comment. Removed 15 figure source notes and placed all ten
+  numbered table captions below their tables.
+- Added 46 clickable citation numbers, including bibliography numbers, with
+  targets matching the existing 13 Source links. References 1–10 use external
+  source pages; references 11–13 use actual local project source files.
+- Added Section 5.6 Student and Exhibition Feedback from the team's reported
+  positive verbal comments. The section clearly identifies the feedback as
+  informal. No survey, ratings, participant counts, or quotations were invented.
+  Figure 5.8 remains a photograph placeholder. Renumbered Achievements and
+  Limitations to 5.7 and refreshed the contents and figure/table indexes.
+- Updated the companion outline and visual evidence notes. Verified source
+  targets, table-caption order, picture effects, equations, template parts,
+  and name placeholders. Reviewed all 62 rendered pages; after the final
+  photograph-caption alignment adjustment, reviewed its page again and
+  confirmed the other 61 page images were unchanged.
+- No application code, architecture, dependencies, model artifacts, commits,
+  or pushes changed. Concurrent forecasting work was preserved.
+
+### Weekly artifact test checksum false-positive correction — 2026-10-07
+
+- The user-run targeted suite reported 791 passed and one failure. The bundle
+  test's blanket JSON substring check matched `30d` inside a valid model SHA-256,
+  not an incorrect horizon or target declaration. No training output was supplied.
+- Replaced that check with exact artifact schema, target/version, calendar-horizon
+  and nested selection/calibration/final identity assertions. Added a deterministic
+  synthetic checksum containing `30d` to retain regression coverage of this case.
+- Only the test and this status entry changed. Training code, models, frozen
+  evidence, APIs and clients remain unchanged. New verification awaits the user's
+  manual test rerun; no agent-run test, training, DB access, commit or push occurred.
+
+### Report V3 future work and limitation revision — 2026-10-07
+
+- Edited the user's latest manually revised V3 document in place and applied
+  reviewer comment 55. Updated Section 5.7 and Sections 6.2–6.5 to remove weekly
+  runtime, admin access, and deployment from the concluding limitations and
+  future-work priorities, without asserting that pending work was completed.
+- Future Work now discusses custom stress testing, transaction-aware analysis,
+  forecasting-model improvements, portfolio prediction intervals, and evaluation
+  of user learning and AI explanation quality. Retained simple academic wording
+  and updated the related outline placeholders.
+- Preserved 325 other non-index paragraphs, all tables, pictures, equations,
+  section geometry, external hyperlinks, styles, headers, and other package
+  parts from the user's saved version. Refreshed only the Word index blocks
+  through a working copy and kept the original navigation bookmarks.
+- Verified the 62-page final render. Inspected all six changed page images;
+  the other 56 images matched the previously inspected report exactly. The
+  user's removals and formatting edits were preserved. A backup of the latest
+  user-edited document and internal QA files are retained outside the report folder.
+- No application code, models, architecture, dependencies, commits, or pushes
+  changed. Concurrent forecasting work was preserved.
+
+### Experimental weekly backend runtime preparation — 2026-10-07
+
+- Reviewed the user-trained `forecast-weekly-v1-20260917` bundle read-only:
+  102 models, all 204 model/metadata checksums, five evidence checksums and
+  original 69,928-row snapshot bindings match. The approved root canonical hash
+  is `5b604af0c7e965cfcebdc0ae38a9570b64464ffc2c8d8adee230a19b2aaf95fe`.
+  Zero deployment-fit warnings, 48 below-nominal final-coverage warning records
+  and the QQQ 21-day volatility selection convergence warning remain retained.
+- Added a separately pinned weekly registry, strict JSON/path/identity gates,
+  complete 102-pair validation before joblib loading and selected-byte rechecks.
+  Only trusted immutable local deployment artifacts are accepted; request inputs
+  cannot choose another package, path, checksum or model. Build evidence and
+  experimental/not-predictive-quality-approved flags remain unchanged.
+- Added current persisted-data weekly inference and portfolio composition for
+  actual 7/14/21-calendar-day targets. Reused V1 features, observation-indexed
+  ARIMA alignment, four-day freshness, authoritative CURRENT/PLANNED/LEGACY
+  weights, common-date correlations and existing D R D/Euler risk formulas.
+  Mixed horizons/provenance or any missing component fail the complete outlook;
+  no scaled 30-day output, fallback, provider request, fitting or write occurs.
+- Registered two additive authenticated `/horizons/{horizon_days}/outlook`
+  asset/owner-scoped portfolio routes and neutral-field response schemas/mappers.
+  Public responses retain per-target warnings and educational experimental
+  caveats; no private residual/evidence metric, daily path or portfolio interval
+  is exposed. Original 30-day source files, endpoints and packages are unchanged.
+- Added synthetic/mocked registry, inference/composition/schema and API tests;
+  extended the existing OpenAPI inventory assertion for the additive paths.
+  Updated the public contract and manual rollout guide. New tests, the runtime
+  integrity command and fresh-data authenticated smoke checks await the user.
+  No updated passing test count or verified live runtime is claimed.
+- No migrations, dependencies, training/evaluation reruns, environment changes,
+  frontend activation, AI grounding, staging, commits or pushes were performed.
+  Concurrent report work and pre-existing status edits were preserved.
+
+### Experimental weekly web integration — 2026-10-08
+
+- The user reported 954 passing backend forecasting/schema/API regressions and
+  read-only registry integrity validation of all 102 weekly model pairs. After
+  restart, 25/25 authenticated GET-only local smoke checks passed: AAPL/QQQ at
+  7/14/21/30 days, two CURRENT and two PLANNED portfolios at all four horizons,
+  and unsupported 8-day rejection. QQQ 21-day ARIMA warnings remain intact.
+  Runtime success is not predictive-quality approval or a fresh holdout result.
+- Enabled actual 7/14/21-day web asset and portfolio outlooks through separate
+  typed weekly contracts/adapters; unchanged 30-day APIs remain the default.
+  Horizon-aware cards and breakdowns retain backend weights, intervals and
+  signed contributions. Calendar-day, experimental/not-quality-approved and
+  per-target warning checks reject malformed or mixed-horizon responses.
+- Added optional Compare all horizons with independent requests/timeouts and
+  failures. Available points and date/status rows remain visible when another
+  horizon fails. No stale selection/account results or scaled-value fallback.
+  Lines are visual guides only and do not bridge missing horizons or different
+  market-data dates; no daily path or portfolio prediction interval is invented.
+- Weekly notices, amber points, friendly target-specific warnings and complete
+  backend limitations retain the experimental quality boundary. Updated web
+  entry labels, scoped theme styles, regressions and rollout documentation.
+  Signed-in browser checks confirmed current/planned four-horizon comparisons,
+  return/volatility switching, immediate loaded-horizon selection and QQQ's
+  21-day asset ranges/ARIMA warning. Compact web controls/chart were inspected.
+  Terminal tests/build await the user's manual commands; no new passing client
+  count is claimed. Mobile weekly parity remains the next checkpoint.
+- No backend, model/artifact, database, migration, training/evaluation, provider,
+  AI grounding, dependency, architecture, staging, commit or push changes.
+  Unrelated untracked docs/report content is preserved and excluded from Git
+  staging guidance.
+
+### Compact web forecast graphs — 2026-10-08
+
+- Capped the shared forecast SVG at 1,100px and centered it, preventing its
+  proportional height, labels and markers from becoming oversized on wide
+  screens. Selected-horizon and comparison charts share this styling; their
+  existing aspect ratio and narrow-screen scrolling remain unchanged.
+- Added a scoped sizing regression. Forecast values, axes, ranges, models,
+  APIs, mobile and unrelated report files are unchanged. Whitespace checks
+  passed; tests/build and signed-in visual acceptance remain for the user's
+  manual verification. No staging, commit or push was performed.
+
+### Watchlist list action alignment — 2026-10-08
+
+- Grouped View Outlook and the remove X in a single non-wrapping, vertically
+  centered row with an 8px gap. Existing navigation, removal/loading behavior,
+  grid view, mobile and APIs are unchanged.
+- Added a scoped layout regression. Tests/build await the user's manual
+  commands; no staging, commit or push was performed.

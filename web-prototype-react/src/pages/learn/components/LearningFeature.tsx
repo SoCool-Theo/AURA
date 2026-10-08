@@ -5,9 +5,10 @@ import type { Lesson } from './LessonLibrary';
 interface LearningFeatureProps {
   lesson: Lesson;
   onOpen: (lesson: Lesson) => void;
+  completed?: boolean;
 }
 
-export function LearningFeature({ lesson, onOpen }: LearningFeatureProps) {
+export function LearningFeature({ lesson, onOpen, completed = false }: LearningFeatureProps) {
   return (
     <Card className="learn-feature-card">
       <div className="learn-feature-copy">
@@ -19,7 +20,7 @@ export function LearningFeature({ lesson, onOpen }: LearningFeatureProps) {
           <span><Icon name="shield" size={14} /> Beginner</span>
         </div>
         <button className="primary-btn" onClick={() => onOpen(lesson)}>
-          Start First Lesson <span>→</span>
+          {completed ? 'Review First Lesson' : 'Start First Lesson'} <span>→</span>
         </button>
       </div>
       <div className="learn-feature-visual">

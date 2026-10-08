@@ -61,10 +61,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const invalidateSession = useCallback((rejectedToken?: string) => {
     if (rejectedToken && readAccessToken() !== rejectedToken) return;
 
-    clearAccessToken();
-    setUser(null);
-    setSessionError(null);
-    setStatus('unauthenticated');
+    try {
+      clearAccessToken();
+    } finally {
+      // A removed account must leave authenticated UI even if storage fails.
+      setUser(null);
+      setSessionError(null);
+      setStatus('unauthenticated');
+    }
   }, []);
 
   const restoreSession = useCallback(async () => {

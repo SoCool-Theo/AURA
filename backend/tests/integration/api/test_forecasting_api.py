@@ -165,10 +165,14 @@ def test_inference_construction_errors_are_sanitized(api_harness):
     assert response.json() == {"detail": "Forecast is currently unavailable."}
 
 
-def test_openapi_exposes_only_current_authenticated_asset_outlook():
+def test_openapi_preserves_current_authenticated_asset_outlook_with_additive_weekly_routes():
     schema = app.openapi()
     paths = {path for path in schema["paths"] if path.startswith("/api/forecasting")}
-    assert paths == {"/api/forecasting/assets/{symbol}/outlook", "/api/forecasting/portfolios/{portfolio_id}/outlook"}
+    assert paths == {
+        "/api/forecasting/assets/{symbol}/outlook", "/api/forecasting/portfolios/{portfolio_id}/outlook",
+        "/api/forecasting/assets/{symbol}/horizons/{horizon_days}/outlook",
+        "/api/forecasting/portfolios/{portfolio_id}/horizons/{horizon_days}/outlook",
+    }
     operation = schema["paths"]["/api/forecasting/assets/{symbol}/outlook"]
     assert set(operation) == {"get"}
     assert operation["get"]["security"] == [{"HTTPBearer": []}]

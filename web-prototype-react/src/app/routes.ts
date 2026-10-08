@@ -6,7 +6,7 @@ export type AppRoute = {
 };
 
 export function routeFromHash(): AppRoute {
-  const raw = window.location.hash.replace(/^#\/?/, '') || 'dashboard';
+  const raw = window.location.hash.replace(/^#\/?/, '') || 'welcome';
   const [page, id, reportId, contextId] = raw.split('/');
 
   return { page, id, reportId, contextId };

@@ -92,6 +92,12 @@ def _summary(
     return PortfolioReportSummary.model_validate(data)
 
 
+@pytest.fixture(autouse=True)
+def notifications_service():
+    with patch.object(route_module, "NotificationService") as factory:
+        yield factory.return_value
+
+
 @pytest.fixture
 def api_harness() -> ApiHarness:
     session = MagicMock(spec=Session)
@@ -140,6 +146,7 @@ def test_all_four_reporting_routes_are_registered() -> None:
 
 def test_post_accepts_analysis_period_returns_report_and_commits_once(
     api_harness: ApiHarness,
+    notifications_service,
 ) -> None:
     report = _report()
     api_harness.service.create_report.return_value = report
@@ -163,6 +170,7 @@ def test_post_accepts_analysis_period_returns_report_and_commits_once(
     )
     assert call_arguments["display_currency"] is PortfolioDisplayCurrency.USD
     api_harness.session.commit.assert_called_once_with()
+    notifications_service.record_saved.assert_called_once_with(user_id=OWNER_ID, portfolio_id=PORTFOLIO_ID, kind="analysis", resource_id=report.id)
     api_harness.session.rollback.assert_not_called()
 
 
@@ -662,6 +670,16 @@ def test_existing_portfolio_routes_and_health_remain_available(
     }
 
 
+def test_notification_recording_failure_rolls_back_report_and_is_sanitized(api_harness, notifications_service):
+    api_harness.service.create_report.return_value = _report()
+    notifications_service.record_saved.side_effect = RuntimeError("private database detail")
+    response = api_harness.client.post(REPORT_PATH, headers=REQUEST_HEADERS, json={"start_date": "2026-01-01", "end_date": "2026-01-31"})
+    assert response.status_code == 500
+    assert "private database detail" not in response.text
+    api_harness.session.commit.assert_not_called()
+    api_harness.session.rollback.assert_called_once_with()
+
+
 def test_openapi_exposes_all_reporting_operations(
     api_harness: ApiHarness,
 ) -> None:
@@ -690,7 +708,9 @@ def test_openapi_exposes_all_reporting_operations(
         {"$ref": "#/components/schemas/PortfolioReportV3Response"},
     ]
     methods = _registered_methods()
-    assert len(methods) == 32
+    assert len(methods) == 42
+    assert ("/api/market-data/status", "GET") in methods
+    assert ("/api/portfolios/{portfolio_id}/simulations/{simulation_id}", "DELETE") in methods
     assert (
         "/api/portfolios/{portfolio_id}/planned-allocation",
         "GET",

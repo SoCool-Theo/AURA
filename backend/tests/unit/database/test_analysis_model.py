@@ -18,6 +18,9 @@ from backend.app.database import (
 
 
 EXPECTED_TABLES = {
+    "market_data_refresh_state",
+    "notifications",
+    "notification_preferences",
     "users",
     "portfolios",
     "holdings",

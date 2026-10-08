@@ -12,6 +12,7 @@ from ..core.security import (
 from ..database.models import User
 from ..database.repositories import UserRepository
 from ..schemas.auth import (
+    AccountDeletionRequest,
     LoginRequest,
     PasswordChangeRequest,
     ProfileUpdateRequest,
@@ -117,6 +118,14 @@ class AuthService:
             if _constraint_name(error) == _EMAIL_UNIQUE_CONSTRAINT:
                 raise DuplicateEmailError from error
             raise
+
+    def delete_account(self, user: User, request: AccountDeletionRequest) -> None:
+        """Verify the current password before deleting this account only."""
+        if user.password_hash is None or not verify_password(
+            request.current_password.get_secret_value(), user.password_hash
+        ):
+            raise CurrentPasswordMismatchError
+        self._repository.delete(user)
 
     def change_password(
         self,

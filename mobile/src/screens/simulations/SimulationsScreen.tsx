@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { Card } from '../../components/ui/Card';
+import { DeleteSimulationButton } from '../../components/simulations/DeleteSimulationButton';
 import { InlineErrorCard } from '../../components/ui/ErrorState';
 import { portfolioErrorMessage } from '../../portfolio/portfolioErrors';
 import { PageTitle } from '../../components/ui/PageTitle';
@@ -63,21 +64,23 @@ export function SimulationsScreen({ navigation }: { navigation: any }) {
         ) : history.length ? (
           <View style={styles.recentList}>
             {history.slice(0, 3).map((item) => (
-              <Pressable
-                accessibilityLabel={`Open ${item.portfolio_name} ${simulationTypeLabel(item.simulation_type)} simulation`}
-                accessibilityRole="button"
-                key={item.id}
-                onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}
-              >
-                <Card style={styles.recentCard}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.recentPortfolio}>{item.portfolio_name}</Text>
-                    <Text style={styles.recentPeriod}>{item.requested_start_date} → {item.requested_end_date}</Text>
-                    <Text style={styles.recentDate}>{formatSimulationTimestamp(item.created_at)}</Text>
-                  </View>
-                  <Tag label={simulationTypeLabel(item.simulation_type)} tone="primary" />
-                </Card>
-              </Pressable>
+              <View key={item.id} style={{ gap: spacing.sm }}>
+                <Pressable
+                  accessibilityLabel={`Open ${item.portfolio_name} ${simulationTypeLabel(item.simulation_type)} simulation`}
+                  accessibilityRole="button"
+                  onPress={() => navigation.navigate('SimulationResult', { portfolioId: item.portfolio_id, simulationId: item.id })}
+                >
+                  <Card style={styles.recentCard}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.recentPortfolio}>{item.portfolio_name}</Text>
+                      <Text style={styles.recentPeriod}>{item.requested_start_date} → {item.requested_end_date}</Text>
+                      <Text style={styles.recentDate}>{formatSimulationTimestamp(item.created_at)}</Text>
+                    </View>
+                    <Tag label={simulationTypeLabel(item.simulation_type)} tone="primary" />
+                  </Card>
+                </Pressable>
+                <DeleteSimulationButton portfolioId={item.portfolio_id} simulationId={item.id} subject={`${item.portfolio_name} · ${simulationTypeLabel(item.simulation_type)} · ${item.id}`} />
+              </View>
             ))}
           </View>
         ) : (

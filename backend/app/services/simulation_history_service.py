@@ -200,6 +200,27 @@ class SimulationHistoryService:
             ]
         )
 
+    def delete(
+        self,
+        *,
+        user_id: UUID,
+        portfolio_id: UUID,
+        simulation_id: UUID,
+    ) -> bool | None:
+        """Delete only an owned portfolio's snapshot; do not restore its payload."""
+        portfolio = self._portfolio_service.get(
+            user_id=user_id, portfolio_id=portfolio_id,
+        )
+        if portfolio is None:
+            return None
+        simulation = self._repository.get_for_portfolio(
+            portfolio_id=portfolio.id, simulation_id=simulation_id,
+        )
+        if simulation is None or simulation.portfolio_id != portfolio.id:
+            raise SimulationNotFoundError("Simulation not found")
+        self._repository.delete(simulation)
+        return True
+
     def get(
         self,
         *,

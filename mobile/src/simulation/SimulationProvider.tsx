@@ -59,6 +59,7 @@ type SimulationContextValue = {
     portfolioId: string,
     simulationId: string
   ) => Promise<SimulationHistoryDetailResponse>;
+  deleteSimulation: (portfolioId: string, simulationId: string) => Promise<void>;
 };
 
 export const SimulationContext = createContext<SimulationContextValue | undefined>(
@@ -96,6 +97,8 @@ export function SimulationProvider({ children }: PropsWithChildren) {
   const [isRefreshingHistory, setIsRefreshingHistory] = useState(false);
   const scenarioRequestRef = useRef(0);
   const historyRequestRef = useRef(0);
+  const deletedIdsRef = useRef(new Set<string>());
+  const authEpochRef = useRef(0);
 
   const refreshScenarios = useCallback(async (): Promise<void> => {
     const requestId = scenarioRequestRef.current + 1;
@@ -136,7 +139,7 @@ export function SimulationProvider({ children }: PropsWithChildren) {
       })));
       if (historyRequestRef.current !== requestId) return;
       setHistory(orderGlobalHistory(histories.flatMap(({ portfolio, response }) => (
-        response.simulations.map((simulation) => ({
+        response.simulations.filter((simulation) => !deletedIdsRef.current.has(simulation.id)).map((simulation) => ({
           ...simulation,
           portfolio_name: portfolio.name
         }))
@@ -152,6 +155,8 @@ export function SimulationProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
+    authEpochRef.current += 1;
+    deletedIdsRef.current.clear();
     historyRequestRef.current += 1;
     setHistory([]);
     setHistoryStatus('idle');
@@ -200,6 +205,15 @@ export function SimulationProvider({ children }: PropsWithChildren) {
     simulationId: string
   ) => simulationsApi.getHistory(portfolioId, simulationId), []);
 
+  const deleteSimulation = useCallback(async (portfolioId: string, simulationId: string) => {
+    const epoch = authEpochRef.current;
+    await simulationsApi.deleteHistory(portfolioId, simulationId);
+    if (epoch !== authEpochRef.current) return;
+    // Also filter in-flight history responses so deleted rows cannot reappear.
+    deletedIdsRef.current.add(simulationId);
+    setHistory((current) => current.filter((item) => item.id !== simulationId));
+  }, []);
+
   const value = useMemo<SimulationContextValue>(() => ({
     scenarios,
     scenarioStatus,
@@ -213,9 +227,11 @@ export function SimulationProvider({ children }: PropsWithChildren) {
     runHistorical,
     runAllocation,
     runCombined,
-    getHistoryDetail
+    getHistoryDetail,
+    deleteSimulation
   }), [
     getHistoryDetail,
+    deleteSimulation,
     history,
     historyError,
     historyStatus,

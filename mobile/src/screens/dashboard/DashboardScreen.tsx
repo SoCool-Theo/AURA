@@ -1,4 +1,7 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import React, { useMemo, useState } from 'react';
+import { MarketDataStatus } from '../../marketData/MarketDataStatus';
+import { useMarketDataRefresh } from '../../marketData/useMarketDataRefresh';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,7 +15,8 @@ import { WebKpiCard } from '../../components/ui/WebKpiCard';
 import { PortfolioReturnsChart } from '../../components/charts/PortfolioReturnsChart';
 import { useDashboard } from '../../dashboard/useDashboard';
 import { dashboardPercent, filterDashboardReturns, type DashboardRange } from '../../dashboard/dashboardPresentation';
-import { usePreferences } from '../../preferences/usePreferences';
+import { accountDisplayName } from '../../auth/accountIdentity';
+import { useAuth } from '../../auth/useAuth';
 import {
   isPortfolioMarketDataUnavailable,
   PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE,
@@ -36,7 +40,8 @@ import {
 const ranges: DashboardRange[] = ['1M', '3M', '6M', '1Y', 'ALL'];
 
 export function DashboardScreen({ navigation }: { navigation: any }) {
-  const { displayName } = usePreferences();
+  const privateValue = usePrivateValue();
+  const { user } = useAuth();
   const dashboard = useDashboard();
   const {
     portfoliosState,
@@ -55,13 +60,14 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
   const monetary = reportMonetaryMetrics(report);
   const points = useMemo(() => filterDashboardReturns(analysis?.portfolio_returns ?? [], range), [analysis, range]);
   const selected = portfolios.find((item) => item.id === selectedId);
-  const firstName = (displayName || 'Investor').split(' ')[0];
+  const displayName = accountDisplayName(user);
   const holdingMode = portfolio ? portfolioHoldingMode(portfolio.holdings) : 'empty';
+  const market = useMarketDataRefresh(dashboard.refreshCurrentValue, holdingMode === 'real' && portfolio?.portfolio_type === 'CURRENT');
   const marketDataUnavailable = isPortfolioMarketDataUnavailable(dashboard.valuationError);
   const analyze = () => navigation.navigate('MoreTab', { screen: 'Analytics', params: { portfolioId: selectedId } });
-  const openReport = () => {
+  const openReport = (focusRiskDrivers = false) => {
     if (report) navigation.navigate('MoreTab', {
-      screen: 'ReportDetail', params: { portfolioId: report.portfolio_id, reportId: report.id }
+      screen: 'ReportDetail', params: { portfolioId: report.portfolio_id, reportId: report.id, focusRiskDrivers }
     });
   };
   const openAssetRisk = (assetSymbol: string) => {
@@ -87,9 +93,9 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content} refreshControl={
-        <RefreshControl refreshing={dashboard.refreshing} onRefresh={() => void dashboard.refresh()} tintColor={colors.primary} />
+        <RefreshControl refreshing={dashboard.refreshing || market.refreshing} onRefresh={() => { market.refresh(); void dashboard.refresh(); }} tintColor={colors.primary} />
       }>
-        <PageTitle eyebrow="AURA" title={`Welcome back, ${firstName}`} subtitle="Your portfolios and latest saved analysis." />
+        <PageTitle eyebrow="AURA" title={`Welcome back, ${displayName}`} subtitle="Your portfolios and latest saved analysis." />
 
         {listStatus === 'error' ? (
           <InlineErrorCard
@@ -167,6 +173,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
             ) : null}
 
             {dashboard.valuationLoading ? <Text style={styles.notice}>{holdingMode === 'planned' ? 'Loading planned target allocation…' : 'Loading current portfolio value…'}</Text> : null}
+            {holdingMode === 'real' && portfolio?.portfolio_type === 'CURRENT' ? <MarketDataStatus market={market} symbols={[...portfolio.holdings.map(holding => holding.symbol), ...(dashboard.valuationCurrency === 'THB' ? ['THB=X'] : [])]} /> : null}
             {dashboard.valuationError ? (
               <InlineErrorCard
                 error={dashboard.valuationError}
@@ -188,9 +195,9 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                 icon="wallet-outline"
                 label={holdingMode === 'planned' ? 'Proposed Investment' : 'Current Value'}
                 value={holdingMode === 'planned' && plannedAllocation
-                  ? formatPortfolioMoney(plannedAllocation.total_proposed_amount, plannedAllocation.plan_currency)
+                  ? privateValue(formatPortfolioMoney(plannedAllocation.total_proposed_amount, plannedAllocation.plan_currency))
                   : valuation
-                  ? formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency)
+                  ? privateValue(formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency))
                   : 'N/A'}
                 meta={holdingMode === 'planned' && plannedAllocation
                   ? 'Hypothetical plan · target weights from proposed amounts'
@@ -201,7 +208,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                     : 'Current valuation unavailable'}
                 tone="blue"
               />
-              <WebKpiCard icon="speedometer-outline" label="Risk Score" value={analysis?.risk_classification.risk_score == null ? 'N/A' : `${analysis.risk_classification.risk_score.toFixed(1)}/100`} meta={analysis?.risk_classification.risk_level ?? 'No verified report loaded'} tone={analysis ? riskTone(analysis.risk_classification.risk_level) : 'primary'} />
+              <WebKpiCard icon="speedometer-outline" label="Risk Score" value={analysis?.risk_classification.risk_score == null ? 'N/A' : `${analysis.risk_classification.risk_score.toFixed(1)}/100`} valueColor={analysis ? colors[riskTone(analysis.risk_classification.risk_level)] : colors.muted} meta={analysis?.risk_classification.risk_level ?? 'No verified report loaded'} tone={analysis ? riskTone(analysis.risk_classification.risk_level) : 'primary'} />
               <WebKpiCard
                 icon="trending-up-outline"
                 label="Annualized Return"
@@ -260,7 +267,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                       <Text style={styles.body}>Requested: {analysis.start_date} → {analysis.end_date}</Text>
                       <Text style={styles.body}>Effective: {analysis.metadata.analysis_start} → {analysis.metadata.analysis_end}</Text>
                       <Text style={styles.body}>Metrics describe this saved report. Current holdings may have changed since it was created.</Text>
-                      <Button title="Open saved report" variant="secondary" onPress={openReport} />
+                      <Button title="Open saved report" variant="secondary" onPress={() => openReport()} />
                     </Card>
                     <SectionHeader title="Portfolio periodic returns" />
                     <Card style={styles.state}>
@@ -279,7 +286,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
                       <PortfolioReturnsChart points={points} />
                       <Text style={styles.body}>Chart window ends at the latest return observation. Filters change displayed points only; all metrics retain the saved report period.</Text>
                     </Card>
-                    <SectionHeader title="Top Risk Drivers" action="View report" onPress={openReport} />
+                    <SectionHeader title="Top Risk Drivers" action="View analysis" onPress={() => openReport(true)} />
                     <Card>
                       {analysis.risk_drivers.entries.slice(0, 3).map((driver) => (
                         <Pressable
@@ -329,6 +336,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
             </Card>
             <View style={styles.actions}>
               <Button title="Analyze Portfolio" onPress={analyze} />
+              <Button title="View 30-Day Outlook" variant="secondary" onPress={() => navigation.navigate('MoreTab', { screen: 'Forecasting', params: { portfolioId: selectedId ?? undefined, returnToHome: true }, initial: false })} />
               <Button title="Reports" variant="secondary" onPress={() => navigation.navigate('MoreTab', { screen: 'Reports' })} />
               <Button title="Simulations" variant="secondary" onPress={() => navigation.navigate('Simulate', { screen: 'Simulations' })} />
             </View>

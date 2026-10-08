@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { usePrivateText, usePrivateValue } from '../../../privacy/PortfolioPrivacy';
 import styles from '../AnalyticsIntegration.module.css';
 
 export type MetricAmountDialogContent = {
@@ -19,6 +20,8 @@ export function MetricAmountDialog({
   onClose: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const privateValue = usePrivateValue();
+  const privateText = usePrivateText();
 
   useEffect(() => {
     if (!content) return;
@@ -54,13 +57,13 @@ export function MetricAmountDialog({
           <button ref={closeRef} type="button" aria-label="Close metric details" onClick={onClose}>×</button>
         </header>
         <strong className={content.tone === 'negative' ? styles.amountNegative : styles.amountPositive}>
-          {content.percentage}
+          {privateText(content.percentage)}
         </strong>
         <span>{content.amountLabel}</span>
-        <b className={content.tone === 'negative' ? styles.amountNegative : styles.amountPositive}>≈ {content.amount}</b>
+        <b className={content.tone === 'negative' ? styles.amountNegative : styles.amountPositive}>≈ {privateValue(content.amount)}</b>
         <div className={styles.metricDialogExplanation}>
-          <strong>{content.reference}</strong>
-          <p>{content.explanation}</p>
+          <strong>{privateText(content.reference)}</strong>
+          <p>{privateText(content.explanation)}</p>
         </div>
         <button className="primary-btn" type="button" onClick={onClose}>Close</button>
       </section>

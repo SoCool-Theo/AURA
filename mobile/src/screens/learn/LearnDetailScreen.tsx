@@ -10,7 +10,7 @@ import { useAppData } from '../../hooks/useAppData';
 import { colors, spacing, typography } from '../../theme/theme';
 
 export function LearnDetailScreen({ route }: { route: any }) {
-  const { learnProgress, toggleLessonComplete, localError, localPending, retryLocalData } = useAppData();
+  const { learnProgress, toggleLessonComplete, localError, localPending, loading, retryLocalData } = useAppData();
   const lesson = learnLessons.find((item) => item.id === route.params.lessonId);
 
   if (!lesson) {
@@ -83,12 +83,13 @@ export function LearnDetailScreen({ route }: { route: any }) {
 
         {localError ? <Card><Text style={styles.noteText}>{localError}</Text><Button title="Retry local progress" onPress={() => void retryLocalData()} /></Card> : null}
         <Button
-          title={done ? 'Mark as not completed' : 'Mark lesson completed'}
+          title={loading ? 'Loading progress…' : localPending ? 'Saving progress…' : done ? 'Mark as not completed' : 'Mark lesson completed'}
           variant={done ? 'secondary' : 'primary'}
           onPress={() => toggleLessonComplete(lesson.id)}
-          disabled={localPending || Boolean(localError)}
+          disabled={loading || localPending || Boolean(localError)}
           style={{ marginTop: spacing.xl }}
         />
+        <Text style={styles.noteText}>Mark completion after reading. Progress is saved for this account on this device only.</Text>
       </ScrollView>
     </SafeAreaView>
   );

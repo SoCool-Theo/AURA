@@ -34,7 +34,7 @@
 .icon { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 12px; display: grid; place-items: center; background: var(--negative-background); color: var(--red-bright); }
 .header h2 { margin: 0; color: var(--text-primary); font-size: 19px; }
 .header p { margin: 6px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.55; }
-.close { width: 34px; height: 34px; flex: 0 0 34px; border: 1px solid var(--border-control); border-radius: 10px; background: var(--control-bg); color: var(--text-secondary); cursor: pointer; font-size: 19px; }
+.close { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--border-control); border-radius: 10px; background: var(--control-bg); color: var(--text-secondary); cursor: pointer; }
 .close:hover, .close:focus-visible { border-color: var(--purple-primary); color: var(--text-primary); outline: none; }
 .subject { margin: 18px 0 0; padding: 12px 14px; border: 1px solid rgba(255, 89, 100, .25); border-radius: 11px; background: rgba(255, 89, 100, .08); }
 .subject small, .subject strong { display: block; }
@@ -45,6 +45,18 @@
 .danger { min-height: 40px; padding: 0 16px; border: 1px solid rgba(255, 89, 100, .5); border-radius: 9px; background: rgba(182, 46, 58, .28); color: var(--red-bright); cursor: pointer; font-weight: 800; }
 .danger:hover:not(:disabled), .danger:focus-visible { border-color: var(--red-bright); background: rgba(182, 46, 58, .4); outline: none; }
 .danger:disabled, .close:disabled { cursor: not-allowed; opacity: .6; }
+
+/* Simulation deletion uses red throughout, without the default teal accent. */
+.dangerTheme { border-color: var(--red-bright); background: linear-gradient(145deg, #30151f, #1c0e17); }
+.dangerTheme .accent { background: var(--red-bright); }
+.dangerTheme .icon, .dangerTheme .subject { background: rgba(255, 89, 100, .12); }
+.dangerTheme .subject { border-color: rgba(255, 89, 100, .45); }
+.dangerTheme .close, .dangerTheme .cancel { color: var(--red-bright); border-color: rgba(255, 89, 100, .4); background: rgba(255, 89, 100, .08); }
+.dangerTheme .close:hover, .dangerTheme .cancel:hover { border-color: var(--red-bright); background: rgba(255, 89, 100, .16); }
+.dangerTheme .close:hover, .dangerTheme .close:focus-visible, .dangerTheme .cancel:hover, .dangerTheme .cancel:focus-visible { color: var(--red-bright); }
+.dangerTheme .danger { border-color: var(--red-bright); background: var(--red-bright); color: #240a10; }
+.dangerTheme .danger:hover:not(:disabled) { background: var(--red-primary); }
+.dangerTheme button:focus-visible { outline: 3px solid rgba(255, 89, 100, .5); outline-offset: 2px; border-color: var(--red-bright); }
 
 @media (max-width: 520px) {
   .content { padding: 18px; }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type InputHTMLAttributes } from 'react';
+import { usePortfolioPrivacy } from '../../../privacy/PortfolioPrivacy';
 import { formatHoldingDecimalInput } from '../portfolioUi';
 import styles from '../PortfolioIntegration.module.css';
 
@@ -20,6 +21,7 @@ export function HoldingDecimalInput({
   onBlur,
   ...props
 }: HoldingDecimalInputProps) {
+  const { hideValues } = usePortfolioPrivacy();
   const [displayValue, setDisplayValue] = useState(() => formatHoldingDecimalInput(value));
   const edited = useRef(false);
 
@@ -35,8 +37,12 @@ export function HoldingDecimalInput({
       aria-describedby={error ? errorId : props['aria-describedby']}
       aria-invalid={Boolean(error)}
       inputMode="decimal"
-      value={displayValue}
+      value={hideValues ? '' : displayValue}
+      placeholder={hideValues ? '••••' : props.placeholder}
+      disabled={hideValues || props.disabled}
+      title={hideValues ? 'Turn off Hide portfolio values in Settings to edit.' : props.title}
       onChange={event => {
+        if (hideValues) return;
         const nextValue = event.target.value;
         if (!TWO_DECIMAL_INPUT.test(nextValue)) return;
         edited.current = true;
@@ -51,6 +57,7 @@ export function HoldingDecimalInput({
         onBlur?.(event);
       }}
     />
+    {hideValues && <small>Hidden. Turn off Hide portfolio values in Settings to edit.</small>}
     {error && <small id={errorId} className={styles.fieldError}>{error}</small>}
   </>;
 }

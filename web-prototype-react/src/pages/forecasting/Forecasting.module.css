@@ -1,0 +1,90 @@
+.page { display: flex; flex-direction: column; gap: 16px; }
+.watchlistLink { display: inline-flex; align-items: center; min-height: 32px; margin-right: 10px; padding: 5px 8px; border: 1px solid var(--border-control); border-radius: 8px; background: var(--control-bg); color: var(--teal-bright); font: inherit; font-size: 11px; cursor: pointer; }
+.watchlistLink:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 2px; }
+.analysisNav, .segmented, .horizons { display: flex; gap: 6px; flex-wrap: wrap; }
+.analysisNav button, .segmented button, .horizons button { min-height: 36px; padding: 8px 12px; border: 1px solid var(--border-control); border-radius: 9px; background: var(--control-bg); color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.analysisNav button.active, .segmented button.active, .horizons button.active { border-color: var(--teal-primary); background: var(--cyan-background); color: var(--teal-bright); }
+.page button:focus-visible, .chartScroll:focus-visible, .tableScroll:focus-visible, .page summary:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 3px; }
+.page button:disabled { opacity: .55; cursor: default; }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.header h1 { margin: 7px 0; font-size: 32px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.header p { color: var(--text-secondary); font-size: 13px; line-height: 1.6; margin: 0; }
+.eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .1em; color: var(--teal-bright); }
+.badge { font-size: 10px; color: var(--amber-bright); border: 1px solid var(--border-card); background: var(--warning-background); border-radius: 8px; padding: 6px 9px; white-space: nowrap; }
+.headerActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.controls, .section, .context { padding: 20px; }
+.controlGrid { margin-top: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.field { min-width: 0; display: flex; flex-direction: column; gap: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+.field input { min-height: 43px; border: 1px solid var(--border-control); border-radius: 10px; padding: 0 12px; color: var(--text-primary); background: var(--control-bg); font: inherit; }
+.field input:focus { outline: 2px solid var(--teal-primary); outline-offset: 2px; }
+.field small { font-size: 10px; color: var(--text-muted); font-weight: 400; }
+.horizons button { flex: 1; min-width: 75px; }
+.horizons small { display: block; margin-top: 4px; font-size: 9px; }
+.compareControl { display: flex; align-items: center; gap: 8px; margin-top: 14px; min-height: 36px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+.compareControl input { accent-color: var(--teal-primary); width: 16px; height: 16px; }
+.compareControl input:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 3px; }
+.qualityNotice { padding: 12px 15px; border: 1px solid var(--amber-bright); border-radius: 10px; background: var(--warning-background); color: var(--text-secondary); font-size: 11px; line-height: 1.7; }
+.qualityNotice strong { color: var(--amber-bright); }
+.qualityNotice p { margin: 5px 0 0; }
+.qualityNotice ul { padding-left: 18px; margin-bottom: 0; }
+.comparisonTable { min-width: 650px; }
+.comparisonWarnings { margin-top: 14px; }
+.note, .figure figcaption { margin: 12px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.65; }
+.education { margin: 0; padding: 12px 15px; background: var(--cyan-background); border: 1px solid var(--border-card); border-radius: 12px; color: var(--text-secondary); font-size: 11px; line-height: 1.7; }
+.results { display: grid; gap: 16px; }
+.context { display: flex; align-items: flex-start; justify-content: space-between; gap: 22px; }
+.context h2 { font-size: 24px; margin: 8px 0; overflow-wrap: anywhere; }
+.context p { margin: 0; color: var(--text-secondary); font-size: 12px; }
+.metadata { display: grid; gap: 10px; color: var(--text-muted); font-size: 10px; }
+.metadata strong { display: block; margin-top: 4px; color: var(--text-secondary); font-size: 11px; overflow-wrap: anywhere; }
+.metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.metric { padding: 20px; }
+.metric > span { font-size: 13px; font-weight: 700; color: var(--text-secondary); }
+.metric > strong { display: block; font-size: 32px; margin: 12px 0; }
+.metric small, .metric p { font-size: 11px; color: var(--text-muted); line-height: 1.6; }
+.metric small { display: block; }
+.metric p { margin-bottom: 0; }
+.metric b { color: var(--text-secondary); font-weight: 600; }
+.accent { color: var(--teal-bright); }
+.negative { color: var(--red-bright) !important; }
+.sectionHeading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.sectionHeading h2 { margin: 0; font-size: 18px; }
+.sectionHeading p { color: var(--text-muted); font-size: 11px; line-height: 1.6; margin: 6px 0 0; }
+.figure { margin: 0; }
+.chartScroll, .tableScroll { overflow: auto; border: 1px solid var(--border-divider); border-radius: 10px; }
+.chart { display: block; width: 100%; max-width: 1100px; min-width: 530px; height: auto; margin-inline: auto; }
+.chart text { fill: var(--text-muted); font-size: 11px; }
+.grid { stroke: var(--border-divider); stroke-width: 1; }
+.zero { stroke: var(--text-muted); stroke-dasharray: 4 5; opacity: .5; }
+.guide { fill: none; stroke: var(--teal-primary); stroke-width: 2; stroke-dasharray: 7 5; }
+.marker { fill: var(--teal-primary); stroke: var(--bg-card); stroke-width: 2; }
+.weeklyMarker { fill: var(--amber-bright); stroke: var(--bg-card); stroke-width: 2; }
+.interval { stroke: var(--teal-bright); stroke-width: 2; opacity: .75; }
+.chart .pointLabel { fill: var(--text-primary); font-weight: 700; }
+.drivers { display: grid; gap: 14px; }
+.driver { display: grid; grid-template-columns: 85px minmax(0, 1fr) 85px; gap: 12px; align-items: center; font-size: 12px; }
+.driver button, .table button { border: 0; background: transparent; color: var(--teal-bright); padding: 6px 0; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.driver strong { text-align: right; color: var(--text-secondary); font-size: 11px; }
+.track { position: relative; height: 16px; background: var(--control-bg); border-radius: 4px; }
+.origin { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--text-muted); z-index: 1; }
+.positiveBar, .negativeBar { position: absolute; height: 100%; border-radius: 3px; background: var(--teal-primary); }
+.negativeBar { background: var(--blue-primary); }
+.table { width: 100%; min-width: 800px; border-collapse: collapse; font-size: 11px; }
+.table th, .table td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-divider); white-space: nowrap; }
+.table th { color: var(--text-muted); font-size: 10px; background: var(--control-bg); }
+.table td { color: var(--text-secondary); }
+.table strong { color: var(--text-primary); }
+.table tr:last-child td { border-bottom: 0; }
+.section summary { cursor: pointer; font-size: 14px; font-weight: 700; padding: 4px 0; }
+.section details[open] summary { margin-bottom: 14px; }
+.modelDetails { display: grid; gap: 10px; font-size: 11px; }
+.modelDetails div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; }
+.modelDetails dt { color: var(--text-muted); }
+.modelDetails dd { margin: 0; color: var(--text-secondary); overflow-wrap: anywhere; }
+.limitations { padding-left: 18px; color: var(--text-muted); font-size: 11px; line-height: 1.8; }
+.state { padding: 32px; text-align: center; }
+.state p { color: var(--text-secondary); }
+.state small { color: var(--text-muted); }
+.state .headerActions { justify-content: center; }
+@media (max-width: 950px) { .header { flex-direction: column; }.context { flex-direction: column; }.controlGrid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .header h1 { font-size: 27px; }.metrics { grid-template-columns: 1fr; }.controls, .section, .context { padding: 16px; }.sectionHeading { flex-direction: column; }.horizons button { padding: 8px 6px; min-width: 58px; }.driver { grid-template-columns: 70px minmax(0, 1fr) 68px; gap: 8px; }.headerActions { width: 100%; }.headerActions button { flex: 1; } }

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { MarketDataStatus } from '../../marketData/MarketDataStatus';
+import { useMarketDataRefresh } from '../../marketData/useMarketDataRefresh';
 import {
   getPlannedPortfolioAllocation,
   getPortfolio,
@@ -7,6 +9,7 @@ import {
 } from '../../api/portfoliosApi';
 import { getPortfolioReport, listPortfolioReports } from '../../api/reportsApi';
 import { useAuth } from '../../auth/useAuth';
+import { accountDisplayName } from '../../auth/accountIdentity';
 import { go } from '../../app/routes';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
@@ -54,6 +57,7 @@ export function DashboardPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [reportReloadKey, setReportReloadKey] = useState(0);
   const [contextReloadKey, setContextReloadKey] = useState(0);
+  const market = useMarketDataRefresh(() => setContextReloadKey(value => value + 1), portfolio?.id === selectedId && portfolio?.portfolio_type === 'CURRENT' && Boolean(portfolio.holdings.length));
 
   useEffect(() => {
     const controller = new AbortController(); setListLoading(true); setListError(null); setPortfolios([]); setSelectedId('');
@@ -88,9 +92,9 @@ export function DashboardPage() {
     setContextLoading(true);
     const request = portfolio.portfolio_type === 'PLANNED'
       ? getPlannedPortfolioAllocation(portfolio.id, { signal: controller.signal })
-        .then(setPlannedAllocation)
+        .then(value => { if (!controller.signal.aborted) setPlannedAllocation(value); })
       : getPortfolioValuation(portfolio.id, valuationCurrency, { signal: controller.signal })
-        .then(setValuation);
+        .then(value => { if (!controller.signal.aborted) setValuation(value); });
 
     void request
       .catch(error => {
@@ -110,7 +114,7 @@ export function DashboardPage() {
     setPortfolioLoading(true); setReportLoading(true); setSelectedId(nextId);
   }
 
-  const firstName = user?.email.split('@')[0] || 'Investor';
+  const displayName = accountDisplayName(user);
   if (listLoading) return <Card className={styles.state}><h2>Loading Dashboard</h2><p role="status">Loading your portfolios.</p></Card>;
   if (listError) return <ScreenErrorState error={listError} fallbackMessage="Unable to load your dashboard portfolios." resourceName="Dashboard" onRetry={() => setReloadKey(value => value + 1)} />;
   if (!portfolios.length) return <Card className={styles.state}><h2>No portfolios yet</h2><p>Create a Current portfolio for investments you own or a Planned portfolio to evaluate before investing.</p><button className="primary-btn" onClick={() => go('create')}>Create Portfolio</button></Card>;
@@ -121,7 +125,7 @@ export function DashboardPage() {
   const marketDataUnavailable = isPortfolioMarketDataUnavailable(contextError);
 
   return <div className="page dashboard-page">
-    <DashboardHeader firstName={firstName} report={report} />
+    <DashboardHeader displayName={displayName} report={report} />
     {Boolean(portfolioError) && <InlineErrorCard error={portfolioError} fallbackMessage="Unable to load the selected portfolio." resourceName="Portfolio" onRetry={() => setReportReloadKey(value => value + 1)} />}
     {portfolioLoading && <Card className={styles.state}><h2>Loading selected portfolio</h2><p role="status">Loading its holdings and saved analysis.</p></Card>}
     {!portfolioLoading && !portfolio && !portfolioError && <Card className={styles.state}><h2>Portfolio unavailable</h2><p>The selected portfolio could not be displayed.</p></Card>}
@@ -136,6 +140,7 @@ export function DashboardPage() {
           </div>
         )}
       </div>
+      {portfolio.portfolio_type === 'CURRENT' && portfolio.holdings.length > 0 && <MarketDataStatus market={market} symbols={[...portfolio.holdings.map(holding => holding.symbol), ...(valuationCurrency === 'THB' ? ['THB=X'] : [])]} busy={contextLoading} />}
       {Boolean(contextError) && <InlineErrorCard
         error={contextError}
         fallbackMessage={portfolio.portfolio_type === 'PLANNED' ? 'Unable to load the planned target allocation.' : 'Unable to load the current portfolio value.'}

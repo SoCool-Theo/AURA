@@ -20,7 +20,7 @@ from app.data_pipeline.updater import (
     MarketDataUpdateResult,
     update_market_data,
 )
-from app.services.market_data_update_service import update_market_data_and_persist
+from app.services.market_data_refresh_service import run_market_data_refresh as update_market_data_and_persist
 
 
 def _build_parser() -> argparse.ArgumentParser:

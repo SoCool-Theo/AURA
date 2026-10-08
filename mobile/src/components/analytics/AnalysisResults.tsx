@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,11 +42,16 @@ import { WebKpiCard } from '../ui/WebKpiCard';
 
 export function AnalysisResults({
   report,
-  onOpenAsset
+  onOpenAsset,
+  onAssetSectionLayout,
+  onRiskDriversSectionLayout
 }: {
   report: PortfolioReportResponse;
   onOpenAsset?: (symbol: string) => void;
+  onAssetSectionLayout?: (offsetY: number) => void;
+  onRiskDriversSectionLayout?: (offsetY: number) => void;
 }) {
+  const privateValue = usePrivateValue();
   const analysis = report.analysis;
   const reportV2 = isPortfolioReportV2(report) ? report : null;
   const reportV3 = isPortfolioReportV3(report) ? report : null;
@@ -87,7 +93,7 @@ export function AnalysisResults({
           <RiskBadge level={risk.risk_level} />
         </View>
         <Text style={styles.summaryText}>
-          Risk score {risk.risk_score.toFixed(1)}/100 · {diversification.level} diversification
+          <Text style={{ color: colors[riskTone(risk.risk_level)] }}>Risk score {risk.risk_score.toFixed(1)}/100</Text> · {diversification.level} diversification
         </Text>
         {risk.reasons.map((reason, index) => (
           <Text key={`${index}-${reason}`} style={styles.reason}>• {reason}</Text>
@@ -100,10 +106,10 @@ export function AnalysisResults({
             <View style={{ flex: 1 }}>
               <Text style={styles.overline}>SAVED PLANNED ALLOCATION</Text>
               <Text style={styles.snapshotValue}>
-                {formatPortfolioMoney(
+                {privateValue(formatPortfolioMoney(
                   currencyView?.total_proposed_amount ?? reportV3.baseline.total_proposed_amount,
                   plannedCurrency ?? reportV3.baseline.plan_currency
-                )}
+                ))}
               </Text>
             </View>
             {reportV3.currency_views && reportV3.currency_views.length > 1 ? (
@@ -141,10 +147,10 @@ export function AnalysisResults({
             return <View key={holding.id} style={styles.metadataRow}>
               <Text style={styles.metadataLabel}>{holding.symbol}</Text>
               <Text style={styles.metadataValue}>
-                {formatPortfolioMoney(
+                {privateValue(formatPortfolioMoney(
                   displayedHolding?.proposed_amount ?? holding.proposed_amount,
                   plannedCurrency ?? reportV3.baseline.plan_currency
-                )} · {formatRatioPercent(Number(holding.target_allocation))}
+                ))} · {formatRatioPercent(Number(holding.target_allocation))}
               </Text>
             </View>;
           })}
@@ -163,10 +169,10 @@ export function AnalysisResults({
             <View style={{ flex: 1 }}>
               <Text style={styles.overline}>SAVED PORTFOLIO VALUATION</Text>
               <Text style={styles.snapshotValue}>
-                {formatPortfolioMoney(
+                {privateValue(formatPortfolioMoney(
                   reportV2.valuation.total_current_value,
                   reportV2.valuation.valuation_currency
-                )}
+                ))}
               </Text>
             </View>
             <Tag label={reportV2.valuation.valuation_currency} tone="primary" />
@@ -176,7 +182,7 @@ export function AnalysisResults({
           </Text>
           {historicalValue ? (
             <Text style={styles.cardText}>
-              Same shares at historical prices: {formatPortfolioMoney(historicalValue.starting_value, historicalValue.currency)} on {historicalValue.start_date} → {formatPortfolioMoney(historicalValue.ending_value, historicalValue.currency)} on {historicalValue.end_date}
+              Same shares at historical prices: {privateValue(formatPortfolioMoney(historicalValue.starting_value, historicalValue.currency))} on {historicalValue.start_date} → {privateValue(formatPortfolioMoney(historicalValue.ending_value, historicalValue.currency))} on {historicalValue.end_date}
             </Text>
           ) : null}
           {reportV2.valuation.fx ? (
@@ -199,7 +205,7 @@ export function AnalysisResults({
           <WebKpiCard
             icon="wallet-outline"
             label="Estimated Value at End of Period"
-            value={formatPortfolioMoney(monetary.estimated_ending_value, monetary.currency)}
+            value={privateValue(formatPortfolioMoney(monetary.estimated_ending_value, monetary.currency))}
             meta="Historical estimate · Tap to understand"
             tone={metrics.cumulative_return < 0 ? 'danger' : 'success'}
             onPress={() => setSelectedMetric('endingValue')}
@@ -210,6 +216,7 @@ export function AnalysisResults({
           icon="speedometer-outline"
           label="Risk Score"
           value={`${risk.risk_score.toFixed(1)}/100`}
+          valueColor={colors[riskTone(risk.risk_level)]}
           meta={risk.risk_level}
           tone={riskTone(risk.risk_level)}
         />
@@ -299,6 +306,7 @@ export function AnalysisResults({
         </Text>
       </Card>
 
+      <View nativeID="risk-drivers" onLayout={(event) => onRiskDriversSectionLayout?.(event.nativeEvent.layout.y)} style={styles.riskDriversSection}>
       <SectionHeader title="Risk Drivers" />
       <View style={styles.list}>
         {analysis.risk_drivers.entries.map((driver) => (
@@ -332,6 +340,11 @@ export function AnalysisResults({
         ))}
       </View>
 
+      </View>
+      <View
+        nativeID="per-asset-analysis"
+        onLayout={(event) => onAssetSectionLayout?.(event.nativeEvent.layout.y)}
+      >
       <SectionHeader title={reportV2 ? 'Per-Asset Valuation and Risk' : reportV3 ? 'Planned Asset Risk' : 'Individual Asset Metrics'} />
       <View style={styles.list}>
         {reportV2 ? reportV2.holdings.map((holding) => (
@@ -354,16 +367,16 @@ export function AnalysisResults({
             {holding.asset_metrics.risk_classification ? (
               <View style={styles.assetRiskRow}>
                 <RiskBadge level={holding.asset_metrics.risk_classification.risk_level} />
-                <Text style={styles.cardText}>{holding.asset_metrics.risk_classification.risk_score.toFixed(1)}/100</Text>
+                <Text style={[styles.cardText, { color: colors[riskTone(holding.asset_metrics.risk_classification.risk_level)] }]}>{holding.asset_metrics.risk_classification.risk_score.toFixed(1)}/100</Text>
               </View>
             ) : null}
             <Text style={styles.cardText}>
-              {formatPortfolioQuantity(holding.shares)} owned{holding.invested_amount && holding.invested_currency
-                ? ` · invested ${holding.invested_currency} ${formatPortfolioQuantity(holding.invested_amount)}`
+              {privateValue(formatPortfolioQuantity(holding.shares))} owned{holding.invested_amount && holding.invested_currency
+                ? ` · invested ${holding.invested_currency} ${privateValue(formatPortfolioQuantity(holding.invested_amount))}`
                 : ''}{holding.purchase_date ? ` · purchased ${holding.purchase_date}` : ''}
             </Text>
             <View style={styles.dataGrid}>
-              <Metric label="Saved current value" value={formatPortfolioMoney(holding.current_value, reportV2.valuation.valuation_currency)} />
+              <Metric label="Saved current value" value={privateValue(formatPortfolioMoney(holding.current_value, reportV2.valuation.valuation_currency))} />
               <Metric label="USD asset price" value={formatPortfolioMoney(holding.asset_price, 'USD')} />
               <Metric label="Price date" value={holding.price_as_of} />
               <Metric label="Cumulative return" value={formatRatioPercent(holding.asset_metrics.cumulative_return)} />
@@ -394,7 +407,7 @@ export function AnalysisResults({
             {asset.risk_classification ? (
               <View style={styles.assetRiskRow}>
                 <RiskBadge level={asset.risk_classification.risk_level} />
-                <Text style={styles.cardText}>{asset.risk_classification.risk_score.toFixed(1)}/100</Text>
+                <Text style={[styles.cardText, { color: colors[riskTone(asset.risk_classification.risk_level)] }]}>{asset.risk_classification.risk_score.toFixed(1)}/100</Text>
               </View>
             ) : null}
             <View style={styles.dataGrid}>
@@ -407,6 +420,7 @@ export function AnalysisResults({
           </Card>
           </Pressable>
         ))}
+      </View>
       </View>
 
       <SectionHeader title="Asset Relationships" />
@@ -474,6 +488,7 @@ function Metadata({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   results: { gap: spacing.md, marginTop: spacing.xl },
+  riskDriversSection: { gap: spacing.md },
   summaryCard: { gap: spacing.sm, backgroundColor: colors.summaryBackground },
   snapshotCard: { gap: spacing.md, backgroundColor: colors.cyanBackground },
   plannedCard: { gap: spacing.md, backgroundColor: colors.summaryBackground, borderColor: colors.primary },

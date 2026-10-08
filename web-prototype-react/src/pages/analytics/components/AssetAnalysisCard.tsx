@@ -1,7 +1,7 @@
 import { Icon } from '../../../components/ui/Icon';
 import { SymbolBadge } from '../../../components/ui/SymbolBadge';
 import type { AssetMetrics } from '../../../types/analytics';
-import { formatNumber, formatPercent } from '../analyticsUi';
+import { formatNumber, formatPercent, riskColor } from '../analyticsUi';
 import styles from '../AnalyticsIntegration.module.css';
 
 interface AssetAnalysisCardProps {
@@ -23,7 +23,7 @@ export function AssetAnalysisCard({ asset, onOpen }: AssetAnalysisCardProps) {
         <span>{formatPercent(asset.weight, 1)} weight</span>
         <i className={styles.assetChevron}><Icon name="chevron-right" size={18} /></i>
       </div>
-      {asset.risk_classification && <p className={styles.assetRiskLevel}>{formatNumber(asset.risk_classification.risk_score, 1)} · {asset.risk_classification.risk_level} risk</p>}
+      {asset.risk_classification && <p className={styles.assetRiskLevel} style={{ color: riskColor(asset.risk_classification.risk_level) }}>{formatNumber(asset.risk_classification.risk_score, 1)} · {asset.risk_classification.risk_level} risk</p>}
       <dl>
         <div><dt>Cumulative return</dt><dd>{formatPercent(asset.cumulative_return)}</dd></div>
         <div><dt>Annualized return</dt><dd>{formatPercent(asset.annualized_return)}</dd></div>

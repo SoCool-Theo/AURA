@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import React, { useCallback, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -23,7 +24,8 @@ import {
 } from '../../portfolio/portfolioFormatting';
 import {
   formatAnalysisNumber,
-  formatRatioPercent
+  formatRatioPercent,
+  riskTone
 } from '../../report/reportFormatting';
 import {
   assetReportMetricAmountContent,
@@ -47,6 +49,7 @@ export function AssetRiskDetailScreen({
   route: any;
   navigation: any;
 }) {
+  const privateValue = usePrivateValue();
   const portfolioId = route.params.portfolioId as string;
   const reportId = route.params.reportId as string;
   const assetSymbol = (route.params.assetSymbol as string).toUpperCase();
@@ -56,6 +59,14 @@ export function AssetRiskDetailScreen({
   const [error, setError] = useState<unknown>(null);
   const [range, setRange] = useState<ReturnViewRange>('1Y');
   const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
+
+  const backToAssetSection = useCallback(() => {
+    navigation.popTo('ReportDetail', {
+      portfolioId,
+      reportId,
+      focusAssetSection: true
+    });
+  }, [navigation, portfolioId, reportId]);
 
   const loadReport = useCallback(async () => {
     setStatus('loading');
@@ -85,7 +96,8 @@ export function AssetRiskDetailScreen({
           resourceName="Asset analysis"
           fallbackMessage="Unable to load this saved asset analysis."
           onRetry={() => void loadReport()}
-          onBack={() => navigation.goBack()}
+          onBack={backToAssetSection}
+          backTitle="Back to Analysis"
         />
       </SafeAreaView>
     );
@@ -101,7 +113,8 @@ export function AssetRiskDetailScreen({
           error={`${assetSymbol} is not part of this saved report.`}
           resourceName="Asset analysis"
           fallbackMessage="Asset analysis not found."
-          onBack={() => navigation.goBack()}
+          onBack={backToAssetSection}
+          backTitle="Back to Analysis"
         />
       </SafeAreaView>
     );
@@ -141,7 +154,7 @@ export function AssetRiskDetailScreen({
             </View>
             <View style={styles.riskTitle}>
               <Text style={styles.overline}>HISTORICAL ASSET RISK</Text>
-              <Text style={styles.score}>{risk ? `${risk.risk_score.toFixed(1)}/100` : 'N/A'}</Text>
+              <Text style={[styles.score, { color: risk ? colors[riskTone(risk.risk_level)] : colors.muted }]}>{risk ? `${risk.risk_score.toFixed(1)}/100` : 'N/A'}</Text>
             </View>
             {risk ? <RiskBadge level={risk.risk_level} /> : null}
           </View>
@@ -209,12 +222,12 @@ export function AssetRiskDetailScreen({
         <Text style={styles.sectionTitle}>Saved Position</Text>
         <Card style={styles.sectionCard}>
           {currentHolding && reportV2 ? <>
-            <Detail label="Current value" value={formatPortfolioMoney(currentHolding.current_value, reportV2.valuation.valuation_currency)} />
-            <Detail label="Shares" value={formatPortfolioQuantity(currentHolding.shares)} />
+            <Detail label="Current value" value={privateValue(formatPortfolioMoney(currentHolding.current_value, reportV2.valuation.valuation_currency))} />
+            <Detail label="Shares" value={privateValue(formatPortfolioQuantity(currentHolding.shares))} />
             <Detail label="Saved allocation" value={formatCurrentAllocation(currentHolding.current_allocation)} />
             <Detail label="Price date" value={currentHolding.price_as_of} />
           </> : plannedHolding && reportV3 ? <>
-            <Detail label="Proposed amount" value={formatPortfolioMoney(plannedHolding.proposed_amount, reportV3.baseline.plan_currency)} />
+            <Detail label="Proposed amount" value={privateValue(formatPortfolioMoney(plannedHolding.proposed_amount, reportV3.baseline.plan_currency))} />
             <Detail label="Target allocation" value={formatCurrentAllocation(plannedHolding.target_allocation)} />
             <Detail label="Portfolio mode" value="Hypothetical plan" />
           </> : <Detail label="Saved allocation" value={formatRatioPercent(asset.weight)} />}

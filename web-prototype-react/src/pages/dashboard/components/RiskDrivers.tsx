@@ -6,7 +6,7 @@ import { formatPercent } from '../dashboardUi';
 import styles from '../DashboardIntegration.module.css';
 
 export function RiskDrivers({ portfolioId, reportId, drivers, loading, failed }: { portfolioId: string; reportId: string | null; drivers: RiskDriverEntry[] | null; loading: boolean; failed: boolean }) {
-  return <Card className="dashboard-risk-card"><div className="dashboard-card-header"><div className="dashboard-card-title"><h2>Top Risk Drivers</h2></div><button className="text-btn" onClick={() => go(`analytics/${portfolioId}`)}>View analysis <span aria-hidden="true">→</span></button></div>
+  return <Card className="dashboard-risk-card"><div className="dashboard-card-header"><div className="dashboard-card-title"><h2>Top Risk Drivers</h2></div><button type="button" className="text-btn" disabled={loading} onClick={() => go(reportId ? `reports/${portfolioId}/${reportId}/risk-drivers` : `analytics/${portfolioId}`)}>View analysis <span aria-hidden="true">→</span></button></div>
     {loading && <div className={styles.emptyPanel}><p role="status">Loading risk drivers…</p></div>}
     {!loading && !drivers && <div className={styles.emptyPanel}><h3>{failed ? 'Risk drivers unavailable' : 'Not analyzed'}</h3><p>{failed ? 'The latest report could not be retrieved.' : 'Create an analysis to identify portfolio risk drivers.'}</p></div>}
     {!loading && drivers && !drivers.length && <div className={styles.emptyPanel}><h3>No risk drivers</h3><p>The latest report returned no risk-driver entries.</p></div>}

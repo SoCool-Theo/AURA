@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import time
+from datetime import UTC, datetime, time
 from typing import Any
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -19,6 +19,8 @@ def create_market_data_scheduler(
     job_callable: Callable[[], Any],
     *,
     update_time: time | None = None,
+    heartbeat_callable: Callable[[], Any] | None = None,
+    catch_up_callable: Callable[[], Any] | None = None,
 ) -> BlockingScheduler:
     """Return a stopped scheduler containing one daily UTC update job."""
     scheduled_time = update_time or settings.market_data_update_time_utc
@@ -36,4 +38,11 @@ def create_market_data_scheduler(
         max_instances=1,
         misfire_grace_time=None,
     )
+    if heartbeat_callable is not None:
+        scheduler.add_job(heartbeat_callable, "interval", seconds=60,
+            id="market-data-worker-heartbeat", coalesce=True, max_instances=1, misfire_grace_time=None)
+    if catch_up_callable is not None:
+        scheduler.add_job(catch_up_callable, "interval", hours=1,
+            next_run_time=datetime.now(UTC), id="market-data-catch-up",
+            coalesce=True, max_instances=1, misfire_grace_time=None)
     return scheduler

@@ -16,6 +16,17 @@ function simulationsPath(portfolioId: Uuid): string {
   return `/api/portfolios/${encodeURIComponent(portfolioId)}/simulations`;
 }
 
+export function deleteSimulationHistory(
+  portfolioId: Uuid,
+  simulationId: Uuid,
+  options: ApiCallOptions = {},
+): Promise<void> {
+  return apiRequest<void>(
+    `${simulationsPath(portfolioId)}/${encodeURIComponent(simulationId)}`,
+    { ...options, method: 'DELETE' },
+  );
+}
+
 export function listHistoricalScenarios(
   signal?: AbortSignal,
 ): Promise<HistoricalScenarioListResponse> {

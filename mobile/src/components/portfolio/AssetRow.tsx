@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type {
@@ -26,6 +27,7 @@ export function AssetRow({
   plannedPreview?: PortfolioPlannedPreviewHoldingResponse;
   valuationCurrency?: PortfolioCurrency;
 }) {
+  const privateValue = usePrivateValue();
   const isReal = isRealPortfolioHolding(holding);
   const isPlanned = isPlannedPortfolioHolding(holding);
   return (
@@ -38,23 +40,23 @@ export function AssetRow({
         <Text style={styles.meta}>
           {isReal
             ? holding.purchase_date
-              ? `${formatPortfolioQuantity(holding.shares)} owned · Purchased ${holding.purchase_date}`
-              : `${formatPortfolioQuantity(holding.shares)} owned`
+              ? `${privateValue(formatPortfolioQuantity(holding.shares))} owned · Purchased ${holding.purchase_date}`
+              : `${privateValue(formatPortfolioQuantity(holding.shares))} owned`
             : isPlanned
-              ? `Proposed ${formatPortfolioMoney(holding.proposed_amount, valuationCurrency)}`
+              ? `Proposed ${privateValue(formatPortfolioMoney(holding.proposed_amount, valuationCurrency))}`
             : `Position ${holding.position + 1} · Legacy allocation`}
         </Text>
         {isReal && holding.invested_amount && holding.invested_currency ? (
           <Text style={styles.fact}>
-            Invested {formatPortfolioMoney(
+            Invested {privateValue(formatPortfolioMoney(
               holding.invested_amount,
               holding.invested_currency
-            )}
+            ))}
           </Text>
         ) : isPlanned && plannedPreview ? (
           <Text style={styles.fact}>
             {plannedPreview.estimate_status === 'AVAILABLE'
-              ? `Estimated ${formatPortfolioQuantity(plannedPreview.estimated_shares!)} shares · display only`
+              ? `Estimated ${privateValue(formatPortfolioQuantity(plannedPreview.estimated_shares!))} shares · display only`
               : plannedPreview.estimate_status === 'FX_UNAVAILABLE'
                 ? 'Share estimate unavailable: FX data missing'
                 : 'Share estimate unavailable: price data missing'}
@@ -64,7 +66,7 @@ export function AssetRow({
       <View style={styles.valueColumn}>
         <Text style={styles.weight}>
           {valuation
-            ? formatPortfolioMoney(valuation.current_value, valuationCurrency)
+            ? privateValue(formatPortfolioMoney(valuation.current_value, valuationCurrency))
             : plannedPreview
               ? `${decimalWeightToPercent(Number(plannedPreview.target_allocation)).toFixed(2)}%`
               : holding.weight === null

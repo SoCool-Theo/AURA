@@ -20,9 +20,10 @@ export interface Lesson {
 interface LessonLibraryProps {
   lessons: Lesson[];
   onOpen: (lesson: Lesson) => void;
+  learnProgress?: Record<string, boolean>;
 }
 
-export function LessonLibrary({ lessons, onOpen }: LessonLibraryProps) {
+export function LessonLibrary({ lessons, onOpen, learnProgress = {} }: LessonLibraryProps) {
   const [query, setQuery] = useState('');
   const normalizedQuery = query.trim().toLowerCase();
   const filteredLessons = useMemo(() => {
@@ -62,7 +63,7 @@ export function LessonLibrary({ lessons, onOpen }: LessonLibraryProps) {
           <Card key={lesson.id} className={`lesson-card lesson-tone-${index % 4}`}>
             <div className="lesson-card-top">
               <span><Icon name={lesson.icon} size={21} /></span>
-              <b>{String(index + 1).padStart(2, '0')}</b>
+              <b>{learnProgress[lesson.id] ? 'Completed' : String(index + 1).padStart(2, '0')}</b>
             </div>
             <span className="lesson-topic">{lesson.topic}</span>
             <h3>{lesson.title}</h3>
@@ -71,7 +72,7 @@ export function LessonLibrary({ lessons, onOpen }: LessonLibraryProps) {
               <span><Icon name="calendar" size={13} />{lesson.time}</span>
               <span><Icon name="analysis" size={13} />{lesson.level}</span>
             </div>
-            <button onClick={() => onOpen(lesson)}>Open Lesson <span>→</span></button>
+            <button onClick={() => onOpen(lesson)}>{learnProgress[lesson.id] ? 'Review Lesson' : 'Open Lesson'} <span>→</span></button>
           </Card>
           );
         })}

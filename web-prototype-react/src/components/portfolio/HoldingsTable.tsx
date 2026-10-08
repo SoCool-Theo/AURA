@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import {
   isLegacyPortfolioHolding,
   isPlannedPortfolioHolding,
@@ -38,6 +39,7 @@ export function HoldingsTable({
   plannedPreview = null,
   onViewAll,
 }: HoldingsTableProps) {
+  const privateValue = usePrivateValue();
   const current = portfolio.portfolio_type === 'CURRENT';
   const planned = portfolio.portfolio_type === 'PLANNED';
   const totalWeight = portfolio.holdings.reduce(
@@ -90,12 +92,12 @@ export function HoldingsTable({
                   </div>
                 </td>
                 {current && isRealPortfolioHolding(holding) ? <>
-                  <td>{formatPortfolioQuantity(holding.shares)}</td>
-                  <td><strong>{valued ? formatPortfolioMoney(valued.current_value, valuation?.valuation_currency ?? 'USD') : '—'}</strong></td>
+                  <td>{privateValue(formatPortfolioQuantity(holding.shares))}</td>
+                  <td><strong>{valued ? privateValue(formatPortfolioMoney(valued.current_value, valuation?.valuation_currency ?? 'USD')) : '—'}</strong></td>
                   <td><strong>{valued ? formatPortfolioAllocation(valued.current_allocation) : '—'}</strong></td>
                 </> : planned && isPlannedPortfolioHolding(holding) ? <>
-                  <td>{formatPortfolioMoney(holding.proposed_amount, portfolio.plan_currency ?? 'USD')}</td>
-                  <td>{estimatedSharesLabel(preview)}</td>
+                  <td>{privateValue(formatPortfolioMoney(holding.proposed_amount, portfolio.plan_currency ?? 'USD'))}</td>
+                  <td>{privateValue(estimatedSharesLabel(preview))}</td>
                   <td><strong>{preview ? formatPortfolioAllocation(preview.target_allocation) : '—'}</strong></td>
                 </> : (
                   <td><strong>{isLegacyPortfolioHolding(holding) ? formatPortfolioAllocation(holding.weight) : '—'}</strong></td>
@@ -109,10 +111,10 @@ export function HoldingsTable({
               <td>Total</td>
               {current ? <>
                 <td />
-                <td>{valuation ? formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency) : '—'}</td>
+                <td>{valuation ? privateValue(formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency)) : '—'}</td>
                 <td>{valuation ? '100.00%' : '—'}</td>
               </> : planned ? <>
-                <td>{plannedPreview ? formatPortfolioMoney(plannedPreview.total_proposed_amount, plannedPreview.plan_currency) : '—'}</td>
+                <td>{plannedPreview ? privateValue(formatPortfolioMoney(plannedPreview.total_proposed_amount, plannedPreview.plan_currency)) : '—'}</td>
                 <td />
                 <td>{plannedPreview ? '100.00%' : '—'}</td>
               </> : <td>{totalWeight.toFixed(1)}%</td>}

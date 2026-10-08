@@ -1,4 +1,7 @@
+import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
 import { useEffect, useState } from 'react';
+import { MarketDataStatus } from '../../marketData/MarketDataStatus';
+import { useMarketDataRefresh } from '../../marketData/useMarketDataRefresh';
 import {
   deletePortfolio,
   duplicatePortfolio,
@@ -42,6 +45,7 @@ import {
 type DetailTab = 'Overview' | 'Holdings' | 'Record';
 
 export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
+  const privateValue = usePrivateValue();
   const [portfolio, setPortfolio] = useState<PortfolioResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -59,6 +63,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
   const [dialogAction, setDialogAction] = useState<PortfolioAction | null>(null);
   const [dialogName, setDialogName] = useState('');
   const [tab, setTab] = useState<DetailTab>('Overview');
+  const market = useMarketDataRefresh(() => { if (!busy) setContextReloadKey(value => value + 1); }, portfolio?.id === portfolioId && portfolio?.portfolio_type === 'CURRENT' && Boolean(portfolio.holdings.length));
 
   useEffect(() => {
     if (!portfolioId) {
@@ -109,9 +114,9 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
     setContextLoading(true);
     const request = portfolio.portfolio_type === 'PLANNED'
       ? getPlannedPortfolioPreview(portfolio.id, { signal: controller.signal })
-        .then(setPlannedPreview)
+        .then(value => { if (!controller.signal.aborted) setPlannedPreview(value); })
       : getPortfolioValuation(portfolio.id, valuationCurrency, { signal: controller.signal })
-        .then(setValuation);
+        .then(value => { if (!controller.signal.aborted) setValuation(value); });
 
     void request
       .catch(error => {
@@ -185,11 +190,11 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
       : 'Saved Allocation';
   const totalValue = portfolio.portfolio_type === 'PLANNED'
     ? plannedPreview
-      ? formatPortfolioMoney(plannedPreview.total_proposed_amount, plannedPreview.plan_currency)
+      ? privateValue(formatPortfolioMoney(plannedPreview.total_proposed_amount, plannedPreview.plan_currency))
       : contextLoading ? 'Loading…' : 'N/A'
     : portfolio.portfolio_type === 'CURRENT'
       ? valuation
-        ? formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency)
+        ? privateValue(formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency))
         : contextLoading ? 'Loading…' : 'N/A'
       : formatPortfolioAllocation(
         portfolio.holdings.reduce((sum, holding) => sum + (holding.weight ?? 0), 0),
@@ -209,6 +214,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
         </div>
         <div className="detail-header-actions">
           <button className="primary-btn" onClick={() => go(`analytics/${portfolio.id}`)} disabled={busy}>Analyze Portfolio</button>
+          <button type="button" className="secondary-btn" onClick={() => go(`forecasting/portfolio/${portfolio.id}`)} disabled={busy}>View Forecast Outlook</button>
           {latestReport && <button className="secondary-btn" onClick={() => go(`reports/${portfolio.id}/${latestReport.id}`)} disabled={busy}>View Latest Report</button>}
           <button className="secondary-btn" onClick={() => setTab('Holdings')} disabled={busy}>Edit Holdings</button>
           <div className="relative">
@@ -231,6 +237,7 @@ export function PortfolioDetailView({ portfolioId }: { portfolioId?: string }) {
       </nav>
 
       {tab === 'Overview' && <div className="detail-tab-panel">
+        {portfolio.portfolio_type === 'CURRENT' && portfolio.holdings.length > 0 && <MarketDataStatus market={market} symbols={[...portfolio.holdings.map(holding => holding.symbol), ...(valuationCurrency === 'THB' ? ['THB=X'] : [])]} busy={busy || contextLoading} />}
         {portfolio.portfolio_type === 'CURRENT' && portfolio.holdings.length > 0 && (
           <div className={styles.valuationToolbar}>
             <div><strong>Current value currency</strong><span>Choose how current values are displayed.</span></div>

@@ -15,7 +15,7 @@ import { colors, spacing } from '../../theme/theme';
 const categories = ['All', 'Risk Basics', 'Analytics', 'Simulation', 'AI'] as const;
 
 export function LearnScreen({ navigation }: { navigation: any }) {
-  const { learnProgress, localError, retryLocalData } = useAppData();
+  const { learnProgress, localError, loading, retryLocalData } = useAppData();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<(typeof categories)[number]>('All');
 
@@ -40,21 +40,21 @@ export function LearnScreen({ navigation }: { navigation: any }) {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <KeyboardAwareScrollView contentContainerStyle={styles.content}>
-        <PageTitle title="Learn" subtitle="Static educational lessons. Progress is saved on this device only." />
+        <PageTitle title="Learn" subtitle="Progress for this account is saved on this device only." />
         {localError ? <Card><Text style={styles.progressLabel}>{localError}</Text><Button title="Retry local progress" onPress={() => void retryLocalData()} /></Card> : null}
 
         <Card style={styles.progressCard}>
           <View style={styles.progressTop}>
             <View>
               <Text style={styles.overline}>YOUR PROGRESS</Text>
-              <Text style={styles.progressCount}>{completed}/{learnLessons.length}</Text>
+              <Text style={styles.progressCount}>{loading ? 'Loading…' : localError ? 'Unavailable' : `${completed}/${learnLessons.length}`}</Text>
               <Text style={styles.progressLabel}>Lessons completed</Text>
             </View>
             <View style={styles.bulb}>
               <Ionicons name="bulb-outline" color={colors.purpleSoft} size={32} />
             </View>
           </View>
-          <View style={styles.track}>
+          <View style={styles.track} accessibilityRole="progressbar" accessibilityLabel="Lessons completed" accessibilityValue={loading || localError ? { text: loading ? 'Loading progress' : 'Progress unavailable' } : { min: 0, max: learnLessons.length, now: completed }}>
             <View style={[styles.fill, { width: `${progress}%` }]} />
           </View>
         </Card>

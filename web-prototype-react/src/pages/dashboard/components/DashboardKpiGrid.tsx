@@ -1,3 +1,4 @@
+import { usePrivateValue } from '../../../privacy/PortfolioPrivacy';
 import { useState, type ReactNode } from 'react';
 import type {
   PortfolioPlannedAllocationResponse,
@@ -9,6 +10,7 @@ import { Card } from '../../../components/ui/Card';
 import { GaugeChart } from '../../../components/charts/GaugeChart';
 import { Icon } from '../../../components/ui/Icon';
 import { formatPercent } from '../dashboardUi';
+import { riskColor } from '../../analytics/analyticsUi';
 import { MetricAmountDialog } from '../../analytics/components/MetricAmountDialog';
 import {
   reportMetricAmountContent,
@@ -47,6 +49,7 @@ export function DashboardKpiGrid({
   reportLoading: boolean;
   reportFailed: boolean;
 }) {
+  const privateValue = usePrivateValue();
   const analysis = report?.analysis; const risk = analysis?.risk_classification;
   const monetary = reportMonetaryMetrics(report);
   const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
@@ -67,12 +70,12 @@ export function DashboardKpiGrid({
       : 'Current Value';
   const value = portfolio.portfolio_type === 'PLANNED'
     ? plannedAllocation
-      ? formatPortfolioMoney(plannedAllocation.total_proposed_amount, plannedAllocation.plan_currency)
+      ? privateValue(formatPortfolioMoney(plannedAllocation.total_proposed_amount, plannedAllocation.plan_currency))
       : contextLoading ? 'Loading…' : 'N/A'
     : portfolio.portfolio_type === 'LEGACY'
       ? formatPortfolioAllocation(legacyTotal)
       : valuation
-        ? formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency)
+        ? privateValue(formatPortfolioMoney(valuation.total_current_value, valuation.valuation_currency))
         : contextLoading ? 'Loading…' : 'N/A';
   const valueStatus = contextLoading
     ? 'Loading'
@@ -88,7 +91,7 @@ export function DashboardKpiGrid({
   return <>
     <div className="dashboard-kpis">
       <DashboardKpi title={valueTitle} icon="wallet" tone="blue" visual={<span className={styles.kpiPlaceholder}>{portfolio.portfolio_type === 'PLANNED' ? '◎' : '◈'}</span>}><strong>{value}</strong><span className="metric-change purple-text">{valueStatus}</span></DashboardKpi>
-      <DashboardKpi title="Risk Score" icon="speedometer" tone={riskKpiTone} visual={displayedRiskScore !== null ? <GaugeChart score={displayedRiskScore} label="" /> : <span className={styles.kpiPlaceholder}>—</span>}><strong>{risk ? risk.risk_score.toFixed(1) : unavailable}</strong><span className={`metric-change ${riskLabelTone}`}>{risk?.risk_level ?? status}</span></DashboardKpi>
+      <DashboardKpi title="Risk Score" icon="speedometer" tone={riskKpiTone} visual={displayedRiskScore !== null ? <GaugeChart score={displayedRiskScore} label="" color={riskColor(risk?.risk_level)} /> : <span className={styles.kpiPlaceholder}>—</span>}><strong style={{ color: riskColor(risk?.risk_level) }}>{risk ? risk.risk_score.toFixed(1) : unavailable}</strong><span className={`metric-change ${riskLabelTone}`} style={{ color: riskColor(risk?.risk_level) }}>{risk?.risk_level ?? status}</span></DashboardKpi>
       <DashboardKpi title="Annualized Return" icon="trend" tone={returnKpiTone} visual={<span className={styles.kpiPlaceholder}>↗</span>} onClick={monetary ? () => setSelectedMetric('annualized') : undefined}><strong>{analysis ? formatPercent(analysis.portfolio_metrics.annualized_return) : unavailable}</strong><span className="metric-change purple-text">{analysis ? monetary ? 'Click for amount' : 'Latest saved report' : status}</span></DashboardKpi>
       <DashboardKpi title="Maximum Drawdown" icon="drawdown" tone="red" visual={<span className={styles.kpiPlaceholder}>↘</span>} onClick={monetary?.maximum_drawdown_amount != null ? () => setSelectedMetric('drawdown') : undefined}><strong>{analysis ? formatPercent(analysis.max_drawdown.max_drawdown) : unavailable}</strong><span className="metric-change negative">{analysis ? monetary?.maximum_drawdown_amount != null ? 'Click for amount' : `${analysis.max_drawdown.peak_date ?? 'N/A'} to ${analysis.max_drawdown.trough_date ?? 'N/A'}` : status}</span></DashboardKpi>
     </div>

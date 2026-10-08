@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View
@@ -15,14 +15,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Button } from '../../components/ui/Button';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
+import { DeleteAccountSection } from './DeleteAccountSection';
+import { AboutAuraDialog } from './AboutAuraDialog';
 import { Card } from '../../components/ui/Card';
 import { PageTitle } from '../../components/ui/PageTitle';
 import { authApi } from '../../api/authApi';
 import { apiErrorPresentation, apiValidationIssues } from '../../api/apiErrorPresentation';
 import { ApiError } from '../../api/apiClient';
+import { accountDisplayName, accountInitials } from '../../auth/accountIdentity';
 import { useAuth } from '../../auth/useAuth';
 import { useAppData } from '../../hooks/useAppData';
 import { usePreferences } from '../../preferences/usePreferences';
+import { usePortfolioPrivacy } from '../../privacy/PortfolioPrivacy';
 import { colors, spacing } from '../../theme/theme';
 import type {
   AuthenticatedUserResponse,
@@ -46,7 +51,7 @@ function draftFromUser(user: AuthenticatedUserResponse | null): ProfileDraft {
     email: user?.email ?? '',
     phoneNumber: user?.phone_number ?? '',
     language: user?.preferred_language ?? 'en',
-    timezone: user?.timezone ?? 'Asia/Bangkok',
+    timezone: 'Asia/Bangkok',
     currentPassword: ''
   };
 }
@@ -63,17 +68,20 @@ function profileRequestError(error: unknown, fallback: string): string {
   return apiErrorPresentation(error, { fallbackMessage: fallback }).message;
 }
 
-export function SettingsScreen() {
+export function SettingsScreen({ navigation }: { navigation?: { navigate: (screen: 'HelpSupport' | 'NotificationSettings') => void } } = {}) {
+  const privacy = usePortfolioPrivacy();
   const { user, setCurrentUser, signOut } = useAuth();
-  const { resetLocalData } = useAppData();
+  const { resetLocalData, loading: progressLoading, localPending } = useAppData();
   const {
     themeMode,
     setThemeMode,
     storageError,
+    ready: preferencesReady,
     resetPreferences
   } = usePreferences();
 
-  const resolvedName = user?.display_name || 'Aura Investor';
+  const resolvedName = accountDisplayName(user);
+  const initials = accountInitials(user);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => draftFromUser(user));
   const [profileSaving, setProfileSaving] = useState(false);
@@ -84,15 +92,44 @@ export function SettingsScreen() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [accountDeleting, setAccountDeleting] = useState(false);
+  const [showAboutAura, setShowAboutAura] = useState(false);
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const signOutConfirmationRef = useRef(false);
   const pendingRef = useRef(false);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
+  const resetConfirmationRef = useRef(false);
+  const resetUnavailable = pending || accountDeleting || progressLoading || localPending || !privacy.ready || preferencesReady === false;
 
   async function logout() {
-    if (pendingRef.current) return;
+    if (!signOutConfirmationRef.current || pendingRef.current || accountDeleting) return;
     pendingRef.current = true;
     setPending(true);
-    try { await signOut(); }
-    catch { Alert.alert('Sign out incomplete', 'Aura could not remove the saved session. Please retry.'); }
+    setSignOutError(null);
+    try {
+      await signOut();
+      signOutConfirmationRef.current = false;
+      setConfirmingSignOut(false);
+    }
+    catch { setSignOutError('Aura could not remove the saved session. Please retry sign out.'); }
     finally { pendingRef.current = false; setPending(false); }
+  }
+
+  function requestSignOut() {
+    if (pendingRef.current || accountDeleting) return;
+    signOutConfirmationRef.current = true;
+    setSignOutError(null);
+    setConfirmingSignOut(true);
+  }
+
+  function cancelSignOut() {
+    if (pendingRef.current) return;
+    signOutConfirmationRef.current = false;
+    setConfirmingSignOut(false);
+    setSignOutError(null);
   }
 
   useEffect(() => {
@@ -208,46 +245,37 @@ export function SettingsScreen() {
   }
 
   function showHelp() {
-    Alert.alert(
-      'Help & Support',
-      'In-app support messaging is not available yet. Please try again or contact the Aura team.'
-    );
+    navigation?.navigate('HelpSupport');
   }
 
   function showAbout() {
-    Alert.alert(
-      'About Aura',
-      'Aura provides portfolio risk analytics, historical simulations, saved-asset Watchlists, and AI explanations grounded in your saved results. Watchlist prices are latest saved market observations, not live quotes.'
-    );
+    setShowAboutAura(true);
   }
 
   function resetEverything() {
+    if (pendingRef.current || resetUnavailable) return;
+    resetConfirmationRef.current = true;
+    setResetError(null); setResetNotice(null); setConfirmingReset(true);
+  }
+
+  function cancelReset() {
     if (pendingRef.current) return;
-    Alert.alert(
-      'Reset local app data?',
-      'This resets Learn progress and preferences on this device, and removes obsolete demo storage. Your portfolios, reports, simulations, and session are not deleted.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            if (pendingRef.current) return;
-            pendingRef.current = true;
-            setPending(true);
-            try {
-              await resetLocalData();
-              await resetPreferences();
-            } catch {
-              Alert.alert('Local reset incomplete', 'Some device data could not be reset. Please retry.');
-            } finally {
-              pendingRef.current = false;
-              setPending(false);
-            }
-          }
-        }
-      ]
-    );
+    resetConfirmationRef.current = false;
+    setConfirmingReset(false); setResetError(null);
+  }
+
+  async function confirmReset() {
+    if (!resetConfirmationRef.current || pendingRef.current || accountDeleting) return;
+    pendingRef.current = true; setPending(true); setResetError(null);
+    try {
+      await resetLocalData();
+      await resetPreferences();
+      await privacy.resetPrivacy();
+      resetConfirmationRef.current = false; setConfirmingReset(false);
+      setResetNotice('Local data reset. Learn progress is cleared, appearance is Dark, and Hide portfolio values is off for this account.');
+    } catch {
+      setResetError('Local reset incomplete. Some local settings may already have reset. Please try again.');
+    } finally { pendingRef.current = false; setPending(false); }
   }
 
   return (
@@ -263,15 +291,25 @@ export function SettingsScreen() {
         <Card style={styles.profileCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {resolvedName.slice(0, 1).toUpperCase()}
+              {initials}
             </Text>
           </View>
 
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{resolvedName}</Text>
-            <Text style={styles.email}>{user?.email}</Text>
+          <View style={styles.profileIdentity}>
+            <Text
+              ellipsizeMode="middle"
+              numberOfLines={user?.display_name ? 1 : 2}
+              style={styles.name}
+            >
+              {resolvedName}
+            </Text>
+            {user?.display_name ? (
+              <Text ellipsizeMode="middle" numberOfLines={1} style={styles.email}>
+                {user.email}
+              </Text>
+            ) : null}
             <Text style={styles.helper}>
-              {user?.phone_number || 'No phone number'} · {user?.preferred_language === 'th' ? 'Thai' : 'English'} · {user?.timezone === 'Asia/Yangon' ? 'Yangon' : 'Bangkok'}
+              {user?.phone_number || 'No phone number'} · {user?.preferred_language === 'th' ? 'Thai' : 'English'} · Bangkok
             </Text>
           </View>
 
@@ -399,12 +437,16 @@ export function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLabel}>Hide portfolio values</Text>
               <Text style={styles.rowDescription}>
-                Unavailable: Aura does not currently provide monetary portfolio values.
+                Hide personal amounts and share quantities. Remembered for this account on this device only.
               </Text>
             </View>
+            <Switch accessibilityLabel="Hide portfolio values" value={privacy.hideValues}
+              disabled={!privacy.ready || pending || accountDeleting} onValueChange={privacy.setHideValues}
+              trackColor={{ false: colors.border, true: colors.primary }} thumbColor={colors.text} />
           </View>
+          {privacy.storageError ? <Text accessibilityRole="alert" style={{ color: colors.danger, padding: spacing.md }}>{privacy.storageError}</Text> : null}
 
-          <View style={styles.row}>
+          <Pressable style={styles.row} accessibilityRole="button" accessibilityLabel="App notifications" onPress={() => navigation?.navigate('NotificationSettings')}>
             <View style={styles.rowIcon}>
               <Ionicons
                 name="notifications-outline"
@@ -415,10 +457,11 @@ export function SettingsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.rowLabel}>App notifications</Text>
               <Text style={styles.rowDescription}>
-                Unavailable: notification delivery is not integrated.
+                Manage notifications inside Aura.
               </Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" color={colors.muted} size={18} />
+          </Pressable>
         </View>
 
         <Text style={styles.sectionTitle}>Data & support</Text>
@@ -426,10 +469,10 @@ export function SettingsScreen() {
           <Pressable
             accessibilityLabel="Reset local data"
             accessibilityRole="button"
-            accessibilityState={{ disabled: pending }}
+            accessibilityState={{ disabled: resetUnavailable }}
             style={[styles.row, styles.rowBorder]}
             onPress={resetEverything}
-            disabled={pending}
+            disabled={resetUnavailable}
           >
             <View style={styles.rowIcon}>
               <Ionicons
@@ -487,14 +530,31 @@ export function SettingsScreen() {
           </Pressable>
         </View>
 
+        {resetNotice ? <Text accessibilityLiveRegion="polite" style={styles.rowDescription}>{resetNotice}</Text> : null}
+
+        <DeleteAccountSection disabled={pending || profileSaving || passwordSaving} onBusyChange={setAccountDeleting} />
+
         <Button
           title={pending ? 'Please wait…' : 'Sign out'}
           variant="danger"
-          onPress={() => void logout()}
-          disabled={pending}
+          onPress={requestSignOut}
+          disabled={pending || accountDeleting}
           style={{ marginTop: spacing.xl }}
         />
       </ScrollView>
+
+      <AboutAuraDialog visible={showAboutAura} onClose={() => setShowAboutAura(false)} />
+
+      <ConfirmationDialog visible={confirmingSignOut} title="Sign out?"
+        description="You'll need to sign in again to access Aura. Your account, portfolios, reports, and saved simulations will not be deleted."
+        subject={user?.email ?? resolvedName} subjectLabel="SIGNED-IN ACCOUNT" confirmLabel="Sign out"
+        tone="danger" iconName="log-out-outline" busy={pending} errorMessage={signOutError}
+        onCancel={cancelSignOut} onConfirm={() => void logout()} />
+
+      <ConfirmationDialog visible={confirmingReset} title="Reset local data?" tone="danger"
+        description="This clears Learn progress and turns Hide portfolio values off for your current account on this device. Appearance resets to Dark and obsolete demo storage is removed. Your account, portfolios, holdings, reports, simulations, watchlist, and signed-in session stay unchanged. Other accounts’ privacy and Learn progress are not reset."
+        subject={user?.email ?? resolvedName} subjectLabel="THIS DEVICE ONLY" confirmLabel="Reset local data"
+        busy={pending} errorMessage={resetError} onCancel={cancelReset} onConfirm={() => void confirmReset()} />
 
       <Modal
         visible={editingProfile}
@@ -588,21 +648,8 @@ export function SettingsScreen() {
                 </View>
 
                 <Text style={styles.inputLabel}>Timezone</Text>
-                <View accessibilityRole="radiogroup" style={styles.choiceColumn}>
-                  {([
-                    ['Asia/Bangkok', 'UTC+07:00 Bangkok'],
-                    ['Asia/Yangon', 'UTC+06:30 Yangon']
-                  ] as const).map(([value, label]) => (
-                    <Pressable
-                      key={value}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: profileDraft.timezone === value }}
-                      onPress={() => setProfileDraft((current) => ({ ...current, timezone: value }))}
-                      style={[styles.choice, profileDraft.timezone === value && styles.choiceSelected]}
-                    >
-                      <Text style={[styles.choiceText, profileDraft.timezone === value && styles.choiceTextSelected]}>{label}</Text>
-                    </Pressable>
-                  ))}
+                <View accessibilityLabel="Timezone UTC plus 7 Bangkok" style={[styles.choice, styles.choiceSelected]}>
+                  <Text style={[styles.choiceText, styles.choiceTextSelected]}>UTC+07:00 Bangkok</Text>
                 </View>
 
                 {emailChanged ? (
@@ -757,12 +804,19 @@ const styles = StyleSheet.create({
   name: {
     color: colors.text,
     fontSize: 16,
-    fontWeight: '900'
+    fontWeight: '900',
+    lineHeight: 21,
+    flexShrink: 1
+  },
+  profileIdentity: {
+    flex: 1,
+    minWidth: 0
   },
   email: {
     color: colors.textSecondary,
     fontSize: 11,
-    marginTop: 3
+    marginTop: 3,
+    flexShrink: 1
   },
   helper: {
     color: colors.muted,

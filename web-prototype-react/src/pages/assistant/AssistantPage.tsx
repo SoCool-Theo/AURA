@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { usePortfolioPrivacy } from '../../privacy/PortfolioPrivacy';
 import { explainPortfolio } from '../../api/agentApi';
 import { listPortfolios } from '../../api/portfoliosApi';
 import { go } from '../../app/routes';
@@ -66,6 +67,7 @@ export function AssistantPage({
   reportId,
   simulationId,
 }: AssistantPageProps) {
+  const { hideValues } = usePortfolioPrivacy();
   const [portfolios, setPortfolios] = useState<PortfolioSummaryResponse[]>([]);
   const [portfolioId, setPortfolioId] = useState('');
   const [savedContext, setSavedContext] = useState<{ type: 'report' | 'simulation'; id: string } | null>(
@@ -129,7 +131,7 @@ export function AssistantPage({
   }, [messages, sending]);
 
   async function submit() {
-    if (sendingRef.current) return;
+    if (sendingRef.current || hideValues) return;
     const normalizedMessage = message.trim();
     if (!portfolioId) {
       setSubmitError('Choose a portfolio before asking Aura a question.');
@@ -232,6 +234,12 @@ export function AssistantPage({
       : portfolioMode === 'PLANNED'
         ? PLANNED_STARTER_QUESTIONS
         : CURRENT_STARTER_QUESTIONS;
+
+  if (hideValues) return <div className={`page ${styles.page}`}><Card className={styles.stateCard}>
+    <h1>AI chat hidden for privacy</h1>
+    <p>Questions and replies can contain personal amounts. Turn off Hide portfolio values in Settings to view your chat or send a message.</p>
+    <button type="button" className="primary-btn" onClick={() => go('settings')}>Open Settings</button>
+  </Card></div>;
 
   if (!loadingPortfolios && loadError) {
     return <div className={`page ${styles.page}`}><ScreenErrorState

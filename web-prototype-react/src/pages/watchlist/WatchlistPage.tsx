@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { MarketDataStatus } from '../../marketData/MarketDataStatus';
+import { useMarketDataRefresh } from '../../marketData/useMarketDataRefresh';
 import { addWatchlistItem, deleteWatchlistItem, listWatchlist } from '../../api/watchlistApi';
 import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import { Card } from '../../components/ui/Card';
@@ -23,13 +25,17 @@ export function WatchlistPage() {
   const [removingSymbol, setRemovingSymbol] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [symbolToRemove, setSymbolToRemove] = useState<string | null>(null);
+  const read = useRef<AbortController | null>(null);
+  const mutation = useRef(false);
+  const market = useMarketDataRefresh(() => { if (!mutation.current) setReloadKey(value => value + 1); });
 
   useEffect(() => {
     const controller = new AbortController();
+    read.current = controller;
     setLoading(true);
     setLoadError(null);
     void listWatchlist({ signal: controller.signal })
-      .then(response => setItems(response.items))
+      .then(response => { if (!controller.signal.aborted) setItems(response.items); })
       .catch(error => { if (!controller.signal.aborted) setLoadError(error); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -55,7 +61,9 @@ export function WatchlistPage() {
   }, [addQuery, items]);
 
   async function add(symbol: string) {
-    if (addingSymbol) return;
+    if (mutation.current) return;
+    mutation.current = true;
+    read.current?.abort();
     setAddingSymbol(symbol);
     setActionError(null);
     try {
@@ -66,12 +74,16 @@ export function WatchlistPage() {
     } catch (error) {
       setActionError(watchlistErrorMessage(error, 'add'));
     } finally {
+      mutation.current = false;
+      setReloadKey(value => value + 1);
       setAddingSymbol(null);
     }
   }
 
   async function remove(symbol: string) {
-    if (removingSymbol) return;
+    if (mutation.current) return;
+    mutation.current = true;
+    read.current?.abort();
     setRemovingSymbol(symbol);
     setActionError(null);
     try {
@@ -81,6 +93,8 @@ export function WatchlistPage() {
     } catch (error) {
       setActionError(watchlistErrorMessage(error, 'remove'));
     } finally {
+      mutation.current = false;
+      setReloadKey(value => value + 1);
       setRemovingSymbol(null);
     }
   }
@@ -90,6 +104,7 @@ export function WatchlistPage() {
       <div><span>MARKET SNAPSHOTS</span><h1>Watchlist</h1><p>Follow supported assets using Aura’s latest saved market data.</p></div>
       <button type="button" className="primary-btn" disabled={loading || Boolean(addingSymbol)} onClick={() => setAddOpen(value => !value)}><span>＋</span>{addOpen ? 'Close Asset Picker' : 'Add Asset'}</button>
     </header>
+    <MarketDataStatus market={market} symbols={items.map(item => item.symbol)} busy={loading || Boolean(addingSymbol || removingSymbol)} />
 
     {actionError && <div className="watchlist-action-error" role="alert">{actionError}</div>}
 
@@ -107,7 +122,7 @@ export function WatchlistPage() {
       : <>
         {loadError && <InlineErrorCard error={loadError} stale fallbackMessage="Unable to refresh your Watchlist." onRetry={() => setReloadKey(value => value + 1)} />}
         <Card className="watchlist-library-card">
-          <div className="watchlist-library-heading"><div><h2>Tracked assets</h2><p>Latest available prices and backend-calculated changes.</p></div><span className="market-status"><i />Saved market data</span></div>
+          <div className="watchlist-library-heading"><div><h2>Tracked assets</h2><p>Latest available prices and backend-calculated changes.</p></div></div>
           {items.length > 0 && <WatchlistToolbar query={query} onQueryChange={setQuery} viewMode={viewMode} onViewChange={setViewMode} />}
           <WatchlistTable assets={filteredItems} totalAssets={items.length} removingSymbol={removingSymbol} viewMode={viewMode} onRemove={symbol => { setActionError(null); setSymbolToRemove(symbol); }} onAdd={() => setAddOpen(true)} onClearSearch={() => setQuery('')} />
         </Card>

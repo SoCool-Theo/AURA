@@ -43,6 +43,68 @@ REQUEST_HEADERS: dict[str, str] = {}
 CREATED_AT = datetime(2026, 8, 20, 9, 30, tzinfo=UTC)
 
 
+def test_delete_simulation_commits_once_and_returns_empty_204(api_harness) -> None:
+    api_harness.service.delete.return_value = True
+    response = api_harness.client.delete(DETAIL_PATH, headers=REQUEST_HEADERS)
+    assert response.status_code == 204
+    assert response.content == b""
+    api_harness.service.delete.assert_called_once_with(
+        user_id=OWNER_ID, portfolio_id=PORTFOLIO_ID, simulation_id=SIMULATION_ID,
+    )
+    api_harness.session.commit.assert_called_once_with()
+    api_harness.session.rollback.assert_not_called()
+
+
+def test_delete_openapi_requires_auth_and_has_no_response_body() -> None:
+    operation = app.openapi()["paths"]["/api/portfolios/{portfolio_id}/simulations/{simulation_id}"]["delete"]
+    assert operation["security"] == [{"HTTPBearer": []}]
+    assert "content" not in operation["responses"]["204"]
+
+
+@pytest.mark.parametrize("path", [f"{LIST_PATH}/invalid", f"/api/portfolios/invalid/simulations/{SIMULATION_ID}"])
+def test_delete_rejects_invalid_identifiers(api_harness, path) -> None:
+    response = api_harness.client.delete(path, headers=REQUEST_HEADERS)
+    assert response.status_code == 422
+    api_harness.service.delete.assert_not_called()
+    api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("parent_missing", [True, False])
+def test_delete_missing_or_unowned_returns_safe_404(api_harness, parent_missing) -> None:
+    if parent_missing:
+        api_harness.service.delete.return_value = None
+    else:
+        api_harness.service.delete.side_effect = SimulationNotFoundError
+    response = api_harness.client.delete(DETAIL_PATH, headers=REQUEST_HEADERS)
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Portfolio not found" if parent_missing else "Simulation not found"}
+    api_harness.session.commit.assert_not_called()
+    api_harness.session.rollback.assert_called_once_with()
+
+
+@pytest.mark.parametrize("headers", [{}, {"X-User-ID": str(OWNER_ID)}, {"Authorization": "Bearer invalid"}])
+def test_delete_requires_bearer_authentication(api_harness, headers) -> None:
+    response = api_harness.client.delete(DETAIL_PATH, headers=headers)
+    assert response.status_code == 401
+    api_harness.service.delete.assert_not_called()
+    api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("commit_failure", [True, False])
+def test_delete_failure_rolls_back_and_hides_internal_details(api_harness, commit_failure) -> None:
+    api_harness.service.delete.return_value = True
+    if commit_failure:
+        api_harness.session.commit.side_effect = RuntimeError("private database details")
+    else:
+        api_harness.service.delete.side_effect = RuntimeError("private database details")
+    response = api_harness.client.delete(DETAIL_PATH, headers=REQUEST_HEADERS)
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Unable to delete simulation"}
+    api_harness.session.rollback.assert_called_once_with()
+    if not commit_failure:
+        api_harness.session.commit.assert_not_called()
+
+
 @dataclass
 class ApiHarness:
     client: TestClient

@@ -31,6 +31,8 @@ export function ReportDetailScreen({
 }) {
   const portfolioId = route.params.portfolioId as string;
   const reportId = route.params.reportId as string;
+  const focusAssetSection = route.params.focusAssetSection === true;
+  const focusRiskDrivers = route.params.focusRiskDrivers === true;
   const { getReport, deleteReport } = useReports();
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
@@ -40,6 +42,25 @@ export function ReportDetailScreen({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const requestRef = useRef(0);
   const deletingRef = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const analysisOffsetRef = useRef<number | null>(null);
+  const assetSectionOffsetRef = useRef<number | null>(null);
+  const riskDriversOffsetRef = useRef<number | null>(null);
+
+  const scrollToSection = useCallback(() => {
+    if (!focusAssetSection && !focusRiskDrivers) return;
+    const analysisOffset = analysisOffsetRef.current;
+    const sectionOffset = focusRiskDrivers ? riskDriversOffsetRef.current : assetSectionOffsetRef.current;
+    if (analysisOffset === null || sectionOffset === null) return;
+    const requestId = requestRef.current;
+    requestAnimationFrame(() => {
+      if (requestRef.current !== requestId) return;
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, analysisOffset + sectionOffset - spacing.md),
+        animated: true
+      });
+    });
+  }, [focusAssetSection, focusRiskDrivers]);
 
   const loadReport = useCallback(async () => {
     const requestId = requestRef.current + 1;
@@ -61,10 +82,11 @@ export function ReportDetailScreen({
 
   useFocusEffect(useCallback(() => {
     void loadReport();
+    scrollToSection();
     return () => {
       requestRef.current += 1;
     };
-  }, [loadReport]));
+  }, [loadReport, scrollToSection]));
 
   function confirmDelete() {
     if (!report || deletingRef.current) return;
@@ -120,7 +142,7 @@ export function ReportDetailScreen({
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         <PageTitle
           eyebrow={`SAVED ANALYSIS · ${reportType}`}
           title={`${report.analysis.portfolio_name} Analysis`}
@@ -161,14 +183,29 @@ export function ReportDetailScreen({
           />
         ) : null}
 
-        <AnalysisResults
-          report={report}
-          onOpenAsset={(assetSymbol) => navigation.navigate('AssetRiskDetail', {
-            portfolioId,
-            reportId,
-            assetSymbol
-          })}
-        />
+        <View
+          onLayout={(event) => {
+            analysisOffsetRef.current = event.nativeEvent.layout.y;
+            scrollToSection();
+          }}
+        >
+          <AnalysisResults
+            report={report}
+            onAssetSectionLayout={(offsetY) => {
+              assetSectionOffsetRef.current = offsetY;
+              scrollToSection();
+            }}
+            onRiskDriversSectionLayout={(offsetY) => {
+              riskDriversOffsetRef.current = offsetY;
+              scrollToSection();
+            }}
+            onOpenAsset={(assetSymbol) => navigation.navigate('AssetRiskDetail', {
+              portfolioId,
+              reportId,
+              assetSymbol
+            })}
+          />
+        </View>
 
         <Card style={styles.assistantCard}>
           <Text style={styles.assistantTitle}>Need help understanding the results?</Text>

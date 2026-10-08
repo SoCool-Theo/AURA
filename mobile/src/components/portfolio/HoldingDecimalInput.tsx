@@ -1,5 +1,8 @@
 import React, { forwardRef, useEffect, useRef, useState } from 'react';
+import { usePortfolioPrivacy } from '../../privacy/PortfolioPrivacy';
 import type { TextInput, TextInputProps } from 'react-native';
+import { Text } from 'react-native';
+import { colors } from '../../theme/theme';
 
 import { formatHoldingDecimalInput } from '../../portfolio/portfolioFormatting';
 import { Input } from '../ui/Input';
@@ -23,6 +26,7 @@ export const HoldingDecimalInput = forwardRef<TextInput, HoldingDecimalInputProp
   onBlur,
   ...props
 }: HoldingDecimalInputProps, ref) {
+  const { hideValues } = usePortfolioPrivacy();
   const [displayValue, setDisplayValue] = useState(() => formatHoldingDecimalInput(value));
   const edited = useRef(false);
 
@@ -30,14 +34,18 @@ export const HoldingDecimalInput = forwardRef<TextInput, HoldingDecimalInputProp
     if (!edited.current) setDisplayValue(formatHoldingDecimalInput(value));
   }, [value]);
 
-  return (
+  return (<>
     <Input
       ref={ref}
       {...props}
       label={label}
-      value={displayValue}
+      value={hideValues ? '' : displayValue}
+      placeholder={hideValues ? '••••' : props.placeholder}
+      editable={!hideValues && props.editable !== false}
+      accessibilityHint={hideValues ? 'Turn off Hide portfolio values in Settings to edit.' : props.accessibilityHint}
       keyboardType="decimal-pad"
       onChangeText={(nextValue) => {
+        if (hideValues) return;
         if (!TWO_DECIMAL_INPUT.test(nextValue)) return;
         edited.current = true;
         setDisplayValue(nextValue);
@@ -51,5 +59,6 @@ export const HoldingDecimalInput = forwardRef<TextInput, HoldingDecimalInputProp
         onBlur?.(event);
       }}
     />
-  );
+    {hideValues ? <Text style={{ color: colors.muted, fontSize: 11 }}>Hidden. Turn off Hide portfolio values in Settings to edit.</Text> : null}
+  </>);
 });

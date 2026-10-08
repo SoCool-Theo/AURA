@@ -20,6 +20,9 @@ from backend.app.database import Base
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_CONFIG_PATH = BACKEND_ROOT / "alembic.ini"
 EXPECTED_TABLES = {
+    "market_data_refresh_state",
+    "notifications",
+    "notification_preferences",
     "users",
     "portfolios",
     "holdings",
@@ -36,6 +39,8 @@ PLANNED_PORTFOLIO_REVISION = "e5b7c9d2a4f1"
 QUANTITY_ONLY_HOLDING_REVISION = "f2c8e9a1b3d4"
 WATCHLIST_REVISION = "a8d3f1c6b2e7"
 PROFILE_REVISION = "b9e4d2f7c1a6"
+NOTIFICATION_REVISION = "c3d5e7f9a2b4"
+REFRESH_REVISION = "d6e8f0a2b4c6"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -305,6 +310,20 @@ def _captured_upgrade() -> tuple[
                 name=create_call.args[0],
             )
         )
+    notification_revision = _script_directory().get_revision(NOTIFICATION_REVISION).module
+    with (
+        patch.object(notification_revision.op, "create_table") as notification_tables,
+        patch.object(notification_revision.op, "create_index") as notification_indexes,
+    ):
+        notification_revision.upgrade()
+    for create_call in notification_tables.call_args_list:
+        sa.Table(create_call.args[0], metadata, *create_call.args[1:])
+    indexes.extend((call.args[1], call.args[0], tuple(call.args[2]), call.kwargs.get("unique", False)) for call in notification_indexes.call_args_list)
+    refresh_revision = _script_directory().get_revision(REFRESH_REVISION).module
+    with patch.object(refresh_revision.op, "create_table") as refresh_table:
+        refresh_revision.upgrade()
+    for create_call in refresh_table.call_args_list:
+        sa.Table(create_call.args[0], metadata, *create_call.args[1:])
     return metadata, indexes
 
 
@@ -359,11 +378,13 @@ def _model_indexes() -> set[tuple[str, str, tuple[str, ...], bool]]:
     }
 
 
-def test_revisions_form_a_single_profile_head() -> None:
+def test_revisions_form_a_single_refresh_head() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
+        REFRESH_REVISION,
+        NOTIFICATION_REVISION,
         PROFILE_REVISION,
         WATCHLIST_REVISION,
         QUANTITY_ONLY_HOLDING_REVISION,
@@ -373,23 +394,11 @@ def test_revisions_form_a_single_profile_head() -> None:
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert script.get_current_head() == PROFILE_REVISION
-    assert revisions[0].down_revision == WATCHLIST_REVISION
-    assert revisions[0].module.down_revision == WATCHLIST_REVISION
-    assert revisions[1].down_revision == QUANTITY_ONLY_HOLDING_REVISION
-    assert revisions[1].module.down_revision == QUANTITY_ONLY_HOLDING_REVISION
-    assert revisions[2].down_revision == PLANNED_PORTFOLIO_REVISION
-    assert revisions[2].module.down_revision == PLANNED_PORTFOLIO_REVISION
-    assert revisions[3].down_revision == REAL_HOLDING_REVISION
-    assert revisions[3].module.down_revision == REAL_HOLDING_REVISION
-    assert revisions[4].down_revision == SIMULATION_REVISION
-    assert revisions[4].module.down_revision == SIMULATION_REVISION
-    assert revisions[5].down_revision == AUTHENTICATION_REVISION
-    assert revisions[5].module.down_revision == AUTHENTICATION_REVISION
-    assert revisions[6].down_revision == INITIAL_REVISION
-    assert revisions[6].module.down_revision == INITIAL_REVISION
-    assert revisions[7].down_revision is None
-    assert revisions[7].module.down_revision is None
+    assert script.get_current_head() == REFRESH_REVISION
+    for index, revision in enumerate(revisions):
+        expected_parent = revisions[index + 1].revision if index + 1 < len(revisions) else None
+        assert revision.down_revision == expected_parent
+        assert revision.module.down_revision == expected_parent
     assert all(callable(revision.module.upgrade) for revision in revisions)
     assert all(callable(revision.module.downgrade) for revision in revisions)
 
@@ -478,6 +487,7 @@ def test_uuid_identifiers_have_no_database_generated_defaults() -> None:
         "analyses",
         "simulations",
         "watchlist_items",
+        "notifications",
     ):
         id_column = migration_metadata.tables[table_name].c.id
         assert isinstance(id_column.type, sa.Uuid)

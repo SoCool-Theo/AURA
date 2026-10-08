@@ -10,6 +10,7 @@ import { CreatePortfolioScreen } from '../screens/portfolios/CreatePortfolioScre
 import { AddAssetScreen } from '../screens/portfolios/AddAssetScreen';
 import { EditHoldingsScreen } from '../screens/portfolios/EditHoldingsScreen';
 import { PortfolioAnalysisScreen } from '../screens/analytics/PortfolioAnalysisScreen';
+import { ForecastingScreen } from '../screens/forecasting/ForecastingScreen';
 
 import { SimulationsScreen } from '../screens/simulations/SimulationsScreen';
 import { HistoricalScenarioScreen } from '../screens/simulations/HistoricalScenarioScreen';
@@ -21,6 +22,8 @@ import { SimulationHistoryScreen } from '../screens/simulations/SimulationHistor
 import { AssistantScreen } from '../screens/assistant/AssistantScreen';
 import { MoreScreen } from '../screens/settings/MoreScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
+import { HelpSupportScreen } from '../screens/settings/HelpSupportScreen';
+import { NotificationsScreen } from '../screens/notifications/NotificationsScreen';
 import { ReportsScreen } from '../screens/reports/ReportsScreen';
 import { ReportDetailScreen } from '../screens/reports/ReportDetailScreen';
 import { AssetRiskDetailScreen } from '../screens/reports/AssetRiskDetailScreen';
@@ -39,6 +42,7 @@ import { darkPalette, lightPalette } from '../theme/colors';
 import { HomeHeaderButton } from '../components/ui/HomeHeaderButton';
 import { BackHeaderButton } from '../components/ui/BackHeaderButton';
 import { usePreferences } from '../preferences/usePreferences';
+import { tabRootAction } from './tabRootNavigation';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const PortfolioStack = createNativeStackNavigator<PortfolioStackParamList>();
@@ -101,6 +105,10 @@ function PortfolioNavigator() {
         })}
       />
       <PortfolioStack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ title: 'Report Detail' }} />
+      <PortfolioStack.Screen name="Forecasting" component={ForecastingScreen} options={({ navigation }) => ({
+        title: 'Forecasting', headerBackVisible: false,
+        headerLeft: () => <BackHeaderButton label="Back from Forecasting" color={palette.text} onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Portfolios')} />
+      })} />
       <PortfolioStack.Screen name="AssetRiskDetail" component={AssetRiskDetailScreen} options={{ title: 'Asset Risk' }} />
     </PortfolioStack.Navigator>
   );
@@ -160,7 +168,21 @@ function MoreNavigator() {
           )
         })}
       />
-      <MoreStack.Screen name="Reports" component={ReportsScreen} options={{ title: 'Reports' }} />
+      <MoreStack.Screen
+        name="Reports"
+        component={ReportsScreen}
+        options={({ navigation }) => ({
+          title: 'Reports',
+          headerBackVisible: false,
+          headerLeft: () => (
+            <BackHeaderButton
+              label="Back to More"
+              color={palette.text}
+              onPress={() => navigation.popTo('More')}
+            />
+          )
+        })}
+      />
       <MoreStack.Screen
         name="ReportDetail"
         component={ReportDetailScreen}
@@ -178,9 +200,26 @@ function MoreNavigator() {
       />
       <MoreStack.Screen name="AssetRiskDetail" component={AssetRiskDetailScreen} options={{ title: 'Asset Risk' }} />
       <MoreStack.Screen name="Watchlist" component={WatchlistScreen} options={{ title: 'Watchlist' }} />
+      <MoreStack.Screen name="Forecasting" component={ForecastingScreen} options={({ navigation, route }) => ({
+        title: 'Forecasting', headerBackVisible: false,
+        headerLeft: () => <BackHeaderButton label={route.params?.returnToHome ? 'Back to Dashboard' : 'Back from Forecasting'} color={palette.text} onPress={() => route.params?.returnToHome ? navigation.getParent()?.navigate('Home') : navigation.canGoBack() ? navigation.goBack() : navigation.navigate('More')} />
+      })} />
       <MoreStack.Screen name="Learn" component={LearnScreen} options={{ title: 'Learn' }} />
       <MoreStack.Screen name="LearnDetail" component={LearnDetailScreen} options={{ title: 'Lesson' }} />
       <MoreStack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+      <MoreStack.Screen name="HelpSupport" component={HelpSupportScreen} options={({ navigation }) => ({
+        title: 'Help & Support',
+        headerBackVisible: false,
+        headerLeft: () => <BackHeaderButton label="Back to Settings" color={palette.text} onPress={() => navigation.popTo('Settings')} />
+      })} />
+      <MoreStack.Screen name="Notifications" component={NotificationsScreen} options={({ navigation }) => ({
+        title: 'Notifications', headerBackVisible: false,
+        headerLeft: () => <BackHeaderButton label="Back to More" color={palette.text} onPress={() => navigation.popTo('More')} />
+      })} />
+      <MoreStack.Screen name="NotificationSettings" component={NotificationsScreen} options={({ navigation }) => ({
+        title: 'App notifications', headerBackVisible: false,
+        headerLeft: () => <BackHeaderButton label="Back to Settings" color={palette.text} onPress={() => navigation.popTo('Settings')} />
+      })} />
     </MoreStack.Navigator>
   );
 }
@@ -190,6 +229,14 @@ export function MainTabNavigator() {
 
   return (
     <Tab.Navigator
+      screenListeners={({ navigation, route }) => ({
+        tabPress: (event) => {
+          const action = tabRootAction(route.name);
+          if (!action) return;
+          event.preventDefault();
+          navigation.dispatch(action);
+        }
+      })}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {

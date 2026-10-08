@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { usePrivateValue } from '../../../privacy/PortfolioPrivacy';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { Icon } from '../../../components/ui/Icon';
 import { go, replace } from '../../../app/routes';
@@ -46,6 +47,7 @@ function MetricLabel({ icon, label, tone }: { icon: string; label: string; tone:
 }
 
 export function AnalysisResults({ report }: { report: PortfolioReportResponse }) {
+  const privateValue = usePrivateValue();
   const analysis = report.analysis;
   const reportV2 = isPortfolioReportV2(report) ? report : null;
   const reportV3 = isPortfolioReportV3(report) ? report : null;
@@ -55,6 +57,11 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
   );
   const [selectedMetric, setSelectedMetric] = useState<ReportMonetaryMetricKey | null>(null);
   const [returnViewRange, setReturnViewRange] = useState<ReturnViewRange>('1Y');
+  const [returnDateOrder, setReturnDateOrder] = useState<'ascending' | 'descending'>('descending');
+  const returnTableRef = useRef<HTMLDivElement>(null);
+  const sortedReturns = useMemo(() => [...analysis.portfolio_returns].sort((left, right) =>
+    returnDateOrder === 'ascending' ? left.date.localeCompare(right.date) : right.date.localeCompare(left.date),
+  ), [analysis.portfolio_returns, returnDateOrder]);
   const metrics = analysis.portfolio_metrics;
   const drawdown = analysis.max_drawdown;
   const diversification = analysis.diversification;
@@ -75,6 +82,11 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
     if (reportV3) setSelectedPlanCurrency(reportV3.baseline.plan_currency);
   }, [reportV3?.id, reportV3?.baseline.plan_currency]);
 
+  useEffect(() => { setReturnDateOrder('descending'); }, [report.id]);
+  useEffect(() => {
+    if (returnTableRef.current) returnTableRef.current.scrollTop = 0;
+  }, [returnDateOrder, report.id]);
+
   function openAssetDetail(symbol: string) {
     replace(`reports/${report.portfolio_id}/${report.id}/assets`);
     go(`asset/${report.portfolio_id}/${report.id}/${encodeURIComponent(symbol)}`);
@@ -89,10 +101,10 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
           <div className={styles.sectionHeading}>
             <div>
               <small className={styles.contextEyebrow}>SAVED PLANNED ALLOCATION</small>
-              <h2>{formatPortfolioMoney(
+              <h2>{privateValue(formatPortfolioMoney(
                 currencyView?.total_proposed_amount ?? reportV3.baseline.total_proposed_amount,
                 plannedCurrency ?? reportV3.baseline.plan_currency,
-              )}</h2>
+              ))}</h2>
               <p>{reportV3.baseline.hypothetical_notice}</p>
             </div>
             {reportV3.currency_views && reportV3.currency_views.length > 1 ? (
@@ -118,10 +130,10 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
               );
               return <div key={holding.id}>
                 <strong>{holding.symbol}</strong>
-                <span>{formatPortfolioMoney(
+                <span>{privateValue(formatPortfolioMoney(
                   displayedHolding?.proposed_amount ?? holding.proposed_amount,
                   plannedCurrency ?? reportV3.baseline.plan_currency,
-                )}</span>
+                ))}</span>
                 <b>{formatPortfolioAllocation(holding.target_allocation)}</b>
               </div>;
             })}
@@ -136,7 +148,7 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
           <div className={styles.sectionHeading}>
             <div>
               <small className={styles.contextEyebrow}>SAVED CURRENT VALUATION</small>
-              <h2>{formatPortfolioMoney(reportV2.valuation.total_current_value, reportV2.valuation.valuation_currency)}</h2>
+              <h2>{privateValue(formatPortfolioMoney(reportV2.valuation.total_current_value, reportV2.valuation.valuation_currency))}</h2>
               <p>Captured {reportV2.valuation.requested_date} using prices dated {reportV2.valuation.oldest_price_as_of} through {reportV2.valuation.newest_price_as_of}. This snapshot is not revalued.</p>
             </div>
             <span className={styles.badge}>{reportV2.valuation.valuation_currency}</span>
@@ -145,12 +157,12 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
             {reportV2.holdings.map(holding => (
               <div key={holding.id}>
                 <strong>{holding.symbol}</strong>
-                <span>{formatPortfolioQuantity(holding.shares)} shares</span>
-                <b>{formatPortfolioMoney(holding.current_value, reportV2.valuation.valuation_currency)} · {formatPortfolioAllocation(holding.current_allocation)}</b>
+                <span>{privateValue(formatPortfolioQuantity(holding.shares))} shares</span>
+                <b>{privateValue(formatPortfolioMoney(holding.current_value, reportV2.valuation.valuation_currency))} · {formatPortfolioAllocation(holding.current_allocation)}</b>
               </div>
             ))}
           </div>
-          {historicalValue && <p className={styles.contextNote}>Same shares at historical prices: {formatPortfolioMoney(historicalValue.starting_value, historicalValue.currency)} on {historicalValue.start_date} → {formatPortfolioMoney(historicalValue.ending_value, historicalValue.currency)} on {historicalValue.end_date}</p>}
+          {historicalValue && <p className={styles.contextNote}>Same shares at historical prices: {privateValue(formatPortfolioMoney(historicalValue.starting_value, historicalValue.currency))} on {historicalValue.start_date} → {privateValue(formatPortfolioMoney(historicalValue.ending_value, historicalValue.currency))} on {historicalValue.end_date}</p>}
           {reportV2.valuation.fx && <p className={styles.contextNote}>USD/THB {formatPortfolioQuantity(reportV2.valuation.fx.rate)} as of {reportV2.valuation.fx.as_of}</p>}
         </Card>
       ) : (
@@ -158,7 +170,7 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
       )}
 
       <div className={styles.metricGrid}>
-        {reportV3 && monetary?.estimated_ending_value != null && <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('endingValue')}><MetricLabel icon="wallet" label="Estimated Value at End of Period" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><i className={styles.metricChevron}><Icon name="chevron-right" size={18} /></i><strong>{formatPortfolioMoney(monetary.estimated_ending_value, monetary.currency)}</strong><span>Historical estimate · Click to understand</span></button>}
+        {reportV3 && monetary?.estimated_ending_value != null && <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('endingValue')}><MetricLabel icon="wallet" label="Estimated Value at End of Period" tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><i className={styles.metricChevron}><Icon name="chevron-right" size={18} /></i><strong>{privateValue(formatPortfolioMoney(monetary.estimated_ending_value, monetary.currency))}</strong><span>Historical estimate · Click to understand</span></button>}
         {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('cumulative')}><MetricLabel icon="trend" label={portfolioReturnLabel} tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><i className={styles.metricChevron}><Icon name="chevron-right" size={18} /></i><strong>{formatPercent(metrics.cumulative_return)}</strong><span>{historicalValue ? 'Same shares at historical prices · Click for values' : 'Saved period · Click for amount'}</span></button> : <Card className={styles.metric}><MetricLabel icon="trend" label={portfolioReturnLabel} tone={metrics.cumulative_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.cumulative_return)}</strong><span>{historicalValue ? 'Same shares valued across the saved period' : 'Compounded return for the saved period'}</span></Card>}
         {monetary ? <button type="button" className={`card ${styles.metric} ${styles.metricButton}`} onClick={() => setSelectedMetric('annualized')}><MetricLabel icon="analytics" label="Annualized Return" tone={metrics.annualized_return < 0 ? 'danger' : 'success'} /><i className={styles.metricChevron}><Icon name="chevron-right" size={18} /></i><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical equivalent · Click for amount</span></button> : <Card className={styles.metric}><MetricLabel icon="analytics" label="Annualized Return" tone={metrics.annualized_return < 0 ? 'danger' : 'success'} /><strong>{formatPercent(metrics.annualized_return)}</strong><span>Historical annualized portfolio return</span></Card>}
         <Card className={styles.metric}><MetricLabel icon="pulse" label="Annualized Volatility" tone="warning" /><strong>{formatPercent(metrics.annualized_volatility)}</strong><span>Annualized variation over the saved period</span></Card>
@@ -169,7 +181,7 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
         <Card className={styles.metric}><MetricLabel icon="assets" label="Effective Assets" tone="blue" /><strong>{formatNumber(concentration.effective_number_of_assets)}</strong><span>HHI {formatNumber(concentration.hhi, 4)}</span></Card>
       </div>
 
-      <RiskDriverTable riskDrivers={analysis.risk_drivers} />
+      <div id="risk-drivers" style={{ scrollMarginTop: 18 }}><RiskDriverTable riskDrivers={analysis.risk_drivers} /></div>
 
       <section id="per-asset-analysis" className={`card ${styles.section}`} style={{ scrollMarginTop: 18 }}>
         <div className={styles.sectionHeading}>
@@ -204,10 +216,14 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
           <PortfolioReturnChart points={visibleReturns} />
           <p className={styles.returnRangeSummary}>Showing {visibleReturns.length} of {analysis.portfolio_returns.length} saved observations · through {analysis.portfolio_returns[analysis.portfolio_returns.length - 1].date}</p>
         </div>}
-        <div className={`${styles.tableWrap} ${styles.returnSeriesScroll}`} tabIndex={0} aria-label="Scrollable portfolio return observations">
+        <div ref={returnTableRef} className={`${styles.tableWrap} ${styles.returnSeriesScroll}`} tabIndex={0} aria-label="Scrollable portfolio return observations">
           <table className={styles.dataTable}>
-            <thead><tr><th>Date</th><th>Portfolio return</th></tr></thead>
-            <tbody>{analysis.portfolio_returns.map(point => (
+            <thead><tr><th scope="col" aria-sort={returnDateOrder}><button type="button" className={styles.dateSortButton}
+              onClick={() => setReturnDateOrder(order => order === 'descending' ? 'ascending' : 'descending')}
+              aria-label={`Date, ${returnDateOrder === 'descending' ? 'newest' : 'oldest'} first. Sort ${returnDateOrder === 'descending' ? 'oldest' : 'newest'} first`}>
+              Date <span aria-hidden="true">{returnDateOrder === 'descending' ? '↓' : '↑'}</span><span className={styles.dateSortOrder}>{returnDateOrder === 'descending' ? 'Newest first' : 'Oldest first'}</span>
+            </button></th><th scope="col">Portfolio return</th></tr></thead>
+            <tbody>{sortedReturns.map(point => (
               <tr key={point.date}><td>{point.date}</td><td className={point.portfolio_return < 0 ? styles.signedNegative : ''}>{formatPercent(point.portfolio_return, 4)}</td></tr>
             ))}</tbody>
           </table>

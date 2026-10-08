@@ -10,6 +10,7 @@ import {
 } from '../../types/simulation';
 import styles from './SimulationIntegration.module.css';
 import { SimulationResults } from './components/SimulationResults';
+import { DeleteSimulationButton } from './components/DeleteSimulationButton';
 import { formatTimestamp, historyDetailToRunResult } from './simulationUi';
 
 export function SimulationHistoryDetailPage({ portfolioId, simulationId }: { portfolioId: string; simulationId: string }) {
@@ -24,5 +25,5 @@ export function SimulationHistoryDetailPage({ portfolioId, simulationId }: { por
     : detailV2
       ? 'Current Holdings'
       : 'Legacy Allocation';
-  return <div className="page simulations-page"><button className="secondary-btn" onClick={() => go(`simulations/${portfolioId}`)}>← Simulation History</button><header className={styles.detailHeader}><div><h1>Saved Simulation</h1><p>{portfolioLabel} · Created {formatTimestamp(detail.created_at)} · Simulation {detail.id}</p></div><span className={styles.badge}>Immutable Snapshot</span></header><SimulationResults result={historyDetailToRunResult(detail)} immutable baseline={detailV3?.baseline ?? detailV2?.baseline} /><section className={`card ${styles.assistantCard}`}><div><small>NEED HELP UNDERSTANDING THE RESULT?</small><h2>Ask Aura about this saved simulation</h2><p>Aura will explain the exact immutable simulation baseline shown above.</p></div><button className="primary-btn" onClick={() => go(`assistant/${portfolioId}/simulation/${simulationId}`)}><Icon name="assistant" size={17} /> Ask Aura</button></section></div>;
+  return <div className="page simulations-page"><button className="secondary-btn" onClick={() => go(`simulations/${portfolioId}`)}>← Simulation History</button><header className={styles.detailHeader}><div><h1>Saved Simulation</h1><p>{portfolioLabel} · Created {formatTimestamp(detail.created_at)} · Simulation {detail.id}</p></div><div className={styles.historyActions}><span className={styles.badge}>Immutable Snapshot</span><DeleteSimulationButton key={`${portfolioId}/${simulationId}`} portfolioId={portfolioId} simulationId={simulationId} subject={`${portfolioLabel} · ${formatTimestamp(detail.created_at)} · ${detail.id}`} onDeleted={() => go(`simulations/${portfolioId}`)} /></div></header><SimulationResults result={historyDetailToRunResult(detail)} immutable baseline={detailV3?.baseline ?? detailV2?.baseline} /><section className={`card ${styles.assistantCard}`}><div><small>NEED HELP UNDERSTANDING THE RESULT?</small><h2>Ask Aura about this saved simulation</h2><p>Aura will explain the exact immutable simulation baseline shown above.</p></div><button className="primary-btn" onClick={() => go(`assistant/${portfolioId}/simulation/${simulationId}`)}><Icon name="assistant" size={17} /> Ask Aura</button></section></div>;
 }

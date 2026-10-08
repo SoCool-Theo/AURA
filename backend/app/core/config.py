@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: PositiveInt = 30
     market_data_update_time_utc: time = time(hour=2)
+    market_data_refresh_max_attempts: Annotated[int, Field(ge=1, le=5)] = 3
+    market_data_refresh_retry_seconds: Annotated[int, Field(ge=1, le=60)] = 10
+    market_data_worker_database_url: PostgresDsn | None = None
     forecasting_artifact_version: Annotated[
         str, Field(pattern=r"^forecast-v[0-9]+-[0-9]{8}$")
     ] = "forecast-v1-20260917"
@@ -46,7 +49,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
     )
 
-    @field_validator("database_url")
+    @field_validator("database_url", "market_data_worker_database_url")
     @classmethod
     def validate_database_driver(
         cls,
@@ -134,6 +137,7 @@ class Settings(BaseSettings):
         env_file=_ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
 

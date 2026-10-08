@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '../../../components/ui/Icon';
+import { useLearnProgress } from '../../../learn/LearnProgress';
 import type { Lesson } from './LessonLibrary';
 
 type LessonDialogProps = {
@@ -9,6 +10,8 @@ type LessonDialogProps = {
 };
 
 export function LessonDialog({ lesson, onClose }: LessonDialogProps) {
+  const { learnProgress, localError, toggleLessonComplete, retryLocalData } = useLearnProgress();
+  const completed = Boolean(learnProgress[lesson.id]);
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -101,6 +104,14 @@ export function LessonDialog({ lesson, onClose }: LessonDialogProps) {
               </a>
             </div>
           )}
+          <div className="learn-completion-controls">
+            <p>{completed ? 'Lesson completed. You can revisit it or undo completion.' : 'Finished reading? Mark this lesson completed to update your progress.'}</p>
+            {localError && <div role="alert">{localError} <button className="secondary-btn" onClick={retryLocalData}>Retry local progress</button></div>}
+            <button type="button" className={completed ? 'secondary-btn' : 'primary-btn'} disabled={Boolean(localError)} onClick={() => toggleLessonComplete(lesson.id)}>
+              {completed ? 'Mark as not completed' : 'Mark lesson completed'}
+            </button>
+            <small>Progress is saved for this account in this browser only.</small>
+          </div>
         </div>
       </section>
     </div>,

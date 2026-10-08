@@ -3,9 +3,10 @@
 from datetime import UTC, date, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.dependencies import CurrentUser, DatabaseSession
+from app.services.notification_service import NotificationService
 from app.scenarios.definitions import HISTORICAL_SCENARIOS
 from app.schemas.simulation import (
     AllocationSimulationRequest,
@@ -91,6 +92,13 @@ def _history_detail_internal_error() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Unable to retrieve simulation",
+    )
+
+
+def _history_delete_internal_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Unable to delete simulation",
     )
 
 
@@ -203,6 +211,37 @@ def get_simulation_history(
     return simulation
 
 
+@router.delete(
+    "/portfolios/{portfolio_id}/simulations/{simulation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+def delete_simulation_history(
+    portfolio_id: UUID,
+    simulation_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> Response:
+    """Permanently remove one owner-scoped saved simulation."""
+    try:
+        deleted = SimulationHistoryService(session).delete(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+            simulation_id=simulation_id,
+        )
+    except SimulationNotFoundError as error:
+        raise _simulation_not_found() from error
+    except Exception as error:
+        raise _history_delete_internal_error() from error
+    if deleted is None:
+        raise _portfolio_not_found()
+    try:
+        session.commit()
+    except Exception as error:
+        raise _history_delete_internal_error() from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post(
     "/portfolios/{portfolio_id}/simulations/historical-scenarios",
     response_model=HistoricalScenarioSimulationResponse,
@@ -264,6 +303,7 @@ def run_historical_scenario(
         )
         if history is None:
             raise _portfolio_not_found()
+        NotificationService(session).record_saved(user_id=current_user.id, portfolio_id=portfolio_id, kind="simulation", resource_id=history.id)
         session.commit()
     except HTTPException:
         raise
@@ -334,6 +374,7 @@ def run_allocation_simulation(
         )
         if history is None:
             raise _portfolio_not_found()
+        NotificationService(session).record_saved(user_id=current_user.id, portfolio_id=portfolio_id, kind="simulation", resource_id=history.id)
         session.commit()
     except HTTPException:
         raise
@@ -406,6 +447,7 @@ def run_combined_simulation(
         )
         if history is None:
             raise _portfolio_not_found()
+        NotificationService(session).record_saved(user_id=current_user.id, portfolio_id=portfolio_id, kind="simulation", resource_id=history.id)
         session.commit()
     except HTTPException:
         raise
