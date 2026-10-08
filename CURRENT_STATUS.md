@@ -3391,3 +3391,31 @@ remain separate follow-on work.
 - Updated the web integration report and focused regression coverage. No backend,
   mobile, migration, dependency, model/artifact or saved-data changes. No staging,
   commit or push; unrelated untracked docs/report content remains untouched.
+
+### Portfolio Outlook monetary mobile integration — 2026-10-09
+
+- Added backend-owned overall and per-holding amounts to native 7/14/21/30-day
+  portfolio Outlook cards and horizon comparisons. CURRENT shows persisted USD
+  market values and valuation/holding price dates, not purchase cost. PLANNED
+  shows entered USD/THB amounts as hypothetical with unchanged-FX disclosure.
+  Each holding uses its own returned baseline and model change/ending estimate.
+  LEGACY remains percentage-only and standalone Asset Outlook stays independent.
+- Added Expected change currency charts without inventing daily paths, intervals
+  or monetary volatility loss. Guides require adjacent available horizons and
+  matching date/currency/baseline context. Compact native labels fit narrow
+  charts; cards and spoken descriptions retain full amounts. String-only display
+  rounding preserves Decimal cents without dependencies or a BigInt requirement.
+- Existing local privacy masks summary, holding and comparison amounts and
+  immediately replaces a selected monetary chart with percentages, including
+  during initial preference loading. Monetary keys/values do not survive in
+  hidden chart points/accessibility output. Malformed amount contexts fail safely
+  without additional API/valuation requests or stale-value fallback.
+- Verification: baseline 93 mobile tests passed; final mobile suite 101 passed
+  (32 forecasting, 69 existing authority), TypeScript passed, and 72 shared
+  market-data/notification/web-forecasting checks passed. Android production
+  Hermes export passed with 1,173 modules after an approved retry for sandbox
+  temporary-bytecode permissions; output remains ignored. Whitespace checks
+  passed. Physical-phone visual/large-text/theme acceptance remains pending.
+- Updated focused tests and the mobile integration report. No backend/web code,
+  models/artifacts, migration, provider update, training or saved-data changes.
+  No staging, commit or push; unrelated untracked docs/report content is preserved.

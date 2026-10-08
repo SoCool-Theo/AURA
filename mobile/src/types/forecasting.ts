@@ -1,4 +1,17 @@
 export type ForecastPredictionInterval = { lower: number; upper: number; coverage: 0.80 };
+export type PortfolioMonetaryProjection = {
+  currency: 'USD' | 'THB';
+  baseline_source: 'current_market_value' | 'planned_investment';
+  baseline_amount: string;
+  expected_change_amount: string;
+  estimated_ending_value: string;
+  hypothetical: boolean;
+  assumes_unchanged_fx: boolean;
+  valuation_requested_date: string | null;
+  oldest_price_as_of: string | null;
+  newest_price_as_of: string | null;
+  limitations: string[];
+};
 export type AssetOutlookResponse = {
   symbol: string;
   forecast_origin_date: string;
@@ -18,6 +31,7 @@ export type PortfolioOutlookComponent = AssetOutlookResponse & {
   current_weight: number;
   forecast_volatility_contribution: number;
   forecast_volatility_contribution_share: number;
+  monetary_projection: PortfolioMonetaryProjection | null;
 };
 export type PortfolioOutlookResponse = {
   portfolio_id: string;
@@ -31,6 +45,7 @@ export type PortfolioOutlookResponse = {
   market_data_as_of: string;
   artifact_version: string;
   components: PortfolioOutlookComponent[];
+  monetary_projection: PortfolioMonetaryProjection | null;
   limitations: string[];
 };
 export type WeeklyHorizon = 7 | 14 | 21;
@@ -51,7 +66,7 @@ export type WeeklyAssetOutlookResponse = Omit<AssetOutlookResponse,
   volatility_warning_codes: string[];
 };
 export type WeeklyPortfolioOutlookComponent = WeeklyAssetOutlookResponse & Pick<PortfolioOutlookComponent,
-  'current_weight' | 'forecast_volatility_contribution' | 'forecast_volatility_contribution_share'>;
+  'current_weight' | 'forecast_volatility_contribution' | 'forecast_volatility_contribution_share' | 'monetary_projection'>;
 export type WeeklyPortfolioOutlookResponse = Omit<PortfolioOutlookResponse,
   'horizon_days' | 'expected_return_30d' | 'forecast_realized_volatility_30d' | 'artifact_version' | 'components'> & WeeklyQuality & {
   components: WeeklyPortfolioOutlookComponent[];

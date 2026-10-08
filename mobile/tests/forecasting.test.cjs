@@ -17,7 +17,9 @@ function load(file, mocks = {}, globals = {}) {
     require(name) { assert.ok(name in mocks, 'Unmocked ' + name); return mocks[name]; }, ...globals });
   return module.exports;
 }
-const ui = load('src/forecasting/forecastingUi.ts', { '../api/apiClient': { ApiError } });
+const money = load('src/forecasting/forecastingMoney.ts');
+const ui = load('src/forecasting/forecastingUi.ts', { '../api/apiClient': { ApiError }, './forecastingMoney': money });
+const privacy = { usePortfolioPrivacy: () => ({ hideValues: false }), usePrivateValue: () => value => value };
 const css = new Proxy({}, { get: (_, key) => key === '__esModule' ? false : String(key) });
 function harness() {
   const slots = []; let cursor = 0, effects = [], render, value, dirty;
@@ -50,15 +52,31 @@ const asset = {
   artifact_version: 'forecast-v1-20260917', return_model_id: 'historical_average', volatility_model_id: 'volatility_linear_regression_v1',
   limitations: ['Forecasts are probabilistic estimates, not guarantees of future performance.'],
 };
+function moneyProjection(amount = '10000', change = '250', ending = '10250', price = null) {
+  return { currency: 'USD', baseline_source: 'current_market_value', baseline_amount: amount,
+    expected_change_amount: change, estimated_ending_value: ending, hypothetical: false, assumes_unchanged_fx: false,
+    valuation_requested_date: '2026-10-07', oldest_price_as_of: price ?? '2026-10-05', newest_price_as_of: price ?? '2026-10-06',
+    limitations: ['Monetary estimates are not guaranteed balances.', 'No calibrated portfolio monetary prediction interval is provided.'] };
+}
 const portfolio = {
   portfolio_id: 'p', portfolio_name: 'Example', baseline_kind: 'current', horizon_days: 30, expected_return_30d: 0.025,
   forecast_realized_volatility_30d: 0.06, market_data_as_of: '2026-10-05', correlation_as_of_date: '2026-10-05',
   correlation_observation_count: 120, artifact_version: asset.artifact_version,
+  monetary_projection: moneyProjection(),
   components: [
-    { ...asset, current_weight: 0.4, forecast_volatility_contribution: -0.012, forecast_volatility_contribution_share: -0.2 },
-    { ...asset, symbol: 'MSFT', forecast_origin_date: '2026-10-05', current_weight: 0.6, forecast_volatility_contribution: 0.072, forecast_volatility_contribution_share: 1.2 },
+    { ...asset, current_weight: 0.4, forecast_volatility_contribution: -0.012, forecast_volatility_contribution_share: -0.2,
+      monetary_projection: moneyProjection('4000', '-120', '3880', '2026-10-06') },
+    { ...asset, symbol: 'MSFT', expected_return_30d: .06166666666666667, forecast_origin_date: '2026-10-05', current_weight: 0.6, forecast_volatility_contribution: 0.072, forecast_volatility_contribution_share: 1.2,
+      monetary_projection: moneyProjection('6000', '370', '6370', '2026-10-05') },
   ], limitations: ['No calibrated portfolio prediction interval is provided.'],
 };
+function portfolioMode(source, kind, currency = 'USD') {
+  const convert = value => kind === 'legacy' ? null : kind === 'current' ? value : { ...value,
+    currency, baseline_source: 'planned_investment', hypothetical: true, assumes_unchanged_fx: currency === 'THB',
+    valuation_requested_date: null, oldest_price_as_of: null, newest_price_as_of: null };
+  return { ...source, baseline_kind: kind, monetary_projection: convert(source.monetary_projection),
+    components: source.components.map(item => ({ ...item, monetary_projection: convert(item.monetary_projection) })) };
+}
 function weekly(value, days) {
   const { expected_return_30d, forecast_realized_volatility_30d, components, ...rest } = value;
   const result = {
@@ -115,7 +133,7 @@ test('V1 displays backend values without generating weekly estimates or portfoli
 test('response validation rejects malformed/mismatched contracts, while preserving signed contributions', () => {
   assert.equal(ui.validOutlookResponse(asset, 'asset', 'AAPL'), true);
   for (const result of [null, {}, { ...asset, symbol: 'MSFT' }, { ...asset, horizon_days: 7 }, { ...asset, expected_return_30d: NaN }, { ...asset, volatility_prediction_interval: { lower: -1, upper: 0, coverage: .8 } }]) assert.ok(!ui.validOutlookResponse(result, 'asset', 'AAPL'));
-  for (const kind of ['current', 'planned', 'legacy']) assert.equal(ui.validOutlookResponse({ ...portfolio, baseline_kind: kind }, 'portfolio', 'p'), true);
+  for (const kind of ['current', 'planned', 'legacy']) assert.equal(ui.validOutlookResponse(portfolioMode(portfolio, kind), 'portfolio', 'p'), true);
   assert.ok(!ui.validOutlookResponse({ ...portfolio, components: undefined }, 'portfolio', 'p'));
   assert.ok(!ui.validOutlookResponse({ ...portfolio, components: [] }, 'portfolio', 'p'));
 });
@@ -133,7 +151,7 @@ test('forecast loader uses selected endpoints, refreshes without saving and supp
   assert.equal(c.calls[0][2].signal.aborted, true); assert.equal(c.h.value.result.symbol, 'MSFT');
   late.resolve(asset); await c.h.settle(); assert.equal(c.h.value.result.symbol, 'MSFT');
   c.h.value.refresh(); await c.h.settle(); assert.equal(c.calls.length, 3);
-  c.setOperation(async (_, id) => ({ ...portfolio, portfolio_id: id, baseline_kind: 'planned' }));
+  c.setOperation(async (_, id) => ({ ...portfolioMode(portfolio, 'planned'), portfolio_id: id }));
   c.select('portfolio', 'p'); await c.h.settle(); assert.equal(c.h.value.result.baseline_kind, 'planned');
   assert.equal(c.calls.at(-1)[0], 'portfolio'); c.h.unmount(); assert.equal(c.timers.size, 0);
 });
@@ -196,9 +214,10 @@ test('native results retain planned baseline, negative shares, ranges, metadata 
     react: h.react, 'react-native': native, '../ui/Card': { Card: 'Card' }, '../ui/Button': { Button: 'Button' },
     './OutlookChart': { OutlookChart: 'Chart' }, '../../forecasting/forecastingUi': ui,
     './ForecastHorizonComparison': { ForecastQualityNotice: 'Quality' },
+    '../../privacy/PortfolioPrivacy': privacy,
     '../../forecasting/forecastingStyles': { forecastingStyles: styles },
   });
-  let result = { ...portfolio, baseline_kind: 'planned' };
+  let result = portfolioMode(portfolio, 'planned');
   h.mount(() => ForecastingResults({ result, onAsset: value => destinations.push(value) }));
   assert.match(text(h.value), /hypothetical/); assert.match(text(h.value), /-20.00%/);
   assert.doesNotMatch(text(h.value), /Low risk|High risk|80% prediction range/);
@@ -300,7 +319,7 @@ test('weekly contracts retain experimental quality, actual values, and same-hori
       { ...a, market_data_age_days: 5 }, { ...a, forecast_origin_date: '2026-10-01' }, { ...a, horizon_days: 30 },
     ]) assert.equal(ui.validOutlookResponse(result, 'asset', 'AAPL', days), false);
     for (const baseline_kind of ['current', 'planned', 'legacy']) {
-      const p = { ...weekly(portfolio, days), baseline_kind };
+      const p = portfolioMode(weekly(portfolio, days), baseline_kind);
       assert.equal(ui.validOutlookResponse(p, 'portfolio', 'p', days), true);
       assert.equal(ui.forecastPoints(p, 'return')[0].interval, undefined);
       assert.equal(ui.validOutlookResponse({ ...p, components: [weekly(portfolio.components[0], days === 7 ? 14 : 7)] }, 'portfolio', 'p', days), false);
@@ -377,6 +396,7 @@ test('mobile comparison cards retain unavailable dates/status and model-quality 
   const h = harness();
   const { ForecastHorizonComparison, ForecastQualityNotice } = load('src/components/forecasting/ForecastHorizonComparison.tsx', {
     react: h.react, 'react-native': native, '../ui/Card': { Card: 'Card' },
+    '../../privacy/PortfolioPrivacy': privacy,
     './OutlookChart': { OutlookChart: 'Chart' }, '../../forecasting/forecastingUi': ui,
     '../../forecasting/forecastingStyles': { forecastingStyles: styles },
   });
@@ -417,9 +437,11 @@ test('native weekly cards and breakdowns use neutral backend values and selected
   const { ForecastingResults } = load('src/components/forecasting/ForecastingResults.tsx', {
     react: h.react, 'react-native': native, '../ui/Card': { Card: 'Card' }, '../ui/Button': { Button: 'Button' },
     './OutlookChart': { OutlookChart: 'Chart' }, './ForecastHorizonComparison': { ForecastQualityNotice: 'Quality' },
+    '../../privacy/PortfolioPrivacy': privacy,
     '../../forecasting/forecastingUi': ui, '../../forecasting/forecastingStyles': { forecastingStyles: styles },
   });
-  const result = { ...weekly(portfolio, 21), baseline_kind: 'planned', expected_return: -.04 };
+  const result = { ...portfolioMode(weekly(portfolio, 21), 'planned'), expected_return: -.04,
+    monetary_projection: { ...portfolioMode(portfolio, 'planned').monetary_projection, expected_change_amount: '-400', estimated_ending_value: '9600' } };
   h.mount(() => ForecastingResults({ result, onAsset() {} }));
   assert.match(text(h.value), /Expected\s+21\s*-Day Return/); assert.match(text(h.value), /-4.00%/);
   assert.match(text(h.value), /hypothetical/); assert.doesNotMatch(text(h.value), /30-Day|80% prediction range/);
@@ -473,4 +495,181 @@ test('themed forecast headers return to the source stack or Dashboard with safe 
   canBack = false;
   more.props.options({ navigation, route: {} }).headerLeft().props.onPress(); assert.equal(destinations.pop(), 'More');
   port.props.options({ navigation }).headerLeft().props.onPress(); assert.equal(destinations.pop(), 'Portfolios');
+});
+
+test('native money formatting preserves Decimal cents, rounding carries, scientific values and negative zero', () => {
+  const cases = [
+    ['1234567890123456.125', '$1,234,567,890,123,456.13'], ['-1.005', '-$1.01'],
+    ['999.999', '$1,000.00'], ['2.345E+1', '$23.45'], ['0.005', '$0.01'], ['0.00005', '$0.00'],
+    ['0E-12', '$0.00'], ['-0.0049', '$0.00'], ['-0', '$0.00'], ['00012.300', '$12.30'],
+  ];
+  for (const [value, expected] of cases) assert.equal(ui.forecastMoney(value, 'USD'), expected);
+  assert.equal(ui.forecastMoney('250.125', 'THB', true), '+฿250.13');
+  assert.equal(ui.forecastMoney('-250.125', 'THB', true), '-฿250.13');
+  for (const invalid of ['NaN', 'Infinity', '1e999999', ' ', '1,000', 100, {}]) assert.equal(ui.forecastMoney(invalid, 'USD'), 'N/A');
+  assert.equal(ui.negativeMoney('-0'), false); assert.equal(ui.negativeMoney('-1E-3'), true);
+  assert.match(ui.compactForecastMoney(125000.125, 'USD', true), /^\+\$125K$/);
+  assert.doesNotMatch(fs.readFileSync(path.join(root, 'src/forecasting/forecastingMoney.ts'), 'utf8'), /BigInt\(|\d+n\b/);
+});
+
+test('all native horizons require complete, consistent overall and holding monetary context', () => {
+  for (const horizon of [7, 14, 21, 30]) {
+    const source = horizon === 30 ? portfolio : weekly(portfolio, horizon);
+    for (const kind of ['current', 'planned', 'legacy']) {
+      for (const currency of kind === 'planned' ? ['USD', 'THB'] : ['USD']) {
+        assert.equal(ui.validOutlookResponse(portfolioMode(source, kind, currency), 'portfolio', 'p', horizon), true);
+      }
+    }
+    for (const patch of [null, undefined, { ...source.monetary_projection, baseline_amount: '0' },
+      { ...source.monetary_projection, expected_change_amount: 250 },
+      { ...source.monetary_projection, currency: 'THB', assumes_unchanged_fx: true },
+      { ...source.monetary_projection, valuation_requested_date: '2026-02-30' },
+      { ...source.monetary_projection, newest_price_as_of: '2026-10-08' },
+      { ...source.monetary_projection, limitations: [42] },
+    ]) assert.equal(ui.validOutlookResponse({ ...source, monetary_projection: patch }, 'portfolio', 'p', horizon), false);
+    for (const patch of [null, { ...source.components[0].monetary_projection, currency: 'THB' },
+      { ...source.components[0].monetary_projection, oldest_price_as_of: '2026-10-01' },
+      { ...source.components[0].monetary_projection, valuation_requested_date: '2026-10-09' },
+    ]) assert.equal(ui.validOutlookResponse({ ...source, components: [{ ...source.components[0], monetary_projection: patch }, source.components[1]] }, 'portfolio', 'p', horizon), false);
+    assert.equal(ui.validOutlookResponse({ ...portfolioMode(source, 'legacy'), monetary_projection: source.monetary_projection }, 'portfolio', 'p', horizon), false);
+    const planned = portfolioMode(source, 'planned', 'THB');
+    assert.equal(ui.validOutlookResponse({ ...planned, monetary_projection: { ...planned.monetary_projection, assumes_unchanged_fx: false } }, 'portfolio', 'p', horizon), false);
+  }
+});
+
+function moneyResultsHarness(initialResult, initialHidden = false) {
+  const h = harness(); let result = initialResult, hidden = initialHidden;
+  const destinations = [];
+  const { ForecastingResults } = load('src/components/forecasting/ForecastingResults.tsx', {
+    react: h.react, 'react-native': native, '../ui/Card': { Card: 'Card' }, '../ui/Button': { Button: 'Button' },
+    './OutlookChart': { OutlookChart: 'Chart' }, './ForecastHorizonComparison': { ForecastQualityNotice: 'Quality' },
+    '../../forecasting/forecastingUi': ui, '../../forecasting/forecastingStyles': { forecastingStyles: styles },
+    '../../privacy/PortfolioPrivacy': { usePortfolioPrivacy: () => ({ hideValues: hidden }), usePrivateValue: () => value => hidden ? '••••' : value },
+  });
+  h.mount(() => ForecastingResults({ result, onAsset: symbol => destinations.push(symbol) }));
+  return { h, destinations, change(next) { result = next; h.render(); }, hide(value) { hidden = value; h.render(); } };
+}
+
+test('native summary and holding cards copy own backend amounts at every horizon and retain standalone drill-down', () => {
+  for (const horizon of [7, 14, 21, 30]) {
+    const source = horizon === 30 ? portfolio : weekly(portfolio, horizon);
+    const c = moneyResultsHarness(source);
+    assert.match(text(c.h.value), /Portfolio amount outlook/);
+    assert.match(text(c.h.value), /\$10,000.00/); assert.match(text(c.h.value), /\+\$250.00/);
+    assert.match(text(c.h.value), /\$10,250.00/); assert.match(text(c.h.value), /not purchase cost/);
+    source.components.forEach(item => {
+      const card = nodes(c.h.value).find(node => node.type === 'Card' && node.props.key === item.symbol);
+      const rows = nodes(card).filter(node => typeof node.type === 'function' && node.type.name === 'DataRow');
+      assert.equal(rows.find(row => row.props.label === 'Current value (USD)').props.value, ui.forecastMoney(item.monetary_projection.baseline_amount, 'USD'));
+      const change = rows.find(row => row.props.label === `${horizon}-day expected change (USD)`);
+      assert.equal(change.props.value, ui.forecastMoney(item.monetary_projection.expected_change_amount, 'USD', true));
+      assert.equal(change.props.negative, ui.negativeMoney(item.monetary_projection.expected_change_amount));
+      assert.equal(rows.find(row => row.props.label === 'Estimated value (USD)').props.value, ui.forecastMoney(item.monetary_projection.estimated_ending_value, 'USD'));
+      assert.equal(rows.find(row => row.props.label === 'Holding price as of').props.value, item.monetary_projection.oldest_price_as_of);
+      assert.ok(text(change.type(change.props)).includes(change.props.value));
+    });
+    nodes(c.h.value).find(node => node.props.accessibilityLabel === 'Expected change (USD) chart').props.onPress(); c.h.render();
+    const chart = nodes(c.h.value).find(node => node.type === 'Chart');
+    assert.equal(chart.props.metric, 'change'); assert.equal(chart.props.points[0].estimate, 250); assert.equal(chart.props.points[0].interval, undefined);
+    nodes(c.h.value).find(node => node.props.accessibilityLabel === 'View AAPL asset outlook').props.onPress();
+    assert.deepEqual(c.destinations, ['AAPL']);
+    nodes(c.h.value).find(node => node.props.accessibilityLabel === 'Model details and limitations').props.onPress(); c.h.render();
+    assert.match(text(c.h.value), /Monetary assumptions/); assert.match(text(c.h.value), /not guaranteed balances/);
+    c.h.unmount();
+  }
+});
+
+test('native planned THB amounts are hypothetical, while legacy and standalone results never expose money controls', () => {
+  const c = moneyResultsHarness(portfolioMode(weekly(portfolio, 14), 'planned', 'THB'));
+  assert.match(text(c.h.value), /฿10,000.00/); assert.match(text(c.h.value), /unchanged exchange rates/);
+  assert.match(text(c.h.value), /not assets you currently own/);
+  assert.ok(nodes(c.h.value).some(node => node.props.label === 'Planned amount (THB)' && node.props.value === '฿4,000.00'));
+  assert.ok(!nodes(c.h.value).some(node => node.props.label === 'Holding price as of'));
+  assert.doesNotMatch(text(c.h.value), /Valuation requested/);
+  nodes(c.h.value).find(node => node.props.accessibilityLabel === 'Expected change (THB) chart').props.onPress(); c.h.render();
+  c.change(asset);
+  assert.equal(nodes(c.h.value).find(node => node.type === 'Chart').props.metric, 'return');
+  assert.doesNotMatch(text(c.h.value), /Portfolio amount outlook|Expected change \(|\$|฿/);
+  assert.match(text(c.h.value), /80% prediction range/);
+  c.change(portfolioMode(portfolio, 'legacy'));
+  assert.match(text(c.h.value), /percentage-only/);
+  assert.ok(!nodes(c.h.value).some(node => /Current value|Planned amount|Estimated value/.test(node.props.label ?? '')));
+  assert.doesNotMatch(text(c.h.value), /\$|฿|Expected change \(/); c.h.unmount();
+});
+
+test('native privacy masks summary and holding values and immediately removes selected money chart data', () => {
+  const c = moneyResultsHarness(portfolio);
+  nodes(c.h.value).find(node => node.props.accessibilityLabel === 'Expected change (USD) chart').props.onPress(); c.h.render();
+  c.hide(true);
+  assert.match(text(c.h.value), /••••/); assert.doesNotMatch(text(c.h.value), /\$|฿|Expected change \(/);
+  for (const row of nodes(c.h.value).filter(node => /Current value|expected change|Estimated value/.test(node.props.label ?? ''))) assert.equal(row.props.value, '••••');
+  const chart = nodes(c.h.value).find(node => node.type === 'Chart');
+  assert.equal(chart.props.metric, 'return');
+  for (const point of chart.props.points) for (const key of ['amount', 'currency', 'baselineKey']) assert.equal(point[key], undefined);
+  c.hide(false); assert.match(text(c.h.value), /\$10,000.00/);
+  assert.equal(nodes(c.h.value).find(node => node.type === 'Chart').props.metric, 'change');
+  c.h.unmount();
+  const initiallyHidden = moneyResultsHarness(portfolio, true);
+  assert.doesNotMatch(text(initiallyHidden.h.value), /\$|฿/);
+  assert.ok(nodes(initiallyHidden.h.value).some(node => node.props.value === '••••')); initiallyHidden.h.unmount();
+});
+
+test('native monetary chart preserves full spoken amounts, compact labels, single-string ticks and baseline gaps', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const { OutlookChart } = load('src/components/forecasting/OutlookChart.tsx', {
+    react, 'react-native': native, 'react-native-svg': { __esModule: true, default: 'Svg', Circle: 'Circle', G: 'G', Line: 'Line', Polyline: 'Polyline', Text: 'SvgText' },
+    '../../theme/theme': { colors: { primary: 'teal', warning: 'amber' } }, '../../forecasting/forecastingUi': ui,
+    '../../forecasting/forecastingStyles': { forecastingStyles: styles },
+  });
+  const points = ui.comparisonPoints([weekly(portfolio, 7), weekly(portfolio, 14), weekly(portfolio, 21), portfolio], 'change');
+  const tree = OutlookChart({ points, metric: 'change' });
+  assert.equal(nodes(tree).filter(node => node.type === 'Polyline').length, 3);
+  assert.equal(nodes(tree).filter(node => node.type === 'Line' && node.props.strokeWidth === 2).length, 0);
+  assert.match(nodes(tree).find(node => node.props.accessibilityRole === 'image').props.accessibilityLabel, /Expected change \(USD\).*7 days: \+\$250.00/);
+  assert.deepEqual(nodes(tree).filter(node => node.type === 'SvgText' && node.props.y === 191).map(node => node.children), [['7 days'], ['14 days'], ['21 days'], ['30 days']]);
+  for (const key of ['baselineKey', 'currency', 'dataDate']) {
+    const changed = points.map(point => ({ ...point })); changed[1][key] = 'different';
+    assert.equal(nodes(OutlookChart({ points: changed, metric: 'change' })).filter(node => node.type === 'Polyline').length, 1);
+  }
+  const changedBaseline = { ...weekly(portfolio, 14), components: portfolio.components.map(item => ({ ...weekly(item, 14), monetary_projection: { ...item.monetary_projection, baseline_amount: '5000' } })) };
+  assert.equal(nodes(OutlookChart({ points: ui.comparisonPoints([weekly(portfolio, 7), changedBaseline], 'change'), metric: 'change' })).filter(node => node.type === 'Polyline').length, 0);
+  const large = OutlookChart({ points: [{ ...points[0], estimate: 125000.125, amount: '125000.125' }], metric: 'change' });
+  assert.match(text(large), /\+\$125K/);
+  assert.match(nodes(large).find(node => node.props.accessibilityRole === 'image').props.accessibilityLabel, /\+\$125,000.13/);
+  for (const amount of ['1E+340', '1E+308', '-1E+308']) assert.equal(ui.forecastPoints({ ...portfolio, monetary_projection: { ...portfolio.monetary_projection, expected_change_amount: amount } }, 'change').length, 0);
+  assert.equal(ui.forecastPoints(asset, 'change').length, 0);
+  assert.equal(ui.forecastPoints(portfolioMode(portfolio, 'legacy'), 'change').length, 0);
+});
+
+test('native comparison amounts retain individual baselines, failures and privacy-safe charts', () => {
+  const h = harness(); let hidden = false, results = [weekly(portfolio, 7), portfolio];
+  const { ForecastHorizonComparison } = load('src/components/forecasting/ForecastHorizonComparison.tsx', {
+    react: h.react, 'react-native': native, '../ui/Card': { Card: 'Card' }, './OutlookChart': { OutlookChart: 'Chart' },
+    '../../forecasting/forecastingUi': ui, '../../forecasting/forecastingStyles': { forecastingStyles: styles },
+    '../../privacy/PortfolioPrivacy': { usePortfolioPrivacy: () => ({ hideValues: hidden }), usePrivateValue: () => value => hidden ? '••••' : value },
+  });
+  h.mount(() => ForecastHorizonComparison({ results, loading: false, unavailable: [14, 21] }));
+  assert.match(text(h.value), /Baseline amount:\s+\$10,000.00 USD/); assert.match(text(h.value), /Estimated value:\s+\$10,250.00/);
+  assert.match(text(h.value), /14\s+days ·\s+Unavailable/);
+  nodes(h.value).find(node => node.props.accessibilityLabel === 'Comparison Expected change (USD) chart').props.onPress(); h.render();
+  assert.equal(nodes(h.value).find(node => node.type === 'Chart').props.metric, 'change');
+  hidden = true; h.render();
+  assert.doesNotMatch(text(h.value), /\$|฿|Expected change \(/); assert.match(text(h.value), /••••/);
+  const chart = nodes(h.value).find(node => node.type === 'Chart'); assert.equal(chart.props.metric, 'return');
+  assert.ok(chart.props.points.every(point => point.amount === undefined && point.baselineKey === undefined));
+  hidden = false; results = [portfolioMode(weekly(portfolio, 7), 'planned', 'THB'), portfolioMode(portfolio, 'planned')]; h.render();
+  assert.match(text(h.value), /฿10,000.00 THB/); assert.match(text(h.value), /\$10,000.00 USD/);
+  assert.equal(nodes(h.value).find(node => node.type === 'Chart').props.metric, 'return');
+  assert.ok(!nodes(h.value).some(node => /Comparison Expected change/.test(node.props.accessibilityLabel ?? ''))); h.unmount();
+});
+
+test('native loader rejects missing monetary context without stale values, fallback or additional valuation requests', async () => {
+  const c = mountHook(); await c.h.settle();
+  c.setOperation(async () => ({ ...portfolio, monetary_projection: null }));
+  c.select('portfolio', 'p'); await c.h.settle(); assert.equal(c.h.value.result, null); assert.ok(c.h.value.error);
+  c.setOperation(async () => portfolio); c.h.value.refresh(); await c.h.settle();
+  assert.equal(c.h.value.result.monetary_projection.baseline_amount, '10000');
+  c.setOperation(async () => ({ ...portfolio, components: [{ ...portfolio.components[0], monetary_projection: null }] }));
+  c.h.value.refresh(); await c.h.settle(); assert.equal(c.h.value.result, null); assert.ok(c.h.value.error);
+  assert.ok(c.calls.every(call => ['asset', 'portfolio'].includes(call[0]) && call[2].body === undefined)); c.h.unmount();
 });

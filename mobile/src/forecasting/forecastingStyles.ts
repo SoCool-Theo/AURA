@@ -28,6 +28,8 @@ export const forecastingStyles = StyleSheet.create({
   assetName: { flex: 1, color: colors.textSecondary, fontSize: 11 },
   metric: { gap: spacing.sm },
   number: { color: colors.primary, fontSize: 30, fontWeight: '900' },
+  moneyMetric: { padding: 12, gap: 7, borderWidth: 1, borderColor: colors.borderSoft, borderRadius: 10, backgroundColor: colors.surfaceAlt },
+  moneyNumber: { color: colors.primary, fontSize: 22, fontWeight: '900', flexShrink: 1 },
   negative: { color: colors.danger },
   dataRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.borderSoft },
   dataLabel: { flex: 1, color: colors.muted, fontSize: 10, lineHeight: 16 },

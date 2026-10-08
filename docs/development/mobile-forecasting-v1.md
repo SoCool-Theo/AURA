@@ -1,6 +1,7 @@
 # Mobile forecasting V1 integration report
 
-Date: 2026-10-07; weekly mobile integration checkpoint: 2026-10-08
+Date: 2026-10-07; weekly mobile integration checkpoint: 2026-10-08;
+portfolio monetary integration checkpoint: 2026-10-09
 
 ## Original 30-day delivered scope
 
@@ -175,3 +176,75 @@ web production code, navigation architecture and dependencies are unchanged.
 No training, migrations, staging, commit or push was performed.
 
 Suggested weekly checkpoint commit: `feat(mobile): integrate experimental weekly forecast horizons`
+
+## Portfolio monetary integration — 2026-10-09
+
+Mobile portfolio Outlook now consumes the overall and holding-specific
+`monetary_projection` fields for all four horizons. The existing native card
+layout adds compact baseline, expected gain/loss and estimated ending-value
+sections. Each asset card shows its own baseline, own forecast change and ending
+estimate, alongside percentages. All amounts come directly from backend Decimal
+strings; the app does not recalculate holdings, allocations or forecasts.
+
+CURRENT shows USD market value from saved prices times owned shares, with the
+requested valuation date, actual price-date range and each holding's price date.
+Purchase cost and saved analyses are not substituted. PLANNED shows entered
+USD/THB amounts, explicitly hypothetical; THB assumes unchanged exchange rates,
+not an FX forecast. LEGACY remains percentage-only. Drilling into an asset still
+opens the user-independent standalone 30-day Asset Outlook, with no user amount.
+
+Selected and comparison charts add Expected change in the returned currency,
+retaining separate Return and Volatility views. Monetary guides require adjacent
+successful horizons, matching market-data dates, currency and identical baseline
+context including holding amounts. A changed allocation/baseline breaks the
+guide; mixed currencies disable the monetary comparison chart. Missing or
+unplottable points are not replaced. No monetary range, daily trajectory or
+volatility-as-loss calculation is introduced.
+
+String-only rounding preserves exact cents, including large/scientific Decimal
+strings, without an added native dependency or BigInt runtime requirement.
+Only chart geometry/compact labels use numeric values. Narrow chart labels
+abbreviate large amounts; native cards and spoken chart descriptions retain
+full formatted amounts. Existing single-string calendar-day ticks remain intact.
+Amounts outside the safe chart numeric range remain available in cards.
+
+Hide portfolio values masks summary, holding and comparison amounts. A selected
+money chart immediately falls back to percentages; money, currency-valued labels
+and baseline keys are removed from its points/accessibility output. Masking also
+applies on the initial hidden render while the privacy preference is loading.
+Missing/malformed monetary context fails through the existing response guard,
+without stale values, fallback amounts or additional valuation/API requests.
+Model-quality warnings and full monetary/backend limitations remain available.
+
+Changed files and purpose:
+
+- `mobile/src/types/forecasting.ts`: overall and component monetary contracts.
+- `src/forecasting/forecastingMoney.ts`: native exact display formatting and
+  monetary context validation; `forecastingUi.ts`: safe amount-chart mapping.
+- `src/components/forecasting/ForecastingResults.tsx`,
+  `ForecastHorizonComparison.tsx`, `OutlookChart.tsx` and
+  `src/forecasting/forecastingStyles.ts`: native amount cards, privacy-safe controls,
+  currency charts, abbreviated labels and holding provenance.
+- `mobile/tests/forecasting.test.cjs`: valid baseline-mode fixtures and eight new
+  monetary regressions; CURRENT_STATUS.md and this report: verification record.
+
+Verification run directly by Codex with user authorization:
+
+- Mobile baseline before edits: 93 passed.
+- Mobile suite after edits: 101 passed (32 forecasting and 69 existing authority).
+- TypeScript: passed.
+- Shared market-data/notification and web forecasting regressions: 72 passed.
+- Android production Hermes export: passed, 1,173 modules. The sandbox initially
+  denied writing temporary bytecode; the approved outside-sandbox retry passed.
+  Output remains ignored under `mobile/.expo/forecast-money-v1-export/`.
+- Git whitespace checks: passed.
+
+These are orchestration/contract and bundling checks, not physical-device E2E.
+On a signed-in phone, review CURRENT, PLANNED USD/THB and LEGACY at all horizons,
+holding amounts versus standalone Asset Outlook, comparison failures/gaps,
+privacy toggling/loading, both themes, large text and spoken amounts. Device
+visual acceptance remains pending. No backend/web code, models, artifacts,
+evidence, migration, dependency, provider update, training or saved data changed.
+
+Suggested commit: `feat(mobile): show portfolio forecast amounts and holding breakdowns`.
+No staging, commit or push was performed; unrelated report work is preserved.
