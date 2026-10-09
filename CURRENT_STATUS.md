@@ -3297,3 +3297,125 @@ remain separate follow-on work.
   grid view, mobile and APIs are unchanged.
 - Added a scoped layout regression. Tests/build await the user's manual
   commands; no staging, commit or push was performed.
+
+### Experimental weekly mobile integration — 2026-10-08
+
+- Enabled actual 7/14/21-day asset and portfolio GET outlooks with separate
+  weekly contracts. The original 30-day routes/default remain unchanged;
+  CURRENT/PLANNED/LEGACY baselines, signed contributions and asset ranges stay
+  backend-owned. Entry labels now describe Forecast Outlook rather than only 30 days.
+- Added accessible horizon selection and optional all-horizon comparison with
+  compact native date/status/metric cards, Return/Volatility charts, amber weekly
+  markers and date-aware gaps. No scaled estimates, daily path, portfolio interval
+  or fallback result is invented. Successful horizons survive individual failures.
+- Focus-aware requests cancel on blur, unmount and account/selection changes,
+  with independent timeout/error handling, manual/pull refresh and no late-result
+  display. Weekly calendar/package/experimental-quality flags and component
+  horizons are validated; retained warnings and full limitations remain visible.
+- Expanded mobile forecasting regressions and the integration guide. Source
+  review/whitespace checks completed; tests, TypeScript, Android export and phone
+  acceptance await the user's manual commands. Prior passing counts predate this
+  change; no new verification success or predictive-quality approval is claimed.
+- Backend, models/artifacts, evidence, database, provider updates, AI, web,
+  dependencies and navigation architecture are unchanged. No staging, commit or
+  push; unrelated untracked docs/report content is preserved.
+
+### Mobile Outlook x-axis label formatting — 2026-10-09
+
+- Render each horizon tick as one SVG string (7 days, 14 days, 21 days, 30 days)
+  rather than separate number/unit children, preventing native SVG text-span
+  overlap. Selected and comparison charts share the fix; graph size, positions,
+  forecast values, backend and web are unchanged.
+- Added single-string/centered tick regressions for asset, portfolio and comparison
+  graphs. Whitespace checks passed; tests/typecheck and phone verification remain
+  for the user's manual run. No staging, commit or push was performed.
+
+### Portfolio Outlook monetary projection backend — 2026-10-09
+
+- Added a portfolio-only `monetary_projection` to 7/14/21/30-day Outlook responses:
+  baseline, expected change, ending estimate, currency and baseline provenance.
+  CURRENT reuses the already resolved USD market value (latest persisted prices
+  times shares), not purchase cost or saved analysis. PLANNED reuses the entered
+  proposed total in USD/THB and is explicitly hypothetical. LEGACY remains
+  percentage-only with a null projection; asset Outlooks/components are unchanged.
+- One shared pure Decimal helper preserves existing forecast ratios and amount
+  precision without rounding, compounding, clamping, extra valuation queries or
+  FX fetching. THB assumes unchanged exchange rates. Volatility is not presented
+  as monetary loss, and no portfolio monetary prediction interval is introduced.
+- Added strict monetary context/arithmetic contracts and synthetic calculation,
+  schema, all-horizon composition and authenticated API regressions. Updated the
+  public contract. Whitespace/source review completed; tests remain pending the
+  user's manual command, and no new passing count is claimed.
+- No frontend, database/migrations, models/artifacts, provider, training,
+  dependencies or AI-context changes. No staging, commit or push; unrelated
+  untracked docs/report content is preserved. Web/mobile money presentation is
+  the next integration step after backend tests pass.
+
+### Portfolio Outlook per-asset monetary breakdown backend — 2026-10-09
+
+- Extended portfolio components for all 7/14/21/30-day horizons with their own
+  `monetary_projection`. CURRENT uses each holding's exact resolved USD current
+  value, not purchase cost; PLANNED uses each entered proposed amount in USD/THB.
+  Each holding's own model return determines its gain/loss and ending estimate.
+- Reused the same baseline and overall projection context without extra queries
+  or valuations. Symbol matching preserves correct amounts even when source
+  rows are reordered; component baseline totals, allocation, arithmetic, currency
+  and valuation provenance are validated. Legacy component projections are null.
+  Standalone asset Outlook responses remain user-independent and unchanged.
+- Added exact-amount, negative/zero-return, precision, all-mode/all-horizon,
+  schema and API safety regressions; updated the public contract. Source and
+  whitespace review completed; user-run tests are pending, with no passing count
+  claimed. No frontend, migration, dependency, model/artifact, training or AI
+  changes. No staging/commit/push; unrelated docs/report content is preserved.
+
+### Portfolio Outlook monetary web integration — 2026-10-09
+
+- Integrated backend-owned overall and holding monetary projections across
+  7/14/21/30-day portfolio Outlooks. Compact cards and asset breakdowns show
+  baseline amounts, expected gains/losses and estimated ending values alongside
+  percentages. CURRENT uses saved USD prices times shares, with price-date
+  provenance; PLANNED uses entered USD/THB amounts and is hypothetical with an
+  unchanged-FX disclosure. LEGACY and standalone Asset Outlook remain
+  percentage-only; no browser valuation or forecast arithmetic is introduced.
+- Added an Expected change currency chart view and comparison amounts. Money
+  guides require matching baseline/currency/date context; unsupported chart
+  magnitudes remain in exact formatted cards/tables. Decimal-string display
+  preserves cents. Hide portfolio values masks amounts and removes monetary
+  charts/accessibility values immediately. Malformed money contexts fail safely.
+- With direct test execution now authorized, the backend forecasting/schema/API
+  suite passed 1,061 tests in 52.28 seconds. Web forecasting passed 29 tests;
+  full web/shared-client suite passed 138 with one pre-existing branding failure
+  in unrelated report-outline wording, retained unchanged. TypeScript and the
+  production build passed with the existing bundle-size warning. Signed-in
+  monetary visual acceptance remains pending; mobile is the next integration.
+- Updated the web integration report and focused regression coverage. No backend,
+  mobile, migration, dependency, model/artifact or saved-data changes. No staging,
+  commit or push; unrelated untracked docs/report content remains untouched.
+
+### Portfolio Outlook monetary mobile integration — 2026-10-09
+
+- Added backend-owned overall and per-holding amounts to native 7/14/21/30-day
+  portfolio Outlook cards and horizon comparisons. CURRENT shows persisted USD
+  market values and valuation/holding price dates, not purchase cost. PLANNED
+  shows entered USD/THB amounts as hypothetical with unchanged-FX disclosure.
+  Each holding uses its own returned baseline and model change/ending estimate.
+  LEGACY remains percentage-only and standalone Asset Outlook stays independent.
+- Added Expected change currency charts without inventing daily paths, intervals
+  or monetary volatility loss. Guides require adjacent available horizons and
+  matching date/currency/baseline context. Compact native labels fit narrow
+  charts; cards and spoken descriptions retain full amounts. String-only display
+  rounding preserves Decimal cents without dependencies or a BigInt requirement.
+- Existing local privacy masks summary, holding and comparison amounts and
+  immediately replaces a selected monetary chart with percentages, including
+  during initial preference loading. Monetary keys/values do not survive in
+  hidden chart points/accessibility output. Malformed amount contexts fail safely
+  without additional API/valuation requests or stale-value fallback.
+- Verification: baseline 93 mobile tests passed; final mobile suite 101 passed
+  (32 forecasting, 69 existing authority), TypeScript passed, and 72 shared
+  market-data/notification/web-forecasting checks passed. Android production
+  Hermes export passed with 1,173 modules after an approved retry for sandbox
+  temporary-bytecode permissions; output remains ignored. Whitespace checks
+  passed. Physical-phone visual/large-text/theme acceptance remains pending.
+- Updated focused tests and the mobile integration report. No backend/web code,
+  models/artifacts, migration, provider update, training or saved-data changes.
+  No staging, commit or push; unrelated untracked docs/report content is preserved.

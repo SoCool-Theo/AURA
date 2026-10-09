@@ -17,7 +17,9 @@ function load(file, mocks = {}, globals = {}) {
     require(name) { assert.ok(name in mocks, 'Unmocked ' + name); return mocks[name]; }, ...globals });
   return module.exports;
 }
-const ui = load('src/pages/forecasting/forecastingUi.ts', { '../../api/apiClient': { ApiError } });
+const monetary = load('src/pages/forecasting/forecastingMoney.ts');
+const ui = load('src/pages/forecasting/forecastingUi.ts', { '../../api/apiClient': { ApiError }, './forecastingMoney': monetary });
+const privacy = { usePortfolioPrivacy: () => ({ hideValues: false }), usePrivateValue: () => value => value };
 const css = new Proxy({}, { get: (_, key) => key === '__esModule' ? false : String(key) });
 function harness() {
   const slots = []; let cursor = 0, effects = [], render, value, dirty;
@@ -50,13 +52,22 @@ const asset = {
   artifact_version: 'forecast-v1-20260917', return_model_id: 'historical_average', volatility_model_id: 'volatility_linear_regression_v1',
   limitations: ['Forecasts are probabilistic estimates, not guarantees of future performance.'],
 };
+function moneyProjection(amount = '10000', change = '250', ending = '10250', price = null) {
+  return { currency: 'USD', baseline_source: 'current_market_value', baseline_amount: amount,
+    expected_change_amount: change, estimated_ending_value: ending, hypothetical: false, assumes_unchanged_fx: false,
+    valuation_requested_date: '2026-10-07', oldest_price_as_of: price ?? '2026-10-05', newest_price_as_of: price ?? '2026-10-06',
+    limitations: ['Monetary estimates are not guaranteed balances.', 'No calibrated portfolio monetary prediction interval is provided.'] };
+}
 const portfolio = {
   portfolio_id: 'p', portfolio_name: 'Example', baseline_kind: 'current', horizon_days: 30, expected_return_30d: 0.025,
   forecast_realized_volatility_30d: 0.06, market_data_as_of: '2026-10-05', correlation_as_of_date: '2026-10-05',
   correlation_observation_count: 120, artifact_version: asset.artifact_version,
+  monetary_projection: moneyProjection(),
   components: [
-    { ...asset, current_weight: 0.4, forecast_volatility_contribution: -0.012, forecast_volatility_contribution_share: -0.2 },
-    { ...asset, symbol: 'MSFT', forecast_origin_date: '2026-10-05', current_weight: 0.6, forecast_volatility_contribution: 0.072, forecast_volatility_contribution_share: 1.2 },
+    { ...asset, current_weight: 0.4, forecast_volatility_contribution: -0.012, forecast_volatility_contribution_share: -0.2,
+      monetary_projection: moneyProjection('4000', '-120', '3880', '2026-10-06') },
+    { ...asset, symbol: 'MSFT', expected_return_30d: .06166666666666667, forecast_origin_date: '2026-10-05', current_weight: 0.6, forecast_volatility_contribution: 0.072, forecast_volatility_contribution_share: 1.2,
+      monetary_projection: moneyProjection('6000', '370', '6370', '2026-10-05') },
   ], limitations: ['No calibrated portfolio prediction interval is provided.'],
 };
 function weeklyAsset(days = 7, symbol = 'AAPL') {
@@ -70,7 +81,17 @@ function weeklyPortfolio(days = 7) {
   const { expected_return_30d, forecast_realized_volatility_30d, ...rest } = portfolio;
   const { symbol, return_prediction_interval, volatility_prediction_interval, forecast_origin_date, market_data_age_days,
     return_model_id, volatility_model_id, return_warning_codes, volatility_warning_codes, ...common } = weeklyAsset(days);
-  return { ...rest, ...common, components: portfolio.components.map(item => ({ ...item, ...weeklyAsset(days, item.symbol) })) };
+  return { ...rest, ...common, monetary_projection: moneyProjection('10000', '-110', '9890'),
+    components: portfolio.components.map(item => ({ ...item, ...weeklyAsset(days, item.symbol),
+      monetary_projection: moneyProjection(item.symbol === 'AAPL' ? '4000' : '6000', item.symbol === 'AAPL' ? '-44' : '-66',
+        item.symbol === 'AAPL' ? '3956' : '5934', item.symbol === 'AAPL' ? '2026-10-06' : '2026-10-05') })) };
+}
+function portfolioMode(source, kind, currency = 'USD') {
+  const convert = value => kind === 'legacy' ? null : kind === 'current' ? value : { ...value,
+    currency, baseline_source: 'planned_investment', hypothetical: true, assumes_unchanged_fx: currency === 'THB',
+    valuation_requested_date: null, oldest_price_as_of: null, newest_price_as_of: null };
+  return { ...source, baseline_kind: kind, monetary_projection: convert(source.monetary_projection),
+    components: source.components.map(item => ({ ...item, monetary_projection: convert(item.monetary_projection) })) };
 }
 function mountHook(options = {}) {
   const h = harness(), calls = [], timers = new Map();
@@ -108,7 +129,7 @@ test('V1 displays backend values without generating weekly estimates or portfoli
 test('response validation rejects malformed/mismatched contracts, while preserving signed contributions', () => {
   assert.equal(ui.validOutlookResponse(asset, 'asset', 'AAPL'), true);
   for (const result of [null, {}, { ...asset, symbol: 'MSFT' }, { ...asset, horizon_days: 7 }, { ...asset, expected_return_30d: NaN }, { ...asset, volatility_prediction_interval: { lower: -1, upper: 0, coverage: .8 } }]) assert.ok(!ui.validOutlookResponse(result, 'asset', 'AAPL'));
-  for (const kind of ['current', 'planned', 'legacy']) assert.equal(ui.validOutlookResponse({ ...portfolio, baseline_kind: kind }, 'portfolio', 'p'), true);
+  for (const kind of ['current', 'planned', 'legacy']) assert.equal(ui.validOutlookResponse(portfolioMode(portfolio, kind), 'portfolio', 'p'), true);
   assert.ok(!ui.validOutlookResponse({ ...portfolio, components: undefined }, 'portfolio', 'p'));
   assert.ok(!ui.validOutlookResponse({ ...portfolio, components: [] }, 'portfolio', 'p'));
 });
@@ -126,7 +147,7 @@ test('forecast loader uses selected endpoints, refreshes without saving and supp
   assert.equal(c.calls[0][2].signal.aborted, true); assert.equal(c.h.value.result.symbol, 'MSFT');
   late.resolve(asset); await c.h.settle(); assert.equal(c.h.value.result.symbol, 'MSFT');
   c.h.value.refresh(); await c.h.settle(); assert.equal(c.calls.length, 3);
-  c.setOperation(async (_, id) => ({ ...portfolio, portfolio_id: id, baseline_kind: 'planned' }));
+  c.setOperation(async (_, id) => ({ ...portfolioMode(portfolio, 'planned'), portfolio_id: id }));
   c.select('portfolio', 'p'); await c.h.settle(); assert.equal(c.h.value.result.baseline_kind, 'planned');
   assert.equal(c.calls.at(-1)[0], 'portfolio'); c.h.unmount(); assert.equal(c.timers.size, 0);
 });
@@ -175,9 +196,10 @@ test('asset and portfolio results preserve backend ranges, planned wording, sign
   const h = harness(), destinations = [];
   const { ForecastingResults } = load('src/pages/forecasting/components/ForecastingResults.tsx', {
     react: h.react, '../../../app/routes': { go: value => destinations.push(value) }, '../../../components/ui/Card': { Card: 'Card' },
+    '../../../privacy/PortfolioPrivacy': privacy,
     '../forecastingUi': ui, './OutlookChart': { OutlookChart: 'OutlookChart' }, '../Forecasting.module.css': css,
   }, { React: h.react });
-  let result = { ...portfolio, baseline_kind: 'planned' }; h.mount(() => ForecastingResults({ result }));
+  let result = portfolioMode(portfolio, 'planned'); h.mount(() => ForecastingResults({ result }));
   assert.match(text(h.value), /hypothetical/); assert.doesNotMatch(text(h.value), /Low risk|High risk|80% prediction range/);
   const bars = nodes(h.value).filter(node => ['negativeBar', 'positiveBar'].includes(node.props.className));
   assert.equal(bars.length, 2); assert.ok(bars.every(node => parseFloat(node.props.style.width) >= 0 && parseFloat(node.props.style.width) <= 100));
@@ -314,6 +336,7 @@ test('weekly cards and comparison display truthful horizon labels, experimental 
   const h = harness();
   const { ForecastingResults } = load('src/pages/forecasting/components/ForecastingResults.tsx', {
     react: h.react, '../../../app/routes': { go: () => {} }, '../../../components/ui/Card': { Card: 'Card' },
+    '../../../privacy/PortfolioPrivacy': privacy,
     '../forecastingUi': ui, './OutlookChart': { OutlookChart: 'OutlookChart' }, '../Forecasting.module.css': css,
   }, { React: h.react });
   h.mount(() => ForecastingResults({ result: weeklyPortfolio(21) }));
@@ -324,6 +347,7 @@ test('weekly cards and comparison display truthful horizon labels, experimental 
   const c = harness();
   const { ForecastHorizonComparison } = load('src/pages/forecasting/components/ForecastHorizonComparison.tsx', {
     react: c.react, '../../../components/ui/Card': { Card: 'Card' }, '../forecastingUi': ui,
+    '../../../privacy/PortfolioPrivacy': privacy,
     './OutlookChart': { OutlookChart: 'OutlookChart' }, '../Forecasting.module.css': css,
   }, { React: c.react });
   c.mount(() => ForecastHorizonComparison({ results: [weeklyAsset(7), asset], loading: false, unavailable: [14, 21] }));
@@ -373,4 +397,160 @@ test('forecasting keeps Analytics active in the existing top navigation', () => 
   const tree = TopNavigation({ route: { page: 'forecasting' } });
   const active = nodes(tree).filter(node => node.props['aria-current'] === 'page');
   assert.equal(active.length, 1); assert.match(text(active[0]), /Analytics/);
+});
+
+test('money formatting retains decimal cents, scientific notation, USD/THB and signed zero without deriving estimates', () => {
+  assert.equal(ui.forecastMoney('1234567890123456.125', 'USD'), '$1,234,567,890,123,456.13');
+  assert.equal(ui.forecastMoney('-1.005', 'USD', true), '-$1.01');
+  assert.equal(ui.forecastMoney('250.125', 'THB', true), '+฿250.13');
+  assert.equal(ui.forecastMoney('2.345E+1', 'USD'), '$23.45');
+  assert.equal(ui.forecastMoney('-0.0049', 'USD', true), '$0.00');
+  assert.equal(ui.forecastMoney('0E-12', 'THB', true), '฿0.00');
+  for (const value of ['NaN', 'Infinity', '1e999999', ' ', '1,000', {}, 100]) assert.equal(ui.forecastMoney(value, 'USD'), 'N/A');
+});
+
+test('all portfolio horizons require money context for each holding, while legacy and standalone assets stay independent', () => {
+  for (const source of [portfolio, weeklyPortfolio(7), weeklyPortfolio(14), weeklyPortfolio(21)]) {
+    for (const kind of ['current', 'planned', 'legacy']) for (const currency of ['USD', 'THB']) {
+      const result = portfolioMode(source, kind, currency);
+      assert.ok(ui.validOutlookResponse(result, 'portfolio', 'p', source.horizon_days));
+    }
+    const clone = () => plain(source);
+    const cases = [];
+    let changed = clone(); delete changed.monetary_projection; cases.push(changed);
+    changed = clone(); changed.monetary_projection = null; cases.push(changed);
+    changed = clone(); changed.monetary_projection.baseline_amount = 10000; cases.push(changed);
+    changed = clone(); changed.monetary_projection.expected_change_amount = 'Infinity'; cases.push(changed);
+    changed = clone(); changed.monetary_projection.currency = 'THB'; cases.push(changed);
+    changed = clone(); changed.components[0].monetary_projection = null; cases.push(changed);
+    changed = clone(); changed.components[0].monetary_projection.valuation_requested_date = '2026-10-08'; cases.push(changed);
+    changed = portfolioMode(source, 'planned', 'THB'); changed.monetary_projection.assumes_unchanged_fx = false; cases.push(changed);
+    changed = portfolioMode(source, 'legacy'); changed.components[0].monetary_projection = moneyProjection(); cases.push(changed);
+    for (const result of cases) assert.ok(!ui.validOutlookResponse(result, 'portfolio', 'p', source.horizon_days));
+  }
+  assert.equal(ui.forecastPoints(asset, 'change').length, 0);
+  assert.equal(ui.forecastPoints(portfolioMode(portfolio, 'legacy'), 'change').length, 0);
+});
+
+function moneyResultsHarness(initialResult, initialHidden = false) {
+  const h = harness(); let result = initialResult, hidden = initialHidden;
+  const privacyMock = { usePortfolioPrivacy: () => ({ hideValues: hidden }), usePrivateValue: () => value => hidden ? '••••' : value };
+  const { ForecastingResults } = load('src/pages/forecasting/components/ForecastingResults.tsx', {
+    react: h.react, '../../../app/routes': { go: () => {} }, '../../../components/ui/Card': { Card: 'Card' },
+    '../../../privacy/PortfolioPrivacy': privacyMock, '../forecastingUi': ui,
+    './OutlookChart': { OutlookChart: 'OutlookChart' }, '../Forecasting.module.css': css,
+  }, { React: h.react });
+  h.mount(() => ForecastingResults({ result }));
+  return { h, change(next) { result = next; h.render(); }, hide(value) { hidden = value; h.render(); } };
+}
+
+test('web amount cards and breakdown copy the returned baseline, gain/loss and ending estimate in every horizon', () => {
+  for (const source of [portfolio, weeklyPortfolio(7), weeklyPortfolio(14), weeklyPortfolio(21)]) {
+    const { h } = moneyResultsHarness(source);
+    assert.match(text(h.value), /Portfolio amount outlook/);
+    assert.match(text(h.value), /\$10,000.00/);
+    assert.ok(text(h.value).includes(ui.forecastMoney(source.monetary_projection.expected_change_amount, 'USD', true)));
+    const breakdown = nodes(h.value).find(node => node.props['aria-label'] === 'Portfolio outlook components');
+    const rows = nodes(breakdown).filter(node => node.type === 'tr').slice(1);
+    assert.equal(rows.length, 2);
+    source.components.forEach((item, index) => {
+      assert.ok(text(rows[index]).includes(ui.forecastMoney(item.monetary_projection.baseline_amount, 'USD')));
+      assert.ok(text(rows[index]).includes(ui.forecastMoney(item.monetary_projection.expected_change_amount, 'USD', true)));
+      assert.ok(text(rows[index]).includes(ui.forecastMoney(item.monetary_projection.estimated_ending_value, 'USD')));
+    });
+    nodes(h.value).find(node => node.type === 'button' && text(node) === 'Expected change (USD)').props.onClick(); h.render();
+    const chart = nodes(h.value).find(node => node.type === 'OutlookChart');
+    assert.equal(chart.props.metric, 'change');
+    assert.equal(chart.props.points[0].estimate, Number(source.monetary_projection.expected_change_amount));
+    assert.equal(chart.props.points[0].interval, undefined);
+    assert.match(text(h.value), /not purchase cost|saved prices/);
+  }
+});
+
+test('planned THB is hypothetical and unchanged FX, with no fabricated current price or standalone amount controls', () => {
+  const { h, change } = moneyResultsHarness(portfolioMode(weeklyPortfolio(14), 'planned', 'THB'));
+  assert.match(text(h.value), /฿10,000.00/);
+  assert.match(text(h.value), /unchanged exchange rates/);
+  assert.match(text(h.value), /not assets you currently own/);
+  assert.doesNotMatch(text(h.value), /Valuation requested|Price:/);
+  change(asset);
+  assert.doesNotMatch(text(h.value), /Portfolio amount outlook|Estimated value|Expected change \(/);
+  change(portfolioMode(portfolio, 'legacy'));
+  assert.match(text(h.value), /percentage-only/);
+  assert.doesNotMatch(text(h.value), /\$|฿|Expected change \(/);
+});
+
+test('privacy immediately masks summary/holding amounts and removes money points and chart labels even after selection', () => {
+  const c = moneyResultsHarness(portfolio);
+  nodes(c.h.value).find(node => node.type === 'button' && text(node) === 'Expected change (USD)').props.onClick(); c.h.render();
+  assert.equal(nodes(c.h.value).find(node => node.type === 'OutlookChart').props.metric, 'change');
+  c.hide(true);
+  assert.match(text(c.h.value), /••••/);
+  assert.doesNotMatch(text(c.h.value), /\$|฿|Expected change \(/);
+  const chart = nodes(c.h.value).find(node => node.type === 'OutlookChart');
+  assert.equal(chart.props.metric, 'return');
+  assert.equal(chart.props.points[0].amount, undefined);
+  assert.equal(chart.props.points[0].baselineKey, undefined);
+  assert.equal(chart.props.points[0].currency, undefined);
+  c.hide(false);
+  assert.match(text(c.h.value), /\$10,000.00/);
+  assert.equal(nodes(c.h.value).find(node => node.type === 'OutlookChart').props.metric, 'change');
+});
+
+test('money comparison reads actual backend changes and breaks guides on missing dates, currency or baseline changes', () => {
+  const react = { createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }) };
+  const { OutlookChart } = load('src/pages/forecasting/components/OutlookChart.tsx', { '../forecastingUi': ui, '../Forecasting.module.css': css }, { React: react });
+  const results = [weeklyPortfolio(7), weeklyPortfolio(14)];
+  let points = ui.comparisonPoints(results, 'change');
+  assert.equal(points[0].estimate, -110);
+  assert.equal(points[0].amount, '-110');
+  let tree = OutlookChart({ points, metric: 'change' });
+  assert.equal(nodes(tree).filter(node => node.type === 'polyline').length, 1);
+  assert.match(text(tree), /Expected change \(USD\)/);
+  assert.match(text(tree), /-\$110.00/);
+  assert.ok(!nodes(tree).some(node => node.props.className === 'interval'));
+  const largePoint = { ...points[0], estimate: 125000.125, amount: '125000.125' };
+  const largeChart = OutlookChart({ points: [largePoint], metric: 'change' });
+  assert.match(text(largeChart), /\$\d+(?:\.\d+)?K/); // Compact axes fit the existing chart margin.
+  assert.match(text(largeChart), /\+\$125,000.13/); // Point/accessibility labels retain the exact displayed cents.
+  assert.equal(nodes(largeChart).find(node => node.props.className === 'pointLabel').props.textAnchor, 'start');
+  for (const key of ['baselineKey', 'currency', 'dataDate']) {
+    const changed = points.map(point => ({ ...point })); changed[1][key] = 'different';
+    tree = OutlookChart({ points: changed, metric: 'change' });
+    assert.equal(nodes(tree).filter(node => node.type === 'polyline').length, 0);
+  }
+  for (const amount of ['1E+340', '1E+308', '-1E+308']) {
+    const enormous = { ...portfolio, monetary_projection: { ...portfolio.monetary_projection, expected_change_amount: amount } };
+    assert.equal(ui.forecastPoints(enormous, 'change').length, 0); // Do not scale an unplottable amount into an invented estimate.
+  }
+});
+
+test('comparison amount table retains unavailable rows and hides currency-valued graphs when privacy changes', () => {
+  const h = harness(); let hidden = false;
+  const { ForecastHorizonComparison } = load('src/pages/forecasting/components/ForecastHorizonComparison.tsx', {
+    react: h.react, '../../../components/ui/Card': { Card: 'Card' }, '../forecastingUi': ui,
+    '../../../privacy/PortfolioPrivacy': { usePortfolioPrivacy: () => ({ hideValues: hidden }), usePrivateValue: () => value => hidden ? '••••' : value },
+    './OutlookChart': { OutlookChart: 'OutlookChart' }, '../Forecasting.module.css': css,
+  }, { React: h.react });
+  h.mount(() => ForecastHorizonComparison({ results: [weeklyPortfolio(7), portfolio], loading: false, unavailable: [14,21] }));
+  assert.match(text(h.value), /\$10,000.00 USD/);
+  assert.match(text(h.value), /Unavailable/);
+  assert.match(text(h.value), /Expected change/);
+  nodes(h.value).find(node => node.type === 'button' && text(node) === 'Expected change (USD)').props.onClick(); h.render();
+  assert.equal(nodes(h.value).find(node => node.type === 'OutlookChart').props.metric, 'change');
+  hidden = true; h.render();
+  assert.doesNotMatch(text(h.value), /\$|฿|Expected change \(/);
+  assert.match(text(h.value), /••••/);
+  assert.equal(nodes(h.value).find(node => node.type === 'OutlookChart').props.metric, 'return');
+});
+
+test('missing monetary context is not displayed by the hook, with no value fallback or extra API requests', async () => {
+  const c = mountHook(); await c.h.settle();
+  c.setOperation(async () => ({ ...portfolio, monetary_projection: null }));
+  c.select('portfolio', 'p'); await c.h.settle();
+  assert.equal(c.h.value.result, null); assert.ok(c.h.value.error);
+  assert.equal(c.calls.at(-1)[0], 'portfolio');
+  c.setOperation(async () => portfolio); c.h.value.refresh(); await c.h.settle();
+  assert.equal(c.h.value.result.monetary_projection.baseline_amount, '10000');
+  assert.ok(c.calls.every(call => call[2].body === undefined)); c.h.unmount();
 });

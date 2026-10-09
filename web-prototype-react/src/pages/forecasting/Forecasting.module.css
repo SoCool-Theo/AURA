@@ -45,6 +45,12 @@
 .metric small { display: block; }
 .metric p { margin-bottom: 0; }
 .metric b { color: var(--text-secondary); font-weight: 600; }
+.moneyMetrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.moneyMetrics > div { min-width: 0; padding: 14px; border: 1px solid var(--border-divider); border-radius: 10px; background: var(--control-bg); }
+.moneyMetrics span { color: var(--text-muted); font-size: 11px; }
+.moneyMetrics strong { display: block; margin-top: 8px; font-size: 22px; overflow-wrap: anywhere; }
+.cellAmount { display: block; margin-top: 5px; font-size: 10px; }
+.assumptionHeading { font-size: 12px; color: var(--text-secondary); margin-top: 18px; }
 .accent { color: var(--teal-bright); }
 .negative { color: var(--red-bright) !important; }
 .sectionHeading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
@@ -88,3 +94,4 @@
 .state .headerActions { justify-content: center; }
 @media (max-width: 950px) { .header { flex-direction: column; }.context { flex-direction: column; }.controlGrid { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .header h1 { font-size: 27px; }.metrics { grid-template-columns: 1fr; }.controls, .section, .context { padding: 16px; }.sectionHeading { flex-direction: column; }.horizons button { padding: 8px 6px; min-width: 58px; }.driver { grid-template-columns: 70px minmax(0, 1fr) 68px; gap: 8px; }.headerActions { width: 100%; }.headerActions button { flex: 1; } }
+@media (max-width: 750px) { .moneyMetrics { grid-template-columns: 1fr; } }

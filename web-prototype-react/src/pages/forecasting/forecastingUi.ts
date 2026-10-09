@@ -1,9 +1,11 @@
 import { ApiError } from '../../api/apiClient';
 import type { OutlookResponse, ForecastPredictionInterval, AnyAssetOutlookResponse, ForecastHorizon } from '../../types/forecasting';
+import { monetaryContextKey, validPortfolioMoney } from './forecastingMoney';
+export { forecastMoney, negativeMoney } from './forecastingMoney';
 
 export const forecastHorizons = [7, 14, 21, 30] as const;
-export type OutlookMetric = 'return' | 'volatility';
-export type OutlookPoint = { horizonDays: number; estimate: number; interval?: ForecastPredictionInterval; dataDate?: string; experimental?: boolean };
+export type OutlookMetric = 'return' | 'volatility' | 'change';
+export type OutlookPoint = { horizonDays: number; estimate: number; interval?: ForecastPredictionInterval; dataDate?: string; experimental?: boolean; currency?: 'USD' | 'THB'; amount?: string; baselineKey?: string };
 export const forecastReturn = (result: OutlookResponse) => result.horizon_days === 30 ? result.expected_return_30d : result.expected_return;
 export const forecastVolatility = (result: OutlookResponse) => result.horizon_days === 30 ? result.forecast_realized_volatility_30d : result.forecast_realized_volatility;
 export const forecastPercent = (value: number, signed = false) => Number.isFinite(value)
@@ -39,10 +41,19 @@ export function validOutlookResponse(result: OutlookResponse, scope: 'portfolio'
     && Array.isArray(result.components) && result.components.length > 0 && result.components.every(item => asset(item)
       && item.artifact_version === result.artifact_version
       && finite(item.current_weight) && item.current_weight >= 0 && item.current_weight <= 1
-      && finite(item.forecast_volatility_contribution) && finite(item.forecast_volatility_contribution_share));
+      && finite(item.forecast_volatility_contribution) && finite(item.forecast_volatility_contribution_share))
+    && validPortfolioMoney(result);
 }
 export function forecastPoints(result: OutlookResponse, metric: OutlookMetric): OutlookPoint[] {
   // One actual backend estimate. Never scale or interpolate a different horizon.
+  if (metric === 'change') {
+    const money = 'portfolio_id' in result ? result.monetary_projection : null;
+    const estimate = money ? Number(money.expected_change_amount) : NaN;
+    // Leave headroom for chart padding and a positive/negative comparison span.
+    if (!money || !Number.isFinite(estimate) || Math.abs(estimate) > Number.MAX_VALUE / 4) return [];
+    return [{ horizonDays: result.horizon_days, estimate,
+      currency: money.currency, amount: money.expected_change_amount, baselineKey: monetaryContextKey(result) }];
+  }
   return [{
     horizonDays: result.horizon_days,
     estimate: metric === 'return' ? forecastReturn(result) : forecastVolatility(result),
@@ -50,9 +61,9 @@ export function forecastPoints(result: OutlookResponse, metric: OutlookMetric): 
   }];
 }
 export function comparisonPoints(results: OutlookResponse[], metric: OutlookMetric): OutlookPoint[] {
-  return [...results].sort((a, b) => a.horizon_days - b.horizon_days).map(result => ({
-    ...forecastPoints(result, metric)[0], dataDate: result.market_data_as_of, experimental: result.horizon_days !== 30,
-  }));
+  return [...results].sort((a, b) => a.horizon_days - b.horizon_days).flatMap(result => forecastPoints(result, metric).map(point => ({
+    ...point, dataDate: result.market_data_as_of, experimental: result.horizon_days !== 30,
+  })));
 }
 export function forecastWarnings(results: OutlookResponse[]) {
   const messages: Record<string, string> = {
