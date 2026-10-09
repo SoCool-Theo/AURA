@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from datetime import date
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
@@ -21,6 +22,7 @@ from app.forecasting.inference_errors import (
     ForecastHistoryInsufficientError, ForecastPredictionError, ForecastSymbolUnsupportedError,
 )
 from app.forecasting.portfolio import InvalidForecastPortfolioError, PortfolioForecast, PortfolioForecastComponent
+from app.forecasting.monetary_projection import PortfolioMonetaryProjection
 from app.main import app
 from app.schemas.forecasting import PortfolioOutlookResponse, PORTFOLIO_FORECAST_LIMITATIONS
 from app.services.market_data_service import MarketDataUnavailableError
@@ -39,8 +41,10 @@ def forecast():
     asset = AssetForecast("AAPL",day,30,.03,-.1,.2,.05,0,.2,.8,
         "historical_average","historical_average","forecast-v1-20260917",
         "forecast-features-v1","forecast-targets-v1",day,0)
+    money = PortfolioMonetaryProjection("USD", "current_market_value", Decimal("10000"),
+        Decimal("300"), Decimal("10300"), False, False, day, day, day)
     return PortfolioForecast(PORTFOLIO,"Synthetic","current",.03,.05,day,60,day,
-                             asset.artifact_version,(PortfolioForecastComponent(asset,1.,.05,1.),))
+        asset.artifact_version,(PortfolioForecastComponent(asset,1.,.05,1.,money),), money)
 
 
 @pytest.fixture
@@ -81,10 +85,61 @@ def test_authenticated_success_ownership_and_public_response(harness):
     assert body["limitations"] == list(PORTFOLIO_FORECAST_LIMITATIONS)
     assert body["components"][0]["current_weight"] == 1
     assert body["components"][0]["return_prediction_interval"]["coverage"] == .8
+    money = body["monetary_projection"]
+    assert money["currency"] == "USD" and money["baseline_source"] == "current_market_value"
+    assert Decimal(money["baseline_amount"]) == 10000
+    assert Decimal(money["expected_change_amount"]) == 300
+    assert Decimal(money["estimated_ending_value"]) == 10300
+    assert isinstance(money["baseline_amount"], str)
+    assert body["components"][0]["monetary_projection"] == money
     assert not any("interval" in key for key in body)
     PortfolioOutlookResponse.model_validate(body)
     for method in ("commit","add","delete","execute"):
         getattr(session,method).assert_not_called()
+
+
+@pytest.mark.parametrize("currency", ["USD", "THB"])
+def test_planned_money_and_legacy_percentage_only(harness, currency):
+    client, _, _, _, service, _ = harness
+    original = forecast()
+    planned_money = PortfolioMonetaryProjection(currency, "planned_investment", Decimal("10000"),
+        Decimal("300"), Decimal("10300"), True, currency == "THB", None, None, None)
+    service.predict.return_value = replace(original, baseline_kind="planned",
+        monetary_projection=planned_money,
+        components=(replace(original.components[0], monetary_projection=planned_money),))
+    response = client.get(URL, headers=headers())
+    assert response.status_code == 200
+    money = response.json()["monetary_projection"]
+    assert money["currency"] == currency and money["hypothetical"] is True
+    assert money["assumes_unchanged_fx"] == (currency == "THB")
+    assert money["valuation_requested_date"] is None
+    assert response.json()["components"][0]["monetary_projection"] == money
+    service.predict.return_value = replace(original, baseline_kind="legacy", monetary_projection=None,
+        components=(replace(original.components[0], monetary_projection=None),))
+    response = client.get(URL, headers=headers())
+    assert response.status_code == 200 and response.json()["monetary_projection"] is None
+    assert response.json()["components"][0]["monetary_projection"] is None
+
+
+@pytest.mark.parametrize("changes", [{"monetary_projection":None},
+    {"monetary_projection":replace(forecast().monetary_projection, expected_change_amount=Decimal("1"))}])
+def test_invalid_component_money_is_sanitized(harness, changes):
+    client, _, _, _, service, _ = harness
+    original = forecast()
+    service.predict.return_value = replace(original, components=(replace(original.components[0], **changes),))
+    response = client.get(URL, headers=headers())
+    assert response.status_code == 503
+    assert response.json() == {"detail":"Forecast is currently unavailable."}
+
+
+def test_invalid_monetary_output_is_sanitized(harness):
+    client, _, _, _, service, _ = harness
+    original = forecast()
+    service.predict.return_value = replace(original,
+        monetary_projection=replace(original.monetary_projection, estimated_ending_value=Decimal("999")))
+    response = client.get(URL, headers=headers())
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Forecast is currently unavailable."}
 
 
 @pytest.mark.parametrize("auth", [{},{"X-User-ID":str(OWNER)},{"Authorization":"Bearer invalid"}])
@@ -150,6 +205,10 @@ def test_invalid_composition_safely_unavailable(harness,change):
 
 
 def test_portfolio_openapi_has_only_uuid_path_and_existing_bearer():
+    schemas = app.openapi()["components"]["schemas"]
+    assert "monetary_projection" in schemas["PortfolioOutlookResponse"]["properties"]
+    assert "monetary_projection" not in schemas["AssetOutlookResponse"]["properties"]
+    assert "monetary_projection" in schemas["PortfolioOutlookComponent"]["properties"]
     operation = app.openapi()["paths"]["/api/forecasting/portfolios/{portfolio_id}/outlook"]
     assert set(operation) == {"get"}
     get = operation["get"]

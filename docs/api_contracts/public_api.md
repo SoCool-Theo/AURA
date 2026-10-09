@@ -211,6 +211,79 @@ No forecast is persisted and no model is fitted, updated, recalibrated, or
 reselected. One unavailable component fails the whole outlook; no fallback or
 partial reweighting is performed.
 
+### Portfolio monetary projection (all four horizons)
+
+Both the 30-day portfolio route and the 7/14/21-day portfolio routes add
+`monetary_projection`. CURRENT and PLANNED responses require this object;
+LEGACY responses return `null` because saved weights do not establish a money
+baseline. Portfolio components also include their holding-specific monetary
+projection, as described below. Standalone asset responses remain independent
+and have no monetary projection. No request inputs, database migration or model
+retraining are added.
+
+The object contains:
+
+- `currency`: CURRENT is `USD`; PLANNED preserves the saved `USD` or `THB` plan
+  currency. This is not a caller-selected display-currency conversion.
+- `baseline_source`: `current_market_value` or `planned_investment`.
+- `baseline_amount`: CURRENT uses the same resolved valuation's
+  `total_current_value_usd` (sum of saved latest adjusted-close prices times
+  shares), not purchase cost or an old saved analysis. PLANNED uses the same
+  resolved allocation's `total_proposed_amount`, without purchasing assets or
+  fetching prices/FX for its monetary baseline.
+- `expected_change_amount = baseline_amount * expected_return` and
+  `estimated_ending_value = baseline_amount + expected_change_amount`. The ratio
+  is the unchanged portfolio `expected_return_30d` or weekly `expected_return`,
+  never annualized, compounded or scaled from another horizon. For example,
+  a USD 10,000 baseline and a 0.03 estimate give USD 300 change and USD 10,300
+  ending value. Negative and zero estimates are preserved without clipping.
+- `hypothetical`: false for CURRENT, true for PLANNED.
+- `assumes_unchanged_fx`: true for THB, false for USD. Applying USD asset-return
+  estimates to a THB plan assumes unchanged exchange rates; it is not an FX
+  forecast or a conversion using a fabricated rate.
+- `valuation_requested_date`, `oldest_price_as_of`, `newest_price_as_of`: CURRENT
+  copies the valuation's reference date and actual price-date range. These dates
+  are separate from forecast-origin/correlation dates. PLANNED sets all three to
+  null because its proposed amount is not a market valuation.
+- `limitations`: fixed educational wording about uncertain arithmetic estimates,
+  unchanged allocation/holdings, excluded fees/taxes/cash flows, hypothetical
+  plans, FX assumptions, and the absence of a portfolio monetary prediction
+  interval. Volatility is not converted into a monetary loss estimate. Model
+  returns below -100% are not clamped; any negative ending estimate is an
+  arithmetic illustration, not a realizable long-only balance.
+
+All three money amounts are finite Decimals serialized as JSON strings to retain
+precision. Calculation uses a local high-precision Decimal context, does not
+round to cents, and reuses the one authoritative baseline already resolved for
+the request; it adds no valuation lookup. Display rounding belongs to clients.
+Schemas reject baseline/currency/date mismatches or amounts inconsistent with
+the portfolio ratio. Malformed projection outputs use the existing safe `503`
+response. Ownership, component completeness, model-quality caveats and all
+existing return/volatility/interval fields remain unchanged.
+
+Each item in portfolio `components` adds its own `monetary_projection` with the
+same fields. CURRENT uses that symbol's exact `current_value_usd` from the
+already resolved holding valuation (shares times latest persisted price);
+PLANNED uses that symbol's exact `proposed_amount` in the plan currency. These
+are not purchase costs or totals reconstructed from rounded allocation weights.
+The component's own horizon-specific expected return determines its change and
+ending estimate, not the overall portfolio return. Its CURRENT price-date range
+contains one holding price date (`oldest_price_as_of == newest_price_as_of`);
+the reference date remains the same valuation request date as the portfolio.
+PLANNED keeps all three dates null and retains hypothetical/THB FX disclosures.
+
+Components are matched by symbol, independent of source row order, and all
+holdings must be present. Their baseline amounts sum exactly to the portfolio
+baseline and agree with the resolved allocations within the existing `1e-10`
+allocation tolerance. The response checks each component's arithmetic,
+currency/source and date provenance. Missing/mismatched component monetary
+outputs fail safely instead of displaying a partial breakdown. Legacy
+components explicitly return a null projection. Aggregate changes can differ
+by tiny float/weight rounding from the sum of component changes; neither the
+existing portfolio forecast nor the exact holding amounts are rewritten to
+force a match. No monetary volatility contribution or prediction range is
+invented. Opening the standalone Asset Outlook still has no user amount.
+
 Missing and wrong-owner portfolios return identical `404 Portfolio not found`
 responses. Unusable allocations/holding states and unsupported assets return
 safe `409` responses. Insufficient common history, stale market data, artifact
@@ -221,8 +294,9 @@ residuals, and training metadata are never public.
 ## Experimental weekly forecasting
 
 The two additive `/horizons/{horizon_days}/outlook` routes above accept only
-`7`, `14` or `21`; other horizons return `422`. Use the unchanged original
-`/outlook` routes and contracts for 30 days. Bearer authentication, 17-asset
+`7`, `14` or `21`; other horizons return `422`. Use the original `/outlook`
+routes for 30 days; their portfolio response has the additive monetary object
+described above, while their existing model fields are unchanged. Bearer authentication, 17-asset
 symbol normalization and owner-safe portfolio lookup are unchanged. There is
 no request body, user-supplied weights, model selection, historical date or
 provider-refresh input. Requests read current persisted observations only.

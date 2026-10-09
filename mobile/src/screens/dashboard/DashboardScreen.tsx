@@ -336,7 +336,7 @@ export function DashboardScreen({ navigation }: { navigation: any }) {
             </Card>
             <View style={styles.actions}>
               <Button title="Analyze Portfolio" onPress={analyze} />
-              <Button title="View 30-Day Outlook" variant="secondary" onPress={() => navigation.navigate('MoreTab', { screen: 'Forecasting', params: { portfolioId: selectedId ?? undefined, returnToHome: true }, initial: false })} />
+              <Button title="View Forecast Outlook" variant="secondary" onPress={() => navigation.navigate('MoreTab', { screen: 'Forecasting', params: { portfolioId: selectedId ?? undefined, returnToHome: true }, initial: false })} />
               <Button title="Reports" variant="secondary" onPress={() => navigation.navigate('MoreTab', { screen: 'Reports' })} />
               <Button title="Simulations" variant="secondary" onPress={() => navigation.navigate('Simulate', { screen: 'Simulations' })} />
             </View>

@@ -185,7 +185,12 @@ def composition():
     service = module.PortfolioForecastService(session)
     service._baseline = MagicMock()
     service._baseline.resolve.return_value = SimpleNamespace(
-        resolved_weights=weights(.6,.4), baseline_kind=SimpleNamespace(value="current"))
+        resolved_weights=weights(.6,.4), baseline_kind=SimpleNamespace(value="current"),
+        valuation=SimpleNamespace(total_current_value_usd=Decimal("10000"), requested_date=TODAY,
+            oldest_price_as_of=TODAY-timedelta(days=2), newest_price_as_of=TODAY,
+            holdings=(SimpleNamespace(symbol="AAPL", current_value_usd=Decimal("6000"), price_as_of=TODAY),
+                SimpleNamespace(symbol="MSFT", current_value_usd=Decimal("4000"), price_as_of=TODAY-timedelta(days=2)))),
+        valuation_as_of=TODAY, planned_allocation=None)
     service._market_data = MagicMock()
     service._market_data.get_range.return_value = prices()
     inference = MagicMock()
@@ -216,6 +221,14 @@ def test_authoritative_weights_arithmetic_return_origins_and_reused_inference(co
     assert all(call.kwargs == {"reference_date": TODAY} for call in inference.predict.call_args_list)
     response = map_portfolio_outlook(result)
     assert response.baseline_kind == "current"
+    assert response.monetary_projection.baseline_amount == Decimal("10000")
+    assert response.monetary_projection.expected_change_amount == Decimal(str(result.expected_return_30d)) * 10000
+    assert response.monetary_projection.valuation_requested_date == TODAY
+    assert response.monetary_projection.oldest_price_as_of == TODAY-timedelta(days=2)
+    assert [c.monetary_projection.baseline_amount for c in response.components] == [Decimal("6000"), Decimal("4000")]
+    assert [c.monetary_projection.expected_change_amount for c in response.components] == [Decimal("600"), Decimal("-200")]
+    assert [c.monetary_projection.estimated_ending_value for c in response.components] == [Decimal("6600"), Decimal("3800")]
+    assert response.components[1].monetary_projection.oldest_price_as_of == TODAY-timedelta(days=2)
     assert response.components[0].return_prediction_interval.lower == -.2
     assert not any("interval" in key for key in response.model_dump())
     for name in ("commit","add","delete","execute"):
@@ -243,14 +256,17 @@ def test_invalid_component_or_inconsistent_provenance_rejected(composition,chang
         service.predict(portfolio)
 
 
-@pytest.mark.parametrize("mode", ["LEGACY","PLANNED","CURRENT"])
-def test_real_baseline_infrastructure_preserves_supported_modes(mode):
+@pytest.mark.parametrize("mode,currency", [("LEGACY",None),("PLANNED","USD"),("PLANNED","THB"),("CURRENT",None)])
+def test_real_baseline_infrastructure_preserves_supported_modes(mode, currency):
     session = MagicMock(spec=Session)
-    portfolio = Portfolio(id=uuid4(),name="Modes",portfolio_type=mode,plan_currency="USD" if mode=="PLANNED" else None)
+    portfolio = Portfolio(id=uuid4(),name="Modes",portfolio_type=mode,plan_currency=currency)
     portfolio.holdings = [Holding(id=uuid4(),symbol=s,position=i,
         weight=Decimal(w) if mode=="LEGACY" else None,
         proposed_amount=Decimal(a) if mode=="PLANNED" else None,
-        shares=Decimal(q) if mode=="CURRENT" else None)
+        shares=Decimal(q) if mode=="CURRENT" else None,
+        invested_amount=Decimal("9999") if mode=="CURRENT" else None,
+        invested_currency="THB" if mode=="CURRENT" else None,
+        purchase_date=TODAY-timedelta(days=100) if mode=="CURRENT" else None)
         for i,(s,w,a,q) in enumerate([("AAPL",".6","60","3"),("MSFT",".4","40","1")])]
     service = module.PortfolioForecastService(session)
     observations = [MarketData(symbol="AAPL",date=TODAY,adjusted_close=Decimal(20)),
@@ -265,6 +281,20 @@ def test_real_baseline_infrastructure_preserves_supported_modes(mode):
     assert [c.current_weight for c in result.components] == pytest.approx([.6,.4])
     assert result.baseline_kind == mode.lower()
     assert valuation.call_count == (1 if mode=="CURRENT" else 0)
+    if mode == "LEGACY":
+        assert result.monetary_projection is None
+        assert all(c.monetary_projection is None for c in result.components)
+    else:
+        money = result.monetary_projection
+        assert money.baseline_amount == Decimal("100")  # Shares x latest price, not purchase cost.
+        assert money.currency == (currency or "USD")
+        assert money.expected_change_amount == Decimal("10")
+        assert money.estimated_ending_value == Decimal("110")
+        assert money.hypothetical == (mode == "PLANNED")
+        assert money.assumes_unchanged_fx == (currency == "THB")
+        assert [c.monetary_projection.baseline_amount for c in result.components] == [Decimal("60"), Decimal("40")]
+        assert [c.monetary_projection.expected_change_amount for c in result.components] == [Decimal("6"), Decimal("4")]
+    map_portfolio_outlook(result)  # Validate production resolver provenance as well as the calculation.
 
 
 @pytest.mark.parametrize("mode", ["CURRENT","LEGACY","PLANNED"])

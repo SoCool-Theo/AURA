@@ -1,6 +1,7 @@
 # Web forecasting V1 integration report
 
-Date: 2026-10-07; weekly web integration checkpoint: 2026-10-08
+Date: 2026-10-07; weekly web integration checkpoint: 2026-10-08;
+portfolio monetary integration checkpoint: 2026-10-09
 
 ## Delivered scope
 
@@ -167,3 +168,52 @@ Suggested checkpoint commit: `feat(web): integrate experimental weekly forecast 
 
 No commit, push, migration, training, deployment, provider update, or saved-result
 mutation was performed. Unrelated report files/status edits were preserved.
+
+## Portfolio monetary integration checkpoint
+
+The 7/14/21/30-day portfolio views now consume the backend's overall and
+per-component `monetary_projection` fields. Compact cards show the baseline,
+expected gain/loss and estimated ending value. The asset breakdown shows each
+holding's baseline, own forecast change and ending estimate, alongside the
+existing percentages. No amount is derived from portfolio weights or overall
+return in the browser.
+
+CURRENT uses persisted USD prices times owned shares, with requested valuation
+date and actual price-date provenance; it does not use purchase cost or saved
+analysis. PLANNED uses entered USD/THB investment amounts and remains explicitly
+hypothetical. THB assumes unchanged FX. LEGACY stays percentage-only, and
+standalone Asset Outlook is unchanged and does not receive the user's amounts.
+
+Selected and comparison charts offer Expected change in the returned currency,
+in addition to Return and Volatility. Money guides require identical baseline
+context, currency and market-data date and adjacent available horizons. No
+daily forecast, monetary interval or volatility-as-loss estimate is introduced.
+Display formatting rounds backend Decimal strings to cents without float
+precision loss; numbers are used only for geometry. Compact money axes fit the
+existing chart, while point/accessibility labels retain displayed cents.
+Amounts outside the chart's safe numeric range stay in the cards/table and are
+not scaled into substitute forecasts.
+
+The existing Hide portfolio values preference masks all new amounts. A selected
+money chart immediately falls back to percentages while hidden, without leaking
+money into point properties, accessibility labels or baseline keys. Missing or
+malformed required monetary context is rejected by the existing response guard.
+
+Changed files: forecasting types, the new pure `forecastingMoney.ts` formatter
+and context checks, `forecastingUi.ts`, results/comparison/chart components,
+forecasting CSS and regression tests, plus this report and CURRENT_STATUS.md.
+No dependencies, backend/mobile code, artifacts or APIs were changed.
+
+Verification run by Codex (the user now permits direct test execution):
+
+- Backend forecasting/schema/API suite: 1,061 passed in 52.28 seconds.
+- Forecasting web regressions: 29 passed, including exact cents, all horizons,
+  baseline modes, holding amounts, privacy, chart gaps and malformed responses.
+- Full web/shared-client suite: 138 passed, one pre-existing product-branding
+  failure caused by unrelated report-outline wording in CURRENT_STATUS.md,
+  also present before these changes. That content remains unchanged.
+- TypeScript and production build passed; the existing large-chunk warning
+  remains. Signed-in visual acceptance of the new monetary views is pending.
+
+Suggested commit: `feat(web): show portfolio forecast amounts and holding breakdowns`.
+No staging, commit, push, migration, model training or data mutation was run.

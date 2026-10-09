@@ -263,7 +263,7 @@ export function PortfolioAnalysisScreen({
           title="Analytics"
           subtitle="Analyze historical risk and save the results."
         />
-        <Button title="View 30-Day Outlook" variant="secondary" onPress={() => navigation.navigate('Forecasting', { portfolioId: selectedPortfolioId || undefined })} />
+        <Button title="View Forecast Outlook" variant="secondary" onPress={() => navigation.navigate('Forecasting', { portfolioId: selectedPortfolioId || undefined })} />
 
         {listStatus === 'error' ? (
           <InlineErrorCard
