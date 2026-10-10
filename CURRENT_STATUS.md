@@ -3567,3 +3567,51 @@ remain separate follow-on work.
   content is preserved. No frontend/mobile changes, staging, commit, or push.
   AI Monitoring, System Health, user mutations, manual refresh, and admin web/
   shared-login integration remain subsequent work.
+
+### Admin backend System Health observations — 2026-10-10
+
+- Added protected read-only `GET /api/admin/system-health`, reporting a UTC
+  check clock, healthy/degraded/unavailable/unknown summary, explicit partial
+  coverage, eight component checks, and the existing nullable market status.
+  API/authentication evidence concerns the successfully authorized request only.
+  The database check executes `SELECT 1` with actual monotonic-clock latency;
+  no other component receives invented timing. New schema/repository/service
+  files follow the existing layers and the admin router retains its role guard.
+- Worker heartbeat, required-observation freshness, and latest refresh result
+  use the existing shared status service/rules and remain separate checks.
+  Offline/stale/missing/partial/failed conditions lower the summary. No heartbeat,
+  no recorded attempt, or a recorded running flag remains unknown rather than
+  claiming an active updater. Provider and analytics are always not_checked;
+  a healthy summary describes only observed components with partial coverage,
+  not proof that all services are operational. No provider call, download,
+  portfolio calculation, forecast, model loading/training/evaluation, or artifact
+  work is performed.
+- PostgreSQL sets a transaction-local two-second statement timeout before the
+  ping and subsequent market-status reads. This does not persist settings or
+  bound earlier authorization/connection work or the whole HTTP request. The
+  session owner closes the uncommitted transaction. The service does not write
+  rows/events, flush, commit, roll back, or close the caller's session itself.
+  A failed post-authorization ping stops further reads and returns a structured
+  unavailable summary. Status-query/validation failures preserve successful
+  ping evidence while marking market checks unavailable and the summary degraded.
+- Known probe failures return HTTP 200 with explicit health statuses; clients
+  must inspect the payload. Unknown checks are never healthy fallbacks. Customers
+  and demoted admins receive 403, invalid/deleted-account credentials receive
+  401 before probes; database-dependent authorization is never bypassed. Failures
+  outside component probes receive sanitized 503. No exception text, connection
+  string, secret, identity, path, or raw SQL is returned. Public `/api/health`
+  remains unchanged and independent of database setup. No HTTP write methods.
+- Verification: 1,283 selected tests passed in 21.08 seconds, including real
+  FastAPI/Bearer/role/synthetic SQLite query acceptance, actual timed ping,
+  missing/current observation and unknown-worker reporting, failure/unknown
+  precedence, safe errors, fixed read query counts/no writes or refresh, shared
+  market status, public health isolation, and existing admin/audit/auth/market/
+  database/schema/scheduler/bootstrap regressions. PostgreSQL timeout SQL/order
+  is mocked; live cancellation/reset behavior and deployment/provider/browser
+  acceptance remain pending. OpenAPI confirms 41 paths/52 operations; whitespace
+  checks passed. No application database was migrated or changed.
+- Updated admin/public contracts, contract index, and route inventory regression.
+  No new dependency, migration, frontend/mobile change, staging, commit, or push.
+  Work remains on `feat/admin-web-foundation`; unrelated untracked docs/report
+  content is preserved. AI Monitoring, user mutations, manual market refresh,
+  and admin web/shared-login integration remain subsequent work.

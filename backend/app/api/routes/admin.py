@@ -22,6 +22,7 @@ from app.schemas.admin_market_data import (
     AdminMarketInventoryResponse,
     AdminMarketObservationsResponse,
 )
+from app.schemas.admin_system_health import AdminSystemHealthResponse
 from app.schemas.audit_log import (
     AuditAction,
     AuditActorKind,
@@ -32,6 +33,7 @@ from app.schemas.audit_log import (
 from app.schemas.market_data_status import MarketDataStatusResponse
 from app.services.admin_market_data_service import AdminMarketDataService
 from app.services.admin_overview_service import AdminOverviewService
+from app.services.admin_system_health_service import AdminSystemHealthService
 from app.services.audit_log_service import AuditLogService
 from app.services.market_data_status_service import MarketDataStatusService
 
@@ -128,6 +130,17 @@ def list_admin_market_observations(
         return AdminMarketDataService(session).observations(query)
     except (SQLAlchemyError, ValidationError) as error:
         raise HTTPException(status_code=503, detail="Admin market-data observations unavailable") from error
+
+
+@router.get("/system-health", response_model=AdminSystemHealthResponse)
+def get_admin_system_health(
+    session: DatabaseSession, current_admin: CurrentAdmin,
+) -> AdminSystemHealthResponse:
+    """Report observed component health, including structured probe failures."""
+    try:
+        return AdminSystemHealthService(session).get()
+    except (SQLAlchemyError, ValidationError) as error:
+        raise HTTPException(status_code=503, detail="Admin system health unavailable") from error
 
 
 @router.get("/audit-logs", response_model=AuditLogListResponse)

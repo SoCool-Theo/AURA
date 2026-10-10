@@ -1,10 +1,10 @@
 # Administration backend contracts
 
 The backend supplies the access boundary, Audit Log storage/query API, Dashboard
-statistics, a read-only Users directory, and Market Data inventory/status/history
-for Aura's separate admin website. User mutations, Market Data refresh requests,
-AI Monitoring, System Health
-aggregation, and admin web integration remain subsequent work.
+statistics, a read-only Users directory, Market Data inventory/status/history,
+and System Health checks for Aura's separate admin website. User mutations,
+Market Data refresh requests, AI Monitoring, and admin web integration remain
+subsequent work.
 
 ## Persisted roles
 
@@ -379,3 +379,90 @@ and offline PostgreSQL SQL compilation. Decimal mapping also verifies full
 `Numeric(28,12)` precision with a synthetic Decimal fixture, because SQLite's
 numeric storage does not establish PostgreSQL numeric precision. Live PostgreSQL,
 real-provider, worker-deployment, and browser acceptance remain pending.
+
+## System Health
+
+`GET /api/admin/system-health` requires Bearer authentication and the persisted
+admin role. This is a read-only observation endpoint, separate from public
+`GET /api/health`, which still reports application liveness without a database
+dependency. No new migration, dependency, startup task, or external probe is added.
+
+The response contains `checked_at` (UTC request-start clock), `status`,
+`coverage: partial`, `checks`, and nullable `market_data`. Each check contains a
+stable `component` identifier, `status`, an allowlisted `reason`, and nullable
+`latency_ms`. No exception text, SQL, database URL, secret, account identity,
+host paths, or invented timings are returned.
+
+| Component | Evidence and status |
+| --- | --- |
+| `api` | `healthy`, `request_received`: this request reached the authorized handler; not uptime or fleet health |
+| `authentication` | `healthy`, `admin_authorized`: this request passed signed-token and persisted-role authorization; not a probe of registration/password login |
+| `database` | Executes `SELECT 1` on the request's already authorized connection; `healthy`/`database_query_succeeded` or `unavailable`/`database_query_failed` |
+| `market_data_worker` | Shared heartbeat rules map `online` to `healthy`/`worker_online`, `offline` to `degraded`/`worker_offline`, and no heartbeat to `unknown`/`worker_unknown` |
+| `market_data` | Shared required-instrument freshness maps current observations to `healthy`/`observations_current`, stale or missing observations to `degraded`/`observations_stale` or `observations_missing` |
+| `market_data_refresh` | Latest stored attempt: success is `healthy`/`refresh_success`; partial/failed is `degraded`/`refresh_partial` or `refresh_failed`; never/running is `unknown`/`refresh_never_run` or `refresh_running` |
+| `market_data_provider` | Always `not_checked`/`probe_not_run`; no provider connectivity request or download is made |
+| `analytics` | Always `not_checked`/`probe_not_run`; no calculation, forecast, model loading/training/evaluation, or artifact operation is run |
+
+`checks` are returned in the order above. Only the database check has a measured
+`latency_ms`, using a monotonic clock around timeout setup and `SELECT 1`;
+it is server-side probe duration, not end-to-end request or remote service
+latency. Other checks have null latency. A reachable database does not prove
+schema/migration completeness, write permissions, or connectivity from another
+worker/host.
+
+The PostgreSQL probe sets `SET LOCAL statement_timeout = '2000ms'` for this
+request transaction before querying. Subsequent shared market-status reads
+use the same per-statement bound. No persistent database setting is changed:
+the request owner closes its uncommitted session, rolling back transaction-local
+settings. This is not a hard HTTP deadline or an authentication/connection
+timeout; token/account authorization happens first. The SQLite test fixture
+skips PostgreSQL timeout SQL. No tables, market rows, users, or audit events are
+written, and the health service never commits, rolls back, or closes the caller's
+session itself.
+
+When the ping fails after authorization, `database` is unavailable and the three
+market checks become `unknown`/`database_unavailable`; no further SQL reads are
+attempted in a potentially failed transaction and `market_data` is null. If the
+ping succeeds but shared status has a database/validation failure, all three
+market checks become `unavailable`/`market_status_unavailable` and `market_data`
+is null. The successful ping evidence remains visible. Known probe failures do
+not turn into successful empty or healthy fallbacks.
+
+Otherwise `market_data` contains exactly the existing
+[daily refresh status](market_data.md#daily-refresh-status), evaluated with the
+same `checked_at` clock. Its heartbeat, observation freshness, last-attempt
+metadata, and prior last-complete marker remain independent. A recorded
+`running` flag alone cannot prove an active updater, so its refresh check is
+unknown. A failed/partial attempt lowers the summary even with current prices
+and a recent worker heartbeat. A successful historical attempt alone cannot
+make stale prices or an offline worker healthy. The singleton is latest state,
+not a durable history or fleet-wide measurement.
+
+### Summary semantics and HTTP errors
+
+- `unavailable`: database ping failed after successful authorization.
+- `degraded`: database ping succeeded, but an observed worker/freshness/refresh
+  check is degraded or unavailable. This takes precedence over unknown checks.
+- `unknown`: no observed degradation, but worker/refresh evidence is unknown.
+- `healthy`: all observed API/auth/database/worker/freshness/refresh checks are
+  healthy. Provider and analytics remain unprobed, so `coverage` stays `partial`;
+  this must not be displayed as proof that all services are operational.
+
+Known probe failures still return `200` with structured component/summary
+statuses: HTTP success means the authorized health observation was produced,
+not that the system is healthy. Clients must inspect the payload. Missing,
+invalid, expired, or deleted-account credentials return `401`, and customers
+or demoted admins return `403` before probes run. If authorization cannot query
+the database, this protected report cannot be reached; it never bypasses the
+role check or falls back to anonymous diagnostics. Unexpected database or
+response-validation failures outside the component probes return sanitized
+`503`, `{"detail":"Admin system health unavailable"}`. No HTTP mutations are
+exposed.
+
+Automated verification covers real FastAPI/Bearer/role/SQLite reads, truthful
+missing/current data and unknown-worker reporting, fixed query counts/no
+writes or refresh, failure/unknown precedence, safe failures, actual timed-ping
+mapping, and mocked PostgreSQL transaction-local timeout SQL/order. This does
+not establish live PostgreSQL cancellation/reset behavior, real-provider
+connectivity, analytics execution, deployment health, or browser integration.

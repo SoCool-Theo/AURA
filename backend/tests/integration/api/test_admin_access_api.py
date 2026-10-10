@@ -147,6 +147,7 @@ def test_admin_openapi_requires_bearer_and_exposes_no_role_write():
     assert set(paths) == {
         "/api/admin/me", "/api/admin/audit-logs", "/api/admin/dashboard", "/api/admin/users",
         "/api/admin/market-data", "/api/admin/market-data/status", "/api/admin/market-data/observations",
+        "/api/admin/system-health",
     }
     assert set(paths["/api/admin/me"]) == {"get"}
     operation = paths["/api/admin/me"]["get"]
