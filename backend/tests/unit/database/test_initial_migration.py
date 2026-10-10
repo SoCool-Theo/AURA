@@ -41,6 +41,7 @@ WATCHLIST_REVISION = "a8d3f1c6b2e7"
 PROFILE_REVISION = "b9e4d2f7c1a6"
 NOTIFICATION_REVISION = "c3d5e7f9a2b4"
 REFRESH_REVISION = "d6e8f0a2b4c6"
+ADMIN_ROLE_REVISION = "e7f9a1b3c5d8"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -324,6 +325,18 @@ def _captured_upgrade() -> tuple[
         refresh_revision.upgrade()
     for create_call in refresh_table.call_args_list:
         sa.Table(create_call.args[0], metadata, *create_call.args[1:])
+    admin_revision = _script_directory().get_revision(ADMIN_ROLE_REVISION).module
+    with (
+        patch.object(admin_revision.op, "add_column") as admin_column,
+        patch.object(admin_revision.op, "create_check_constraint") as admin_checks,
+    ):
+        admin_revision.upgrade()
+    for add_call in admin_column.call_args_list:
+        metadata.tables[add_call.args[0]].append_column(add_call.args[1])
+    for create_call in admin_checks.call_args_list:
+        metadata.tables[create_call.args[1]].append_constraint(
+            sa.CheckConstraint(create_call.args[2], name=create_call.args[0])
+        )
     return metadata, indexes
 
 
@@ -378,11 +391,12 @@ def _model_indexes() -> set[tuple[str, str, tuple[str, ...], bool]]:
     }
 
 
-def test_revisions_form_a_single_refresh_head() -> None:
+def test_revisions_form_a_single_admin_role_head() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
+        ADMIN_ROLE_REVISION,
         REFRESH_REVISION,
         NOTIFICATION_REVISION,
         PROFILE_REVISION,
@@ -394,7 +408,7 @@ def test_revisions_form_a_single_refresh_head() -> None:
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert script.get_current_head() == REFRESH_REVISION
+    assert script.get_current_head() == ADMIN_ROLE_REVISION
     for index, revision in enumerate(revisions):
         expected_parent = revisions[index + 1].revision if index + 1 < len(revisions) else None
         assert revision.down_revision == expected_parent
@@ -550,6 +564,9 @@ def test_postgresql_offline_upgrade_and_downgrade_sql_without_connection(
     assert "ADD COLUMN password_hash TEXT" in upgrade_sql
     assert "CONSTRAINT uq_users_email UNIQUE (email)" in upgrade_sql
     assert "CONSTRAINT ck_users_credentials_complete CHECK" in upgrade_sql
+    assert "ADD COLUMN role TEXT DEFAULT 'CUSTOMER' NOT NULL" in upgrade_sql
+    assert "CONSTRAINT ck_users_role CHECK (role IN ('CUSTOMER', 'ADMIN'))" in upgrade_sql
+    assert "CONSTRAINT ck_users_admin_credentials CHECK" in upgrade_sql
     assert "gen_random_uuid" not in upgrade_sql
     assert "uuid_generate" not in upgrade_sql
 
@@ -567,6 +584,9 @@ def test_postgresql_offline_upgrade_and_downgrade_sql_without_connection(
     assert "DROP INDEX ix_simulations_portfolio_created_at" in downgrade_sql
     assert "DROP INDEX ix_market_data_date" in downgrade_sql
     assert "DROP CONSTRAINT ck_users_credentials_complete" in downgrade_sql
+    assert "DROP CONSTRAINT ck_users_admin_credentials" in downgrade_sql
+    assert "DROP CONSTRAINT ck_users_role" in downgrade_sql
+    assert "DROP COLUMN role" in downgrade_sql
     assert "DROP CONSTRAINT uq_users_email" in downgrade_sql
     assert "DROP COLUMN password_hash" in downgrade_sql
     assert "DROP COLUMN email" in downgrade_sql

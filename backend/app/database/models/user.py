@@ -46,6 +46,11 @@ class User(Base):
             name="ck_users_timezone",
         ),
         UniqueConstraint("email", name="uq_users_email"),
+        CheckConstraint("role IN ('CUSTOMER', 'ADMIN')", name="ck_users_role"),
+        CheckConstraint(
+            "role != 'ADMIN' OR (email IS NOT NULL AND password_hash IS NOT NULL)",
+            name="ck_users_admin_credentials",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -79,6 +84,12 @@ class User(Base):
         nullable=False,
         default="Asia/Bangkok",
         server_default="Asia/Bangkok",
+    )
+    role: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="CUSTOMER",
+        server_default="CUSTOMER",
     )
 
     portfolios: Mapped[list[Portfolio]] = relationship(

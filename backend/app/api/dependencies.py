@@ -67,3 +67,20 @@ def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_current_admin(current_user: CurrentUser) -> User:
+    """Authorize the persisted role, never a client field or a token role claim."""
+    if (
+        current_user.role != "ADMIN"
+        or current_user.email is None
+        or current_user.password_hash is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access required",
+        )
+    return current_user
+
+
+CurrentAdmin = Annotated[User, Depends(get_current_admin)]

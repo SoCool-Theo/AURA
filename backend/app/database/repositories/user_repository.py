@@ -2,8 +2,9 @@
 
 from collections.abc import Mapping
 from typing import Any
+from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from ..models import User
@@ -22,10 +23,30 @@ class UserRepository:
 
     def create(self, *, email: str, password_hash: str) -> User:
         """Add and flush an already-canonical, already-hashed User."""
-        user = User(email=email, password_hash=password_hash)
+        user = User(email=email, password_hash=password_hash, role="CUSTOMER")
         self._session.add(user)
         self._session.flush()
         return user
+
+    def lock_admin_bootstrap(self) -> None:
+        """Serialize first-admin provisioning until the caller ends its transaction."""
+        self._session.execute(text("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE"))
+
+    def get_by_id(self, user_id: UUID) -> User | None:
+        return self._session.get(User, user_id)
+
+    def has_other_admin(self, user_id: UUID) -> bool:
+        statement = (
+            select(User.id)
+            .where(User.role == "ADMIN", User.id != user_id)
+            .limit(1)
+        )
+        return self._session.scalars(statement).first() is not None
+
+    def promote_to_admin(self, user: User) -> None:
+        """Persist an operator-authorized promotion without owning the transaction."""
+        user.role = "ADMIN"
+        self._session.flush()
 
     def update_profile(
         self,

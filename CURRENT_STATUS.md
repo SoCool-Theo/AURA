@@ -1279,9 +1279,9 @@ live portfolio valuation, editable profiles, password management, global
 Search, Notifications, support/contact APIs, report export/share/delete
 actions, and user-level report/simulation history optimization.
 
-Aura's Admin frontend remains a separate future workstream. No completed
-Admin role/authorization system, Admin-specific backend API, or Admin
-web/backend integration exists.
+Aura's Admin web/backend integration remains a separate workstream. The backend
+role and authorization foundation is documented in the 2026-10-10 progress entry
+below; the six admin monitoring/management modules remain pending.
 
 ## Backend AI Agent
 
@@ -3419,3 +3419,33 @@ remain separate follow-on work.
 - Updated focused tests and the mobile integration report. No backend/web code,
   models/artifacts, migration, provider update, training or saved-data changes.
   No staging, commit or push; unrelated untracked docs/report content is preserved.
+
+### Admin backend access foundation — 2026-10-10
+
+- Added persisted `CUSTOMER`/`ADMIN` roles and migration `e7f9a1b3c5d8` after
+  `d6e8f0a2b4c6`. Existing/legacy accounts default to customers; database checks
+  reject unsupported roles and administrators without credentials. Registration
+  explicitly creates customers and public registration/profile requests cannot
+  set a role. Existing customer authentication response shapes are unchanged.
+- Added the shared `CurrentAdmin` dependency and protected `/api/admin/me`
+  identity endpoint. Every request resolves the stored account role using the
+  existing Bearer token. Token role claims and client fields cannot grant access;
+  role changes take effect on the next request. Admins retain ownership checks
+  on customer portfolio endpoints. Identity responses exclude credential hashes.
+- Added an explicit first-admin operator command for an existing account UUID,
+  requiring `--apply`. PostgreSQL transaction-scoped locking serializes bootstrap
+  attempts; another account is refused once an admin exists. The same sole
+  admin is idempotent. Caller-owned commit/rollback and resource cleanup are
+  covered; CLI database failures are sanitized. No automatic startup provisioning.
+- Verification: 374 focused/regression tests passed in 12.67 seconds, covering
+  admin access, public authentication, portfolio APIs, database models/repositories,
+  migration consistency/offline PostgreSQL upgrade/downgrade SQL, and bootstrap
+  safety. Database persistence checks use SQLite; API and bootstrap database
+  sessions are mocked. OpenAPI confirms 34 paths/45 operations. Whitespace checks
+  passed. Live PostgreSQL migration/concurrent-lock and browser acceptance remain
+  pending; no application database was migrated and no real account promoted.
+- Updated public/admin contracts and migration-head regressions. This completes
+  the permission foundation only. Audit storage, the six admin module APIs, and
+  Admin web integration remain subsequent work. No frontend, dependencies, model
+  artifacts, training, staging, commit or push changes; untracked docs/report
+  content is preserved. Work remains on `feat/admin-web-foundation`.
