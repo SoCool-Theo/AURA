@@ -155,3 +155,39 @@ not establish live PostgreSQL, real-provider, or Cloudflare deployment readiness
 Known baseline checks: TypeScript has three missing Cloudflare worker type
 diagnostics. The full Node suite retains two existing failures for development
 preview metadata and the catalog's thin-scrollbar utility.
+
+### Docker PostgreSQL acceptance
+
+Use the approved Docker test database at `127.0.0.1:5433/aura_test`. The harness
+reads `TEST_DATABASE_URL` from ignored `.env.test-database` and validates the
+host, port, database, role and PostgreSQL version before writing. From the
+repository root:
+
+```powershell
+.\.venv\Scripts\python.exe Admin/tests/serve-postgres-fixture.py --check-only
+```
+
+It creates a unique temporary schema with a search path that excludes `public`,
+runs the actual Alembic migration chain, checks preservation of a pre-existing
+customer, provisions the synthetic first administrator using the real service,
+and checks all ten admin routes, permissions, aggregates, audit persistence,
+decimal observations and concurrent reads. Cleanup removes only the schema it
+created. Fingerprints of all existing public tables are compared before/after.
+No provider calls, worker startup or model execution occur.
+
+For client/browser acceptance, omit `--check-only`, then start the existing built
+preview and client check in separate terminals from `Admin`:
+
+```powershell
+node tests/serve-admin-preview.mjs
+node tests/admin-backend-acceptance.mjs
+```
+
+The PostgreSQL harness uses the same port `8019`, synthetic account shape and
+ignored credentials file as the SQLite harness; run only one backend harness at
+a time. Open `http://127.0.0.1:5192` for the browser check. Stop the preview and
+gracefully stop the Python server with Ctrl+C so its `finally` cleanup runs.
+A forced process termination can leave the temporary schema behind; never
+remove public tables or reset the Docker volume to clean up a fixture.
+Testing migrations in this disposable schema does not upgrade the persistent
+public application schema or provision a real administrator.

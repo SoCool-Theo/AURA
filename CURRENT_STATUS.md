@@ -3740,3 +3740,40 @@ remain separate follow-on work.
   changed. Work stays on `feat/admin-web-foundation`; untracked docs/report is
   preserved. Local fixture credentials/output are generated under ignored
   `Admin/.wrangler` and are not committed.
+
+### Admin Docker PostgreSQL acceptance — 2026-10-10
+
+- Verified the user-approved Docker PostgreSQL 18.4 instance at
+  `127.0.0.1:5433/aura_test` with role `aura`. Added an opt-in test-only harness
+  at `Admin/tests/serve-postgres-fixture.py`, documented in `Admin/README.md`.
+  It reads ignored `TEST_DATABASE_URL`, validates the local target, and creates
+  a unique disposable schema whose search path excludes `public`. Actual Alembic
+  migrations advance that schema from the existing application baseline
+  `a8d3f1c6b2e7` to head `a9b1c3d5e7f0`; a pre-existing synthetic legacy account
+  remains a CUSTOMER. The persistent public application revision is unchanged.
+- Real first-admin provisioning, repeated idempotent provisioning and rejection
+  of a second administrator passed. All 10 admin routes returned 200 for the
+  test administrator, 403 for a customer and 401 without credentials. Verified
+  exact dashboard totals/UTC trend, safe directory fields, one persisted
+  bootstrap audit event, exact PostgreSQL decimal prices and healthy database
+  observation. Thirty concurrent HTTP reads using independent PostgreSQL
+  sessions passed. The existing frontend-client acceptance passed all 10 runtime
+  response contracts, three rounds of parallel dashboard reads, pagination,
+  search/role/account-type filters, empty results and cleared-session behavior.
+  All 15 isolated admin client tests also passed.
+- Browser verification used the built admin preview with the real application
+  routers and synthetic data in PostgreSQL: customer rejection, administrator
+  login, all nine pages, user pagination/search/empty state, exact stored price,
+  measured database health, AI outcome filtering, persisted audit history,
+  verified profile, session restoration and logout/reload passed. Saved a real
+  PostgreSQL-backed dashboard screenshot outside the repository. No provider,
+  worker, model training/evaluation or deployment ran.
+- Graceful shutdown removed the temporary schema and generated credentials.
+  Existing public table inventory and hashes of every retained row matched the
+  initial fingerprint after cleanup. Docker volume, public data, public
+  migrations and existing account roles were preserved. No production backend
+  or client code, dependencies, architecture, staging, commit or push changed.
+  Existing development-preview, Cloudflare typing and two baseline Node-test
+  issues remain outstanding; hosting and real-provider acceptance are pending.
+  Work remains on `feat/admin-web-foundation`; unrelated untracked files were
+  preserved.
