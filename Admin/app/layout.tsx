@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Aura Admin Panel",
-  description: "System administration for Aura portfolio risk intelligence.",
+  description: "Administration for Aura, a portfolio risk education platform.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

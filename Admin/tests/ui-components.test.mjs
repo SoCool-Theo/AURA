@@ -13,8 +13,9 @@ const vite = await createServer({
   appType: "custom",
   configFile: false,
   root,
+  cacheDir: ".wrangler/ui-components-test-cache",
   resolve: { alias: { "@": root } },
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, hmr: false, ws: false },
 });
 
 after(async () => {

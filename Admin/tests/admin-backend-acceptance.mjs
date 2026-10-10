@@ -8,7 +8,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const credentials = JSON.parse(await readFile(new URL("../.wrangler/admin-fixture-credentials.json", import.meta.url), "utf8"));
 const baseUrl = process.argv[2] ?? "http://127.0.0.1:8019";
 assert.ok(["http://127.0.0.1:8019", "http://127.0.0.1:5191", "http://127.0.0.1:5192"].includes(baseUrl), "Use only the documented localhost fixture/preview ports");
-const vite = await createServer({ root, configFile: false, cacheDir: ".wrangler/admin-acceptance-cache", appType: "custom", server: { middlewareMode: true } });
+const vite = await createServer({ root, configFile: false, cacheDir: ".wrangler/admin-acceptance-cache", appType: "custom", server: { middlewareMode: true, hmr: false, ws: false } });
 try {
   const { createAdminApi } = await vite.ssrLoadModule("/lib/adminApi.ts");
   const values = new Map();

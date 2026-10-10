@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const vite = await createServer({ configFile: false, root, cacheDir: ".wrangler/admin-api-test-cache", appType: "custom", server: { middlewareMode: true } });
+const vite = await createServer({ configFile: false, root, cacheDir: ".wrangler/admin-api-test-cache", appType: "custom", server: { middlewareMode: true, hmr: false, ws: false } });
 after(() => vite.close());
 const { createAdminApi, ADMIN_TOKEN_KEY, apiOrigin } = await vite.ssrLoadModule("/lib/adminApi.ts");
 const contracts = await vite.ssrLoadModule("/lib/adminContracts.ts");

@@ -1,0 +1,5 @@
+{
+  // Type generation only; deployment bindings remain owned by vite.config.ts.
+  "compatibility_date": "2026-10-10",
+  "compatibility_flags": ["nodejs_compat"]
+}

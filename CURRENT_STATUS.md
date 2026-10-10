@@ -3777,3 +3777,47 @@ remain separate follow-on work.
   issues remain outstanding; hosting and real-provider acceptance are pending.
   Work remains on `feat/admin-web-foundation`; unrelated untracked files were
   preserved.
+
+### Admin local development and persistent test setup — 2026-10-10
+
+- Made normal admin development/build/lint commands portable to Windows
+  PowerShell. The bounded production build now uses Node instead of Bash.
+  Generated official worker runtime declarations using the installed Wrangler,
+  added a repeatable type-generation command, and retained optional D1 typing
+  for the unused scaffold. No dependencies, deployment bindings, architecture,
+  or backend persistence technology changed.
+- Corrected the HTML baseline test to check actual production metadata and the
+  administrator access guard; updated the description to portfolio risk
+  education platform wording. Added the scrolling utilities already referenced
+  by shared controls. SSR test caches are separate from the development server
+  and their HMR/WebSocket listeners are disabled to prevent interference.
+- The local database guard rejected the saved remote backend configuration
+  before any write. Preserved `backend/.env` and created only ignored
+  `backend/.env.local` for Docker PostgreSQL, a separate local JWT key, and
+  disabled AI-provider credentials. Applied the existing verified migration
+  chain to the approved persistent `127.0.0.1:5433/aura_test` public schema,
+  from `a8d3f1c6b2e7` to head `a9b1c3d5e7f0`. Fingerprints of every pre-existing
+  row's original column values matched after migration; the existing customer
+  role and all 95,488 market observations were preserved.
+- Created a dedicated synthetic local test administrator through AuthService
+  and deliberate first-admin provisioning, including its persisted bootstrap
+  audit event. Its generated credentials remain only in ignored
+  `.local-secrets/admin-dev-credentials.json`. The account and ignored local
+  configuration intentionally remain available for continued development;
+  passwords, JWT keys and database credentials are not committed or documented.
+- Verification: full admin Node suite 20 passed, 0 failed; TypeScript, ESLint
+  and the production build passed. Normal FastAPI startup with the local env
+  override and `npm run dev` on Windows passed all 10 real admin response
+  contracts directly and through the development proxy. Browser checks covered
+  login, Dashboard, Users, System Health, AI Monitoring, Activity Logs, Settings,
+  responsive navigation, source hot reload, session restoration and logout/reload.
+  Saved a real persistent-Docker dashboard screenshot outside the repository.
+- The existing build chunk warning remains. Vinext logged a development renderer
+  warning following hot reload, without blocking the verified pages or session
+  checks. Health correctly reports stale observations, one missing required
+  instrument and no worker/refresh heartbeat. Provider, worker and hosting
+  acceptance remain separate work; no provider calls or model runs occurred.
+  Verification servers stopped gracefully and ports 8000/5190 were released.
+  Updated `Admin/README.md` with startup, credentials and verification commands.
+  Work stays on `feat/admin-web-foundation`; unrelated untracked files were
+  preserved. No staging, commit, push, remote migration or deployment occurred.

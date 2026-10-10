@@ -2,6 +2,14 @@
 @import "tw-animate-css";
 @import "../vendor/shadcn-tailwind-4.13.0.css";
 
+/* Utilities already used by the shared scrolling components. */
+@utility scrollbar-thin { scrollbar-width: thin; }
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+@utility scrollbar-gutter-stable { scrollbar-gutter: stable; }
+
 /* Match the customer web palette; retain the existing admin layouts and themes. */
 :root, :root[data-aura-theme="dark"] {
   color-scheme:dark;
