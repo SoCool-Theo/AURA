@@ -20,6 +20,7 @@ DATABASE_URL = (
 
 def test_declarative_base_contains_registered_domain_tables() -> None:
     assert set(Base.metadata.tables) == {
+        "audit_logs",
         "market_data_refresh_state",
         "notifications",
         "notification_preferences",

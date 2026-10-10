@@ -1280,8 +1280,8 @@ Search, Notifications, support/contact APIs, report export/share/delete
 actions, and user-level report/simulation history optimization.
 
 Aura's Admin web/backend integration remains a separate workstream. The backend
-role and authorization foundation is documented in the 2026-10-10 progress entry
-below; the six admin monitoring/management modules remain pending.
+role/authorization and Audit Log foundations are documented in the 2026-10-10
+progress entries below; Admin web integration and the remaining modules are pending.
 
 ## Backend AI Agent
 
@@ -3449,3 +3449,39 @@ remain separate follow-on work.
   Admin web integration remain subsequent work. No frontend, dependencies, model
   artifacts, training, staging, commit or push changes; untracked docs/report
   content is preserved. Work remains on `feat/admin-web-foundation`.
+
+### Admin backend audit logging — 2026-10-10
+
+- Added `audit_logs` storage and migration `f8a0b2c4d6e9` after
+  `e7f9a1b3c5d8`, with UUIDs, database timestamps, actor/action/target fields,
+  JSONB details, actor consistency checks, and time/actor/target indexes.
+  Historical account UUIDs have no cascading foreign keys, preserving events
+  when an account is deleted. The application provides inserts and reads only;
+  database-level tamper prevention and retention cleanup are not implemented.
+- Added a reusable internal audit repository/service and typed event allowlist.
+  Current event `ADMIN_BOOTSTRAPPED` records only the CUSTOMER-to-ADMIN role
+  change, with an OPERATOR actor and no authenticated actor account. It shares
+  the bootstrap transaction: recording failure rolls back the promotion and
+  event; repeating the same sole-admin bootstrap produces no duplicate. Existing
+  roles/history, sign-ins, rejected attempts, and reads are not backfilled/logged.
+  Future admin mutations must explicitly extend the action/detail catalog.
+- Added protected `GET /api/admin/audit-logs` with bounded pagination and AND
+  filters for action, actor kind/UUID, target type/UUID, and inclusive UTC time
+  ranges. Newest-first timestamp/UUID order is deterministic; a single SQL
+  statement returns page and filtered total, including empty out-of-range pages.
+  Customers are denied before querying. Invalid filters return 422; audit-query
+  failures/corrupt event details return sanitized 503. No HTTP write methods,
+  credential fields, free text, or arbitrary metadata are accepted/exposed.
+- Verification: 432 relevant tests passed in 11.14 seconds, covering synthetic
+  SQLite-backed FastAPI/Bearer/role/repository integration, real synthetic
+  role/event persistence and rollback, idempotency, retention, filters/page totals,
+  metadata rejection, public authentication/portfolio regressions, database
+  models/repositories, bootstrap CLI, and offline PostgreSQL migration upgrade/
+  downgrade SQL. OpenAPI confirms 35 paths/46 operations. Whitespace checks passed.
+  Live PostgreSQL migration/concurrent-lock and browser acceptance remain pending.
+- Updated public/admin contracts, schema inventories, and migration-head
+  regressions. New provisioning requires both role and audit migrations. No
+  application database migration, real-account promotion, new dependencies,
+  frontend/mobile changes, model work, staging, commit, or push. The branch remains
+  `feat/admin-web-foundation`; untracked docs/report content is preserved. Remaining
+  admin module APIs and web integration are subsequent work.

@@ -26,6 +26,7 @@ PROFILE_REVISION = "b9e4d2f7c1a6"
 NOTIFICATION_REVISION = "c3d5e7f9a2b4"
 REFRESH_REVISION = "d6e8f0a2b4c6"
 ADMIN_ROLE_REVISION = "e7f9a1b3c5d8"
+AUDIT_REVISION = "f8a0b2c4d6e9"
 
 
 def _alembic_config() -> Config:
@@ -56,6 +57,7 @@ def test_alembic_environment_uses_aura_base_metadata() -> None:
     assert "from backend.app.database.base import Base" in environment_source
     assert "target_metadata = Base.metadata" in environment_source
     assert set(Base.metadata.tables) == {
+        "audit_logs",
         "market_data_refresh_state",
         "notifications",
         "notification_preferences",
@@ -89,7 +91,7 @@ def test_alembic_configuration_loads_without_connecting(
     script = ScriptDirectory.from_config(config)
 
     assert script.dir == str(ALEMBIC_DIRECTORY)
-    assert len(list(script.walk_revisions())) == 11
+    assert len(list(script.walk_revisions())) == 12
 
 
 def test_offline_migration_operation_does_not_connect(
@@ -114,10 +116,11 @@ def test_quantity_only_revision_extends_planned_portfolios() -> None:
         if path.name != "__init__.py"
     ]
 
-    assert len(revision_files) == 11
+    assert len(revision_files) == 12
     script = ScriptDirectory.from_config(_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        AUDIT_REVISION,
         ADMIN_ROLE_REVISION,
         REFRESH_REVISION,
         NOTIFICATION_REVISION,
@@ -132,4 +135,4 @@ def test_quantity_only_revision_extends_planned_portfolios() -> None:
     ]
     for index, revision in enumerate(revisions):
         assert revision.down_revision == (revisions[index + 1].revision if index + 1 < len(revisions) else None)
-    assert script.get_current_head() == ADMIN_ROLE_REVISION
+    assert script.get_current_head() == AUDIT_REVISION

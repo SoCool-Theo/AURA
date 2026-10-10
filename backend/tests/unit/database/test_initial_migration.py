@@ -20,6 +20,7 @@ from backend.app.database import Base
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_CONFIG_PATH = BACKEND_ROOT / "alembic.ini"
 EXPECTED_TABLES = {
+    "audit_logs",
     "market_data_refresh_state",
     "notifications",
     "notification_preferences",
@@ -42,6 +43,7 @@ PROFILE_REVISION = "b9e4d2f7c1a6"
 NOTIFICATION_REVISION = "c3d5e7f9a2b4"
 REFRESH_REVISION = "d6e8f0a2b4c6"
 ADMIN_ROLE_REVISION = "e7f9a1b3c5d8"
+AUDIT_REVISION = "f8a0b2c4d6e9"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -337,6 +339,18 @@ def _captured_upgrade() -> tuple[
         metadata.tables[create_call.args[1]].append_constraint(
             sa.CheckConstraint(create_call.args[2], name=create_call.args[0])
         )
+    audit_revision = _script_directory().get_revision(AUDIT_REVISION).module
+    with (
+        patch.object(audit_revision.op, "create_table") as audit_table,
+        patch.object(audit_revision.op, "create_index") as audit_indexes,
+    ):
+        audit_revision.upgrade()
+    for create_call in audit_table.call_args_list:
+        sa.Table(create_call.args[0], metadata, *create_call.args[1:])
+    indexes.extend(
+        (call.args[1], call.args[0], tuple(call.args[2]), call.kwargs.get("unique", False))
+        for call in audit_indexes.call_args_list
+    )
     return metadata, indexes
 
 
@@ -391,11 +405,12 @@ def _model_indexes() -> set[tuple[str, str, tuple[str, ...], bool]]:
     }
 
 
-def test_revisions_form_a_single_admin_role_head() -> None:
+def test_revisions_form_a_single_audit_head() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
+        AUDIT_REVISION,
         ADMIN_ROLE_REVISION,
         REFRESH_REVISION,
         NOTIFICATION_REVISION,
@@ -408,7 +423,7 @@ def test_revisions_form_a_single_admin_role_head() -> None:
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert script.get_current_head() == ADMIN_ROLE_REVISION
+    assert script.get_current_head() == AUDIT_REVISION
     for index, revision in enumerate(revisions):
         expected_parent = revisions[index + 1].revision if index + 1 < len(revisions) else None
         assert revision.down_revision == expected_parent
@@ -502,6 +517,7 @@ def test_uuid_identifiers_have_no_database_generated_defaults() -> None:
         "simulations",
         "watchlist_items",
         "notifications",
+        "audit_logs",
     ):
         id_column = migration_metadata.tables[table_name].c.id
         assert isinstance(id_column.type, sa.Uuid)
@@ -567,6 +583,8 @@ def test_postgresql_offline_upgrade_and_downgrade_sql_without_connection(
     assert "ADD COLUMN role TEXT DEFAULT 'CUSTOMER' NOT NULL" in upgrade_sql
     assert "CONSTRAINT ck_users_role CHECK (role IN ('CUSTOMER', 'ADMIN'))" in upgrade_sql
     assert "CONSTRAINT ck_users_admin_credentials CHECK" in upgrade_sql
+    assert "CONSTRAINT ck_audit_logs_actor CHECK" in upgrade_sql
+    assert "CREATE INDEX ix_audit_logs_created_at ON audit_logs (created_at, id)" in upgrade_sql
     assert "gen_random_uuid" not in upgrade_sql
     assert "uuid_generate" not in upgrade_sql
 
@@ -587,6 +605,7 @@ def test_postgresql_offline_upgrade_and_downgrade_sql_without_connection(
     assert "DROP CONSTRAINT ck_users_admin_credentials" in downgrade_sql
     assert "DROP CONSTRAINT ck_users_role" in downgrade_sql
     assert "DROP COLUMN role" in downgrade_sql
+    assert "DROP INDEX ix_audit_logs_created_at" in downgrade_sql
     assert "DROP CONSTRAINT uq_users_email" in downgrade_sql
     assert "DROP COLUMN password_hash" in downgrade_sql
     assert "DROP COLUMN email" in downgrade_sql

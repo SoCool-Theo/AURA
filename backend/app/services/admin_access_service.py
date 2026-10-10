@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 
 from ..database.models import User
 from ..database.repositories.user_repository import UserRepository
+from ..schemas.audit_log import AuditEventCreate, AuditRoleChangeDetails
+from .audit_log_service import AuditLogService
 
 
 class AdminBootstrapError(ValueError):
@@ -15,6 +17,7 @@ class AdminBootstrapError(ValueError):
 class AdminAccessService:
     def __init__(self, session: Session) -> None:
         self._repository = UserRepository(session)
+        self._audit = AuditLogService(session)
 
     def bootstrap_first_admin(self, user_id: UUID) -> User:
         """Promote one existing account; concurrent attempts are serialized."""
@@ -29,4 +32,13 @@ class AdminAccessService:
         if user.role != "CUSTOMER":
             raise AdminBootstrapError("Account role is not eligible for bootstrap")
         self._repository.promote_to_admin(user)
+        self._audit.record(
+            AuditEventCreate(
+                actor_kind="OPERATOR",
+                action="ADMIN_BOOTSTRAPPED",
+                target_type="USER",
+                target_id=user.id,
+                details=AuditRoleChangeDetails(previous_role="CUSTOMER", new_role="ADMIN"),
+            )
+        )
         return user
