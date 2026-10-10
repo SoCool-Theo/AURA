@@ -1,4 +1,21 @@
 import { ApiError } from '../../api/apiClient';
+import type {
+  DecimalString,
+  PortfolioCurrency,
+  PortfolioPlannedAllocationResponse,
+  PortfolioPlannedPreviewResponse,
+  PortfolioResponse,
+  PortfolioType,
+  PortfolioValuationResponse,
+} from '../../types/portfolio';
+
+export const PORTFOLIO_MARKET_DATA_RECOVERY_MESSAGE =
+  'New analysis is unavailable until market data is refreshed. Retry the current value after the refresh completes.';
+
+export type PortfolioAllocationDisplayHolding = {
+  symbol: string;
+  weight: number;
+};
 
 export function portfolioErrorMessage(
   error: unknown,
@@ -7,14 +24,108 @@ export function portfolioErrorMessage(
   return error instanceof ApiError ? error.message : fallback;
 }
 
-export function displayPercentage(decimalWeight: number): string {
-  return Number((decimalWeight * 100).toFixed(10)).toString();
+export function isPortfolioMarketDataUnavailable(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 503;
 }
 
-export function requestWeight(displayedPercentage: string): number {
-  return Number(displayedPercentage) / 100;
+export function portfolioValuationErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.status === 409) {
+    return 'This portfolio cannot be valued until all holdings use one complete supported format.';
+  }
+  if (isPortfolioMarketDataUnavailable(error)) {
+    return 'Current valuation is temporarily unavailable because required market or currency data is missing or stale.';
+  }
+  return portfolioErrorMessage(error, 'Current valuation is unavailable.');
 }
 
 export function formatPortfolioDate(value: string): string {
   return new Date(value).toLocaleString();
+}
+
+export function portfolioTypeLabel(type: PortfolioType): string {
+  if (type === 'PLANNED') return 'Planned portfolio';
+  if (type === 'LEGACY') return 'Legacy allocation';
+  return 'Current portfolio';
+}
+
+function finiteDecimal(value: DecimalString): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function formatPortfolioMoney(
+  value: DecimalString,
+  currency: PortfolioCurrency,
+): string {
+  const parsed = finiteDecimal(value);
+  if (parsed === null) return 'N/A';
+  const symbol = currency === 'THB' ? '฿' : '$';
+  return `${symbol}${parsed.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+export function formatSignedPortfolioMoney(
+  value: DecimalString,
+  currency: PortfolioCurrency,
+): string {
+  const parsed = finiteDecimal(value);
+  if (parsed === null) return 'N/A';
+  const symbol = currency === 'THB' ? '฿' : '$';
+  const magnitude = Math.abs(parsed).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  if (parsed > 0) return `+${symbol}${magnitude}`;
+  if (parsed < 0) return `−${symbol}${magnitude}`;
+  return `${symbol}${magnitude}`;
+}
+
+export function formatPortfolioQuantity(value: DecimalString): string {
+  const parsed = finiteDecimal(value);
+  return parsed === null
+    ? value
+    : parsed.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+}
+
+export function formatHoldingDecimalInput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : value;
+}
+
+export function formatPortfolioAllocation(value: DecimalString | number): string {
+  const parsed = typeof value === 'number' ? value : finiteDecimal(value);
+  return parsed === null || !Number.isFinite(parsed)
+    ? 'N/A'
+    : `${(parsed * 100).toFixed(2)}%`;
+}
+
+export function resolvedPortfolioAllocation(
+  portfolio: PortfolioResponse,
+  valuation: PortfolioValuationResponse | null,
+  planned: PortfolioPlannedAllocationResponse | PortfolioPlannedPreviewResponse | null,
+): PortfolioAllocationDisplayHolding[] {
+  if (portfolio.portfolio_type === 'CURRENT') {
+    return (valuation?.holdings ?? []).flatMap(holding => {
+      const weight = finiteDecimal(holding.current_allocation);
+      return weight === null ? [] : [{ symbol: holding.symbol, weight }];
+    });
+  }
+  if (portfolio.portfolio_type === 'PLANNED') {
+    return (planned?.holdings ?? []).flatMap(holding => {
+      const weight = finiteDecimal(holding.target_allocation);
+      return weight === null ? [] : [{ symbol: holding.symbol, weight }];
+    });
+  }
+  return portfolio.holdings.flatMap(holding => (
+    holding.weight == null
+      ? []
+      : [{ symbol: holding.symbol, weight: holding.weight }]
+  ));
 }

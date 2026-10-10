@@ -30,6 +30,18 @@ class RiskClassificationResult:
     reasons: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class AssetRiskClassificationResult:
+    """Contain deterministic risk classification for one asset."""
+
+    risk_score: float
+    risk_level: str
+    volatility_points: int
+    drawdown_points: int
+    metrics_used: tuple[str, ...]
+    reasons: tuple[str, ...]
+
+
 def _validated_real_scalar(value: float, input_name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
         raise TypeError(f"{input_name} cannot be Boolean")
@@ -218,6 +230,16 @@ def calculate_overall_risk_score(
     return score
 
 
+def calculate_asset_risk_score(
+    annualized_volatility: float,
+    max_drawdown: float,
+) -> float:
+    """Calculate one asset's educational risk score from applicable metrics."""
+    volatility_points = score_volatility(annualized_volatility)
+    drawdown_points = score_max_drawdown(max_drawdown)
+    return float((volatility_points + drawdown_points) / 6.0 * 100.0)
+
+
 def classify_risk_score(risk_score: float) -> str:
     """Classify a validated Aura risk score into its educational level."""
     validated = _validated_closed_range(
@@ -233,6 +255,43 @@ def classify_risk_score(risk_score: float) -> str:
     if validated < 75.0:
         return "High"
     return "Very High"
+
+
+def analyze_asset_risk_classification(
+    annualized_volatility: float,
+    max_drawdown: float,
+) -> AssetRiskClassificationResult:
+    """Return an asset-only score without portfolio concentration concepts."""
+    volatility_points = score_volatility(annualized_volatility)
+    drawdown_points = score_max_drawdown(max_drawdown)
+    risk_score = float(
+        (volatility_points + drawdown_points) / 6.0 * 100.0
+    )
+
+    reasons: list[str] = []
+    if volatility_points == 2:
+        reasons.append("Elevated historical volatility")
+    elif volatility_points == 3:
+        reasons.append("High historical volatility")
+
+    if drawdown_points == 2:
+        reasons.append("Significant historical drawdown")
+    elif drawdown_points == 3:
+        reasons.append("Severe historical drawdown")
+
+    if not reasons:
+        reasons.append(
+            "No major risk flags under Aura's current asset thresholds"
+        )
+
+    return AssetRiskClassificationResult(
+        risk_score=risk_score,
+        risk_level=classify_risk_score(risk_score),
+        volatility_points=volatility_points,
+        drawdown_points=drawdown_points,
+        metrics_used=("volatility", "maximum_drawdown"),
+        reasons=tuple(reasons),
+    )
 
 
 def analyze_risk_classification(

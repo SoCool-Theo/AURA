@@ -86,6 +86,71 @@ def test_update_market_data_defaults_end_date_to_today(tmp_path) -> None:
     assert result.requested_end_date == date.today().isoformat()
 
 
+def test_default_update_uses_assets_plus_internal_fx(tmp_path: Path) -> None:
+    raw_path = tmp_path / "raw.csv"
+    processed_path = tmp_path / "processed.csv"
+    provider = FakeProvider()
+
+    result, data = _update_market_data_with_frame(
+        start_date="2026-01-01",
+        end_date="2026-01-31",
+        provider=provider,
+        raw_path=raw_path,
+        processed_path=processed_path,
+    )
+
+    assert result.symbols == tuple(sorted(updater_module.MARKET_UPDATE_SYMBOLS))
+    assert "THB=X" in data["symbol"].tolist()
+    assert len(updater_module.DEFAULT_SYMBOLS) == 17
+    assert "THB=X" not in updater_module.DEFAULT_SYMBOLS
+
+
+def test_explicit_update_symbols_do_not_gain_internal_fx(tmp_path: Path) -> None:
+    result, _ = _update_market_data_with_frame(
+        symbols=["AAPL"],
+        start_date="2026-01-01",
+        end_date="2026-01-31",
+        provider=FakeProvider(),
+        raw_path=tmp_path / "raw.csv",
+        processed_path=tmp_path / "processed.csv",
+    )
+
+    assert result.symbols == ("AAPL",)
+
+
+def test_internal_fx_failure_preserves_successful_asset_rows(
+    tmp_path: Path,
+) -> None:
+    raw_data = pd.DataFrame(
+        {
+            "Date": ["2026-01-02"],
+            "Adj Close": [100.0],
+            "Volume": [1_000],
+            "symbol": ["AAPL"],
+            "source": ["fake"],
+        }
+    )
+    raw_data.attrs["failed_symbols"] = ("THB=X",)
+
+    with patch.object(
+        updater_module,
+        "fetch_historical_prices",
+        return_value=raw_data,
+    ):
+        result, data = _update_market_data_with_frame(
+            symbols=["AAPL", "THB=X"],
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            provider=FakeProvider(),
+            raw_path=tmp_path / "raw.csv",
+            processed_path=tmp_path / "processed.csv",
+        )
+
+    assert result.symbols == ("AAPL",)
+    assert result.failed_symbols == ("THB=X",)
+    assert data["symbol"].tolist() == ["AAPL"]
+
+
 def test_private_seam_returns_result_and_validated_canonical_frame(
     tmp_path: Path,
 ) -> None:

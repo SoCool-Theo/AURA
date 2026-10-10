@@ -36,6 +36,7 @@ APPLICATION_TABLES = {
     "market_data",
     "portfolios",
     "users",
+    "watchlist_items",
 }
 
 USER_A_ID = UUID("10000000-0000-0000-0000-000000000001")

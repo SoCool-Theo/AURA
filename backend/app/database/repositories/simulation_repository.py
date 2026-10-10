@@ -63,3 +63,8 @@ class SimulationRepository:
             Simulation.id == simulation_id,
         )
         return self._session.scalar(statement)
+
+    def delete(self, simulation: Simulation) -> None:
+        """Remove one already-scoped snapshot without committing."""
+        self._session.delete(simulation)
+        self._session.flush()

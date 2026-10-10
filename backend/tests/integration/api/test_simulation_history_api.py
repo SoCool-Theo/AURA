@@ -17,10 +17,15 @@ from app.core.security import create_access_token
 from app.database.models import User
 from app.main import app
 from app.schemas.simulation_history import (
+    SimulationBaselineHolding,
+    SimulationBaselineValuationContext,
     SimulationHistoryDetailResponse,
     SimulationHistoryListResponse,
     SimulationHistorySummary,
+    SimulationHistoryV2DetailResponse,
+    SimulationHistoryV3DetailResponse,
 )
+from app.schemas.portfolio import PlannedPortfolioBaselineContext
 from app.services.simulation_history_service import SimulationNotFoundError
 from backend.tests.unit.services.test_simulation_history_mapper import (
     _response_for_type,
@@ -36,6 +41,68 @@ LIST_PATH = f"/api/portfolios/{PORTFOLIO_ID}/simulations"
 DETAIL_PATH = f"{LIST_PATH}/{SIMULATION_ID}"
 REQUEST_HEADERS: dict[str, str] = {}
 CREATED_AT = datetime(2026, 8, 20, 9, 30, tzinfo=UTC)
+
+
+def test_delete_simulation_commits_once_and_returns_empty_204(api_harness) -> None:
+    api_harness.service.delete.return_value = True
+    response = api_harness.client.delete(DETAIL_PATH, headers=REQUEST_HEADERS)
+    assert response.status_code == 204
+    assert response.content == b""
+    api_harness.service.delete.assert_called_once_with(
+        user_id=OWNER_ID, portfolio_id=PORTFOLIO_ID, simulation_id=SIMULATION_ID,
+    )
+    api_harness.session.commit.assert_called_once_with()
+    api_harness.session.rollback.assert_not_called()
+
+
+def test_delete_openapi_requires_auth_and_has_no_response_body() -> None:
+    operation = app.openapi()["paths"]["/api/portfolios/{portfolio_id}/simulations/{simulation_id}"]["delete"]
+    assert operation["security"] == [{"HTTPBearer": []}]
+    assert "content" not in operation["responses"]["204"]
+
+
+@pytest.mark.parametrize("path", [f"{LIST_PATH}/invalid", f"/api/portfolios/invalid/simulations/{SIMULATION_ID}"])
+def test_delete_rejects_invalid_identifiers(api_harness, path) -> None:
+    response = api_harness.client.delete(path, headers=REQUEST_HEADERS)
+    assert response.status_code == 422
+    api_harness.service.delete.assert_not_called()
+    api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("parent_missing", [True, False])
+def test_delete_missing_or_unowned_returns_safe_404(api_harness, parent_missing) -> None:
+    if parent_missing:
+        api_harness.service.delete.return_value = None
+    else:
+        api_harness.service.delete.side_effect = SimulationNotFoundError
+    response = api_harness.client.delete(DETAIL_PATH, headers=REQUEST_HEADERS)
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Portfolio not found" if parent_missing else "Simulation not found"}
+    api_harness.session.commit.assert_not_called()
+    api_harness.session.rollback.assert_called_once_with()
+
+
+@pytest.mark.parametrize("headers", [{}, {"X-User-ID": str(OWNER_ID)}, {"Authorization": "Bearer invalid"}])
+def test_delete_requires_bearer_authentication(api_harness, headers) -> None:
+    response = api_harness.client.delete(DETAIL_PATH, headers=headers)
+    assert response.status_code == 401
+    api_harness.service.delete.assert_not_called()
+    api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("commit_failure", [True, False])
+def test_delete_failure_rolls_back_and_hides_internal_details(api_harness, commit_failure) -> None:
+    api_harness.service.delete.return_value = True
+    if commit_failure:
+        api_harness.session.commit.side_effect = RuntimeError("private database details")
+    else:
+        api_harness.service.delete.side_effect = RuntimeError("private database details")
+    response = api_harness.client.delete(DETAIL_PATH, headers=REQUEST_HEADERS)
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Unable to delete simulation"}
+    api_harness.session.rollback.assert_called_once_with()
+    if not commit_failure:
+        api_harness.session.commit.assert_not_called()
 
 
 @dataclass
@@ -113,6 +180,91 @@ def _detail(simulation_type: str) -> SimulationHistoryDetailResponse:
     return SimulationHistoryDetailResponse(
         **summary.model_dump(),
         result=result,
+    )
+
+
+def _v2_detail() -> SimulationHistoryV2DetailResponse:
+    summary = _summary("allocation")
+    result = _response_for_type("allocation").model_dump(mode="json")
+    result["portfolio_id"] = str(PORTFOLIO_ID)
+    return SimulationHistoryV2DetailResponse(
+        **summary.model_dump(),
+        schema_version="allocation-simulation-response-v2",
+        result=result,
+        baseline=SimulationBaselineValuationContext(
+            valuation_currency="USD",
+            valuation_date=date(2026, 9, 12),
+            oldest_price_as_of=date(2026, 9, 11),
+            newest_price_as_of=date(2026, 9, 12),
+            total_current_value_usd="1000.00",
+            holdings=[
+                SimulationBaselineHolding(
+                    id=UUID("53000000-0000-0000-0000-000000000001"),
+                    symbol="AAPL",
+                    invested_amount="500.00",
+                    invested_currency="THB",
+                    shares="4.00",
+                    purchase_date=date(2026, 1, 2),
+                    position=0,
+                    asset_price="150.00",
+                    asset_quote_currency="USD",
+                    price_as_of=date(2026, 9, 12),
+                    current_value_usd="600.00",
+                    current_allocation="0.60",
+                ),
+                SimulationBaselineHolding(
+                    id=UUID("53000000-0000-0000-0000-000000000002"),
+                    symbol="BND",
+                    invested_amount="400.00",
+                    invested_currency="USD",
+                    shares="5.00",
+                    purchase_date=date(2026, 2, 3),
+                    position=1,
+                    asset_price="80.00",
+                    asset_quote_currency="USD",
+                    price_as_of=date(2026, 9, 11),
+                    current_value_usd="400.00",
+                    current_allocation="0.40",
+                ),
+            ],
+        ),
+    )
+
+
+def _v3_detail() -> SimulationHistoryV3DetailResponse:
+    summary = _summary("allocation")
+    result = _response_for_type("allocation").model_dump(mode="json")
+    result["portfolio_id"] = str(PORTFOLIO_ID)
+    return SimulationHistoryV3DetailResponse(
+        **summary.model_dump(),
+        schema_version="allocation-simulation-response-v3",
+        result=result,
+        baseline=PlannedPortfolioBaselineContext(
+            portfolio_type="PLANNED",
+            baseline_source="proposed-amount-target-allocation",
+            plan_currency="THB",
+            total_proposed_amount="10000",
+            hypothetical_notice=(
+                "Hypothetical historical analysis only; not a forecast, "
+                "recommendation, or executable order."
+            ),
+            holdings=[
+                {
+                    "id": "53000000-0000-0000-0000-000000000001",
+                    "symbol": "MSFT",
+                    "proposed_amount": "6000",
+                    "target_allocation": "0.6",
+                    "position": 0,
+                },
+                {
+                    "id": "53000000-0000-0000-0000-000000000002",
+                    "symbol": "AAPL",
+                    "proposed_amount": "4000",
+                    "target_allocation": "0.4",
+                    "position": 1,
+                },
+            ],
+        ),
     )
 
 
@@ -274,6 +426,76 @@ def test_authenticated_detail_returns_exact_validated_result_contract(
     api_harness.service.save.assert_not_called()
     _assert_route_did_not_manage_session(api_harness)
     api_harness.session.rollback.assert_not_called()
+
+
+def test_authenticated_v2_detail_exposes_frozen_baseline_around_same_result(
+    api_harness: ApiHarness,
+) -> None:
+    detail = _v2_detail()
+    api_harness.service.get.return_value = detail
+
+    response = api_harness.client.get(DETAIL_PATH, headers=REQUEST_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json() == detail.model_dump(mode="json")
+    validated = SimulationHistoryV2DetailResponse.model_validate(
+        response.json()
+    )
+    assert validated == detail
+    assert response.json()["schema_version"] == (
+        "allocation-simulation-response-v2"
+    )
+    assert response.json()["baseline"]["valuation_currency"] == "USD"
+    assert response.json()["baseline"]["valuation_date"] == "2026-09-12"
+    assert [
+        holding["symbol"]
+        for holding in response.json()["baseline"]["holdings"]
+    ] == ["AAPL", "BND"]
+    assert response.json()["result"] == detail.result.model_dump(mode="json")
+    api_harness.service.get.assert_called_once_with(
+        user_id=OWNER_ID,
+        portfolio_id=PORTFOLIO_ID,
+        simulation_id=SIMULATION_ID,
+    )
+    _assert_route_did_not_manage_session(api_harness)
+
+
+def test_authenticated_v3_detail_exposes_frozen_planned_baseline(
+    api_harness: ApiHarness,
+) -> None:
+    detail = _v3_detail()
+    api_harness.service.get.return_value = detail
+
+    response = api_harness.client.get(DETAIL_PATH, headers=REQUEST_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json() == detail.model_dump(mode="json")
+    validated = SimulationHistoryV3DetailResponse.model_validate(
+        response.json()
+    )
+    assert validated == detail
+    assert response.json()["schema_version"] == (
+        "allocation-simulation-response-v3"
+    )
+    assert response.json()["baseline"]["portfolio_type"] == "PLANNED"
+    assert response.json()["baseline"]["plan_currency"] == "THB"
+    assert "estimated_shares" not in response.json()["baseline"]["holdings"][0]
+    _assert_route_did_not_manage_session(api_harness)
+
+
+def test_openapi_history_detail_includes_all_snapshot_generations(
+    api_harness: ApiHarness,
+) -> None:
+    schema = api_harness.client.get("/openapi.json").json()
+    response_schema = schema["paths"][
+        "/api/portfolios/{portfolio_id}/simulations/{simulation_id}"
+    ]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+
+    assert response_schema["anyOf"] == [
+        {"$ref": "#/components/schemas/SimulationHistoryDetailResponse"},
+        {"$ref": "#/components/schemas/SimulationHistoryV2DetailResponse"},
+        {"$ref": "#/components/schemas/SimulationHistoryV3DetailResponse"},
+    ]
 
 
 @pytest.mark.parametrize("portfolio_state", ["missing", "wrong-owner"])

@@ -7,9 +7,10 @@ import {
 import { go } from '../../app/routes';
 import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
+import { ConfirmationDialog } from '../../components/ui/ConfirmationDialog';
 import type { PortfolioSummaryResponse } from '../../types/portfolio';
 import type { PortfolioReportHistoryItem } from '../../types/report';
-import { analysisErrorMessage } from '../analytics/analyticsUi';
 import { ReportFilters } from './components/ReportFilters';
 import { ReportSummary } from './components/ReportSummary';
 import { ReportTable } from './components/ReportTable';
@@ -21,13 +22,14 @@ export function ReportsPage() {
   const [query, setQuery] = useState('');
   const [portfolioId, setPortfolioId] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const deletingReportIdsRef = useRef(new Set<string>());
   const [deletingReportIds, setDeletingReportIds] = useState<Set<string>>(
     new Set(),
   );
+  const [reportToDelete, setReportToDelete] = useState<PortfolioReportHistoryItem | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -54,7 +56,7 @@ export function ReportsPage() {
         )));
       })
       .catch(requestError => {
-        if (!controller.signal.aborted) setError(analysisErrorMessage(requestError, 'Unable to load report history.'));
+        if (!controller.signal.aborted) setError(requestError);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -78,21 +80,15 @@ export function ReportsPage() {
 
   async function remove(report: PortfolioReportHistoryItem) {
     if (deletingReportIdsRef.current.has(report.id)) return;
-    if (!confirm(
-      `Delete the saved analysis report for ${report.portfolio_name}? This cannot be undone.`,
-    )) return;
-
     deletingReportIdsRef.current.add(report.id);
     setDeletingReportIds(new Set(deletingReportIdsRef.current));
     setActionError(null);
     try {
       await deletePortfolioReport(report.portfolio_id, report.id);
       setReports(previous => previous.filter(item => item.id !== report.id));
+      setReportToDelete(null);
     } catch (requestError) {
-      setActionError(analysisErrorMessage(
-        requestError,
-        'Unable to delete report.',
-      ));
+      setActionError(requestError);
     } finally {
       deletingReportIdsRef.current.delete(report.id);
       setDeletingReportIds(new Set(deletingReportIdsRef.current));
@@ -105,22 +101,20 @@ export function ReportsPage() {
         <div>
           <span>IMMUTABLE ANALYSIS SNAPSHOTS</span>
           <h1>Reports</h1>
-          <p>Real report history composed from each owned portfolio’s reporting endpoint.</p>
+          <p>Review saved analysis snapshots from your current, planned, and legacy portfolios.</p>
         </div>
         <button className="primary-btn" onClick={() => go('analytics')}>
-          <Icon name="analysis" size={17} /> Create New Analysis
+          <Icon name="analytics" size={17} /> Create New Analysis
         </button>
       </header>
 
-      {actionError && (
-        <p className={styles.actionError} role="alert">{actionError}</p>
-      )}
+      {Boolean(actionError) && <InlineErrorCard error={actionError} fallbackMessage="Unable to delete report." />}
 
       {!loading && !error && <ReportSummary reports={reports} portfolioCount={portfolios.length} />}
 
       <Card className="reports-library-card">
         <div className="reports-library-heading">
-          <div><h2>Report Library</h2><p>Analysis snapshots are listed in portfolio order and backend history order.</p></div>
+          <div><h2>Report Library</h2><p>Browse immutable analysis snapshots for each portfolio.</p></div>
           <span>{visible.length} {visible.length === 1 ? 'report' : 'reports'}</span>
         </div>
 
@@ -133,15 +127,15 @@ export function ReportsPage() {
           onReset={resetFilters}
         />}
 
-        {loading && <div className="reports-empty-state" role="status"><span><Icon name="reports" size={28} /></span><h3>Loading report history</h3><p>Retrieving owned portfolios and their saved reports.</p></div>}
-        {error && <div className="reports-empty-state" role="alert"><span><Icon name="reports" size={28} /></span><h3>Report history unavailable</h3><p>{error}</p><button className="primary-btn" onClick={() => setReloadKey(key => key + 1)}>Try Again</button></div>}
+        {loading && <div className="reports-empty-state" role="status"><span><Icon name="reports" size={28} /></span><h3>Loading report history</h3><p>Retrieving your portfolios and saved reports.</p></div>}
+        {Boolean(error) && <ScreenErrorState error={error} fallbackMessage="Unable to load report history." resourceName="Report history" onRetry={() => setReloadKey(key => key + 1)} />}
         {!loading && !error && <ReportTable
           reports={visible}
           totalReportCount={reports.length}
           onOpen={report => go(`reports/${report.portfolio_id}/${report.id}`)}
           onCreateAnalysis={() => go('analytics')}
           onResetFilters={resetFilters}
-          onDelete={report => void remove(report)}
+          onDelete={report => { setActionError(null); setReportToDelete(report); }}
           deletingReportIds={deletingReportIds}
         />}
 
@@ -152,8 +146,19 @@ export function ReportsPage() {
       </Card>
       <div className="reports-education-note">
         <Icon name="shield" size={16} />
-        <p>Deletion permanently removes the saved backend report. Export, sharing, and download generation remain unavailable.</p>
+        <p>Deletion permanently removes the saved report. Export, sharing, and download generation remain unavailable.</p>
       </div>
+      {reportToDelete && <ConfirmationDialog
+        title="Delete report?"
+        description="This permanently removes the saved analysis snapshot and cannot be undone."
+        subjectLabel="Saved report"
+        subject={`${reportToDelete.portfolio_name} · ${reportToDelete.id}`}
+        confirmLabel="Delete Report"
+        busy={deletingReportIds.has(reportToDelete.id)}
+        error={actionError}
+        onCancel={() => { if (!deletingReportIds.has(reportToDelete.id)) { setReportToDelete(null); setActionError(null); } }}
+        onConfirm={() => void remove(reportToDelete)}
+      />}
     </div>
   );
 }

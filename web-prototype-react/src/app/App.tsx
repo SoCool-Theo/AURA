@@ -3,6 +3,7 @@ import { ProtectedRoute } from '../auth/ProtectedRoute';
 import { useAuth } from '../auth/useAuth';
 import { useHashRoute } from '../hooks/useHashRoute';
 import { AnalyticsPage } from '../pages/analytics/AnalyticsPage';
+import { ForecastingPage } from '../pages/forecasting/ForecastingPage';
 import { AssistantPage } from '../pages/assistant/AssistantPage';
 import { LoginPage } from '../pages/auth/LoginPage';
 import { RegisterPage } from '../pages/auth/RegisterPage';
@@ -14,21 +15,32 @@ import { PortfolioDetailPage } from '../pages/portfolios/PortfolioDetailPage';
 import { PortfoliosPage } from '../pages/portfolios/PortfoliosPage';
 import { ReportsPage } from '../pages/reports/ReportsPage';
 import { ReportDetailPage } from '../pages/reports/ReportDetailPage';
+import { AssetRiskDetailPage } from '../pages/reports/AssetRiskDetailPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
+import { HelpSupportPage } from '../pages/help/HelpSupportPage';
+import { NotificationsPage } from '../pages/notifications/NotificationsPage';
 import { SimulationsPage } from '../pages/simulations/SimulationsPage';
 import { SimulationHistoryDetailPage } from '../pages/simulations/SimulationHistoryDetailPage';
 import { WatchlistPage } from '../pages/watchlist/WatchlistPage';
+import { WelcomePage } from '../pages/welcome/WelcomePage';
 import { AppLayout } from './AppLayout';
 import { go } from './routes';
 
 function App() {
   const route = useHashRoute();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const isPublicAuthRoute = route.page === 'login' || route.page === 'signup';
+  const isWelcomeRoute = route.page === 'welcome';
 
   useEffect(() => {
-    if (isPublicAuthRoute && status === 'authenticated') go('dashboard');
-  }, [isPublicAuthRoute, status]);
+    if ((isPublicAuthRoute || isWelcomeRoute) && status === 'authenticated') go('dashboard');
+  }, [isPublicAuthRoute, isWelcomeRoute, status]);
+
+  if (isWelcomeRoute) {
+    if (status === 'authenticated') return null;
+    if (status === 'initializing') return <ProtectedRoute>{null}</ProtectedRoute>;
+    return <WelcomePage />;
+  }
 
   if (isPublicAuthRoute) {
     if (status === 'authenticated') return null;
@@ -41,17 +53,31 @@ function App() {
     case 'portfolios': content = <PortfoliosPage />; break;
     case 'portfolio': content = <PortfolioDetailPage key={route.id} portfolioId={route.id} />; break;
     case 'analytics': content = <AnalyticsPage key={route.id} portfolioId={route.id} />; break;
+    case 'forecasting': content = !route.id || route.id === 'portfolio' || route.id === 'asset'
+      ? <ForecastingPage key={`${user?.id ?? ''}:${route.id ?? ''}:${route.reportId ?? ''}`} scope={route.id === 'asset' ? 'asset' : 'portfolio'} selection={route.reportId} />
+      : <NotFoundPage />; break;
     case 'simulations': content = route.id && route.reportId
       ? <SimulationHistoryDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} simulationId={route.reportId} />
       : <SimulationsPage key={route.id} portfolioId={route.id} />; break;
-    case 'assistant': content = <AssistantPage />; break;
+    case 'assistant': content = <AssistantPage
+      key={[route.id, route.reportId, route.contextId].filter(Boolean).join('/')}
+      portfolioId={route.id}
+      reportId={route.reportId === 'report' ? route.contextId : route.contextId ? undefined : route.reportId}
+      simulationId={route.reportId === 'simulation' ? route.contextId : undefined}
+    />; break;
     case 'reports': content = route.id && route.reportId
-      ? <ReportDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} reportId={route.reportId} />
+      ? <ReportDetailPage key={`${route.id}/${route.reportId}`} portfolioId={route.id} reportId={route.reportId} focusAssetSection={route.contextId === 'assets'} focusRiskDrivers={route.contextId === 'risk-drivers'} />
       : <ReportsPage />; break;
+    case 'asset': content = route.id && route.reportId && route.contextId
+      ? <AssetRiskDetailPage key={`${route.id}/${route.reportId}/${route.contextId}`} portfolioId={route.id} reportId={route.reportId} assetSymbol={route.contextId} />
+      : <NotFoundPage />; break;
     case 'watchlist': content = <WatchlistPage />; break;
     case 'learn': content = <LearnPage />; break;
     case 'create': content = <CreatePortfolioPage />; break;
     case 'settings': content = <SettingsPage />; break;
+    case 'help': content = <HelpSupportPage />; break;
+    case 'notifications': content = <NotificationsPage key="inbox" />; break;
+    case 'notification-settings': content = <NotificationsPage key="notification-settings" settings />; break;
     case '404': content = <NotFoundPage />; break;
     default: content = <NotFoundPage />;
   }

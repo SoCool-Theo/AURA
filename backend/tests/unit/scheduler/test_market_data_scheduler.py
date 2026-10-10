@@ -97,3 +97,15 @@ def test_scheduler_core_has_no_runner_retry_or_persistent_job_store() -> None:
     assert "sleep" not in source
     assert "jobstore" not in source
     assert "update_market_data_and_persist" not in source
+
+
+def test_deployment_scheduler_registers_heartbeat_and_immediate_hourly_catchup():
+    job, heartbeat, catchup = Mock(), Mock(), Mock()
+    scheduler = create_market_data_scheduler(job, heartbeat_callable=heartbeat, catch_up_callable=catchup)
+    jobs = {entry.id: entry for entry in scheduler.get_jobs()}
+    assert len(jobs) == 3
+    assert jobs["market-data-worker-heartbeat"].trigger.interval.total_seconds() == 60
+    assert jobs["market-data-catch-up"].trigger.interval.total_seconds() == 3600
+    assert jobs["market-data-catch-up"].next_run_time.tzinfo is not None
+    assert all(entry.coalesce and entry.max_instances == 1 and entry.misfire_grace_time is None for entry in jobs.values())
+    job.assert_not_called(); heartbeat.assert_not_called(); catchup.assert_not_called()

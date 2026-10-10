@@ -1,6 +1,8 @@
 # Aura System Architecture
 
-This document defines Aura's backend, customer web, planned mobile, and shared client-backend architecture. Proposed structures are targets unless current repository evidence explicitly identifies them as implemented.
+This document defines Aura's backend, customer web, mobile, and shared
+client-backend architecture. Proposed structures are targets unless current
+repository evidence or `CURRENT_STATUS.md` identifies them as implemented.
 
 ## Quick Navigation
 
@@ -20,9 +22,9 @@ AURA/
 ├── AGENTS.md                      ← Tells Codex how to work on Aura
 ├── PROJECT_CONTEXT.md             ← What Aura is and why it is being built
 ├── CURRENT_STATUS.md              ← Tells Codex what has actually been completed
-├── backend/                       ← FastAPI backend, analytics, database, simulations, AI later
+├── backend/                       ← FastAPI backend, analytics, database, simulations, AI
 ├── web-prototype-react/            ← Customer React web application
-├── mobile/                        ← Customer mobile application / later work
+├── mobile/                        ← Customer mobile application
 ├── data/                          ← Shared market data
 ├── docs/                          ← Project documentation
 ├── .gitignore
@@ -32,8 +34,8 @@ AURA/
 # Architecture Decisions
 
 - Customer website uses React and TypeScript and lives under `web-prototype-react/`.
-- The planned customer mobile application uses React Native and TypeScript and lives under `mobile/`.
-- Website first, mobile application later.
+- The customer mobile application uses React Native and TypeScript and lives under `mobile/`.
+- The website and mobile application share one backend contract.
 - FastAPI remains the shared backend for the React web and React Native clients; there is no separate mobile backend.
 - PostgreSQL remains the backend persistence layer.
 - Clean historical data is used directly for calculations.
@@ -44,11 +46,13 @@ AURA/
 - Web and mobile may use different backend URLs during local development while preserving the same API contracts.
 - Analytics engine first.
 - Historical simulator after core analytics.
-- AI agent later.
+- The AI agent explains backend-owned deterministic results and remains
+  educational and non-advisory.
 - The dashboard remains concise while detailed analytics live on dedicated pages.
 - Web and mobile mock data is development/test data and remains separate from production API data.
 - Shared components, charts, styles, and types are separated from feature-specific pages.
-- Client AI interfaces may be planned, but real AI integration is not complete until the backend AI Agent is implemented.
+- The backend AI Agent and the current customer web/mobile AI integrations are
+  implemented; saved resources are grounded from frozen snapshots.
 - No ML training folder yet.
 
 ---
@@ -87,7 +91,7 @@ AURA/
 │   │   │       ├── health.py
 │   │   │       ├── portfolio.py
 │   │   │       ├── simulation.py
-│   │   │       └── agent.py                  ← Later
+│   │   │       └── agent.py
 │   │   │
 │   │   ├── analytics/
 │   │   │   ├── __init__.py
@@ -142,7 +146,7 @@ AURA/
 │   │   │   ├── analytics.py
 │   │   │   ├── market_data.py
 │   │   │   ├── simulation.py
-│   │   │   └── agent.py                     ← Later
+│   │   │   └── agent.py
 │   │   │
 │   │   ├── services/
 │   │   │   ├── __init__.py
@@ -150,7 +154,7 @@ AURA/
 │   │   │   ├── portfolio_service.py
 │   │   │   └── analysis_service.py
 │   │   │
-│   │   ├── agents/                           ← Later
+│   │   ├── agents/
 │   │   │   ├── __init__.py
 │   │   │   ├── agent.py
 │   │   │   ├── tools.py
@@ -235,9 +239,151 @@ AURA/
 | `database/` | Reads and saves stored data |
 | `schemas/` | Defines data input/output format |
 | `services/` | Coordinates the whole process |
-| `agents/` | AI explanation later |
+| `agents/` | Grounded educational AI explanation layer |
 | `core/` | Global settings and constants |
 | `utils/` | Small reusable helper functions |
+
+## Current Holding and Valuation Architecture
+
+The currently implemented compatibility architecture below is being extended
+by the approved [planned-portfolio target contract](../api_contracts/planned_portfolios.md).
+Type-aware CRUD exposes user-facing `CURRENT` and `PLANNED` portfolio types
+while retaining `LEGACY` as internal compatibility state. The shared baseline
+resolver, analysis composition, reporting, simulations, and AI grounding now
+support all three modes.
+
+Aura supports three complete, mutually exclusive persisted holding modes:
+
+| Mode | Persisted holding state | Current valuation |
+| --- | --- | --- |
+| `LEGACY` | `weight` is present; real-holding fields and `proposed_amount` are `NULL` | Not available |
+| `CURRENT` | `weight` and `proposed_amount` are `NULL`; `shares` is present; investment provenance is either complete or absent | Available from persisted current market data |
+| `PLANNED` | `proposed_amount` is present; `weight` and real-holding fields are `NULL` | Target allocation is derived without current prices; current valuation is not ownership-authoritative |
+
+For a current holding, the normal customer write contract is `symbol` plus
+positive `shares` (the quantity owned). The backend controls the zero-based
+`position` used to preserve order. Existing/full current records may also carry
+`invested_amount`, `invested_currency`, and `purchase_date` as one complete
+optional provenance group; Aura never fabricates those facts for new
+quantity-only rows. Aura does not persist manual weight, current allocation,
+current price, current value, or FX rate for current holdings.
+
+For a planned holding, the user controls `symbol` and positive
+`proposed_amount` in the portfolio's single `plan_currency`. The backend derives
+the total and exact canonical target allocation without market or FX data.
+`GET /api/portfolios/{portfolio_id}/planned-preview` may also derive estimated
+shares from a best-effort current USD asset price and, for THB plans, USD/THB
+FX. Each estimate carries explicit availability and provenance; estimates are
+never persisted and never influence canonical weights or analytics.
+
+`PortfolioBaselineResolutionService` is the sole analysis baseline resolver:
+
+```text
+CURRENT -> current valuation -> dynamic weights
+PLANNED -> proposed amounts -> target weights
+LEGACY  -> saved weights
+                            |
+                            v
+                   canonical weights
+                            |
+                            v
+                 analysis composition
+```
+
+For `CURRENT`, the same valuation also supplies the owned share quantities.
+Those fixed quantities are valued at every aligned historical price date to
+produce the portfolio-value and portfolio-return series. The current dynamic
+weights remain authoritative for concentration, diversification, and risk
+contribution.
+
+Planned analysis therefore does not require current-price or FX availability.
+It still requires sufficient aligned historical price data under the same
+no-fabrication rules as other portfolio modes.
+
+Current valuation is calculated once in `PortfolioValuationService`:
+
+```text
+current_value_usd = shares × latest valid USD market price
+total_current_value_usd = sum(current_value_usd)
+current_allocation = current_value_usd / total_current_value_usd
+```
+
+The maximum accepted age for each required current observation is four
+calendar days. USD is canonical. THB is an optional display currency using the
+internal `THB=X` series as USD/THB (THB per USD). Missing or stale `THB=X`
+disables THB display but does not affect USD valuation.
+
+The instrument registry deliberately separates 17 user-selectable assets from
+the internal `THB=X` market instrument. Default/scheduled updates cover both
+groups, while explicit user asset selection remains limited to the 17 assets.
+
+## Analysis, Reporting, Simulation, and AI Composition
+
+For a current portfolio, Aura keeps today's owned share quantities fixed and
+values them using aligned prices throughout the user-selected historical
+period. Portfolio cumulative return, annualized return, volatility, Sharpe,
+and maximum drawdown come from that historical portfolio-value series. This is
+not realized profit/loss: `purchase_date`, trades, deposits, withdrawals, and
+other cash flows do not change the reconstructed series.
+
+Individual-asset return, volatility, maximum drawdown, and Sharpe describe the
+asset over the analysis period. Portfolio risk contribution additionally
+depends on portfolio allocation and covariance/correlation. Investing more does
+not make the asset itself more volatile, although a larger current allocation
+can increase its contribution to portfolio risk.
+
+Report persistence supports `portfolio-analysis-response-v1` for legacy
+portfolios, `portfolio-analysis-response-v2` for current portfolios, and
+`portfolio-analysis-response-v3` for planned portfolios. V2 freezes the
+valuation currency/date, price dates, USD/display totals, optional FX, holding
+facts, prices, values, dynamic allocations, complete analytics, per-asset
+metrics, and risk contribution/rank. V3 freezes the plan currency, ordered
+proposed amounts, exact backend target weights, complete analytics, and the
+hypothetical/non-forecast limitation. Report V3 can additionally freeze one
+best-effort USD/THB observation for display-only currency views; missing FX
+never blocks planned analysis. It does not store estimated shares.
+
+Simulation history supports the existing V1 formats and these V2 formats:
+
+- `historical-scenario-simulation-response-v2`
+- `allocation-simulation-response-v2`
+- `combined-simulation-response-v2`
+
+Planned simulation history uses separate V3 formats:
+
+- `historical-scenario-simulation-response-v3`
+- `allocation-simulation-response-v3`
+- `combined-simulation-response-v3`
+
+The real simulation's original allocation is the current canonical USD
+allocation. Allocation and Combined retain the user's hypothetical percentages
+as the modified allocation. For planned simulations, the original allocation
+is the target allocation resolved from proposed amounts; modified percentages
+remain separate hypothetical input. V2 and V3 history freeze their baseline at
+creation. Opening a saved report or simulation restores the JSONB snapshot and
+never revalues or reruns it. Planned report currency switching uses only an FX
+observation frozen at creation and never queries live FX on retrieval.
+
+AI grounding follows the same source boundary: live legacy portfolios use
+saved weights, live current portfolios use current USD valuation, and live
+planned portfolios use proposed amounts and their exact target weights. Report
+V2/V3 and Simulation V2/V3 use their frozen snapshots. Saved resources do not
+require current market prices. Context carries `portfolio_type`,
+`baseline_source`, and snapshot version so the model uses current, planned, or
+saved-allocation language correctly. Planned context excludes estimated shares
+and adds an explicit hypothetical/non-forecast limitation. AI remains
+educational, non-advisory, cannot claim proposed assets are currently owned,
+and cannot produce buy/sell recommendations.
+
+## Transaction Ownership
+
+- Repositories and services do not commit.
+- The successful API/request boundary commits writes.
+- Current valuation is read-only and persists nothing.
+- Reports and simulations save immutable snapshots at the successful outer
+  transaction boundary.
+- A failed valuation, analysis, or simulation does not commit a partial
+  snapshot.
 
 [↑ Back to Quick Navigation](#quick-navigation)
 
@@ -525,6 +671,9 @@ Authenticated API Requests
 - `ProtectedRoute.tsx` prevents unauthenticated access to protected frontend pages.
 - Backend authentication remains authoritative.
 - The frontend must not use `X-User-ID` as authentication.
+- Authenticated profile fields are persisted with the User. Email changes and
+  password replacement require current-password verification; plaintext
+  passwords are never returned or stored.
 
 This is a target architecture. It does not imply that refresh tokens, OAuth, MFA, password reset, logout revocation, or every authentication screen is already implemented.
 
@@ -536,13 +685,13 @@ This is a target architecture. It does not imply that refresh tokens, OAuth, MFA
 | Portfolios | Creates, lists, opens, renames, edits, duplicates, and deletes user portfolios and holdings. |
 | Analytics | Shows detailed portfolio risk analysis including volatility, drawdown, Sharpe ratio, correlation, diversification, risk drivers, and individual asset analysis. |
 | Simulations | Runs Historical Scenario, Allocation Change, and Combined Simulation workflows and displays simulation history. |
-| AI Assistant | Provides the conversational explanation interface once the backend AI Agent is implemented. |
+| AI Assistant | Provides grounded educational explanations through the backend AI Agent. |
 | Reports | Lists and displays saved immutable portfolio-analysis reports. |
 | Settings | Handles frontend profile and application settings. |
-| Watchlist | Optional or later market watchlist functionality. |
+| Watchlist | Presents the authenticated observation-only Watchlist API, including add/remove actions and persisted latest/daily/YTD market context. |
 | Learn | Optional or later educational content functionality. |
 
-Watchlist and Learn may exist as routes or frontend features without appearing in the current primary top navigation.
+Watchlist and Learn may exist as routes or frontend features without appearing in the current primary top navigation. Watchlist is integrated on the protected web route and in the mobile `More` stack without adding another bottom tab.
 
 ## Dashboard Design Boundary
 
@@ -654,7 +803,10 @@ Mocks may remain for deterministic frontend testing or isolated UI development. 
 
 ## Frontend Implementation Status Boundary
 
-This section documents the planned architecture. Individual frontend pages or prototype interactions may already exist, but the target folder split, production API integration, authentication layer, protected routes, and backend AI Agent integration must not be treated as complete until repository evidence and status documentation confirm them.
+This section documents the architecture and responsibility boundaries. The
+current customer web app has backend authentication, portfolio, report,
+simulation, and AI integration, but it still requires the real-holding and V2
+contract work listed in `docs/frontend_mobile_integration_backlog.md`.
 
 [↑ Back to Quick Navigation](#quick-navigation)
 
@@ -662,7 +814,11 @@ This section documents the planned architecture. Individual frontend pages or pr
 
 # Mobile App Architecture
 
-Aura's planned customer mobile application uses React Native and TypeScript under `mobile/`. It connects to the same FastAPI backend as the React web application and does not introduce a separate mobile backend. The structure below is the **target mobile architecture**; it does not claim that every listed file, screen, integration, or capability is implemented.
+Aura's customer mobile application uses React Native and TypeScript under
+`mobile/`. It connects to the same FastAPI backend as the React web application
+and does not introduce a separate mobile backend. The structure below defines
+the target responsibilities; completed and deferred capabilities are tracked in
+`CURRENT_STATUS.md` and `docs/frontend_mobile_integration_backlog.md`.
 
 ## Target Mobile Structure
 
@@ -809,7 +965,9 @@ Learn
 Watchlist
 ```
 
-Navigation placement does not claim that every listed screen or its backend functionality is currently implemented. In particular, the AI interface remains planned until the backend AI Agent exists.
+Navigation placement does not claim that every listed screen is integrated.
+The AI interface and authenticated Watchlist backend and clients are
+implemented; Notifications remain deferred.
 
 ## Mobile Environment Configuration
 
@@ -832,7 +990,10 @@ Backend URLs must not be hard-coded inside screens. `src/config/environment.ts` 
 
 Mobile `mocks/` data is limited to development, testing, and isolated screen work. It is not a production source for authentication, portfolios, analysis, reports, simulations, or AI responses.
 
-The mobile tree documents a planned architecture. It does not claim that all mobile screens, mobile/backend integration, secure storage, deployment, or AI Assistant backend integration is complete.
+The mobile tree documents responsibility boundaries. Authentication,
+portfolio/report/simulation flows, secure token storage, and the AI Assistant
+are integrated against the pre-real-holding contract. Real-holding/valuation and
+V2 history parity plus production deployment remain incomplete.
 
 [↑ Back to Quick Navigation](#quick-navigation)
 
@@ -840,7 +1001,8 @@ The mobile tree documents a planned architecture. It does not claim that all mob
 
 # Shared Client-Backend Architecture
 
-Aura's React web application and planned React Native application use the same FastAPI backend and PostgreSQL persistence layer:
+Aura's React web and React Native applications use the same FastAPI backend and
+PostgreSQL persistence layer:
 
 ```text
 React Web App ───────────┐
@@ -866,7 +1028,7 @@ Both clients use the same backend API contracts for:
 - allocation simulations;
 - combined simulations;
 - simulation history; and
-- future AI functionality once the backend AI Agent is implemented.
+- grounded AI explanations.
 
 Separate `/api/web/...` and `/api/mobile/...` endpoint families should not be created without a real technical requirement. Both applications should receive consistent ownership decisions, financial calculations, simulation results, reports, and authentication outcomes from the shared backend.
 
@@ -904,7 +1066,7 @@ Platform-specific folder definitions are available in their corresponding sectio
 - `database/` — database connection, models, and repository actions.
 - `schemas/` — expected data structures for input and output.
 - `services/` — coordinates workflows between different backend parts.
-- `agents/` — AI explanation layer to be developed later.
+- `agents/` — grounded educational AI explanation layer.
 - `utils/` — small reusable helper functions.
 
 ### Tests

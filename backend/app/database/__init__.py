@@ -7,7 +7,15 @@ from .connection import (
     create_session_factory,
     session_scope,
 )
-from .models import Analysis, Holding, MarketData, Portfolio, User
+from .models import (
+    Analysis,
+    Holding,
+    MarketData,
+    Portfolio,
+    PortfolioType,
+    User,
+    WatchlistItem,
+)
 
 __all__ = [
     "Analysis",
@@ -15,7 +23,9 @@ __all__ = [
     "Holding",
     "MarketData",
     "Portfolio",
+    "PortfolioType",
     "User",
+    "WatchlistItem",
     "check_database_connection",
     "create_database_engine",
     "create_session_factory",

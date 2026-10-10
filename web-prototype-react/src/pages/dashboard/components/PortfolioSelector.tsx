@@ -1,8 +1,22 @@
 import type { PortfolioSummaryResponse } from '../../../types/portfolio';
-import { AuraSelect } from '../../../components/ui/AuraSelect';
-import type { AuraSelectOption } from '../../../components/ui/AuraSelect';
 
 export function PortfolioSelector({ portfolios, selectedId, onSelect }: { portfolios: PortfolioSummaryResponse[]; selectedId: string; onSelect: (id: string) => void }) {
-  const options: AuraSelectOption<string>[] = portfolios.map(portfolio => ({ value: portfolio.id, label: portfolio.name, description: 'Saved portfolio', icon: 'wallet', tone: 'amber' }));
-  return <AuraSelect className="dashboard-selector dashboard-aura-select" ariaLabel="Select portfolio" value={selectedId} options={options} onChange={onSelect} />;
+  return <div className="dashboard-portfolio-picker">
+    <span className="dashboard-portfolio-picker-label">SELECTED PORTFOLIO</span>
+    <div className="dashboard-portfolio-options" role="radiogroup" aria-label="Select portfolio">
+      {portfolios.map(portfolio => {
+        const selected = portfolio.id === selectedId;
+        return <button
+          type="button"
+          role="radio"
+          aria-checked={selected}
+          className={`dashboard-portfolio-option ${selected ? 'active' : ''}`}
+          key={portfolio.id}
+          onClick={() => onSelect(portfolio.id)}
+        >
+          {portfolio.name}
+        </button>;
+      })}
+    </div>
+  </div>;
 }

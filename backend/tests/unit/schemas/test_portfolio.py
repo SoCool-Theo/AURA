@@ -1,5 +1,6 @@
 from copy import deepcopy
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from uuid import UUID
 
 import pytest
@@ -13,9 +14,13 @@ from backend.app.schemas.portfolio import (
     PortfolioHoldingResponse,
     PortfolioHoldingsReplaceRequest,
     PortfolioListResponse,
+    PortfolioPlannedAllocationResponse,
+    PortfolioPlannedHoldingsReplaceRequest,
+    PortfolioPlannedPreviewResponse,
     PortfolioResponse,
     PortfolioSummaryResponse,
     PortfolioUpdateRequest,
+    PortfolioValuationResponse,
 )
 
 
@@ -35,6 +40,9 @@ def _valid_response_data() -> dict[str, object]:
     return {
         "id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
         "name": "Core Portfolio",
+        "portfolio_type": "LEGACY",
+        "plan_currency": None,
+        "source_plan_id": None,
         "created_at": "2026-08-17T09:30:00+07:00",
         "updated_at": "2026-08-17T10:45:00+07:00",
         "holdings": [
@@ -42,6 +50,24 @@ def _valid_response_data() -> dict[str, object]:
             {"symbol": "MSFT", "weight": 0.40, "position": 1},
         ],
     }
+
+
+def _real_holding_data(
+    symbol: str = "AAPL",
+    *,
+    invested_amount: str = "1500.00",
+    invested_currency: str | None = "USD",
+    shares: str = "10.25",
+) -> dict[str, object]:
+    holding: dict[str, object] = {
+        "symbol": symbol,
+        "invested_amount": invested_amount,
+        "shares": shares,
+        "purchase_date": "2026-01-10",
+    }
+    if invested_currency is not None:
+        holding["invested_currency"] = invested_currency
+    return holding
 
 
 def test_holding_accepts_normalized_symbol_and_decimal_weight() -> None:
@@ -349,6 +375,40 @@ def test_crud_name_request_accepts_valid_name(request_type: type) -> None:
     assert result.name == "Core Portfolio"
 
 
+def test_create_defaults_to_current_and_accepts_explicit_planned_context(
+) -> None:
+    current = PortfolioCreateRequest(name="Current")
+    planned = PortfolioCreateRequest(
+        name="Plan",
+        portfolio_type=" planned ",
+        plan_currency=" thb ",
+    )
+
+    assert current.portfolio_type == "CURRENT"
+    assert current.plan_currency is None
+    assert planned.portfolio_type == "PLANNED"
+    assert planned.plan_currency == "THB"
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"name": "Plan", "portfolio_type": "PLANNED"},
+        {
+            "name": "Current",
+            "portfolio_type": "CURRENT",
+            "plan_currency": "USD",
+        },
+        {"name": "Legacy", "portfolio_type": "LEGACY"},
+    ],
+)
+def test_create_rejects_incomplete_or_non_creatable_type_context(
+    data: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        PortfolioCreateRequest.model_validate(data)
+
+
 @pytest.mark.parametrize(
     "request_type",
     [
@@ -415,13 +475,32 @@ def test_crud_name_request_rejects_unknown_field(
         request_type.model_validate({"name": "Core", "user_id": "hidden"})
 
 
-def test_crud_holdings_replace_accepts_single_full_weight_holding() -> None:
+def test_crud_holdings_replace_accepts_real_usd_holding() -> None:
     result = PortfolioHoldingsReplaceRequest.model_validate(
-        {"holdings": [{"symbol": "AAPL", "weight": 1.0}]}
+        {"holdings": [_real_holding_data()]}
     )
 
-    assert [(holding.symbol, holding.weight) for holding in result.holdings] == [
-        ("AAPL", 1.0)
+    holding = result.holdings[0]
+    assert holding.symbol == "AAPL"
+    assert holding.invested_amount == Decimal("1500.00")
+    assert holding.invested_currency == "USD"
+    assert holding.shares == Decimal("10.25")
+    assert holding.purchase_date == date(2026, 1, 10)
+
+
+def test_crud_holdings_replace_defaults_currency_and_accepts_thb() -> None:
+    result = PortfolioHoldingsReplaceRequest.model_validate(
+        {
+            "holdings": [
+                _real_holding_data("AAPL", invested_currency=None),
+                _real_holding_data("MSFT", invested_currency=" thb "),
+            ]
+        }
+    )
+
+    assert [holding.invested_currency for holding in result.holdings] == [
+        "USD",
+        "THB",
     ]
 
 
@@ -429,17 +508,17 @@ def test_crud_holdings_replace_normalizes_symbols_and_preserves_order() -> None:
     result = PortfolioHoldingsReplaceRequest.model_validate(
         {
             "holdings": [
-                {"symbol": " beta ", "weight": 0.20},
-                {"symbol": "alpha", "weight": 0.50},
-                {"symbol": " cash ", "weight": 0.30},
+                _real_holding_data(" aapl "),
+                _real_holding_data("msft"),
+                _real_holding_data(" btc-usd "),
             ]
         }
     )
 
     assert [holding.symbol for holding in result.holdings] == [
-        "BETA",
-        "ALPHA",
-        "CASH",
+        "AAPL",
+        "MSFT",
+        "BTC-USD",
     ]
 
 
@@ -451,67 +530,37 @@ def test_crud_holdings_replace_rejects_duplicate_normalized_symbols() -> None:
         PortfolioHoldingsReplaceRequest.model_validate(
             {
                 "holdings": [
-                    {"symbol": "AAPL", "weight": 0.50},
-                    {"symbol": " aapl ", "weight": 0.50},
+                    _real_holding_data("AAPL"),
+                    _real_holding_data(" aapl "),
                 ]
             }
         )
 
 
-@pytest.mark.parametrize("weight", [-0.01, 1.01])
-def test_crud_holdings_replace_rejects_out_of_range_nested_weight(
-    weight: float,
-) -> None:
-    with pytest.raises(ValidationError):
+def test_crud_holdings_replace_rejects_manual_weight() -> None:
+    holding = _real_holding_data()
+    holding["weight"] = 1.0
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         PortfolioHoldingsReplaceRequest.model_validate(
-            {"holdings": [{"symbol": "AAPL", "weight": weight}]}
+            {"holdings": [holding]}
         )
 
 
-@pytest.mark.parametrize(
-    "weights",
-    [
-        (0.50, 0.499_999_998),
-        (0.50, 0.500_000_002),
-    ],
-)
-def test_crud_holdings_replace_rejects_total_outside_tolerance(
-    weights: tuple[float, float],
-) -> None:
-    with pytest.raises(
-        ValidationError,
-        match="holding weights must sum to 1.0",
-    ):
-        PortfolioHoldingsReplaceRequest.model_validate(
-            {
-                "holdings": [
-                    {"symbol": "AAPL", "weight": weights[0]},
-                    {"symbol": "MSFT", "weight": weights[1]},
-                ]
-            }
-        )
-
-
-@pytest.mark.parametrize(
-    "weights",
-    [
-        (0.50, 0.499_999_999_5),
-        (0.50, 0.500_000_000_5),
-    ],
-)
-def test_crud_holdings_replace_preserves_existing_weight_tolerance(
-    weights: tuple[float, float],
-) -> None:
+def test_crud_holdings_replace_has_no_total_weight_requirement() -> None:
     result = PortfolioHoldingsReplaceRequest.model_validate(
         {
             "holdings": [
-                {"symbol": "AAPL", "weight": weights[0]},
-                {"symbol": "MSFT", "weight": weights[1]},
+                _real_holding_data("AAPL", invested_amount="1.25"),
+                _real_holding_data("MSFT", invested_amount="99999.75"),
             ]
         }
     )
 
-    assert [holding.weight for holding in result.holdings] == list(weights)
+    assert [holding.invested_amount for holding in result.holdings] == [
+        Decimal("1.25"),
+        Decimal("99999.75"),
+    ]
 
 
 def test_crud_holdings_replace_rejects_empty_holdings() -> None:
@@ -521,17 +570,16 @@ def test_crud_holdings_replace_rejects_empty_holdings() -> None:
 
 def test_crud_holdings_replace_rejects_unknown_field() -> None:
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        holding = _real_holding_data()
+        holding["current_value"] = "1500.00"
         PortfolioHoldingsReplaceRequest.model_validate(
-            {
-                "holdings": [{"symbol": "AAPL", "weight": 1.0}],
-                "portfolio_id": "hidden",
-            }
+            {"holdings": [holding]}
         )
 
 
 def test_crud_holdings_replace_does_not_mutate_caller_input() -> None:
-    first = {"symbol": " aapl ", "weight": 0.60}
-    second = {"symbol": "msft", "weight": 0.40}
+    first = _real_holding_data(" aapl ")
+    second = _real_holding_data("msft", invested_currency=" thb ")
     holdings = [first, second]
     data = {"holdings": holdings}
     original = deepcopy(data)
@@ -543,6 +591,45 @@ def test_crud_holdings_replace_does_not_mutate_caller_input() -> None:
     assert holdings[0] is first
     assert holdings[1] is second
     assert [holding.symbol for holding in result.holdings] == ["AAPL", "MSFT"]
+
+
+def test_planned_holdings_replace_accepts_amounts_and_preserves_order() -> None:
+    result = PortfolioPlannedHoldingsReplaceRequest.model_validate(
+        {
+            "holdings": [
+                {"symbol": " aapl ", "proposed_amount": "4000.00"},
+                {"symbol": "msft", "proposed_amount": "6000.00"},
+            ]
+        }
+    )
+
+    assert [holding.symbol for holding in result.holdings] == ["AAPL", "MSFT"]
+    assert [holding.proposed_amount for holding in result.holdings] == [
+        Decimal("4000.00"),
+        Decimal("6000.00"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "holdings",
+    [
+        [],
+        [{"symbol": "AAPL", "proposed_amount": "0"}],
+        [
+            {"symbol": "AAPL", "proposed_amount": "1"},
+            {"symbol": " aapl ", "proposed_amount": "2"},
+        ],
+        [{"symbol": "AAPL", "proposed_amount": "1", "shares": "1"}],
+        [{"symbol": "AAPL", "proposed_amount": "1", "weight": 1.0}],
+    ],
+)
+def test_planned_holdings_replace_rejects_invalid_or_mixed_input(
+    holdings: list[dict[str, object]],
+) -> None:
+    with pytest.raises(ValidationError):
+        PortfolioPlannedHoldingsReplaceRequest.model_validate(
+            {"holdings": holdings}
+        )
 
 
 def test_crud_holding_response_accepts_persisted_shape_and_json_number() -> None:
@@ -591,9 +678,121 @@ def test_crud_holding_response_rejects_unknown_field() -> None:
                 "symbol": "AAPL",
                 "weight": 1.0,
                 "position": 0,
-                "shares": 10,
+                "current_value": 10,
             }
         )
+
+
+def _valid_valuation_response_data(
+    *,
+    currency: str = "USD",
+) -> dict[str, object]:
+    fx: dict[str, object] | None = None
+    total_current_value = "250.000000000000"
+    current_value = "250.000000000000"
+    if currency == "THB":
+        fx = {
+            "pair": "USD/THB",
+            "provider_symbol": "THB=X",
+            "rate": "32.500000000000",
+            "as_of": "2026-09-11",
+        }
+        total_current_value = "8125.000000000000000000000000"
+        current_value = total_current_value
+    return {
+        "portfolio_id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
+        "valuation_currency": currency,
+        "requested_date": "2026-09-12",
+        "oldest_price_as_of": "2026-09-10",
+        "newest_price_as_of": "2026-09-11",
+        "total_current_value_usd": "250.000000000000",
+        "total_current_value": total_current_value,
+        "fx": fx,
+        "holdings": [
+            {
+                "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+                "symbol": "AAPL",
+                "invested_amount": "200.000000000000",
+                "invested_currency": "USD",
+                "shares": "2.000000000000",
+                "purchase_date": "2026-01-10",
+                "position": 0,
+                "asset_price": "125.000000000000",
+                "asset_quote_currency": "USD",
+                "price_as_of": "2026-09-11",
+                "current_value_usd": "250.000000000000",
+                "current_value": current_value,
+                "current_allocation": "1",
+            }
+        ],
+    }
+
+
+def test_crud_holding_response_accepts_planned_shape_only() -> None:
+    result = PortfolioHoldingResponse.model_validate(
+        {
+            "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+            "symbol": "AAPL",
+            "proposed_amount": "4000.000000000000",
+            "position": 0,
+        }
+    )
+
+    assert result.model_dump(mode="json") == {
+        "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+        "symbol": "AAPL",
+        "weight": None,
+        "proposed_amount": "4000.000000000000",
+        "position": 0,
+    }
+
+
+@pytest.mark.parametrize("currency", ["USD", "THB"])
+def test_valuation_response_preserves_decimal_json_contract(
+    currency: str,
+) -> None:
+    result = PortfolioValuationResponse.model_validate(
+        _valid_valuation_response_data(currency=currency)
+    )
+
+    serialized = result.model_dump(mode="json")
+
+    assert serialized["valuation_currency"] == currency
+    assert serialized["total_current_value_usd"] == "250.000000000000"
+    assert isinstance(serialized["total_current_value"], str)
+    holding = serialized["holdings"][0]
+    assert holding["asset_price"] == "125.000000000000"
+    assert holding["current_allocation"] == "1"
+
+
+def test_valuation_response_rejects_currency_fx_mismatch() -> None:
+    data = _valid_valuation_response_data()
+    data["fx"] = {
+        "pair": "USD/THB",
+        "provider_symbol": "THB=X",
+        "rate": "32.5",
+        "as_of": "2026-09-11",
+    }
+
+    with pytest.raises(ValidationError, match="USD valuation must not"):
+        PortfolioValuationResponse.model_validate(data)
+
+    thb_data = _valid_valuation_response_data(currency="THB")
+    thb_data["fx"] = None
+    with pytest.raises(ValidationError, match="THB valuation requires"):
+        PortfolioValuationResponse.model_validate(thb_data)
+
+
+def test_valuation_response_rejects_unknown_fields_and_future_observations() -> None:
+    data = _valid_valuation_response_data()
+    data["calculated_total"] = "250"
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        PortfolioValuationResponse.model_validate(data)
+
+    future_data = _valid_valuation_response_data()
+    future_data["newest_price_as_of"] = "2026-09-13"
+    with pytest.raises(ValidationError, match="must not be after requested_date"):
+        PortfolioValuationResponse.model_validate(future_data)
 
 
 def test_crud_portfolio_response_accepts_complete_end_user_shape() -> None:
@@ -659,16 +858,243 @@ def test_crud_summary_response_accepts_lightweight_shape() -> None:
     data = _valid_response_data()
 
     result = PortfolioSummaryResponse.model_validate(
-        {key: data[key] for key in ("id", "name", "created_at", "updated_at")}
+        {
+            key: data[key]
+            for key in (
+                "id",
+                "name",
+                "portfolio_type",
+                "plan_currency",
+                "created_at",
+                "updated_at",
+            )
+        }
     )
 
     assert result.name == "Core Portfolio"
     assert result.model_dump().keys() == {
         "id",
         "name",
+        "portfolio_type",
+        "plan_currency",
         "created_at",
         "updated_at",
     }
+
+
+def test_planned_allocation_response_preserves_decimal_authority() -> None:
+    result = PortfolioPlannedAllocationResponse.model_validate(
+        {
+            "portfolio_id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
+            "portfolio_type": "PLANNED",
+            "plan_currency": "USD",
+            "total_proposed_amount": "10000.000000000000",
+            "holdings": [
+                {
+                    "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+                    "symbol": "AAPL",
+                    "proposed_amount": "4000.000000000000",
+                    "target_allocation": "0.400000000000000000",
+                    "position": 0,
+                }
+            ],
+        }
+    )
+
+    serialized = result.model_dump(mode="json")
+    assert serialized["total_proposed_amount"] == "10000.000000000000"
+    assert serialized["holdings"][0]["target_allocation"] == (
+        "0.400000000000000000"
+    )
+
+
+def test_planned_preview_response_preserves_available_estimate_context() -> None:
+    result = PortfolioPlannedPreviewResponse.model_validate(
+        {
+            "portfolio_id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
+            "portfolio_type": "PLANNED",
+            "plan_currency": "THB",
+            "requested_date": "2026-09-12",
+            "total_proposed_amount": "6500",
+            "fx": {
+                "pair": "USD/THB",
+                "provider_symbol": "THB=X",
+                "rate": "32.5",
+                "as_of": "2026-09-11",
+            },
+            "holdings": [
+                {
+                    "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+                    "symbol": "AAPL",
+                    "proposed_amount": "6500",
+                    "target_allocation": "1",
+                    "position": 0,
+                    "estimate_status": "AVAILABLE",
+                    "estimated_shares": "1",
+                    "asset_price": "200",
+                    "asset_quote_currency": "USD",
+                    "price_as_of": "2026-09-11",
+                }
+            ],
+        }
+    )
+
+    serialized = result.model_dump(mode="json")
+    assert serialized["fx"]["rate"] == "32.5"
+    assert serialized["holdings"][0]["estimated_shares"] == "1"
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {
+            "estimate_status": "AVAILABLE",
+            "estimated_shares": None,
+            "asset_price": "200",
+            "asset_quote_currency": "USD",
+            "price_as_of": "2026-09-11",
+        },
+        {
+            "estimate_status": "PRICE_UNAVAILABLE",
+            "estimated_shares": None,
+            "asset_price": "200",
+            "asset_quote_currency": "USD",
+            "price_as_of": "2026-09-11",
+        },
+        {
+            "estimate_status": "FX_UNAVAILABLE",
+            "estimated_shares": None,
+            "asset_price": None,
+            "asset_quote_currency": None,
+            "price_as_of": None,
+        },
+    ],
+)
+def test_planned_preview_rejects_inconsistent_estimate_context(
+    changes: dict[str, object],
+) -> None:
+    holding = {
+        "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+        "symbol": "AAPL",
+        "proposed_amount": "6500",
+        "target_allocation": "1",
+        "position": 0,
+        **changes,
+    }
+
+    with pytest.raises(ValidationError):
+        PortfolioPlannedPreviewResponse.model_validate(
+            {
+                "portfolio_id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
+                "portfolio_type": "PLANNED",
+                "plan_currency": "USD",
+                "requested_date": "2026-09-12",
+                "total_proposed_amount": "6500",
+                "fx": None,
+                "holdings": [holding],
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("plan_currency", "fx", "estimate_status", "error"),
+    [
+        (
+            "USD",
+            None,
+            "FX_UNAVAILABLE",
+            "USD planned preview cannot require FX",
+        ),
+        (
+            "THB",
+            None,
+            "AVAILABLE",
+            "available THB estimates require FX context",
+        ),
+        (
+            "THB",
+            {
+                "pair": "USD/THB",
+                "provider_symbol": "THB=X",
+                "rate": "32.5",
+                "as_of": "2026-09-11",
+            },
+            "FX_UNAVAILABLE",
+            "cannot report unavailable FX",
+        ),
+    ],
+)
+def test_planned_preview_rejects_currency_status_mismatch(
+    plan_currency: str,
+    fx: dict[str, str] | None,
+    estimate_status: str,
+    error: str,
+) -> None:
+    holding = {
+        "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+        "symbol": "AAPL",
+        "proposed_amount": "6500",
+        "target_allocation": "1",
+        "position": 0,
+        "estimate_status": estimate_status,
+        "estimated_shares": "1" if estimate_status == "AVAILABLE" else None,
+        "asset_price": "200",
+        "asset_quote_currency": "USD",
+        "price_as_of": "2026-09-11",
+    }
+
+    with pytest.raises(ValidationError, match=error):
+        PortfolioPlannedPreviewResponse.model_validate(
+            {
+                "portfolio_id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
+                "portfolio_type": "PLANNED",
+                "plan_currency": plan_currency,
+                "requested_date": "2026-09-12",
+                "total_proposed_amount": "6500",
+                "fx": fx,
+                "holdings": [holding],
+            }
+        )
+
+
+def test_planned_preview_rejects_future_price_and_fx_context() -> None:
+    base = {
+        "portfolio_id": "c3eef91a-0f86-497a-8a7f-a3a908fde211",
+        "portfolio_type": "PLANNED",
+        "plan_currency": "THB",
+        "requested_date": "2026-09-12",
+        "total_proposed_amount": "6500",
+        "fx": {
+            "pair": "USD/THB",
+            "provider_symbol": "THB=X",
+            "rate": "32.5",
+            "as_of": "2026-09-11",
+        },
+        "holdings": [
+            {
+                "id": "a3eef91a-0f86-497a-8a7f-a3a908fde211",
+                "symbol": "AAPL",
+                "proposed_amount": "6500",
+                "target_allocation": "1",
+                "position": 0,
+                "estimate_status": "AVAILABLE",
+                "estimated_shares": "1",
+                "asset_price": "200",
+                "asset_quote_currency": "USD",
+                "price_as_of": "2026-09-11",
+            }
+        ],
+    }
+
+    future_price = deepcopy(base)
+    future_price["holdings"][0]["price_as_of"] = "2026-09-13"
+    with pytest.raises(ValidationError, match="price observation dates"):
+        PortfolioPlannedPreviewResponse.model_validate(future_price)
+
+    future_fx = deepcopy(base)
+    future_fx["fx"]["as_of"] = "2026-09-13"
+    with pytest.raises(ValidationError, match="FX observation date"):
+        PortfolioPlannedPreviewResponse.model_validate(future_fx)
 
 
 def test_crud_summary_response_rejects_unknown_field() -> None:

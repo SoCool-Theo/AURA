@@ -6,6 +6,7 @@ from backend.app.analytics.returns import (
     calculate_annualized_return,
     calculate_asset_returns,
     calculate_cumulative_return,
+    calculate_fixed_share_portfolio_values,
     calculate_portfolio_returns,
 )
 
@@ -111,6 +112,45 @@ def test_calculate_portfolio_returns_does_not_mutate_inputs() -> None:
 
     pd.testing.assert_frame_equal(asset_returns, original_returns)
     assert weights == original_weights
+
+
+def test_fixed_share_portfolio_values_preserve_quantities_across_prices() -> None:
+    prices = _prices()
+    shares = {"ALPHA": 1.0, "BETA": 2.0}
+
+    result = calculate_fixed_share_portfolio_values(prices, shares)
+
+    expected = pd.Series(
+        [400.0, 400.0, 387.0],
+        index=prices.index,
+        name="portfolio_value",
+    )
+    pd.testing.assert_series_equal(result, expected)
+    assert shares == {"ALPHA": 1.0, "BETA": 2.0}
+
+
+def test_fixed_share_portfolio_values_align_quantities_by_symbol() -> None:
+    result = calculate_fixed_share_portfolio_values(
+        _prices()[["ALPHA", "BETA"]],
+        {"BETA": 2.0, "ALPHA": 1.0},
+    )
+
+    assert result.tolist() == pytest.approx([400.0, 400.0, 387.0])
+
+
+@pytest.mark.parametrize(
+    "shares",
+    [
+        {"BETA": 2.0},
+        {"BETA": 2.0, "ALPHA": 0.0},
+        {"BETA": 2.0, "ALPHA": float("inf")},
+    ],
+)
+def test_fixed_share_portfolio_values_reject_invalid_quantities(
+    shares: dict[str, float],
+) -> None:
+    with pytest.raises(ValueError, match="share quantity"):
+        calculate_fixed_share_portfolio_values(_prices(), shares)
 
 
 def test_calculate_cumulative_return_compounds_periodic_returns() -> None:

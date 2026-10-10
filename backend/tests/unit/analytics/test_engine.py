@@ -37,7 +37,9 @@ from backend.app.analytics.returns import (
     calculate_portfolio_returns,
 )
 from backend.app.analytics.risk_classifier import (
+    AssetRiskClassificationResult,
     RiskClassificationResult,
+    analyze_asset_risk_classification,
     analyze_risk_classification,
 )
 from backend.app.analytics.risk_driver import (
@@ -180,6 +182,64 @@ def test_analyze_portfolio_has_known_portfolio_returns_and_drawdown() -> None:
     )
 
 
+def test_fixed_share_analysis_uses_historical_portfolio_values_for_metrics(
+) -> None:
+    prices = _prices()
+    result = analyze_portfolio(
+        prices,
+        _weights(),
+        periods_per_year=3,
+        share_quantities={"ALPHA": 2.0, "BETA": 1.0},
+    )
+    expected_values = pd.Series(
+        [300.0, 310.0, 319.0, 327.8],
+        index=prices.index,
+        name="portfolio_value",
+    )
+    expected_returns = expected_values.pct_change().iloc[1:].rename(
+        "portfolio_return"
+    )
+
+    pd.testing.assert_series_equal(
+        result.historical_portfolio_values,
+        expected_values,
+    )
+    pd.testing.assert_series_equal(
+        result.portfolio_returns,
+        expected_returns,
+    )
+    assert result.cumulative_return == pytest.approx(327.8 / 300.0 - 1.0)
+    assert result.annualized_return == pytest.approx(
+        calculate_annualized_return(expected_returns, periods_per_year=3)
+    )
+    assert result.annualized_volatility == pytest.approx(
+        calculate_annualized_volatility(expected_returns, periods_per_year=3)
+    )
+    assert result.sharpe_ratio == pytest.approx(
+        calculate_sharpe_ratio(expected_returns, periods_per_year=3)
+    )
+    expected_drawdown = calculate_max_drawdown_details(expected_returns)
+    assert result.max_drawdown.max_drawdown == pytest.approx(
+        expected_drawdown.max_drawdown
+    )
+    assert result.max_drawdown.peak_date == expected_drawdown.peak_date
+    assert result.max_drawdown.trough_date == expected_drawdown.trough_date
+    expected_risk_drivers = analyze_risk_drivers(
+        result.asset_returns,
+        _weights(),
+        periods_per_year=3,
+    )
+    assert result.risk_drivers.portfolio_volatility == pytest.approx(
+        expected_risk_drivers.portfolio_volatility
+    )
+    pd.testing.assert_frame_equal(
+        result.risk_drivers.ranked_contributions,
+        expected_risk_drivers.ranked_contributions,
+    )
+    assert result.asset_metrics.loc["ALPHA", "weight"] == pytest.approx(0.4)
+    assert result.asset_metrics.loc["BETA", "weight"] == pytest.approx(0.6)
+
+
 def test_analyze_portfolio_result_is_frozen() -> None:
     result = _analyze()
 
@@ -293,6 +353,12 @@ def test_engine_results_match_direct_public_module_calls() -> None:
                 symbol_returns,
                 annual_risk_free_rate=0.03,
                 periods_per_year=3,
+            )
+        )
+        assert result.asset_risk_classifications[symbol] == (
+            analyze_asset_risk_classification(
+                float(asset_volatilities[symbol]),
+                calculate_max_drawdown(symbol_returns),
             )
         )
 
@@ -464,6 +530,11 @@ def test_engine_result_has_expected_pandas_and_nested_types() -> None:
     result = _analyze()
 
     assert isinstance(result.asset_metrics, pd.DataFrame)
+    assert list(result.asset_risk_classifications) == ["BETA", "ALPHA"]
+    assert all(
+        isinstance(classification, AssetRiskClassificationResult)
+        for classification in result.asset_risk_classifications.values()
+    )
     assert isinstance(result.asset_returns, pd.DataFrame)
     assert isinstance(result.portfolio_returns, pd.Series)
     assert result.portfolio_returns.name == "portfolio_return"

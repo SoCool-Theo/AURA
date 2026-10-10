@@ -9,7 +9,7 @@ export function ActivityTab({ portfolio }: { portfolio: PortfolioResponse }) {
         <div className="detail-section-header">
           <div>
             <h2>Portfolio Record</h2>
-            <p>The Portfolio API exposes record timestamps, not an activity feed.</p>
+            <p>Aura currently records when this portfolio was created and last updated.</p>
           </div>
         </div>
         <dl>

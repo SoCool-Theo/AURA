@@ -13,6 +13,10 @@ def _enable_runner_logger(monkeypatch: pytest.MonkeyPatch) -> None:
     """Undo logging configurations that disable pre-collected loggers."""
     monkeypatch.setattr(runner.logger, "disabled", False)
     monkeypatch.setattr(runner.logger, "propagate", True)
+    # Never let runner unit tests acquire a production database lease.
+    lease = MagicMock()
+    monkeypatch.setattr(runner, "market_data_lease", MagicMock(return_value=lease))
+    monkeypatch.setattr(runner, "MarketDataWorker", MagicMock())
 
 
 def _scheduler_mock() -> MagicMock:
@@ -58,7 +62,9 @@ def test_runner_configures_constructs_logs_and_starts_once(
         runner.main()
 
     configure.assert_called_once_with()
-    create_scheduler.assert_called_once_with(scheduled_job)
+    create_scheduler.assert_called_once_with(scheduled_job,
+        heartbeat_callable=runner.MarketDataWorker.return_value.heartbeat,
+        catch_up_callable=runner.catch_up_market_data)
     scheduler.start.assert_called_once_with()
     scheduler.shutdown.assert_not_called()
     scheduled_job.assert_not_called()
@@ -96,7 +102,7 @@ def test_runner_handles_normal_interruption_and_shuts_down(
     scheduled_job.assert_not_called()
 
 
-def test_runner_startup_failure_propagates_without_substitution() -> None:
+def test_runner_startup_failure_is_sanitized() -> None:
     scheduler = _scheduler_mock()
     failure = RuntimeError("scheduler startup failed")
     scheduler.start.side_effect = failure
@@ -112,7 +118,8 @@ def test_runner_startup_failure_propagates_without_substitution() -> None:
     ):
         runner.main()
 
-    assert raised.value is failure
+    assert "scheduler startup failed" not in str(raised.value)
+    assert "update_failed" in str(raised.value)
     scheduler.shutdown.assert_not_called()
 
 
@@ -124,5 +131,26 @@ def test_module_import_is_safe_and_runner_has_no_fastapi_integration() -> None:
     source = Path(runner.__file__).read_text(encoding="utf-8").lower()
     assert "fastapi" not in source
     assert "lifespan" not in source
-    assert "startup" not in source
     assert "update_market_data_and_persist" not in source
+
+
+def test_lost_heartbeat_exits_with_failure_for_supervisor_restart():
+    scheduler = _scheduler_mock()
+
+    def run():
+        listener = scheduler.add_listener.call_args.args[0]
+        listener(Mock(job_id="market-data-worker-heartbeat"))
+
+    scheduler.start.side_effect = run
+    with patch.object(runner, "configure_logging"), patch.object(runner, "create_market_data_scheduler", return_value=scheduler):
+        with pytest.raises(runner.MarketDataRefreshError, match="database_unavailable"):
+            runner.main()
+    scheduler.shutdown.assert_called_once_with(wait=False)
+
+
+def test_normal_market_job_failure_does_not_stop_worker():
+    scheduler = _scheduler_mock()
+    scheduler.start.side_effect = lambda: scheduler.add_listener.call_args.args[0](Mock(job_id="market-data-daily-update"))
+    with patch.object(runner, "configure_logging"), patch.object(runner, "create_market_data_scheduler", return_value=scheduler):
+        runner.main()
+    scheduler.shutdown.assert_not_called()

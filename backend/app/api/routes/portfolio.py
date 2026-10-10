@@ -1,26 +1,78 @@
 """Core portfolio creation and retrieval endpoints."""
 
 from collections.abc import Sequence
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.dependencies import CurrentUser, DatabaseSession
-from app.database.models import Holding, Portfolio
+from app.database.models import Holding, Portfolio, PortfolioType
+from app.database.repositories import PortfolioTypeConflictError
 from app.schemas.portfolio import (
     PortfolioCreateRequest,
     PortfolioDuplicateRequest,
     PortfolioHoldingResponse,
+    PortfolioHoldingValuationResponse,
     PortfolioHoldingsReplaceRequest,
     PortfolioListResponse,
+    PortfolioPlannedAllocationHoldingResponse,
+    PortfolioPlannedAllocationResponse,
+    PortfolioPlannedHoldingsReplaceRequest,
+    PortfolioPlannedPreviewHoldingResponse,
+    PortfolioPlannedPreviewResponse,
     PortfolioResponse,
     PortfolioSummaryResponse,
     PortfolioUpdateRequest,
+    PortfolioValuationFxResponse,
+    PortfolioValuationResponse,
 )
+from app.services.market_data_service import MarketDataUnavailableError
 from app.services.portfolio_service import PortfolioService
+from app.services.portfolio_planned_allocation_service import (
+    InvalidPlannedPortfolioError,
+    PlannedPortfolioAllocation,
+    PortfolioPlannedAllocationService,
+)
+from app.services.portfolio_planned_preview_service import (
+    PlannedPortfolioPreview,
+    PortfolioPlannedPreviewService,
+)
+from app.services.portfolio_valuation_service import (
+    InvalidHoldingModeError,
+    InvalidPortfolioValueError,
+    PortfolioDisplayCurrency,
+    PortfolioValuationResult,
+    PortfolioValuationService,
+    UnsupportedHoldingInstrumentError,
+)
 
 
 router = APIRouter(prefix="/portfolios", tags=["Portfolios"])
+
+
+def _current_utc_date() -> date:
+    """Capture one current UTC calendar date per preview request."""
+    return datetime.now(UTC).date()
+
+
+def _response_portfolio_type(
+    portfolio: Portfolio,
+    holdings: Sequence[Holding],
+) -> str:
+    if portfolio.portfolio_type in {
+        PortfolioType.CURRENT.value,
+        PortfolioType.PLANNED.value,
+        PortfolioType.LEGACY.value,
+    }:
+        return portfolio.portfolio_type
+    if holdings and all(holding.weight is not None for holding in holdings):
+        return PortfolioType.LEGACY.value
+    if holdings and all(
+        holding.proposed_amount is not None for holding in holdings
+    ):
+        return PortfolioType.PLANNED.value
+    return PortfolioType.CURRENT.value
 
 
 def _to_portfolio_response(
@@ -29,18 +81,121 @@ def _to_portfolio_response(
     holdings: Sequence[Holding] | None = None,
 ) -> PortfolioResponse:
     mapped_holdings = portfolio.holdings if holdings is None else holdings
+    portfolio_type = _response_portfolio_type(portfolio, mapped_holdings)
     return PortfolioResponse(
         id=portfolio.id,
         name=portfolio.name,
+        portfolio_type=portfolio_type,
+        plan_currency=portfolio.plan_currency,
+        source_plan_id=portfolio.source_plan_id,
         created_at=portfolio.created_at,
         updated_at=portfolio.updated_at,
         holdings=[
-            PortfolioHoldingResponse(
+            PortfolioHoldingResponse.model_validate(holding)
+            for holding in mapped_holdings
+        ],
+    )
+
+
+def _to_planned_allocation_response(
+    allocation: PlannedPortfolioAllocation,
+) -> PortfolioPlannedAllocationResponse:
+    return PortfolioPlannedAllocationResponse(
+        portfolio_id=allocation.portfolio_id,
+        portfolio_type="PLANNED",
+        plan_currency=allocation.plan_currency,
+        total_proposed_amount=allocation.total_proposed_amount,
+        holdings=[
+            PortfolioPlannedAllocationHoldingResponse(
+                id=holding.holding_id,
                 symbol=holding.symbol,
-                weight=float(holding.weight),
+                proposed_amount=holding.proposed_amount,
+                target_allocation=holding.target_allocation,
                 position=holding.position,
             )
-            for holding in mapped_holdings
+            for holding in allocation.holdings
+        ],
+    )
+
+
+def _to_planned_preview_response(
+    preview: PlannedPortfolioPreview,
+) -> PortfolioPlannedPreviewResponse:
+    fx = (
+        None
+        if preview.fx_context is None
+        else PortfolioValuationFxResponse(
+            pair=preview.fx_context.pair,
+            provider_symbol=preview.fx_context.provider_symbol,
+            rate=preview.fx_context.rate,
+            as_of=preview.fx_context.as_of,
+        )
+    )
+    return PortfolioPlannedPreviewResponse(
+        portfolio_id=preview.portfolio_id,
+        portfolio_type="PLANNED",
+        plan_currency=preview.plan_currency,
+        requested_date=preview.requested_date,
+        total_proposed_amount=preview.total_proposed_amount,
+        fx=fx,
+        holdings=[
+            PortfolioPlannedPreviewHoldingResponse(
+                id=holding.holding_id,
+                symbol=holding.symbol,
+                proposed_amount=holding.proposed_amount,
+                target_allocation=holding.target_allocation,
+                position=holding.position,
+                estimate_status=holding.estimate_status.value,
+                estimated_shares=holding.estimated_shares,
+                asset_price=holding.asset_price,
+                asset_quote_currency=holding.asset_quote_currency,
+                price_as_of=holding.price_as_of,
+            )
+            for holding in preview.holdings
+        ],
+    )
+
+
+def _to_portfolio_valuation_response(
+    portfolio_id: UUID,
+    valuation: PortfolioValuationResult,
+) -> PortfolioValuationResponse:
+    fx = (
+        None
+        if valuation.fx_context is None
+        else PortfolioValuationFxResponse(
+            pair=valuation.fx_context.pair,
+            provider_symbol=valuation.fx_context.provider_symbol,
+            rate=valuation.fx_context.rate,
+            as_of=valuation.fx_context.as_of,
+        )
+    )
+    return PortfolioValuationResponse(
+        portfolio_id=portfolio_id,
+        valuation_currency=valuation.display_currency.value,
+        requested_date=valuation.requested_date,
+        oldest_price_as_of=valuation.oldest_price_as_of,
+        newest_price_as_of=valuation.newest_price_as_of,
+        total_current_value_usd=valuation.total_current_value_usd,
+        total_current_value=valuation.total_current_value,
+        fx=fx,
+        holdings=[
+            PortfolioHoldingValuationResponse(
+                id=holding.holding_id,
+                symbol=holding.symbol,
+                invested_amount=holding.invested_amount,
+                invested_currency=holding.invested_currency,
+                shares=holding.shares,
+                purchase_date=holding.purchase_date,
+                position=holding.position,
+                asset_price=holding.asset_price,
+                asset_quote_currency=holding.asset_quote_currency,
+                price_as_of=holding.price_as_of,
+                current_value_usd=holding.current_value_usd,
+                current_value=holding.current_value,
+                current_allocation=holding.current_allocation,
+            )
+            for holding in valuation.holdings
         ],
     )
 
@@ -51,6 +206,8 @@ def _to_portfolio_summary(
     return PortfolioSummaryResponse(
         id=portfolio.id,
         name=portfolio.name,
+        portfolio_type=(portfolio.portfolio_type or PortfolioType.CURRENT.value),
+        plan_currency=portfolio.plan_currency,
         created_at=portfolio.created_at,
         updated_at=portfolio.updated_at,
     )
@@ -84,6 +241,8 @@ def create_portfolio(
         portfolio = PortfolioService(session).create(
             user_id=current_user.id,
             name=request.name,
+            portfolio_type=request.portfolio_type,
+            plan_currency=request.plan_currency,
         )
         response = _to_portfolio_response(portfolio, holdings=())
         session.commit()
@@ -142,6 +301,121 @@ def get_portfolio(
         raise _internal_error("Unable to retrieve portfolio") from error
 
 
+@router.get(
+    "/{portfolio_id}/planned-allocation",
+    response_model=PortfolioPlannedAllocationResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_planned_portfolio_allocation(
+    portfolio_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> PortfolioPlannedAllocationResponse:
+    try:
+        portfolio = PortfolioService(session).get(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+        )
+    except Exception as error:
+        raise _internal_error("Unable to resolve planned allocation") from error
+
+    if portfolio is None:
+        raise _portfolio_not_found()
+
+    try:
+        allocation = PortfolioPlannedAllocationService().resolve(portfolio)
+        return _to_planned_allocation_response(allocation)
+    except InvalidPlannedPortfolioError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Portfolio cannot provide a planned allocation",
+        ) from error
+    except Exception as error:
+        raise _internal_error("Unable to resolve planned allocation") from error
+
+
+@router.get(
+    "/{portfolio_id}/planned-preview",
+    response_model=PortfolioPlannedPreviewResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_planned_portfolio_preview(
+    portfolio_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> PortfolioPlannedPreviewResponse:
+    try:
+        portfolio = PortfolioService(session).get(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+        )
+    except Exception as error:
+        raise _internal_error("Unable to preview planned portfolio") from error
+
+    if portfolio is None:
+        raise _portfolio_not_found()
+
+    try:
+        preview = PortfolioPlannedPreviewService(session).preview(
+            portfolio=portfolio,
+            requested_date=_current_utc_date(),
+        )
+        return _to_planned_preview_response(preview)
+    except InvalidPlannedPortfolioError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Portfolio cannot provide a planned preview",
+        ) from error
+    except Exception as error:
+        raise _internal_error("Unable to preview planned portfolio") from error
+
+
+@router.get(
+    "/{portfolio_id}/valuation",
+    response_model=PortfolioValuationResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_portfolio_valuation(
+    portfolio_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+    currency: PortfolioDisplayCurrency = PortfolioDisplayCurrency.USD,
+) -> PortfolioValuationResponse:
+    try:
+        portfolio = PortfolioService(session).get(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+        )
+    except Exception as error:
+        raise _internal_error("Unable to value portfolio") from error
+
+    if portfolio is None:
+        raise _portfolio_not_found()
+
+    try:
+        valuation = PortfolioValuationService(session).value(
+            portfolio.holdings,
+            display_currency=currency,
+        )
+        return _to_portfolio_valuation_response(portfolio.id, valuation)
+    except MarketDataUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Required market data is unavailable",
+        ) from error
+    except (
+        InvalidHoldingModeError,
+        InvalidPortfolioValueError,
+        UnsupportedHoldingInstrumentError,
+    ) as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Portfolio cannot be valued in its current holding state",
+        ) from error
+    except Exception as error:
+        raise _internal_error("Unable to value portfolio") from error
+
+
 @router.patch(
     "/{portfolio_id}",
     response_model=PortfolioResponse,
@@ -180,20 +454,44 @@ def rename_portfolio(
 )
 def replace_portfolio_holdings(
     portfolio_id: UUID,
-    request: PortfolioHoldingsReplaceRequest,
+    request: (
+        PortfolioHoldingsReplaceRequest
+        | PortfolioPlannedHoldingsReplaceRequest
+    ),
     session: DatabaseSession,
     current_user: CurrentUser,
 ) -> PortfolioResponse:
-    holdings = [
-        (holding.symbol, holding.weight)
-        for holding in request.holdings
-    ]
     try:
-        portfolio = PortfolioService(session).replace_holdings(
-            user_id=current_user.id,
-            portfolio_id=portfolio_id,
-            holdings=holdings,
-        )
+        service = PortfolioService(session)
+        if isinstance(request, PortfolioPlannedHoldingsReplaceRequest):
+            portfolio = service.replace_planned_holdings(
+                user_id=current_user.id,
+                portfolio_id=portfolio_id,
+                holdings=[
+                    (holding.symbol, holding.proposed_amount)
+                    for holding in request.holdings
+                ],
+            )
+        else:
+            portfolio = service.replace_holdings(
+                user_id=current_user.id,
+                portfolio_id=portfolio_id,
+                holdings=[
+                    (
+                        holding.symbol,
+                        holding.invested_amount,
+                        holding.invested_currency,
+                        holding.shares,
+                        holding.purchase_date,
+                    )
+                    for holding in request.holdings
+                ],
+            )
+    except PortfolioTypeConflictError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Holding input does not match portfolio type",
+        ) from error
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

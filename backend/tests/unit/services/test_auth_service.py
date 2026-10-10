@@ -8,10 +8,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.database.models import User
-from backend.app.schemas.auth import LoginRequest, RegistrationRequest
+from backend.app.schemas.auth import (
+    AccountDeletionRequest,
+    LoginRequest,
+    PasswordChangeRequest,
+    ProfileUpdateRequest,
+    RegistrationRequest,
+)
 import backend.app.services.auth_service as service_module
 from backend.app.services.auth_service import (
     AuthService,
+    CurrentPasswordMismatchError,
     DuplicateEmailError,
     InvalidCredentialsError,
 )
@@ -246,4 +253,183 @@ def test_token_issuance_delegates_user_uuid_to_phase3_helper() -> None:
 
     assert result == "encoded-token"
     create_access_token.assert_called_once_with(user.id)
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_profile_update_verifies_email_change_and_passes_canonical_fields() -> None:
+    service, session, repository = _service_with_repository()
+    user = _credential_user()
+    repository.get_by_email.return_value = None
+    repository.update_profile.return_value = user
+    request = ProfileUpdateRequest(
+        display_name="Aura Investor",
+        email="NEW@Example.COM",
+        phone_number="+66 81 234 5678",
+        preferred_language="th",
+        timezone="Asia/Yangon",
+        current_password="current-password",
+    )
+
+    with patch.object(
+        service_module,
+        "verify_password",
+        return_value=True,
+    ) as verify_password:
+        result = service.update_profile(user, request)
+
+    assert result is user
+    verify_password.assert_called_once_with(
+        "current-password",
+        "encoded-password-hash",
+    )
+    repository.get_by_email.assert_called_once_with("new@example.com")
+    repository.update_profile.assert_called_once_with(
+        user,
+        {
+            "email": "new@example.com",
+            "display_name": "Aura Investor",
+            "phone_number": "+66 81 234 5678",
+            "preferred_language": "th",
+            "timezone": "Asia/Yangon",
+        },
+    )
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_profile_update_can_clear_optional_fields_without_password() -> None:
+    service, session, repository = _service_with_repository()
+    user = _credential_user()
+    repository.update_profile.return_value = user
+
+    result = service.update_profile(
+        user,
+        ProfileUpdateRequest(display_name=None, phone_number=None),
+    )
+
+    assert result is user
+    repository.update_profile.assert_called_once_with(
+        user,
+        {"display_name": None, "phone_number": None},
+    )
+    repository.get_by_email.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_profile_email_change_rejects_wrong_password_and_duplicate() -> None:
+    service, session, repository = _service_with_repository()
+    user = _credential_user()
+    request = ProfileUpdateRequest(
+        email="new@example.com",
+        current_password="wrong-password",
+    )
+
+    with patch.object(service_module, "verify_password", return_value=False):
+        with pytest.raises(CurrentPasswordMismatchError):
+            service.update_profile(user, request)
+
+    repository.get_by_email.assert_not_called()
+    repository.update_profile.assert_not_called()
+
+    repository.get_by_email.return_value = User(
+        id=uuid4(),
+        email="new@example.com",
+        password_hash="another-hash",
+    )
+    with patch.object(service_module, "verify_password", return_value=True):
+        with pytest.raises(DuplicateEmailError):
+            service.update_profile(user, request)
+
+    repository.update_profile.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_profile_email_uniqueness_race_is_mapped() -> None:
+    service, session, repository = _service_with_repository()
+    user = _credential_user()
+    repository.get_by_email.return_value = None
+    original = SimpleNamespace(
+        diag=SimpleNamespace(constraint_name="uq_users_email")
+    )
+    repository.update_profile.side_effect = IntegrityError(
+        "UPDATE users",
+        {},
+        original,
+    )
+    request = ProfileUpdateRequest(
+        email="new@example.com",
+        current_password="current-password",
+    )
+
+    with patch.object(service_module, "verify_password", return_value=True):
+        with pytest.raises(DuplicateEmailError):
+            service.update_profile(user, request)
+
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_password_change_verifies_current_and_hashes_replacement() -> None:
+    service, session, repository = _service_with_repository()
+    user = _credential_user()
+    request = PasswordChangeRequest(
+        current_password="current-password",
+        new_password="replacement-password",
+    )
+
+    with (
+        patch.object(service_module, "verify_password", return_value=True),
+        patch.object(
+            service_module,
+            "hash_password",
+            return_value="replacement-hash",
+        ) as hash_password,
+    ):
+        service.change_password(user, request)
+
+    hash_password.assert_called_once_with("replacement-password")
+    repository.update_password.assert_called_once_with(
+        user,
+        password_hash="replacement-hash",
+    )
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_password_change_rejects_wrong_current_password_without_hashing() -> None:
+    service, session, repository = _service_with_repository()
+    user = _credential_user()
+    request = PasswordChangeRequest(
+        current_password="wrong-password",
+        new_password="replacement-password",
+    )
+
+    with (
+        patch.object(service_module, "verify_password", return_value=False),
+        patch.object(service_module, "hash_password") as hash_password,
+    ):
+        with pytest.raises(CurrentPasswordMismatchError):
+            service.change_password(user, request)
+
+    hash_password.assert_not_called()
+    repository.update_password.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+@pytest.mark.parametrize("password_hash", [None, "encoded-password-hash"])
+def test_account_deletion_rejects_wrong_or_missing_credentials(password_hash) -> None:
+    service, session, repository = _service_with_repository()
+    user = _credential_user()
+    user.password_hash = password_hash
+    with patch.object(service_module, "verify_password", return_value=False):
+        with pytest.raises(CurrentPasswordMismatchError):
+            service.delete_account(user, AccountDeletionRequest(current_password="wrong-password"))
+    repository.delete.assert_not_called()
+    _assert_session_lifecycle_untouched(session)
+
+
+def test_account_deletion_verifies_password_and_deletes_only_supplied_user() -> None:
+    service, session, repository = _service_with_repository()
+    user = _credential_user()
+    with patch.object(service_module, "verify_password", return_value=True) as verify:
+        service.delete_account(user, AccountDeletionRequest(current_password="current-password"))
+    verify.assert_called_once_with("current-password", user.password_hash)
+    repository.delete.assert_called_once_with(user)
     _assert_session_lifecycle_untouched(session)

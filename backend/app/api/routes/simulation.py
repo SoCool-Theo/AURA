@@ -1,10 +1,12 @@
 """Public catalogue and authenticated portfolio simulation endpoints."""
 
+from datetime import UTC, date, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.dependencies import CurrentUser, DatabaseSession
+from app.services.notification_service import NotificationService
 from app.scenarios.definitions import HISTORICAL_SCENARIOS
 from app.schemas.simulation import (
     AllocationSimulationRequest,
@@ -17,7 +19,7 @@ from app.schemas.simulation import (
     HistoricalScenarioSimulationResponse,
 )
 from app.schemas.simulation_history import (
-    SimulationHistoryDetailResponse,
+    SimulationHistoryDetail,
     SimulationHistoryListResponse,
 )
 from app.services.allocation_simulation_service import (
@@ -30,6 +32,12 @@ from app.services.historical_scenario_service import (
     EmptyPortfolioError,
     HistoricalScenarioNotFoundError,
     HistoricalScenarioService,
+)
+from app.services.market_data_service import MarketDataUnavailableError
+from app.services.portfolio_valuation_service import (
+    InvalidHoldingModeError,
+    InvalidPortfolioValueError,
+    UnsupportedHoldingInstrumentError,
 )
 from app.services.simulation_history_service import (
     SimulationHistoryService,
@@ -45,6 +53,11 @@ _MISSING_MARKET_DATA_PREFIX = (
 _INSUFFICIENT_HISTORY_ERROR = (
     "prices must contain at least three rows for historical simulation"
 )
+
+
+def _current_utc_date() -> date:
+    """Capture one current UTC calendar date per simulation request."""
+    return datetime.now(UTC).date()
 
 
 def _internal_error() -> HTTPException:
@@ -79,6 +92,13 @@ def _history_detail_internal_error() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Unable to retrieve simulation",
+    )
+
+
+def _history_delete_internal_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Unable to delete simulation",
     )
 
 
@@ -165,7 +185,7 @@ def list_simulation_history(
 
 @router.get(
     "/portfolios/{portfolio_id}/simulations/{simulation_id}",
-    response_model=SimulationHistoryDetailResponse,
+    response_model=SimulationHistoryDetail,
     status_code=status.HTTP_200_OK,
 )
 def get_simulation_history(
@@ -173,7 +193,7 @@ def get_simulation_history(
     simulation_id: UUID,
     session: DatabaseSession,
     current_user: CurrentUser,
-) -> SimulationHistoryDetailResponse:
+) -> SimulationHistoryDetail:
     """Return one validated immutable simulation for an owned portfolio."""
     try:
         simulation = SimulationHistoryService(session).get(
@@ -191,6 +211,37 @@ def get_simulation_history(
     return simulation
 
 
+@router.delete(
+    "/portfolios/{portfolio_id}/simulations/{simulation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+def delete_simulation_history(
+    portfolio_id: UUID,
+    simulation_id: UUID,
+    session: DatabaseSession,
+    current_user: CurrentUser,
+) -> Response:
+    """Permanently remove one owner-scoped saved simulation."""
+    try:
+        deleted = SimulationHistoryService(session).delete(
+            user_id=current_user.id,
+            portfolio_id=portfolio_id,
+            simulation_id=simulation_id,
+        )
+    except SimulationNotFoundError as error:
+        raise _simulation_not_found() from error
+    except Exception as error:
+        raise _history_delete_internal_error() from error
+    if deleted is None:
+        raise _portfolio_not_found()
+    try:
+        session.commit()
+    except Exception as error:
+        raise _history_delete_internal_error() from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post(
     "/portfolios/{portfolio_id}/simulations/historical-scenarios",
     response_model=HistoricalScenarioSimulationResponse,
@@ -204,15 +255,30 @@ def run_historical_scenario(
 ) -> HistoricalScenarioSimulationResponse:
     """Run one scenario for the authenticated user's portfolio."""
     try:
-        response = HistoricalScenarioService(session).run(
+        execution = HistoricalScenarioService(session).run_with_context(
             user_id=current_user.id,
             portfolio_id=portfolio_id,
             request=request,
+            valuation_date=_current_utc_date(),
         )
     except HistoricalScenarioNotFoundError as error:
         raise _scenario_not_found() from error
     except EmptyPortfolioError as error:
         raise _unprocessable_historical_input(str(error)) from error
+    except MarketDataUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Required current market data is unavailable",
+        ) from error
+    except (
+        InvalidHoldingModeError,
+        InvalidPortfolioValueError,
+        UnsupportedHoldingInstrumentError,
+    ) as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Portfolio cannot be simulated in its current holding state",
+        ) from error
     except ValueError as error:
         if _is_expected_historical_data_error(error):
             raise _unprocessable_historical_input(str(error)) from error
@@ -220,8 +286,9 @@ def run_historical_scenario(
     except Exception as error:
         raise _internal_error() from error
 
-    if response is None:
+    if execution is None:
         raise _portfolio_not_found()
+    response = execution.response
 
     try:
         history = SimulationHistoryService(session).save(
@@ -232,9 +299,11 @@ def run_historical_scenario(
             requested_start_date=response.scenario.requested_start_date,
             requested_end_date=response.scenario.requested_end_date,
             response=response,
+            baseline=execution.baseline,
         )
         if history is None:
             raise _portfolio_not_found()
+        NotificationService(session).record_saved(user_id=current_user.id, portfolio_id=portfolio_id, kind="simulation", resource_id=history.id)
         session.commit()
     except HTTPException:
         raise
@@ -256,16 +325,31 @@ def run_allocation_simulation(
 ) -> AllocationSimulationResponse:
     """Compare one allocation for the authenticated user's portfolio."""
     try:
-        response = AllocationSimulationService(session).run(
+        execution = AllocationSimulationService(session).run_with_context(
             user_id=current_user.id,
             portfolio_id=portfolio_id,
             request=request,
+            valuation_date=_current_utc_date(),
         )
     except (
         AllocationSymbolMismatchError,
         AllocationEmptyPortfolioError,
     ) as error:
         raise _unprocessable_historical_input(str(error)) from error
+    except MarketDataUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Required current market data is unavailable",
+        ) from error
+    except (
+        InvalidHoldingModeError,
+        InvalidPortfolioValueError,
+        UnsupportedHoldingInstrumentError,
+    ) as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Portfolio cannot be simulated in its current holding state",
+        ) from error
     except ValueError as error:
         if _is_expected_historical_data_error(error):
             raise _unprocessable_historical_input(str(error)) from error
@@ -273,8 +357,9 @@ def run_allocation_simulation(
     except Exception as error:
         raise _allocation_internal_error() from error
 
-    if response is None:
+    if execution is None:
         raise _portfolio_not_found()
+    response = execution.response
 
     try:
         history = SimulationHistoryService(session).save(
@@ -285,9 +370,11 @@ def run_allocation_simulation(
             requested_start_date=response.start_date,
             requested_end_date=response.end_date,
             response=response,
+            baseline=execution.baseline,
         )
         if history is None:
             raise _portfolio_not_found()
+        NotificationService(session).record_saved(user_id=current_user.id, portfolio_id=portfolio_id, kind="simulation", resource_id=history.id)
         session.commit()
     except HTTPException:
         raise
@@ -309,10 +396,11 @@ def run_combined_simulation(
 ) -> CombinedSimulationResponse:
     """Compare allocations during one scenario for an owned portfolio."""
     try:
-        response = CombinedSimulationService(session).run(
+        execution = CombinedSimulationService(session).run_with_context(
             user_id=current_user.id,
             portfolio_id=portfolio_id,
             request=request,
+            valuation_date=_current_utc_date(),
         )
     except HistoricalScenarioNotFoundError as error:
         raise _scenario_not_found() from error
@@ -321,6 +409,20 @@ def run_combined_simulation(
         AllocationEmptyPortfolioError,
     ) as error:
         raise _unprocessable_historical_input(str(error)) from error
+    except MarketDataUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Required current market data is unavailable",
+        ) from error
+    except (
+        InvalidHoldingModeError,
+        InvalidPortfolioValueError,
+        UnsupportedHoldingInstrumentError,
+    ) as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Portfolio cannot be simulated in its current holding state",
+        ) from error
     except ValueError as error:
         if _is_expected_historical_data_error(error):
             raise _unprocessable_historical_input(str(error)) from error
@@ -328,8 +430,9 @@ def run_combined_simulation(
     except Exception as error:
         raise _combined_internal_error() from error
 
-    if response is None:
+    if execution is None:
         raise _portfolio_not_found()
+    response = execution.response
 
     try:
         history = SimulationHistoryService(session).save(
@@ -340,9 +443,11 @@ def run_combined_simulation(
             requested_start_date=response.scenario.requested_start_date,
             requested_end_date=response.scenario.requested_end_date,
             response=response,
+            baseline=execution.baseline,
         )
         if history is None:
             raise _portfolio_not_found()
+        NotificationService(session).record_saved(user_id=current_user.id, portfolio_id=portfolio_id, kind="simulation", resource_id=history.id)
         session.commit()
     except HTTPException:
         raise

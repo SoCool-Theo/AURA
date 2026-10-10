@@ -8,6 +8,7 @@ interface AuthLayoutProps {
 export function AuthLayout({ children }: AuthLayoutProps) {
   return (
     <main className={styles.authShell}>
+      <a className={styles.welcomeLink} href="#/welcome">← Back to Aura</a>
       <div className={styles.authBackdrop} aria-hidden="true" />
       <section className={styles.authCard} aria-label="Aura account access">
         <header className={styles.authBrand}>

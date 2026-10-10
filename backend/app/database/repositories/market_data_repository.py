@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TypedDict
 
-from sqlalchemy import select
+from sqlalchemy import and_, extract, func, select, union
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -64,6 +64,113 @@ class MarketDataRepository:
                 MarketData.symbol.in_(selected_symbols),
                 MarketData.date >= start_date,
                 MarketData.date <= end_date,
+            )
+            .order_by(MarketData.symbol, MarketData.date)
+        )
+        return list(self._session.scalars(statement).all())
+
+    def get_latest_on_or_before(
+        self,
+        symbols: Sequence[str],
+        requested_date: date,
+    ) -> list[MarketData]:
+        """Return at most one latest row per symbol in requested order."""
+        selected_symbols = tuple(dict.fromkeys(symbols))
+        if not selected_symbols:
+            return []
+
+        latest_dates = (
+            select(
+                MarketData.symbol.label("symbol"),
+                func.max(MarketData.date).label("latest_date"),
+            )
+            .where(
+                MarketData.symbol.in_(selected_symbols),
+                MarketData.date <= requested_date,
+            )
+            .group_by(MarketData.symbol)
+            .subquery()
+        )
+        statement = select(MarketData).join(
+            latest_dates,
+            and_(
+                MarketData.symbol == latest_dates.c.symbol,
+                MarketData.date == latest_dates.c.latest_date,
+            ),
+        )
+        rows = list(self._session.scalars(statement).all())
+        rows_by_symbol = {row.symbol: row for row in rows}
+        return [
+            rows_by_symbol[symbol]
+            for symbol in selected_symbols
+            if symbol in rows_by_symbol
+        ]
+
+    def get_price_change_observations(
+        self,
+        symbols: Sequence[str],
+    ) -> list[MarketData]:
+        """Return compact latest, previous, and latest-year-first contexts.
+
+        The single query returns no more than three distinct persisted rows per
+        symbol and never synthesizes, fills, or mutates market observations.
+        """
+        selected_symbols = tuple(dict.fromkeys(symbols))
+        if not selected_symbols:
+            return []
+
+        latest_dates = (
+            select(
+                MarketData.symbol.label("symbol"),
+                func.max(MarketData.date).label("latest_date"),
+            )
+            .where(MarketData.symbol.in_(selected_symbols))
+            .group_by(MarketData.symbol)
+            .subquery()
+        )
+        previous_dates = (
+            select(
+                MarketData.symbol.label("symbol"),
+                func.max(MarketData.date).label("observation_date"),
+            )
+            .join(
+                latest_dates,
+                MarketData.symbol == latest_dates.c.symbol,
+            )
+            .where(MarketData.date < latest_dates.c.latest_date)
+            .group_by(MarketData.symbol)
+        )
+        first_year_dates = (
+            select(
+                MarketData.symbol.label("symbol"),
+                func.min(MarketData.date).label("observation_date"),
+            )
+            .join(
+                latest_dates,
+                MarketData.symbol == latest_dates.c.symbol,
+            )
+            .where(
+                extract("year", MarketData.date)
+                == extract("year", latest_dates.c.latest_date)
+            )
+            .group_by(MarketData.symbol)
+        )
+        observation_dates = union(
+            select(
+                latest_dates.c.symbol,
+                latest_dates.c.latest_date.label("observation_date"),
+            ),
+            previous_dates,
+            first_year_dates,
+        ).subquery()
+        statement = (
+            select(MarketData)
+            .join(
+                observation_dates,
+                and_(
+                    MarketData.symbol == observation_dates.c.symbol,
+                    MarketData.date == observation_dates.c.observation_date,
+                ),
             )
             .order_by(MarketData.symbol, MarketData.date)
         )

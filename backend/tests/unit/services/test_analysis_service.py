@@ -15,7 +15,10 @@ from backend.app.analytics.concentration import ConcentrationResult
 from backend.app.analytics.diversification import DiversificationResult
 from backend.app.analytics.drawdown import MaxDrawdownResult
 from backend.app.analytics.engine import PortfolioAnalyticsResult
-from backend.app.analytics.risk_classifier import RiskClassificationResult
+from backend.app.analytics.risk_classifier import (
+    AssetRiskClassificationResult,
+    RiskClassificationResult,
+)
 from backend.app.analytics.risk_driver import RiskDriverResult
 from backend.app.database.models import MarketData
 from backend.app.schemas import (
@@ -182,6 +185,35 @@ def _analytics_result() -> PortfolioAnalyticsResult:
             ),
         ),
         asset_metrics=asset_metrics,
+        asset_risk_classifications={
+            "MSFT": AssetRiskClassificationResult(
+                risk_score=100.0 / 3.0,
+                risk_level="Moderate",
+                volatility_points=2,
+                drawdown_points=0,
+                metrics_used=("volatility", "maximum_drawdown"),
+                reasons=("Elevated historical volatility",),
+            ),
+            "AAPL": AssetRiskClassificationResult(
+                risk_score=50.0,
+                risk_level="High",
+                volatility_points=2,
+                drawdown_points=1,
+                metrics_used=("volatility", "maximum_drawdown"),
+                reasons=("Elevated historical volatility",),
+            ),
+            "BND": AssetRiskClassificationResult(
+                risk_score=0.0,
+                risk_level="Low",
+                volatility_points=0,
+                drawdown_points=0,
+                metrics_used=("volatility", "maximum_drawdown"),
+                reasons=(
+                    "No major risk flags under Aura's current asset "
+                    "thresholds",
+                ),
+            ),
+        },
         asset_returns=asset_returns,
         portfolio_returns=pd.Series(
             np.array([0.005, -0.01, 0.02], dtype=np.float64),
@@ -330,6 +362,51 @@ def test_analysis_service_orchestrates_existing_boundaries_in_order() -> None:
     session.commit.assert_not_called()
     session.rollback.assert_not_called()
     session.close.assert_not_called()
+
+
+def test_analysis_service_passes_normalized_share_quantities_to_engine() -> None:
+    session = MagicMock(spec=Session)
+    request = _analysis_request()
+    records = _retrieved_analysis_records()
+    prices = pd.DataFrame({"sentinel": [1.0]})
+    analytics_result = MagicMock(spec=PortfolioAnalyticsResult)
+    response = MagicMock(spec=PortfolioAnalysisResponse)
+    market_data_service, market_data_service_type = (
+        _mocked_market_data_service()
+    )
+    market_data_service.get_range.return_value = records
+
+    with (
+        patch.object(
+            service_module,
+            "MarketDataService",
+            market_data_service_type,
+        ),
+        patch.object(service_module, "_build_price_frame", return_value=prices),
+        patch.object(
+            service_module,
+            "analyze_portfolio",
+            return_value=analytics_result,
+        ) as analyze_portfolio,
+        patch.object(
+            service_module,
+            "_map_analysis_response",
+            return_value=response,
+        ),
+    ):
+        result = AnalysisService(session).analyze(
+            request,
+            share_quantities={
+                "MSFT": Decimal("2.5"),
+                "AAPL": Decimal("3"),
+                "BND": Decimal("4.25"),
+            },
+        )
+
+    assert result is response
+    assert analyze_portfolio.call_args.kwargs == {
+        "share_quantities": {"MSFT": 2.5, "AAPL": 3.0, "BND": 4.25}
+    }
 
 
 def test_analysis_service_integrates_real_phase_two_and_three_helpers() -> None:
@@ -586,6 +663,35 @@ def test_map_analysis_response_constructs_complete_strict_response() -> None:
     json.dumps(response.model_dump(mode="json"), allow_nan=False)
 
 
+def test_map_analysis_response_includes_fixed_share_historical_values() -> None:
+    result = replace(
+        _analytics_result(),
+        historical_portfolio_values=pd.Series(
+            [1000.0, 1010.0, 1020.0, 1032.0],
+            index=pd.DatetimeIndex(
+                [
+                    "2026-01-02",
+                    "2026-01-03",
+                    "2026-01-04",
+                    "2026-01-05",
+                ]
+            ),
+            name="portfolio_value",
+        ),
+    )
+
+    response = _map_analysis_response(_analysis_request(), result)
+
+    context = response.historical_value_context
+    assert context is not None
+    assert context.basis == "fixed-current-shares"
+    assert context.currency == "USD"
+    assert context.start_date == date(2026, 1, 2)
+    assert context.end_date == date(2026, 1, 5)
+    assert context.starting_value == Decimal("1000.0")
+    assert context.ending_value == Decimal("1032.0")
+
+
 def test_map_analysis_response_preserves_all_engine_collection_order() -> None:
     response = _map_analysis_response(
         _analysis_request(),
@@ -615,6 +721,14 @@ def test_map_analysis_response_preserves_all_engine_collection_order() -> None:
         "annualized_volatility": 0.25,
         "max_drawdown": -0.18,
         "sharpe_ratio": -0.4,
+        "risk_classification": {
+            "risk_score": 50.0,
+            "risk_level": "High",
+            "volatility_points": 2,
+            "drawdown_points": 1,
+            "metrics_used": ["volatility", "maximum_drawdown"],
+            "reasons": ["Elevated historical volatility"],
+        },
     }
     assert response.correlation_matrix.symbols == ["MSFT", "AAPL", "BND"]
     assert response.correlation_matrix.values == [
@@ -640,6 +754,19 @@ def test_map_analysis_response_preserves_all_engine_collection_order() -> None:
         -0.01,
         0.02,
     ]
+    assert [series.symbol for series in response.asset_returns] == [
+        "MSFT",
+        "AAPL",
+        "BND",
+    ]
+    assert [point.date for point in response.asset_returns[1].points] == [
+        date(2026, 1, 3),
+        date(2026, 1, 4),
+        date(2026, 1, 5),
+    ]
+    assert [
+        point.asset_return for point in response.asset_returns[1].points
+    ] == [-0.02, 0.01, 0.02]
 
 
 def test_map_analysis_response_preserves_nullable_drawdown_dates() -> None:

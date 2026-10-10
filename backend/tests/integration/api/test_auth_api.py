@@ -19,6 +19,7 @@ from app.database.models import User
 from app.main import app
 from app.services.auth_service import (
     AuthService,
+    CurrentPasswordMismatchError,
     DuplicateEmailError,
     InvalidCredentialsError,
 )
@@ -43,6 +44,10 @@ def _user() -> User:
         id=USER_ID,
         email="user@example.com",
         password_hash="encoded-password-hash",
+        display_name="Aura Investor",
+        phone_number="+66 81 234 5678",
+        preferred_language="en",
+        timezone="Asia/Bangkok",
         created_at=CREATED_AT,
         updated_at=UPDATED_AT,
     )
@@ -87,7 +92,20 @@ def auth_api_harness() -> AuthApiHarness:
         yield AuthApiHarness(client=client, session=session, service=service)
 
 
-def test_auth_router_exposes_only_the_three_approved_endpoints() -> None:
+def _public_user_payload() -> dict[str, str]:
+    return {
+        "id": str(USER_ID),
+        "email": "user@example.com",
+        "display_name": "Aura Investor",
+        "phone_number": "+66 81 234 5678",
+        "preferred_language": "en",
+        "timezone": "Asia/Bangkok",
+        "created_at": "2026-08-18T02:30:00Z",
+        "updated_at": "2026-08-18T03:45:00Z",
+    }
+
+
+def test_auth_router_exposes_profile_and_password_endpoints() -> None:
     auth_paths = {
         path
         for path in app.openapi()["paths"]
@@ -98,6 +116,7 @@ def test_auth_router_exposes_only_the_three_approved_endpoints() -> None:
         "/api/auth/register",
         "/api/auth/login",
         "/api/auth/me",
+        "/api/auth/me/password",
     }
 
 
@@ -115,12 +134,7 @@ def test_register_returns_canonical_public_user_and_commits_once(
     )
 
     assert response.status_code == 201
-    assert response.json() == {
-        "id": str(USER_ID),
-        "email": "user@example.com",
-        "created_at": "2026-08-18T02:30:00Z",
-        "updated_at": "2026-08-18T03:45:00Z",
-    }
+    assert response.json() == _public_user_payload()
     assert "password" not in response.json()
     assert "password_hash" not in response.json()
     request = auth_api_harness.service.register.call_args.args[0]
@@ -269,17 +283,131 @@ def test_me_returns_current_public_user_without_committing(
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "id": str(USER_ID),
-        "email": "user@example.com",
-        "created_at": "2026-08-18T02:30:00Z",
-        "updated_at": "2026-08-18T03:45:00Z",
-    }
+    assert response.json() == _public_user_payload()
     assert "password_hash" not in response.json()
     auth_api_harness.session.get.assert_called_once_with(User, USER_ID)
     auth_api_harness.session.commit.assert_not_called()
     auth_api_harness.session.rollback.assert_not_called()
     auth_api_harness.session.close.assert_called_once_with()
+
+
+def test_profile_update_is_authenticated_validated_and_committed(
+    auth_api_harness: AuthApiHarness,
+) -> None:
+    current = _user()
+    updated = _user()
+    updated.email = "new@example.com"
+    updated.display_name = "Updated Investor"
+    updated.phone_number = None
+    updated.preferred_language = "th"
+    updated.timezone = "Asia/Yangon"
+    auth_api_harness.session.get.return_value = current
+    auth_api_harness.service.update_profile.return_value = updated
+
+    response = auth_api_harness.client.patch(
+        "/api/auth/me",
+        headers=_authorization(create_access_token(USER_ID)),
+        json={
+            "email": " NEW@Example.COM ",
+            "display_name": "  Updated Investor  ",
+            "phone_number": None,
+            "preferred_language": "th",
+            "timezone": "Asia/Yangon",
+            "current_password": PASSWORD,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        **_public_user_payload(),
+        "email": "new@example.com",
+        "display_name": "Updated Investor",
+        "phone_number": None,
+        "preferred_language": "th",
+        "timezone": "Asia/Yangon",
+    }
+    request = auth_api_harness.service.update_profile.call_args.args[1]
+    assert request.email == "new@example.com"
+    assert request.display_name == "Updated Investor"
+    auth_api_harness.session.commit.assert_called_once_with()
+
+
+def test_profile_email_conflict_and_wrong_password_are_sanitized(
+    auth_api_harness: AuthApiHarness,
+) -> None:
+    auth_api_harness.session.get.return_value = _user()
+    token = create_access_token(USER_ID)
+    auth_api_harness.service.update_profile.side_effect = DuplicateEmailError
+
+    conflict = auth_api_harness.client.patch(
+        "/api/auth/me",
+        headers=_authorization(token),
+        json={"email": "taken@example.com", "current_password": PASSWORD},
+    )
+
+    assert conflict.status_code == 409
+    assert conflict.json() == {"detail": "Email already registered"}
+
+    auth_api_harness.service.update_profile.side_effect = (
+        CurrentPasswordMismatchError
+    )
+    forbidden = auth_api_harness.client.patch(
+        "/api/auth/me",
+        headers=_authorization(token),
+        json={"email": "new@example.com", "current_password": PASSWORD},
+    )
+
+    assert forbidden.status_code == 403
+    assert forbidden.json() == {"detail": "Current password is incorrect"}
+
+
+def test_password_change_requires_auth_and_commits_no_response_body(
+    auth_api_harness: AuthApiHarness,
+) -> None:
+    user = _user()
+    auth_api_harness.session.get.return_value = user
+
+    response = auth_api_harness.client.put(
+        "/api/auth/me/password",
+        headers=_authorization(create_access_token(USER_ID)),
+        json={
+            "current_password": PASSWORD,
+            "new_password": "replacement-password",
+        },
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""
+    request = auth_api_harness.service.change_password.call_args.args[1]
+    assert request.current_password.get_secret_value() == PASSWORD
+    assert request.new_password.get_secret_value() == "replacement-password"
+    auth_api_harness.session.commit.assert_called_once_with()
+
+
+def test_profile_writes_reject_invalid_payloads_before_service(
+    auth_api_harness: AuthApiHarness,
+) -> None:
+    auth_api_harness.session.get.return_value = _user()
+    token = create_access_token(USER_ID)
+
+    empty_profile = auth_api_harness.client.patch(
+        "/api/auth/me",
+        headers=_authorization(token),
+        json={},
+    )
+    same_password = auth_api_harness.client.put(
+        "/api/auth/me/password",
+        headers=_authorization(token),
+        json={
+            "current_password": PASSWORD,
+            "new_password": PASSWORD,
+        },
+    )
+
+    assert empty_profile.status_code == 422
+    assert same_password.status_code == 422
+    auth_api_harness.service.update_profile.assert_not_called()
+    auth_api_harness.service.change_password.assert_not_called()
 
 
 _NOW = datetime.now(UTC)
@@ -407,3 +535,83 @@ def test_health_remains_public_without_jwt_or_database_configuration() -> None:
 
     assert response.status_code == 200
     create_engine.assert_not_called()
+
+
+def test_delete_account_commits_once_and_returns_empty_204(auth_api_harness) -> None:
+    user = _user()
+    auth_api_harness.session.get.return_value = user
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=_authorization(create_access_token(USER_ID)),
+        json={"current_password": PASSWORD},
+    )
+    assert response.status_code == 204
+    assert response.content == b""
+    deleted_user, request = auth_api_harness.service.delete_account.call_args.args
+    assert deleted_user is user
+    assert request.current_password.get_secret_value() == PASSWORD
+    assert PASSWORD not in repr(request)
+    auth_api_harness.session.commit.assert_called_once_with()
+    auth_api_harness.session.rollback.assert_not_called()
+
+
+@pytest.mark.parametrize("failure,code,detail", [
+    (CurrentPasswordMismatchError(), 403, "Current password is incorrect"),
+    (RuntimeError("sensitive internal failure"), 500, "Unable to delete account"),
+])
+def test_delete_account_failures_roll_back_and_are_sanitized(auth_api_harness, failure, code, detail):
+    auth_api_harness.session.get.return_value = _user()
+    auth_api_harness.service.delete_account.side_effect = failure
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=_authorization(create_access_token(USER_ID)),
+        json={"current_password": PASSWORD},
+    )
+    assert response.status_code == code
+    assert response.json() == {"detail": detail}
+    auth_api_harness.session.commit.assert_not_called()
+    auth_api_harness.session.rollback.assert_called_once_with()
+
+
+def test_delete_account_commit_failure_rolls_back(auth_api_harness):
+    auth_api_harness.session.get.return_value = _user()
+    auth_api_harness.session.commit.side_effect = RuntimeError("internal failure")
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=_authorization(create_access_token(USER_ID)),
+        json={"current_password": PASSWORD},
+    )
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Unable to delete account"}
+    auth_api_harness.session.rollback.assert_called_once_with()
+
+
+def test_deleted_account_token_cannot_read_or_delete_again(auth_api_harness):
+    auth_api_harness.session.get.return_value = None
+    headers = _authorization(create_access_token(USER_ID))
+    assert auth_api_harness.client.get("/api/auth/me", headers=headers).status_code == 401
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=headers, json={"current_password": PASSWORD},
+    )
+    assert response.status_code == 401
+    auth_api_harness.service.delete_account.assert_not_called()
+    auth_api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("payload", [{}, {"current_password": "short"},
+    {"current_password": None}, {"current_password": PASSWORD, "user_id": str(USER_ID)}])
+def test_delete_account_rejects_invalid_or_owner_override_payload(auth_api_harness, payload):
+    auth_api_harness.session.get.return_value = _user()
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=_authorization(create_access_token(USER_ID)), json=payload,
+    )
+    assert response.status_code == 422
+    auth_api_harness.service.delete_account.assert_not_called()
+    auth_api_harness.session.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("headers,failure", _INVALID_AUTHORIZATION_CASES)
+def test_delete_account_requires_valid_authentication(auth_api_harness, headers, failure):
+    response = auth_api_harness.client.request(
+        "DELETE", "/api/auth/me", headers=headers, json={"current_password": PASSWORD},
+    )
+    assert response.status_code == 401, failure
+    auth_api_harness.service.delete_account.assert_not_called()
+    auth_api_harness.session.commit.assert_not_called()

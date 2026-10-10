@@ -1,9 +1,10 @@
 # Portfolio analytics response
 
-`PortfolioAnalysisResponse` is the JSON-safe destination contract for completed
-portfolio analytics. Production conversion from `PortfolioAnalyticsResult` is
-deferred, and no route or service uses this response merely because the schema
-exists.
+`PortfolioAnalysisResponse` is the JSON-safe deterministic analytics contract
+used by report creation and report snapshots. For real portfolios it is
+composed with a frozen valuation and per-asset context in Report V2; legacy
+reports retain the V1 envelope. For planned portfolios it is composed with the
+frozen proposed-amount target baseline in Report V3.
 
 ## Top-level fields
 
@@ -23,6 +24,7 @@ exists.
 | `correlation_matrix` | `CorrelationMatrix` | Yes | Ordered square correlation matrix. |
 | `correlation_pairs` | `list[CorrelationPair]` | Yes | Ordered unique pairs; may be empty for one asset. |
 | `portfolio_returns` | `list[PortfolioReturnPoint]` | Yes | Ordered dated periodic portfolio returns. |
+| `asset_returns` | `list[AssetReturnSeries]` | New responses | Ordered dated periodic returns for every asset. Empty only when reading a legacy saved response. |
 
 ## Nested models
 
@@ -125,6 +127,24 @@ absolute values.
 | `annualized_volatility` | non-negative finite `float` | Annualized volatility as a decimal. |
 | `max_drawdown` | `float` from `-1.0` through `0.0` | Signed asset maximum drawdown. |
 | `sharpe_ratio` | finite `float \| null` | Annualized Sharpe ratio, or `null` when undefined. |
+| `risk_classification` | `AssetRiskClassification \| null` | Asset-only educational risk score. `null` is accepted only for legacy saved responses. |
+
+### `AssetRiskClassification`
+
+Asset risk uses the existing volatility and maximum-drawdown point thresholds,
+normalizes those two equally weighted components to a `0.0` through `100.0`
+score, and applies the existing `Low`, `Moderate`, `High`, and `Very High`
+score bands. It deliberately excludes portfolio concentration and
+diversification.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `risk_score` | `float` from `0.0` through `100.0` | Asset-only educational risk score. |
+| `risk_level` | `Low`, `Moderate`, `High`, or `Very High` | Asset risk label. |
+| `volatility_points` | `int` from `0` through `3` | Existing volatility-threshold points. |
+| `drawdown_points` | `int` from `0` through `3` | Existing maximum-drawdown-threshold points. |
+| `metrics_used` | `list[str]` | Exactly `volatility`, then `maximum_drawdown`. |
+| `reasons` | non-empty `list[str]` | Deterministic asset-risk reasons. |
 
 ### Correlations
 
@@ -144,11 +164,23 @@ known matrix symbols, and duplicate unordered pairs are rejected.
 Return dates are unique, strictly increasing, inside the inclusive response
 period, and need not be consecutive.
 
+### `AssetReturnSeries` and `AssetReturnPoint`
+
+Each series contains one normalized `symbol` and a non-empty ordered `points`
+list. Each point contains a `date` and finite decimal `asset_return`. New
+analysis responses contain one series per asset in asset-metric order. Every
+series uses the same dates as `portfolio_returns`, allowing clients to compare
+the portfolio and its assets over the identical prepared observation window.
+
 ## Cross-field and JSON behavior
 
 Asset-metric, risk-driver, and correlation-matrix symbol sets must match.
 Asset-metric weights sum to `1.0` with an absolute tolerance of `1e-9`.
 Collections preserve supplied order and are not sorted or repaired.
+Asset-risk classifications must be present for every asset or absent for every
+asset in a legacy saved response. Likewise, an empty `asset_returns` collection
+is accepted only for backwards-compatible saved-response reads; newly executed
+analysis always populates it.
 
 Dates serialize as ISO strings. Intentionally unavailable values serialize as
 JSON `null`. The public format contains no Pandas `DataFrame`, `Series`, or
@@ -158,6 +190,6 @@ rejected.
 Canonical example:
 [`backend/examples/analysis_response.json`](../../backend/examples/analysis_response.json).
 
-This destination contract contains no AI explanation or recommendation field.
-Routes, services, and production conversion from `PortfolioAnalyticsResult`
-remain deferred.
+This contract contains no AI explanation or recommendation field. Production
+analysis/report services convert deterministic `PortfolioAnalyticsResult`
+values into this response; planned V3 AI grounding remains deferred.

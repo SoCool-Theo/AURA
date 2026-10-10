@@ -1,8 +1,10 @@
+from datetime import date
 from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     DateTime,
     Numeric,
     Text,
@@ -13,16 +15,27 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable
 from sqlalchemy.types import Uuid
 
-from backend.app.database import Base, Holding, Portfolio, User
+from backend.app.database import (
+    Base,
+    Holding,
+    Portfolio,
+    PortfolioType,
+    User,
+    WatchlistItem,
+)
 
 
 EXPECTED_TABLES = {
+    "market_data_refresh_state",
+    "notifications",
+    "notification_preferences",
     "analyses",
     "simulations",
     "users",
     "portfolios",
     "holdings",
     "market_data",
+    "watchlist_items",
 }
 
 
@@ -33,13 +46,14 @@ def test_models_use_existing_aura_base_and_expected_tables() -> None:
     assert User.__tablename__ == "users"
     assert Portfolio.__tablename__ == "portfolios"
     assert Holding.__tablename__ == "holdings"
+    assert WatchlistItem.__tablename__ == "watchlist_items"
     assert set(Base.metadata.tables) == EXPECTED_TABLES
 
 
 def test_primary_keys_are_application_generated_python_uuids() -> None:
     generated_values: list[UUID] = []
 
-    for model in (User, Portfolio, Holding):
+    for model in (User, Portfolio, Holding, WatchlistItem):
         id_column = model.__table__.c.id
         assert id_column.primary_key is True
         assert id_column.nullable is False
@@ -61,21 +75,37 @@ def test_required_model_columns_are_not_nullable() -> None:
         "id",
         "user_id",
         "name",
+        "portfolio_type",
         "created_at",
         "updated_at",
     ):
         assert Portfolio.__table__.c[column_name].nullable is False
 
+    for column_name in ("plan_currency", "source_plan_id"):
+        assert Portfolio.__table__.c[column_name].nullable is True
+
     for column_name in (
         "id",
         "portfolio_id",
         "symbol",
-        "weight",
         "position",
         "created_at",
         "updated_at",
     ):
         assert Holding.__table__.c[column_name].nullable is False
+
+    for column_name in ("id", "user_id", "symbol", "created_at"):
+        assert WatchlistItem.__table__.c[column_name].nullable is False
+
+    for column_name in (
+        "invested_amount",
+        "proposed_amount",
+        "invested_currency",
+        "shares",
+        "purchase_date",
+        "weight",
+    ):
+        assert Holding.__table__.c[column_name].nullable is True
 
 
 def test_user_credentials_are_nullable_text_and_support_legacy_construction(
@@ -101,7 +131,7 @@ def test_user_credentials_are_nullable_text_and_support_legacy_construction(
     assert credential_user.password_hash == "$argon2id$test-hash"
 
 
-def test_user_credential_constraints_match_persistence_contract() -> None:
+def test_user_account_constraints_match_persistence_contract() -> None:
     check_constraints = {
         constraint.name: str(constraint.sqltext)
         for constraint in User.__table__.constraints
@@ -119,21 +149,43 @@ def test_user_credential_constraints_match_persistence_contract() -> None:
         "ck_users_credentials_complete": (
             "(email IS NULL AND password_hash IS NULL) OR "
             "(email IS NOT NULL AND password_hash IS NOT NULL)"
-        )
+        ),
+        "ck_users_display_name_length": (
+            "display_name IS NULL OR length(display_name) BETWEEN 1 AND 100"
+        ),
+        "ck_users_phone_number_length": (
+            "phone_number IS NULL OR length(phone_number) BETWEEN 4 AND 32"
+        ),
+        "ck_users_preferred_language": (
+            "preferred_language IN ('en', 'th')"
+        ),
+        "ck_users_timezone": (
+            "timezone IN ('Asia/Bangkok', 'Asia/Yangon')"
+        ),
     }
     assert unique_constraints == {"uq_users_email": ("email",)}
 
 
 def test_foreign_keys_target_owners_and_cascade_on_delete() -> None:
     portfolio_user_fk = next(iter(Portfolio.__table__.c.user_id.foreign_keys))
+    portfolio_source_fk = next(
+        iter(Portfolio.__table__.c.source_plan_id.foreign_keys)
+    )
     holding_portfolio_fk = next(
         iter(Holding.__table__.c.portfolio_id.foreign_keys)
+    )
+    watchlist_user_fk = next(
+        iter(WatchlistItem.__table__.c.user_id.foreign_keys)
     )
 
     assert portfolio_user_fk.target_fullname == "users.id"
     assert portfolio_user_fk.ondelete == "CASCADE"
+    assert portfolio_source_fk.target_fullname == "portfolios.id"
+    assert portfolio_source_fk.ondelete == "SET NULL"
     assert holding_portfolio_fk.target_fullname == "portfolios.id"
     assert holding_portfolio_fk.ondelete == "CASCADE"
+    assert watchlist_user_fk.target_fullname == "users.id"
+    assert watchlist_user_fk.ondelete == "CASCADE"
 
 
 def test_ownership_relationships_mirror_delete_semantics() -> None:
@@ -141,6 +193,8 @@ def test_ownership_relationships_mirror_delete_semantics() -> None:
     portfolio_user = inspect(Portfolio).relationships.user
     portfolio_holdings = inspect(Portfolio).relationships.holdings
     holding_portfolio = inspect(Holding).relationships.portfolio
+    user_watchlist_items = inspect(User).relationships.watchlist_items
+    watchlist_user = inspect(WatchlistItem).relationships.user
 
     assert user_portfolios.back_populates == "user"
     assert portfolio_user.back_populates == "portfolios"
@@ -152,6 +206,10 @@ def test_ownership_relationships_mirror_delete_semantics() -> None:
     assert "delete-orphan" in portfolio_holdings.cascade
     assert portfolio_holdings.passive_deletes is True
     assert list(portfolio_holdings.order_by) == [Holding.__table__.c.position]
+    assert user_watchlist_items.back_populates == "user"
+    assert watchlist_user.back_populates == "watchlist_items"
+    assert "delete-orphan" in user_watchlist_items.cascade
+    assert user_watchlist_items.passive_deletes is True
 
 
 def test_relationships_link_owned_objects_without_database_access() -> None:
@@ -165,22 +223,116 @@ def test_relationships_link_owned_objects_without_database_access() -> None:
 
     user.portfolios.append(portfolio)
     portfolio.holdings.append(holding)
+    watchlist_item = WatchlistItem(symbol="MSFT")
+    user.watchlist_items.append(watchlist_item)
 
     assert portfolio.user is user
     assert holding.portfolio is portfolio
     assert holding.symbol == "AAPL"
+    assert watchlist_item.user is user
 
 
-def test_holding_uses_exact_weight_and_integer_position_types() -> None:
+def test_portfolio_type_and_plan_context_match_approved_contract() -> None:
+    portfolio = Portfolio(name="Current portfolio")
+    planned = Portfolio(
+        name="Planned portfolio",
+        portfolio_type=PortfolioType.PLANNED.value,
+        plan_currency="THB",
+    )
+    checks = {
+        constraint.name: str(constraint.sqltext)
+        for constraint in Portfolio.__table__.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+
+    assert set(PortfolioType) == {
+        PortfolioType.CURRENT,
+        PortfolioType.PLANNED,
+        PortfolioType.LEGACY,
+    }
+    assert Portfolio.__table__.c.portfolio_type.default.arg == "CURRENT"
+    assert str(Portfolio.__table__.c.portfolio_type.server_default.arg) == (
+        "'CURRENT'"
+    )
+    assert isinstance(Portfolio.__table__.c.portfolio_type.type, Text)
+    assert isinstance(Portfolio.__table__.c.plan_currency.type, Text)
+    assert portfolio.plan_currency is None
+    assert planned.portfolio_type == "PLANNED"
+    assert planned.plan_currency == "THB"
+    assert checks == {
+        "ck_portfolios_type": (
+            "portfolio_type IN ('CURRENT', 'PLANNED', 'LEGACY')"
+        ),
+        "ck_portfolios_plan_currency_by_type": (
+            "(portfolio_type = 'PLANNED' AND "
+            "plan_currency IN ('USD', 'THB')) OR "
+            "(portfolio_type IN ('CURRENT', 'LEGACY') AND "
+            "plan_currency IS NULL)"
+        ),
+        "ck_portfolios_source_plan": (
+            "source_plan_id IS NULL OR "
+            "(portfolio_type = 'CURRENT' AND source_plan_id <> id)"
+        ),
+    }
+
+
+def test_holding_uses_approved_current_planned_and_legacy_types() -> None:
     weight_type = Holding.__table__.c.weight.type
+    invested_amount_type = Holding.__table__.c.invested_amount.type
+    proposed_amount_type = Holding.__table__.c.proposed_amount.type
+    shares_type = Holding.__table__.c.shares.type
 
     assert isinstance(weight_type, Numeric)
     assert weight_type.precision == 20
     assert weight_type.scale == 18
+    assert isinstance(invested_amount_type, Numeric)
+    assert invested_amount_type.precision == 28
+    assert invested_amount_type.scale == 12
+    assert isinstance(proposed_amount_type, Numeric)
+    assert proposed_amount_type.precision == 28
+    assert proposed_amount_type.scale == 12
+    assert isinstance(Holding.__table__.c.invested_currency.type, Text)
+    assert isinstance(shares_type, Numeric)
+    assert shares_type.precision == 28
+    assert shares_type.scale == 12
+    assert isinstance(Holding.__table__.c.purchase_date.type, Date)
     assert Holding.__table__.c.position.type.python_type is int
 
 
-def test_holding_check_constraints_cover_only_row_level_bounds() -> None:
+def test_holding_supports_complete_legacy_current_and_planned_construction(
+) -> None:
+    legacy = Holding(
+        symbol="AAPL",
+        weight=Decimal("1.000000000000000000"),
+        position=0,
+    )
+    real = Holding(
+        symbol="BTC-USD",
+        invested_amount=Decimal("1000.000000000000"),
+        invested_currency="USD",
+        shares=Decimal("0.010000000000"),
+        purchase_date=date(2026, 1, 2),
+        position=1,
+    )
+    planned = Holding(
+        symbol="MSFT",
+        proposed_amount=Decimal("2500.000000000000"),
+        position=2,
+    )
+
+    assert legacy.invested_amount is None
+    assert legacy.invested_currency is None
+    assert legacy.shares is None
+    assert legacy.purchase_date is None
+    assert legacy.proposed_amount is None
+    assert real.weight is None
+    assert real.proposed_amount is None
+    assert planned.weight is None
+    assert planned.invested_amount is None
+    assert planned.proposed_amount == Decimal("2500.000000000000")
+
+
+def test_holding_check_constraints_cover_approved_row_contract() -> None:
     checks = {
         constraint.name: str(constraint.sqltext)
         for constraint in Holding.__table__.constraints
@@ -189,6 +341,29 @@ def test_holding_check_constraints_cover_only_row_level_bounds() -> None:
 
     assert checks == {
         "ck_holdings_weight_range": "weight >= 0 AND weight <= 1",
+        "ck_holdings_invested_amount_positive": (
+            "invested_amount IS NULL OR invested_amount > 0"
+        ),
+        "ck_holdings_proposed_amount_positive": (
+            "proposed_amount IS NULL OR proposed_amount > 0"
+        ),
+        "ck_holdings_shares_positive": "shares IS NULL OR shares > 0",
+        "ck_holdings_invested_currency": (
+            "invested_currency IS NULL OR "
+            "invested_currency IN ('USD', 'THB')"
+        ),
+        "ck_holdings_complete_mode": (
+            "(weight IS NOT NULL AND proposed_amount IS NULL AND "
+            "invested_amount IS NULL AND invested_currency IS NULL AND "
+            "shares IS NULL AND purchase_date IS NULL) OR "
+            "(weight IS NULL AND proposed_amount IS NULL AND shares IS NOT "
+            "NULL AND ((invested_amount IS NULL AND invested_currency IS "
+            "NULL AND purchase_date IS NULL) OR (invested_amount IS NOT "
+            "NULL AND invested_currency IS NOT NULL AND purchase_date IS "
+            "NOT NULL))) OR (weight IS NULL AND proposed_amount IS NOT "
+            "NULL AND invested_amount IS NULL AND invested_currency IS NULL "
+            "AND shares IS NULL AND purchase_date IS NULL)"
+        ),
         "ck_holdings_position_non_negative": "position >= 0",
     }
     assert all("sum" not in expression.lower() for expression in checks.values())
@@ -207,13 +382,46 @@ def test_holding_has_approved_composite_unique_constraints() -> None:
     }
 
 
-def test_holding_does_not_persist_deferred_financial_values() -> None:
+def test_watchlist_has_owner_symbol_uniqueness_and_no_derived_columns() -> None:
+    unique_columns = {
+        tuple(column.name for column in constraint.columns)
+        for constraint in WatchlistItem.__table__.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+
+    assert unique_columns == {("user_id", "symbol")}
+    assert tuple(WatchlistItem.__table__.c.keys()) == (
+        "id",
+        "user_id",
+        "symbol",
+        "created_at",
+    )
+    assert not {
+        "latest_price",
+        "daily_change_percent",
+        "ytd_change_percent",
+        "shares",
+        "allocation",
+    } & set(WatchlistItem.__table__.c.keys())
+
+
+def test_holding_persists_inputs_but_not_derived_financial_values() -> None:
     column_names = set(Holding.__table__.c.keys())
 
-    assert "shares" not in column_names
-    assert "invested_amount" not in column_names
+    assert "shares" in column_names
+    assert "invested_amount" in column_names
+    assert "proposed_amount" in column_names
+    assert "invested_currency" in column_names
+    assert "purchase_date" in column_names
     assert "amount_invested" not in column_names
+    assert "current_value" not in column_names
+    assert "current_value_usd" not in column_names
+    assert "current_value_thb" not in column_names
+    assert "current_allocation" not in column_names
+    assert "allocation" not in column_names
+    assert "latest_price" not in column_names
     assert "current_market_value" not in column_names
+    assert "estimated_shares" not in column_names
 
 
 def test_timestamp_columns_are_timezone_capable_and_consistent() -> None:
@@ -252,5 +460,23 @@ def test_models_compile_as_postgresql_ddl_without_connecting() -> None:
     )
     assert "TIMESTAMP WITH TIME ZONE" in ddl_by_table["users"]
     assert "NUMERIC(20, 18)" in ddl_by_table["holdings"]
+    assert ddl_by_table["holdings"].count("NUMERIC(28, 12)") == 3
+    assert "portfolio_type TEXT" in ddl_by_table["portfolios"]
+    assert "plan_currency TEXT" in ddl_by_table["portfolios"]
+    assert "source_plan_id UUID" in ddl_by_table["portfolios"]
+    assert "CONSTRAINT ck_portfolios_type CHECK" in (
+        ddl_by_table["portfolios"]
+    )
+    assert "ON DELETE SET NULL" in ddl_by_table["portfolios"]
+    assert "proposed_amount NUMERIC(28, 12)" in ddl_by_table["holdings"]
+    assert "invested_currency TEXT" in ddl_by_table["holdings"]
+    assert "purchase_date DATE" in ddl_by_table["holdings"]
+    assert "CONSTRAINT ck_holdings_complete_mode CHECK" in (
+        ddl_by_table["holdings"]
+    )
     assert "ON DELETE CASCADE" in ddl_by_table["portfolios"]
     assert "ON DELETE CASCADE" in ddl_by_table["holdings"]
+    assert "CONSTRAINT uq_watchlist_items_user_symbol UNIQUE" in (
+        ddl_by_table["watchlist_items"]
+    )
+    assert "ON DELETE CASCADE" in ddl_by_table["watchlist_items"]

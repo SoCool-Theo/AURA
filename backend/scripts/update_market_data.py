@@ -14,12 +14,13 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
+from app.core.instruments import MARKET_UPDATE_SYMBOLS
 from app.data_pipeline.fetcher import DEFAULT_START_DATE, DEFAULT_SYMBOLS
 from app.data_pipeline.updater import (
     MarketDataUpdateResult,
     update_market_data,
 )
-from app.services.market_data_update_service import update_market_data_and_persist
+from app.services.market_data_refresh_service import run_market_data_refresh as update_market_data_and_persist
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -32,7 +33,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Symbols to update, separated by spaces. Defaults to Aura's "
-            "standard historical symbol set."
+            "required asset and internal valuation instrument set."
         ),
     )
     parser.add_argument(
@@ -75,7 +76,9 @@ def _print_update_result(result: MarketDataUpdateResult) -> None:
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
-    symbols = args.symbols if args.symbols is not None else DEFAULT_SYMBOLS
+    symbols = (
+        args.symbols if args.symbols is not None else MARKET_UPDATE_SYMBOLS
+    )
 
     try:
         stored_count: int | None = None

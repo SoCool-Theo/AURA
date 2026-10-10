@@ -34,6 +34,7 @@ export type AuthContextValue = {
   register: (
     request: RegistrationRequest,
   ) => Promise<AuthenticatedUserResponse>;
+  setCurrentUser: (user: AuthenticatedUserResponse) => void;
   logout: () => void;
   retrySessionRestore: () => Promise<void>;
 };
@@ -48,7 +49,7 @@ function sessionRestoreMessage(error: unknown): string {
   if (error instanceof ApiError && error.kind === 'configuration') {
     return error.message;
   }
-  return 'Aura could not verify your session. Check the API connection and try again.';
+  return 'Aura could not verify your session. Check the service connection and try again.';
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -60,10 +61,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const invalidateSession = useCallback((rejectedToken?: string) => {
     if (rejectedToken && readAccessToken() !== rejectedToken) return;
 
-    clearAccessToken();
-    setUser(null);
-    setSessionError(null);
-    setStatus('unauthenticated');
+    try {
+      clearAccessToken();
+    } finally {
+      // A removed account must leave authenticated UI even if storage fails.
+      setUser(null);
+      setSessionError(null);
+      setStatus('unauthenticated');
+    }
   }, []);
 
   const restoreSession = useCallback(async () => {
@@ -149,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionError,
     login,
     register,
+    setCurrentUser: setUser,
     logout,
     retrySessionRestore: restoreSession,
   }), [

@@ -6,10 +6,12 @@ import { Card } from '../../components/ui/Card';
 import { Icon } from '../../components/ui/Icon';
 import { AuraSelect } from '../../components/ui/AuraSelect';
 import type { AuraSelectOption } from '../../components/ui/AuraSelect';
+import { InlineErrorCard, ScreenErrorState } from '../../components/ui/ApiErrorState';
 import type { PortfolioSummaryResponse } from '../../types/portfolio';
 import type { PortfolioReportResponse } from '../../types/report';
 import { analysisErrorMessage, formatReportTimestamp } from './analyticsUi';
 import styles from './AnalyticsIntegration.module.css';
+import forecastStyles from '../forecasting/Forecasting.module.css';
 import { AnalysisResults } from './components/AnalysisResults';
 
 interface AnalyticsPageProps {
@@ -39,20 +41,22 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
   const [report, setReport] = useState<PortfolioReportResponse | null>(null);
   const [loadingPortfolios, setLoadingPortfolios] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoadingPortfolios(true);
-    setError(null);
+    setLoadError(null);
+    setActionError(null);
     void listPortfolios({ signal: controller.signal })
       .then(response => {
         setPortfolios(response.portfolios);
         const requestedPortfolioExists = portfolioId
           ? response.portfolios.some(item => item.id === portfolioId)
           : false;
-        if (portfolioId && !requestedPortfolioExists) setError('Portfolio not found');
+        if (portfolioId && !requestedPortfolioExists) setActionError('Portfolio not found. Choose another portfolio.');
         setSelectedPortfolioId(current => {
           if (portfolioId) {
             return requestedPortfolioExists ? portfolioId : '';
@@ -62,7 +66,7 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
         });
       })
       .catch(requestError => {
-        if (!controller.signal.aborted) setError(analysisErrorMessage(requestError, 'Unable to load portfolios.'));
+        if (!controller.signal.aborted) setLoadError(requestError);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoadingPortfolios(false);
@@ -73,16 +77,16 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
   async function analyze() {
     if (analyzing) return;
     if (!selectedPortfolioId || !startDate || !endDate) {
-      setError('Choose a portfolio, start date, and end date.');
+      setActionError('Choose a portfolio, start date, and end date.');
       return;
     }
     if (startDate > endDate) {
-      setError('Start date must be on or before end date.');
+      setActionError('Start date must be on or before end date.');
       return;
     }
 
     setAnalyzing(true);
-    setError(null);
+    setActionError(null);
     setReport(null);
     try {
       setReport(await createPortfolioReport(selectedPortfolioId, {
@@ -90,7 +94,7 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
         end_date: endDate,
       }));
     } catch (requestError) {
-      setError(analysisErrorMessage(requestError, 'Unable to analyze this portfolio.'));
+      setActionError(requestError);
     } finally {
       setAnalyzing(false);
     }
@@ -105,7 +109,7 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
         : portfolios.length
           ? 'Select a portfolio'
           : 'No portfolios available',
-      description: 'Choose an owned saved portfolio',
+      description: 'Choose a saved portfolio',
       icon: 'wallet',
       tone: 'neutral',
       disabled: true,
@@ -113,7 +117,11 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
     ...portfolios.map(portfolio => ({
       value: portfolio.id,
       label: portfolio.name,
-      description: 'Saved portfolio',
+      description: portfolio.portfolio_type === 'PLANNED'
+        ? `Planned allocation · ${portfolio.plan_currency ?? 'USD'}`
+        : portfolio.portfolio_type === 'LEGACY'
+          ? 'Legacy saved allocation'
+          : 'Current holdings',
       icon: 'wallet',
       tone: 'teal' as const,
     })),
@@ -122,13 +130,14 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
   function selectPortfolio(nextPortfolioId: string) {
     setSelectedPortfolioId(nextPortfolioId);
     setReport(null);
-    setError(null);
+    setActionError(null);
   }
 
   return (
     <div className="page analytics-page">
+      <nav className={forecastStyles.analysisNav} aria-label="Analysis views"><button type="button" className={forecastStyles.active} aria-current="page">Historical Analysis</button><button type="button" onClick={() => go(selectedPortfolioId ? `forecasting/portfolio/${selectedPortfolioId}` : 'forecasting')}>Forecast Outlook</button></nav>
       <header className="analytics-header">
-        <div><h1>Portfolio Analysis</h1><p>Run Aura’s backend analysis and save an immutable report snapshot.</p></div>
+        <div><h1>Portfolio Analysis</h1><p>Explore historical risk and save an immutable report snapshot.</p></div>
         <div>
           <button className="secondary-btn" onClick={() => go('reports')}><Icon name="reports" size={17} /> Report History</button>
           {selectedPortfolio && <button className="secondary-btn" onClick={() => go(`portfolio/${selectedPortfolio.id}`)}>View Portfolio</button>}
@@ -137,7 +146,7 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
 
       <Card className={styles.controls}>
         <div className={styles.controlsHeading}>
-          <div><h2>Analysis period</h2><p>The exact requested calendar dates are sent to the reporting endpoint without trading-day adjustment.</p></div>
+          <div><h2>Analysis period</h2><p>Choose the exact calendar dates you want Aura to analyze.</p></div>
           <span className={styles.badge}>Creates one saved report</span>
         </div>
         <div className={styles.controlGrid}>
@@ -153,24 +162,28 @@ export function AnalyticsPage({ portfolioId }: AnalyticsPageProps) {
                 disabled={loadingPortfolios || analyzing}
               />
             </div>
-            <label className={styles.field}>Start Date<input type="date" value={startDate} onChange={event => { setStartDate(event.target.value); setReport(null); setError(null); }} disabled={analyzing} /></label>
-            <label className={styles.field}>End Date<input type="date" value={endDate} onChange={event => { setEndDate(event.target.value); setReport(null); setError(null); }} disabled={analyzing} /></label>
+            <label className={styles.field}>Start Date<input type="date" value={startDate} onChange={event => { setStartDate(event.target.value); setReport(null); setActionError(null); }} disabled={analyzing} /></label>
+            <label className={styles.field}>End Date<input type="date" value={endDate} onChange={event => { setEndDate(event.target.value); setReport(null); setActionError(null); }} disabled={analyzing} /></label>
           </div>
           <button className="primary-btn" onClick={() => void analyze()} disabled={loadingPortfolios || analyzing || !selectedPortfolioId}>{analyzing ? 'Analyzing…' : 'Analyze Portfolio'}</button>
         </div>
       </Card>
 
-      {error && <p className={styles.error} role="alert">{error}</p>}
-      {loadingPortfolios && <Card className={styles.stateCard}><h2>Loading portfolios</h2><p role="status">Retrieving your real portfolio list.</p></Card>}
-      {!loadingPortfolios && error && !portfolios.length && <Card className={styles.stateCard}><h2>Portfolios unavailable</h2><p>Analysis cannot begin until the portfolio list loads.</p><button className="primary-btn" onClick={() => setReloadKey(key => key + 1)}>Try again</button></Card>}
-      {!loadingPortfolios && !error && !portfolios.length && <Card className={styles.stateCard}><h2>No portfolios to analyze</h2><p>Create a portfolio with an ordered allocation before running analysis.</p><button className="primary-btn" onClick={() => go('create')}>Create Portfolio</button></Card>}
+      {Boolean(actionError) && <InlineErrorCard
+        error={actionError}
+        fallbackMessage="Unable to analyze this portfolio."
+        message={analysisErrorMessage(actionError, 'Unable to analyze this portfolio.')}
+      />}
+      {loadingPortfolios && <Card className={styles.stateCard}><h2>Loading portfolios</h2><p role="status">Retrieving your saved portfolios.</p></Card>}
+      {!loadingPortfolios && Boolean(loadError) && !portfolios.length && <ScreenErrorState error={loadError} fallbackMessage="Analysis cannot begin until your portfolios can be loaded." resourceName="Portfolio list" onRetry={() => setReloadKey(key => key + 1)} />}
+      {!loadingPortfolios && !loadError && !portfolios.length && <Card className={styles.stateCard}><h2>No portfolios to analyze</h2><p>Create a portfolio with an ordered allocation before running analysis.</p><button className="primary-btn" onClick={() => go('create')}>Create Portfolio</button></Card>}
       {analyzing && <Card className={styles.stateCard}><h2>Running portfolio analysis</h2><p role="status">Aura is calculating the requested period and saving the report snapshot.</p></Card>}
       {report && !analyzing && <>
         <div className={styles.savedBar}>
           <span><strong>Report saved.</strong> Created {formatReportTimestamp(report.created_at)} with ID {report.id}.</span>
           <div><button className="secondary-btn" onClick={() => go(`reports/${report.portfolio_id}/${report.id}`)}>Open Saved Report</button><button className="secondary-btn" onClick={() => go('reports')}>All Reports</button></div>
         </div>
-        <AnalysisResults analysis={report.analysis} />
+        <AnalysisResults report={report} />
       </>}
     </div>
   );

@@ -9,6 +9,8 @@ from backend.app.schemas.auth import (
     AccessTokenResponse,
     AuthenticatedUserResponse,
     LoginRequest,
+    PasswordChangeRequest,
+    ProfileUpdateRequest,
     RegistrationRequest,
 )
 
@@ -90,6 +92,10 @@ def test_authenticated_user_response_exposes_only_public_fields() -> None:
         {
             "id": uuid4(),
             "email": "User@Example.COM",
+            "display_name": "Aura Investor",
+            "phone_number": "+66 81 234 5678",
+            "preferred_language": "en",
+            "timezone": "Asia/Bangkok",
             "created_at": timestamp,
             "updated_at": timestamp,
         }
@@ -98,6 +104,10 @@ def test_authenticated_user_response_exposes_only_public_fields() -> None:
     assert set(response.model_dump()) == {
         "id",
         "email",
+        "display_name",
+        "phone_number",
+        "preferred_language",
+        "timezone",
         "created_at",
         "updated_at",
     }
@@ -122,10 +132,82 @@ def test_access_token_response_uses_bearer_type() -> None:
     }
 
 
+def test_profile_update_normalizes_fields_and_requires_password_for_email() -> None:
+    request = ProfileUpdateRequest.model_validate(
+        {
+            "display_name": "  Aura Investor  ",
+            "email": " NEW@Example.COM ",
+            "phone_number": "  +66 81 234 5678  ",
+            "preferred_language": "th",
+            "timezone": "Asia/Yangon",
+            "current_password": "current-password",
+        }
+    )
+
+    assert request.display_name == "Aura Investor"
+    assert request.email == "new@example.com"
+    assert request.phone_number == "+66 81 234 5678"
+    assert request.preferred_language == "th"
+    assert request.timezone == "Asia/Yangon"
+    assert "current-password" not in request.model_dump_json()
+
+    with pytest.raises(ValidationError):
+        ProfileUpdateRequest(email="new@example.com")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"display_name": "   "},
+        {"phone_number": "call-me"},
+        {"preferred_language": "fr"},
+        {"timezone": "UTC"},
+        {"current_password": "current-password", "display_name": "Name"},
+    ],
+)
+def test_profile_update_rejects_invalid_or_ambiguous_payloads(
+    payload: dict[str, str],
+) -> None:
+    with pytest.raises(ValidationError):
+        ProfileUpdateRequest.model_validate(payload)
+
+
+def test_profile_update_can_clear_optional_public_fields() -> None:
+    request = ProfileUpdateRequest(
+        display_name=None,
+        phone_number=None,
+    )
+
+    assert request.model_fields_set == {"display_name", "phone_number"}
+
+
+def test_password_change_requires_distinct_secrets_and_never_serializes_them(
+) -> None:
+    request = PasswordChangeRequest(
+        current_password="current-password",
+        new_password="replacement-password",
+    )
+
+    assert request.current_password.get_secret_value() == "current-password"
+    assert request.new_password.get_secret_value() == "replacement-password"
+    serialized = request.model_dump_json()
+    assert "current-password" not in serialized
+    assert "replacement-password" not in serialized
+
+    with pytest.raises(ValidationError):
+        PasswordChangeRequest(
+            current_password="same-password",
+            new_password="same-password",
+        )
+
+
 def test_auth_schemas_do_not_expand_stable_package_exports() -> None:
     assert not {
         "RegistrationRequest",
         "LoginRequest",
         "AuthenticatedUserResponse",
         "AccessTokenResponse",
+        "ProfileUpdateRequest",
+        "PasswordChangeRequest",
     }.intersection(schemas_package.__all__)

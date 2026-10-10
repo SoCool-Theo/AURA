@@ -76,6 +76,16 @@ export type AssetMetrics = {
   annualized_volatility: number;
   max_drawdown: number;
   sharpe_ratio: number | null;
+  risk_classification?: AssetRiskClassification | null;
+};
+
+export type AssetRiskClassification = {
+  risk_score: number;
+  risk_level: RiskLevel;
+  volatility_points: number;
+  drawdown_points: number;
+  metrics_used: Array<'volatility' | 'maximum_drawdown'>;
+  reasons: string[];
 };
 
 export type CorrelationMatrixResponse = {
@@ -97,6 +107,15 @@ export type AnalysisMetadata = {
   asset_count: number;
 };
 
+export type HistoricalPortfolioValueContext = {
+  basis: 'fixed-current-shares';
+  currency: 'USD';
+  start_date: IsoDate;
+  end_date: IsoDate;
+  starting_value: string;
+  ending_value: string;
+};
+
 export type PortfolioMetrics = {
   cumulative_return: number;
   annualized_return: number;
@@ -107,6 +126,16 @@ export type PortfolioMetrics = {
 export type PortfolioReturnPoint = {
   date: IsoDate;
   portfolio_return: number;
+};
+
+export type AssetReturnPoint = {
+  date: IsoDate;
+  asset_return: number;
+};
+
+export type AssetReturnSeries = {
+  symbol: string;
+  points: AssetReturnPoint[];
 };
 
 export type PortfolioAnalysisResponse = AnalysisPeriod & {
@@ -122,6 +151,8 @@ export type PortfolioAnalysisResponse = AnalysisPeriod & {
   correlation_matrix: CorrelationMatrixResponse;
   correlation_pairs: CorrelationPair[];
   portfolio_returns: PortfolioReturnPoint[];
+  asset_returns?: AssetReturnSeries[];
+  historical_value_context?: HistoricalPortfolioValueContext | null;
 };
 
 // Legacy correlation-grid shape used by the untouched prototype mock.

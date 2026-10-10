@@ -7,18 +7,30 @@ from sqlalchemy.orm import Session
 
 from ..database.models import Simulation
 from ..database.repositories import SimulationRepository
+from ..schemas.portfolio import PlannedPortfolioBaselineContext
 from ..schemas.simulation_history import (
+    SimulationHistoryDetail,
     SimulationHistoryDetailResponse,
     SimulationHistoryListResponse,
     SimulationHistoryResult,
     SimulationHistorySummary,
+    SimulationHistoryV2DetailResponse,
+    SimulationHistoryV3DetailResponse,
     SimulationType,
+)
+from .portfolio_baseline_resolver import (
+    PortfolioBaselineKind,
+    PortfolioBaselineResolution,
 )
 from .portfolio_service import PortfolioService
 from .simulation_history_mapper import (
     simulation_response_to_snapshot,
-    simulation_snapshot_to_response,
+    simulation_response_to_v2_snapshot,
+    simulation_response_to_v3_snapshot,
     simulation_type_to_schema_version,
+    simulation_type_to_v2_schema_version,
+    simulation_type_to_v3_schema_version,
+    restore_simulation_snapshot,
     validate_simulation_snapshot_consistency,
 )
 
@@ -44,24 +56,39 @@ def _simulation_to_summary(
 
 def _simulation_to_detail(
     simulation: Simulation,
-) -> SimulationHistoryDetailResponse:
+) -> SimulationHistoryDetail:
     """Revalidate a stored snapshot and map its complete history envelope."""
-    response = simulation_snapshot_to_response(
+    restored = restore_simulation_snapshot(
         simulation_type=simulation.simulation_type,
         schema_version=simulation.schema_version,
         snapshot=simulation.result_snapshot,
     )
     validate_simulation_snapshot_consistency(
         simulation_type=simulation.simulation_type,
-        response=response,
+        response=restored.response,
         portfolio_id=simulation.portfolio_id,
         scenario_id=simulation.scenario_id,
         requested_start_date=simulation.requested_start_date,
         requested_end_date=simulation.requested_end_date,
     )
-    return SimulationHistoryDetailResponse(
-        **_simulation_to_summary(simulation).model_dump(),
-        result=response,
+    summary = _simulation_to_summary(simulation).model_dump()
+    if restored.baseline is None:
+        return SimulationHistoryDetailResponse(
+            **summary,
+            result=restored.response,
+        )
+    if isinstance(restored.baseline, PlannedPortfolioBaselineContext):
+        return SimulationHistoryV3DetailResponse(
+            **summary,
+            schema_version=restored.schema_version,
+            baseline=restored.baseline,
+            result=restored.response,
+        )
+    return SimulationHistoryV2DetailResponse(
+        **summary,
+        schema_version=restored.schema_version,
+        baseline=restored.baseline,
+        result=restored.response,
     )
 
 
@@ -83,7 +110,8 @@ class SimulationHistoryService:
         requested_start_date: date,
         requested_end_date: date,
         response: SimulationHistoryResult,
-    ) -> SimulationHistoryDetailResponse | None:
+        baseline: PortfolioBaselineResolution | None = None,
+    ) -> SimulationHistoryDetail | None:
         """Persist one already-successful simulation for an owned portfolio."""
         portfolio = self._portfolio_service.get(
             user_id=user_id,
@@ -92,11 +120,45 @@ class SimulationHistoryService:
         if portfolio is None:
             return None
 
-        schema_version = simulation_type_to_schema_version(simulation_type)
-        snapshot = simulation_response_to_snapshot(
-            simulation_type=simulation_type,
-            response=response,
-        )
+        if (
+            baseline is not None
+            and baseline.baseline_kind is PortfolioBaselineKind.REAL
+        ):
+            if baseline.valuation is None:
+                raise ValueError("real simulation baseline requires valuation")
+            schema_version = simulation_type_to_v2_schema_version(
+                simulation_type
+            )
+            snapshot = simulation_response_to_v2_snapshot(
+                simulation_type=simulation_type,
+                response=response,
+                valuation=baseline.valuation,
+            )
+        elif (
+            baseline is not None
+            and baseline.baseline_kind is PortfolioBaselineKind.PLANNED
+        ):
+            if (
+                baseline.planned_allocation is None
+                or baseline.valuation is not None
+            ):
+                raise ValueError(
+                    "planned simulation baseline requires planned allocation"
+                )
+            schema_version = simulation_type_to_v3_schema_version(
+                simulation_type
+            )
+            snapshot = simulation_response_to_v3_snapshot(
+                simulation_type=simulation_type,
+                response=response,
+                planned_allocation=baseline.planned_allocation,
+            )
+        else:
+            schema_version = simulation_type_to_schema_version(simulation_type)
+            snapshot = simulation_response_to_snapshot(
+                simulation_type=simulation_type,
+                response=response,
+            )
         validate_simulation_snapshot_consistency(
             simulation_type=simulation_type,
             response=response,
@@ -138,13 +200,34 @@ class SimulationHistoryService:
             ]
         )
 
+    def delete(
+        self,
+        *,
+        user_id: UUID,
+        portfolio_id: UUID,
+        simulation_id: UUID,
+    ) -> bool | None:
+        """Delete only an owned portfolio's snapshot; do not restore its payload."""
+        portfolio = self._portfolio_service.get(
+            user_id=user_id, portfolio_id=portfolio_id,
+        )
+        if portfolio is None:
+            return None
+        simulation = self._repository.get_for_portfolio(
+            portfolio_id=portfolio.id, simulation_id=simulation_id,
+        )
+        if simulation is None or simulation.portfolio_id != portfolio.id:
+            raise SimulationNotFoundError("Simulation not found")
+        self._repository.delete(simulation)
+        return True
+
     def get(
         self,
         *,
         user_id: UUID,
         portfolio_id: UUID,
         simulation_id: UUID,
-    ) -> SimulationHistoryDetailResponse | None:
+    ) -> SimulationHistoryDetail | None:
         """Return one owned simulation, distinguishing parent and item absence."""
         portfolio = self._portfolio_service.get(
             user_id=user_id,

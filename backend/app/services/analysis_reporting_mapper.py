@@ -1,15 +1,214 @@
 """Pure conversion helpers for persisted portfolio-analysis reports."""
 
-from typing import Any
+from datetime import date
+from decimal import Decimal, localcontext
+import math
+from typing import Any, Literal, Mapping
 
 from ..database.models import Analysis
-from ..schemas.analytics import PortfolioAnalysisResponse
-from ..schemas.reporting import PortfolioReportResponse, PortfolioReportSummary
+from ..schemas.analytics import (
+    AssetMetrics,
+    AssetReturnSeries,
+    PortfolioAnalysisResponse,
+)
+from ..schemas.portfolio import PortfolioValuationFxResponse
+from ..schemas.reporting import (
+    PortfolioReportDetailResponse,
+    PortfolioReportAssetMonetaryMetrics,
+    PortfolioReportMonetaryMetrics,
+    PortfolioReportResponse,
+    PortfolioReportSummary,
+    PortfolioReportV2Holding,
+    PortfolioReportV2Response,
+    PortfolioReportV2Snapshot,
+    PortfolioReportV2ValuationContext,
+    PortfolioReportV3Response,
+    PortfolioReportV3CurrencyConversionContext,
+    PortfolioReportV3CurrencyHolding,
+    PortfolioReportV3CurrencyView,
+    PortfolioReportV3Snapshot,
+)
+from .planned_snapshot_mapper import planned_allocation_to_snapshot_baseline
+from .portfolio_analysis_composition import PortfolioEnrichedAnalysisResult
+from .portfolio_analysis_preparation_service import (
+    PortfolioAnalysisBaselineKind,
+)
 
 
 PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION = (
     "portfolio-analysis-response-v1"
 )
+PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION = (
+    "portfolio-analysis-response-v2"
+)
+PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION = (
+    "portfolio-analysis-response-v3"
+)
+_MINIMUM_DECIMAL_PRECISION = 80
+
+
+def analysis_to_report_monetary_metrics(
+    analysis: PortfolioAnalysisResponse,
+    *,
+    currency: Literal["USD", "THB"],
+    basis: Literal[
+        "fixed-shares-historical-value",
+        "saved-current-valuation",
+        "planned-proposed-amount",
+    ],
+    reference_amount: Decimal,
+    cumulative_return_amount: Decimal | None = None,
+) -> PortfolioReportMonetaryMetrics:
+    """Derive stable currency equivalents from one frozen analysis path."""
+    resolved_cumulative_return_amount = (
+        cumulative_return_amount
+        if cumulative_return_amount is not None
+        else reference_amount
+        * Decimal(str(analysis.portfolio_metrics.cumulative_return))
+    )
+    return PortfolioReportMonetaryMetrics(
+        currency=currency,
+        basis=basis,
+        reference_amount=reference_amount,
+        cumulative_return_amount=resolved_cumulative_return_amount,
+        annualized_return_amount=(
+            reference_amount
+            * Decimal(str(analysis.portfolio_metrics.annualized_return))
+        ),
+        maximum_drawdown_amount=_maximum_drawdown_amount(
+            analysis,
+            reference_amount,
+        ),
+        estimated_ending_value=(
+            reference_amount + resolved_cumulative_return_amount
+            if basis == "planned-proposed-amount"
+            else None
+        ),
+    )
+
+
+def analysis_to_asset_report_monetary_metrics(
+    analysis: PortfolioAnalysisResponse,
+    *,
+    currency: Literal["USD", "THB"],
+    basis: Literal["saved-current-value", "planned-proposed-amount"],
+    reference_amounts: Mapping[str, Decimal],
+) -> list[PortfolioReportAssetMonetaryMetrics]:
+    """Derive per-asset currency equivalents from one frozen report."""
+    expected_symbols = {
+        metric.symbol for metric in analysis.asset_metrics
+    }
+    if set(reference_amounts) != expected_symbols:
+        raise ValueError(
+            "asset monetary reference symbols must match analysis assets"
+        )
+
+    returns_by_symbol = {
+        series.symbol: series for series in analysis.asset_returns
+    }
+    return [
+        PortfolioReportAssetMonetaryMetrics(
+            symbol=metric.symbol,
+            currency=currency,
+            basis=basis,
+            reference_amount=reference_amounts[metric.symbol],
+            cumulative_return_amount=(
+                reference_amounts[metric.symbol]
+                * Decimal(str(metric.cumulative_return))
+            ),
+            annualized_return_amount=(
+                reference_amounts[metric.symbol]
+                * Decimal(str(metric.annualized_return))
+            ),
+            maximum_drawdown_amount=_asset_maximum_drawdown_amount(
+                metric,
+                returns_by_symbol.get(metric.symbol),
+                reference_amounts[metric.symbol],
+            ),
+        )
+        for metric in analysis.asset_metrics
+    ]
+
+
+def _maximum_drawdown_amount(
+    analysis: PortfolioAnalysisResponse,
+    reference_amount: Decimal,
+) -> Decimal | None:
+    """Return the currency decline for the report's exact drawdown episode."""
+    drawdown = analysis.max_drawdown
+    if drawdown.max_drawdown == 0.0:
+        return Decimal("0")
+    if drawdown.trough_date is None:
+        return None
+
+    wealth = Decimal("1")
+    wealth_by_date: dict[date, Decimal] = {}
+    for point in analysis.portfolio_returns:
+        wealth *= Decimal("1") + Decimal(str(point.portfolio_return))
+        wealth_by_date[point.date] = wealth
+
+    trough_wealth = wealth_by_date.get(drawdown.trough_date)
+    if trough_wealth is None:
+        return None
+    if drawdown.peak_date is None:
+        peak_wealth = Decimal("1")
+    else:
+        peak_wealth = wealth_by_date.get(drawdown.peak_date)
+        if peak_wealth is None:
+            return None
+
+    calculated_drawdown = trough_wealth / peak_wealth - Decimal("1")
+    if not math.isclose(
+        float(calculated_drawdown),
+        drawdown.max_drawdown,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        return None
+
+    amount = reference_amount * (trough_wealth - peak_wealth)
+    return min(amount, Decimal("0"))
+
+
+def _asset_maximum_drawdown_amount(
+    metric: AssetMetrics,
+    returns: AssetReturnSeries | None,
+    reference_amount: Decimal,
+) -> Decimal | None:
+    """Scale the asset's exact frozen peak-to-trough wealth decline."""
+    if metric.max_drawdown == 0.0:
+        return Decimal("0")
+    if returns is None:
+        return None
+
+    wealth = Decimal("1")
+    running_peak = Decimal("1")
+    drawdown_peak = Decimal("1")
+    drawdown_trough = Decimal("1")
+    deepest_drawdown = Decimal("0")
+
+    for point in returns.points:
+        periodic_return = Decimal(str(point.asset_return))
+        if periodic_return <= Decimal("-1"):
+            return None
+        wealth *= Decimal("1") + periodic_return
+        running_peak = max(running_peak, wealth)
+        drawdown = wealth / running_peak - Decimal("1")
+        if drawdown < deepest_drawdown:
+            deepest_drawdown = drawdown
+            drawdown_peak = running_peak
+            drawdown_trough = wealth
+
+    if not math.isclose(
+        float(deepest_drawdown),
+        metric.max_drawdown,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        return None
+
+    amount = reference_amount * (drawdown_trough - drawdown_peak)
+    return min(amount, Decimal("0"))
 
 
 def analysis_response_to_snapshot(
@@ -17,6 +216,159 @@ def analysis_response_to_snapshot(
 ) -> dict[str, Any]:
     """Return a fresh strict-JSON-compatible analytics snapshot."""
     return response.model_dump(mode="json")
+
+
+def enriched_analysis_to_v2_snapshot(
+    enriched: PortfolioEnrichedAnalysisResult,
+) -> dict[str, Any]:
+    """Map authoritative composed values into a strict JSON-safe V2 snapshot."""
+    if (
+        enriched.baseline_kind is not PortfolioAnalysisBaselineKind.REAL
+        or enriched.valuation is None
+    ):
+        raise ValueError("V2 snapshots require a real valuation result")
+
+    valuation = enriched.valuation
+    fx = (
+        None
+        if valuation.fx_context is None
+        else PortfolioValuationFxResponse(
+            pair=valuation.fx_context.pair,
+            provider_symbol=valuation.fx_context.provider_symbol,
+            rate=valuation.fx_context.rate,
+            as_of=valuation.fx_context.as_of,
+        )
+    )
+    snapshot = PortfolioReportV2Snapshot(
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION,
+        analysis=enriched.analysis,
+        valuation=PortfolioReportV2ValuationContext(
+            valuation_currency=valuation.display_currency.value,
+            requested_date=valuation.requested_date,
+            oldest_price_as_of=valuation.oldest_price_as_of,
+            newest_price_as_of=valuation.newest_price_as_of,
+            total_current_value_usd=valuation.total_current_value_usd,
+            total_current_value=valuation.total_current_value,
+            fx=fx,
+        ),
+        holdings=[
+            PortfolioReportV2Holding(
+                id=holding.holding_id,
+                symbol=holding.symbol,
+                invested_amount=holding.invested_amount,
+                invested_currency=holding.invested_currency,
+                shares=holding.shares,
+                purchase_date=holding.purchase_date,
+                position=holding.position,
+                asset_price=holding.asset_price,
+                asset_quote_currency=holding.asset_quote_currency,
+                price_as_of=holding.price_as_of,
+                current_value_usd=holding.current_value_usd,
+                current_value=holding.current_value,
+                current_allocation=holding.current_allocation,
+                asset_metrics=holding.asset_metrics,
+                risk_driver=holding.risk_driver_entry,
+            )
+            for holding in enriched.holdings
+        ],
+    )
+    return snapshot.model_dump(mode="json")
+
+
+def enriched_analysis_to_v3_snapshot(
+    enriched: PortfolioEnrichedAnalysisResult,
+    *,
+    currency_conversion: PortfolioReportV3CurrencyConversionContext | None = (
+        None
+    ),
+) -> dict[str, Any]:
+    """Map a planned analysis and its immutable target-allocation baseline."""
+    if (
+        enriched.baseline_kind is not PortfolioAnalysisBaselineKind.PLANNED
+        or enriched.valuation is not None
+        or enriched.planned_allocation is None
+    ):
+        raise ValueError("V3 snapshots require a planned allocation result")
+
+    snapshot = PortfolioReportV3Snapshot(
+        schema_version=PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION,
+        analysis=enriched.analysis,
+        baseline=planned_allocation_to_snapshot_baseline(
+            enriched.planned_allocation
+        ),
+        currency_conversion=currency_conversion,
+    )
+    result = snapshot.model_dump(mode="json")
+    if currency_conversion is None:
+        result.pop("currency_conversion", None)
+    return result
+
+
+def _convert_planned_amount(
+    amount: Decimal,
+    *,
+    source_currency: Literal["USD", "THB"],
+    target_currency: Literal["USD", "THB"],
+    usd_thb_rate: Decimal,
+) -> Decimal:
+    """Convert a saved amount using only its frozen USD/THB rate."""
+    if source_currency == target_currency:
+        return amount
+    with localcontext() as context:
+        context.prec = _MINIMUM_DECIMAL_PRECISION
+        if source_currency == "USD":
+            return amount * usd_thb_rate
+        return amount / usd_thb_rate
+
+
+def _planned_currency_view(
+    snapshot: PortfolioReportV3Snapshot,
+    currency: Literal["USD", "THB"],
+) -> PortfolioReportV3CurrencyView:
+    """Derive one complete display view from an immutable V3 snapshot."""
+    source_currency = snapshot.baseline.plan_currency
+    conversion = snapshot.currency_conversion
+    if currency != source_currency and conversion is None:
+        raise ValueError("alternate planned currency requires frozen FX")
+    rate = Decimal("1") if conversion is None else conversion.fx.rate
+    total = _convert_planned_amount(
+        snapshot.baseline.total_proposed_amount,
+        source_currency=source_currency,
+        target_currency=currency,
+        usd_thb_rate=rate,
+    )
+    amounts = {
+        holding.symbol: _convert_planned_amount(
+            holding.proposed_amount,
+            source_currency=source_currency,
+            target_currency=currency,
+            usd_thb_rate=rate,
+        )
+        for holding in snapshot.baseline.holdings
+    }
+    return PortfolioReportV3CurrencyView(
+        currency=currency,
+        total_proposed_amount=total,
+        holdings=[
+            PortfolioReportV3CurrencyHolding(
+                symbol=holding.symbol,
+                proposed_amount=amounts[holding.symbol],
+            )
+            for holding in snapshot.baseline.holdings
+        ],
+        monetary_metrics=analysis_to_report_monetary_metrics(
+            snapshot.analysis,
+            currency=currency,
+            basis="planned-proposed-amount",
+            reference_amount=total,
+        ),
+        asset_monetary_metrics=analysis_to_asset_report_monetary_metrics(
+            snapshot.analysis,
+            currency=currency,
+            basis="planned-proposed-amount",
+            reference_amounts=amounts,
+        ),
+    )
 
 
 def analysis_record_to_report_summary(
@@ -34,17 +386,116 @@ def analysis_record_to_report_summary(
 
 def analysis_record_to_report_response(
     analysis: Analysis,
-) -> PortfolioReportResponse:
+) -> PortfolioReportDetailResponse:
     """Validate a stored snapshot and map its complete report envelope."""
-    if analysis.schema_version != PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION:
-        raise ValueError(
-            "unsupported portfolio analysis snapshot schema version: "
-            f"{analysis.schema_version!r}"
+    if analysis.schema_version == PORTFOLIO_ANALYSIS_RESPONSE_SCHEMA_VERSION:
+        validated_analysis = PortfolioAnalysisResponse.model_validate(
+            analysis.result_snapshot
+        )
+        _validate_relational_period(analysis, validated_analysis)
+        return PortfolioReportResponse(
+            id=analysis.id,
+            portfolio_id=analysis.portfolio_id,
+            created_at=analysis.created_at,
+            analysis=validated_analysis,
         )
 
-    validated_analysis = PortfolioAnalysisResponse.model_validate(
-        analysis.result_snapshot
+    if analysis.schema_version == PORTFOLIO_ANALYSIS_RESPONSE_V2_SCHEMA_VERSION:
+        validated_snapshot = PortfolioReportV2Snapshot.model_validate(
+            analysis.result_snapshot
+        )
+        _validate_relational_period(analysis, validated_snapshot.analysis)
+        historical_value = validated_snapshot.analysis.historical_value_context
+        return PortfolioReportV2Response(
+            id=analysis.id,
+            portfolio_id=analysis.portfolio_id,
+            created_at=analysis.created_at,
+            monetary_metrics=(
+                None
+                if historical_value is None
+                else analysis_to_report_monetary_metrics(
+                    validated_snapshot.analysis,
+                    currency="USD",
+                    basis="fixed-shares-historical-value",
+                    reference_amount=historical_value.starting_value,
+                    cumulative_return_amount=(
+                        historical_value.ending_value
+                        - historical_value.starting_value
+                    ),
+                )
+            ),
+            asset_monetary_metrics=(
+                analysis_to_asset_report_monetary_metrics(
+                    validated_snapshot.analysis,
+                    currency=(
+                        validated_snapshot.valuation.valuation_currency
+                    ),
+                    basis="saved-current-value",
+                    reference_amounts={
+                        holding.symbol: holding.current_value
+                        for holding in validated_snapshot.holdings
+                    },
+                )
+            ),
+            **validated_snapshot.model_dump(),
+        )
+
+    if analysis.schema_version == PORTFOLIO_ANALYSIS_RESPONSE_V3_SCHEMA_VERSION:
+        validated_snapshot = PortfolioReportV3Snapshot.model_validate(
+            analysis.result_snapshot
+        )
+        _validate_relational_period(analysis, validated_snapshot.analysis)
+        currencies: list[Literal["USD", "THB"]] = [
+            validated_snapshot.baseline.plan_currency
+        ]
+        if validated_snapshot.currency_conversion is not None:
+            currencies.append(
+                "THB"
+                if validated_snapshot.baseline.plan_currency == "USD"
+                else "USD"
+            )
+        currency_views = [
+            _planned_currency_view(validated_snapshot, currency)
+            for currency in currencies
+        ]
+        return PortfolioReportV3Response(
+            id=analysis.id,
+            portfolio_id=analysis.portfolio_id,
+            created_at=analysis.created_at,
+            monetary_metrics=analysis_to_report_monetary_metrics(
+                validated_snapshot.analysis,
+                currency=validated_snapshot.baseline.plan_currency,
+                basis="planned-proposed-amount",
+                reference_amount=(
+                    validated_snapshot.baseline.total_proposed_amount
+                ),
+            ),
+            asset_monetary_metrics=(
+                analysis_to_asset_report_monetary_metrics(
+                    validated_snapshot.analysis,
+                    currency=validated_snapshot.baseline.plan_currency,
+                    basis="planned-proposed-amount",
+                    reference_amounts={
+                        holding.symbol: holding.proposed_amount
+                        for holding in validated_snapshot.baseline.holdings
+                    },
+                )
+            ),
+            currency_views=currency_views,
+            **validated_snapshot.model_dump(),
+        )
+
+    raise ValueError(
+        "unsupported portfolio analysis snapshot schema version: "
+        f"{analysis.schema_version!r}"
     )
+
+
+def _validate_relational_period(
+    analysis: Analysis,
+    validated_analysis: PortfolioAnalysisResponse,
+) -> None:
+    """Ensure immutable payload dates agree with relational lookup metadata."""
     if validated_analysis.start_date != analysis.start_date:
         raise ValueError(
             "analysis snapshot start_date does not match relational "
@@ -54,10 +505,3 @@ def analysis_record_to_report_response(
         raise ValueError(
             "analysis snapshot end_date does not match relational end_date"
         )
-
-    return PortfolioReportResponse(
-        id=analysis.id,
-        portfolio_id=analysis.portfolio_id,
-        created_at=analysis.created_at,
-        analysis=validated_analysis,
-    )

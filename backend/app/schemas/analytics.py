@@ -1,14 +1,17 @@
 """Atomic, JSON-safe Pydantic contracts for Aura analytics results."""
 
 from datetime import date
+from decimal import Decimal
 import math
 from typing import Annotated, Literal, Self
 
 from pydantic import (
     BeforeValidator,
     Field,
+    SerializerFunctionWrapHandler,
     Strict,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
@@ -64,6 +67,10 @@ CorrelationFloat = Annotated[
 NonNegativeInt = Annotated[int, Field(strict=True, ge=0)]
 PositiveInt = Annotated[int, Field(strict=True, gt=0)]
 RiskPoints = Annotated[int, Field(strict=True, ge=0, le=3)]
+PositiveHistoricalValue = Annotated[
+    Decimal,
+    Field(gt=Decimal("0"), allow_inf_nan=False),
+]
 
 
 class MaximumDrawdownMetrics(AuraBaseModel):
@@ -145,6 +152,29 @@ class RiskClassification(AuraBaseModel):
     reasons: Annotated[list[str], Field(min_length=1)]
 
 
+class AssetRiskClassification(AuraBaseModel):
+    """Deterministic educational risk classification for one asset."""
+
+    risk_score: ScoreFloat
+    risk_level: Literal["Low", "Moderate", "High", "Very High"]
+    volatility_points: RiskPoints
+    drawdown_points: RiskPoints
+    metrics_used: Annotated[
+        list[Literal["volatility", "maximum_drawdown"]],
+        Field(min_length=2, max_length=2),
+    ]
+    reasons: Annotated[list[str], Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def validate_metrics_used(self) -> Self:
+        if self.metrics_used != ["volatility", "maximum_drawdown"]:
+            raise ValueError(
+                "asset risk metrics_used must be volatility followed by "
+                "maximum_drawdown"
+            )
+        return self
+
+
 class AssetMetrics(AuraBaseModel):
     """The engine's public metrics for one portfolio asset."""
 
@@ -155,6 +185,7 @@ class AssetMetrics(AuraBaseModel):
     annualized_volatility: NonNegativeFiniteFloat
     max_drawdown: DrawdownFloat
     sharpe_ratio: FiniteFloat | None
+    risk_classification: AssetRiskClassification | None = None
 
 
 class CorrelationPair(AuraBaseModel):
@@ -221,6 +252,25 @@ class AnalysisMetadata(AuraBaseModel):
         return self
 
 
+class HistoricalPortfolioValueContext(AuraBaseModel):
+    """Fixed-share USD values across one current portfolio analysis period."""
+
+    basis: Literal["fixed-current-shares"]
+    currency: Literal["USD"]
+    start_date: date
+    end_date: date
+    starting_value: PositiveHistoricalValue
+    ending_value: PositiveHistoricalValue
+
+    @model_validator(mode="after")
+    def validate_date_order(self) -> Self:
+        if self.start_date > self.end_date:
+            raise ValueError(
+                "historical value start_date must not be after end_date"
+            )
+        return self
+
+
 class PortfolioMetrics(AuraBaseModel):
     """The engine's top-level scalar portfolio metrics."""
 
@@ -231,10 +281,38 @@ class PortfolioMetrics(AuraBaseModel):
 
 
 class PortfolioReturnPoint(AuraBaseModel):
-    """One dated periodically rebalanced portfolio return observation."""
+    """One dated portfolio return observation."""
 
     date: date
     portfolio_return: FiniteFloat
+
+
+class AssetReturnPoint(AuraBaseModel):
+    """One dated return observation for one analyzed asset."""
+
+    date: date
+    asset_return: FiniteFloat
+
+
+class AssetReturnSeries(AuraBaseModel):
+    """Ordered dated return observations for one analyzed asset."""
+
+    symbol: AssetSymbol
+    points: Annotated[list[AssetReturnPoint], Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def validate_point_dates(self) -> Self:
+        point_dates = [point.date for point in self.points]
+        if len(point_dates) != len(set(point_dates)):
+            raise ValueError("asset return dates must be unique")
+        if any(
+            current <= previous
+            for previous, current in zip(point_dates, point_dates[1:])
+        ):
+            raise ValueError(
+                "asset return dates must be strictly increasing"
+            )
+        return self
 
 
 class RiskDriverAnalysis(AuraBaseModel):
@@ -276,6 +354,18 @@ class PortfolioAnalysisResponse(AnalysisPeriod):
         list[PortfolioReturnPoint],
         Field(min_length=1),
     ]
+    asset_returns: list[AssetReturnSeries] = Field(default_factory=list)
+    historical_value_context: HistoricalPortfolioValueContext | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_unavailable_historical_value_context(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, object]:
+        serialized = handler(self)
+        if self.historical_value_context is None:
+            serialized.pop("historical_value_context", None)
+        return serialized
 
     @field_validator("portfolio_name", mode="before")
     @classmethod
@@ -317,6 +407,16 @@ class PortfolioAnalysisResponse(AnalysisPeriod):
                 "asset-metric symbols must be unique after normalization"
             )
 
+        classified_asset_count = sum(
+            metric.risk_classification is not None
+            for metric in self.asset_metrics
+        )
+        if classified_asset_count not in (0, len(self.asset_metrics)):
+            raise ValueError(
+                "asset risk classifications must be present for all assets "
+                "or absent for legacy responses"
+            )
+
         matrix_symbols = set(self.correlation_matrix.symbols)
         if set(asset_symbols) != matrix_symbols:
             raise ValueError(
@@ -330,6 +430,29 @@ class PortfolioAnalysisResponse(AnalysisPeriod):
             raise ValueError(
                 "risk-driver symbols must match correlation matrix symbols"
             )
+
+        if self.asset_returns:
+            series_symbols = [series.symbol for series in self.asset_returns]
+            if series_symbols != asset_symbols:
+                raise ValueError(
+                    "asset-return series symbols and order must match "
+                    "asset metrics"
+                )
+            for series in self.asset_returns:
+                series_dates = [point.date for point in series.points]
+                if series_dates != return_dates:
+                    raise ValueError(
+                        "asset-return dates must match portfolio-return dates"
+                    )
+                if any(
+                    point_date < self.start_date
+                    or point_date > self.end_date
+                    for point_date in series_dates
+                ):
+                    raise ValueError(
+                        "asset return dates must fall within the inclusive "
+                        "response period"
+                    )
 
         total_weight = math.fsum(
             metric.weight for metric in self.asset_metrics
@@ -373,4 +496,25 @@ class PortfolioAnalysisResponse(AnalysisPeriod):
                 "metadata return_observation_count must match the number "
                 "of portfolio return observations"
             )
+        context = self.historical_value_context
+        if context is not None:
+            if (
+                context.start_date != self.metadata.analysis_start
+                or context.end_date != self.metadata.analysis_end
+            ):
+                raise ValueError(
+                    "historical value dates must match analysis metadata"
+                )
+            historical_return = (
+                context.ending_value / context.starting_value - Decimal("1")
+            )
+            if not math.isclose(
+                float(historical_return),
+                self.portfolio_metrics.cumulative_return,
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            ):
+                raise ValueError(
+                    "historical values must match portfolio cumulative return"
+                )
         return self

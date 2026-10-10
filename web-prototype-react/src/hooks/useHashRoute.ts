@@ -8,7 +8,7 @@ export function useHashRoute() {
     const handleHashChange = () => setRoute(routeFromHash());
 
     window.addEventListener('hashchange', handleHashChange);
-    if (!window.location.hash) go('dashboard');
+    if (!window.location.hash) go('welcome');
 
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);

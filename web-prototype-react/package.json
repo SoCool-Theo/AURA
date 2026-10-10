@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:authority": "node --test tests/productionAuthority.test.cjs tests/notifications.test.cjs tests/marketData.test.cjs tests/forecasting.test.cjs"
   },
   "dependencies": {
     "react": "^19.1.1",
