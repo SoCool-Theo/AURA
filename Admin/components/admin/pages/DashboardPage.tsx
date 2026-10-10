@@ -50,7 +50,7 @@ export function DashboardPage({ navigate, records, lastUpdate, onUpdate }: {
 
         <SectionCard title="Analyses Overview" description="Last 7 days">
           <div className="chart-number"><strong>285</strong><span>↑ 12.5%</span></div>
-          <div className="chart-box small"><ResponsiveContainer width="100%" height="100%"><BarChart data={bars}><CartesianGrid stroke="#263554" vertical={false} /><XAxis dataKey="day" stroke="#8ea0c2" fontSize={12} /><YAxis stroke="#8ea0c2" fontSize={12} /><Tooltip /><Bar dataKey="analyses" fill="#8b5cf6" radius={[5,5,0,0]} /></BarChart></ResponsiveContainer></div>
+          <div className="chart-box small"><ResponsiveContainer width="100%" height="100%"><BarChart data={bars}><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="day" stroke="var(--muted-foreground)" fontSize={12} /><YAxis stroke="var(--muted-foreground)" fontSize={12} /><Tooltip /><Bar dataKey="analyses" fill="var(--primary)" radius={[5,5,0,0]} /></BarChart></ResponsiveContainer></div>
         </SectionCard>
       </div>
 
@@ -58,11 +58,11 @@ export function DashboardPage({ navigate, records, lastUpdate, onUpdate }: {
         <SectionCard title="Recent Analyses" action={<Button variant="ghost" size="sm" onClick={() => navigate("reports")}>View all</Button>}>
           <div className="row-list">{[["Tech Portfolio","Yan Lin Oo","72"],["Balanced Portfolio","Alex Morgan","48"],["Retirement Fund","Sarah Lee","32"],["Long Term Growth","John Smith","68"]].map(x => <button key={x[0]} onClick={() => navigate("reports")}><Activity /><span><b>{x[0]}</b><small>{x[1]}</small></span><strong className={Number(x[2]) > 65 ? "risk-high" : "risk-low"}>{x[2]}</strong></button>)}</div>
         </SectionCard>
-        <SectionCard title="Most Analyzed Assets" description="Last 7 days"><div className="asset-list">{[["NVDA",87],["AAPL",76],["TSLA",63],["SPY",59],["MSFT",52]].map(([name,count], i) => <p key={String(name)}><i style={{background:["#8b5cf6","#3b82f6","#f35d91","#ff9840","#32d8d0"][i]}}/><b>{name}</b><span>{count} analyses</span></p>)}</div></SectionCard>
+        <SectionCard title="Most Analyzed Assets" description="Last 7 days"><div className="asset-list">{[["NVDA",87],["AAPL",76],["TSLA",63],["SPY",59],["MSFT",52]].map(([name,count], i) => <p key={String(name)}><i style={{background:["var(--primary)","var(--blue)","var(--purple)","var(--warning)","var(--primary-hover)"][i]}}/><b>{name}</b><span>{count} analyses</span></p>)}</div></SectionCard>
         <SectionCard title="Recent Admin Activity" action={<Button variant="ghost" size="sm" onClick={() => navigate("activity")}>View all</Button>}><div className="activity-mini">{["Market data update completed","Viewed system health report","User account created","Settings updated"].map((x,i)=><p key={x}><span>{i === 0 ? <Database /> : i === 1 ? <ShieldCheck /> : i === 2 ? <Users /> : <Activity />}</span><b>{x}</b><small>{i+1}h</small></p>)}</div></SectionCard>
       </div>
 
-      <SectionCard title="Analyses Trend" description="Last 30 days"><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><AreaChart data={trend}><defs><linearGradient id="purple" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#9b5df7" stopOpacity=".5"/><stop offset="1" stopColor="#9b5df7" stopOpacity="0"/></linearGradient></defs><CartesianGrid stroke="#263554" vertical={false}/><XAxis dataKey="day" stroke="#8ea0c2"/><YAxis stroke="#8ea0c2"/><Tooltip/><Area type="monotone" dataKey="analyses" stroke="#a855f7" fill="url(#purple)" strokeWidth={3}/><Area type="monotone" dataKey="reports" stroke="#3b82f6" fill="transparent" strokeWidth={3}/></AreaChart></ResponsiveContainer></div></SectionCard>
+      <SectionCard title="Analyses Trend" description="Last 30 days"><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><AreaChart data={trend}><defs><linearGradient id="purple" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--primary)" stopOpacity=".5"/><stop offset="1" stopColor="var(--primary)" stopOpacity="0"/></linearGradient></defs><CartesianGrid stroke="var(--border)" vertical={false}/><XAxis dataKey="day" stroke="var(--muted-foreground)"/><YAxis stroke="var(--muted-foreground)"/><Tooltip/><Area type="monotone" dataKey="analyses" stroke="var(--primary)" fill="url(#purple)" strokeWidth={3}/><Area type="monotone" dataKey="reports" stroke="var(--blue)" fill="transparent" strokeWidth={3}/></AreaChart></ResponsiveContainer></div></SectionCard>
     </div>
   );
 }

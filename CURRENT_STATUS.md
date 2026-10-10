@@ -3665,3 +3665,33 @@ remain separate follow-on work.
   `feat/admin-web-foundation`; unrelated untracked docs/report content is preserved.
   User mutations, manual market refresh, and admin web/shared-login integration
   remain subsequent work.
+
+### Admin color palette aligned with customer web — 2026-10-10
+
+- Updated `Admin/app/globals.css` to use the customer web's dark navy background
+  (`#07111F`), navy cards/navigation, teal primary (`#31D6CF`), cyan highlights,
+  blue/purple secondary accents, and matching green/amber/red status colors.
+  Replaced decorative purple primary gradients with teal/cyan, themed chart
+  tooltips, and used readable control/identity text colors. Retained the existing
+  dark/light/system appearance feature, with a coordinated light palette and
+  consistently dark, readable sidebar panels. No layout or feature redesign.
+- Updated only chart/grid/axis/asset-key colors in
+  `Admin/components/admin/pages/DashboardPage.tsx` to use the theme tokens.
+  Existing chart data, types, sizing, interactions, components, and navigation
+  remain unchanged. A source comparison excluding color expressions confirms
+  existing dimensions, typography, spacing, responsive rules, JSX and handlers
+  are unchanged. No dependencies, API integration, backend/mobile/customer-web
+  changes, migrations, staging, commit, push, or deployment.
+- Verification: the Windows-native `vinext build` completes successfully.
+  Browser review covers the narrow dashboard, desktop dark/light dashboard,
+  appearance selection, user dialog/focus styles, and actual teal/blue trend
+  paths with a navy tooltip. Restored dark appearance and normal browser sizing;
+  saved an actual dashboard screenshot outside the repository. Whitespace checks
+  passed. Admin TypeScript has three existing Cloudflare worker type errors;
+  comparison against HEAD confirms no new diagnostics. Existing Node tests pass
+  three checks and fail two expectations for preview metadata and a thin-scrollbar
+  utility. HEAD layout inspection and compilation of HEAD CSS confirm those
+  expectations were already absent. These unrelated infrastructure/test issues
+  remain unresolved; no claim of a fully passing admin test suite is made.
+- Work remains on `feat/admin-web-foundation`; unrelated untracked docs/report
+  content is preserved. Admin web/shared-login/API integration remains next work.
