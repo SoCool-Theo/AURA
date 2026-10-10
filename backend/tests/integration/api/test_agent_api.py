@@ -35,7 +35,7 @@ OWNER_ID = UUID("62a1279e-bc8d-4c89-876d-a09250b50395")
 PORTFOLIO_ID = UUID("e6518442-58cb-408f-ae3f-bf47fb00b555")
 REPORT_ID = UUID("10000000-0000-0000-0000-000000000001")
 SIMULATION_ID = UUID("30000000-0000-0000-0000-000000000001")
-JWT_SECRET = "phase-8-agent-api-test-secret"
+JWT_SECRET = "phase-8-agent-api-test-secret-at-least-32-characters"
 PATH = "/api/agent/explain"
 
 
@@ -142,16 +142,15 @@ def api_harness() -> Iterator[ApiHarness]:
     provider = FakeProvider()
     FakeTools.mode = "available"
     FakeTools.instances = []
-    app.dependency_overrides[route_module.get_agent_provider] = lambda: provider
 
     with (
         patch.object(dependency_module, "_get_session_factory", return_value=session_factory),
         patch.object(agent_service_module, "AuraAgentTools", FakeTools),
+        patch.object(route_module, "get_agent_provider", return_value=provider),
         patch.object(settings, "jwt_secret_key", SecretStr(JWT_SECRET)),
         TestClient(app, raise_server_exceptions=False) as client,
     ):
         yield ApiHarness(client=client, session=session, provider=provider)
-    app.dependency_overrides.pop(route_module.get_agent_provider, None)
 
 
 def _headers() -> dict[str, str]:
@@ -228,8 +227,9 @@ def test_owned_request_returns_public_response_with_grounded_sources(
     assert len(api_harness.provider.requests) == 1
     assert api_harness.provider.requests[0].grounded_context["portfolio"]["id"] == str(PORTFOLIO_ID)
     assert FakeTools.instances[0].portfolio_resolution_flags == [True]
-    api_harness.session.commit.assert_not_called()
-    api_harness.session.flush.assert_not_called()
+    # The explanation remains read-only; its content-free monitoring row commits.
+    api_harness.session.commit.assert_called_once_with()
+    api_harness.session.flush.assert_called_once_with()
 
 
 def test_planned_request_returns_mode_aware_grounding_and_limitation(
@@ -251,7 +251,7 @@ def test_planned_request_returns_mode_aware_grounding_and_limitation(
         "proposed-amount-target-allocation"
     )
     assert context["holdings"][0]["proposed_amount"] == "1000"
-    api_harness.session.commit.assert_not_called()
+    api_harness.session.commit.assert_called_once_with()
 
 
 def test_planned_provider_ownership_claim_is_not_returned(
@@ -468,4 +468,4 @@ def test_default_provider_truthfully_returns_unavailable_after_authentication() 
 
     assert response.status_code == 503
     assert response.json() == {"detail": "AI explanation service is currently unavailable."}
-    session.commit.assert_not_called()
+    session.commit.assert_called_once_with()

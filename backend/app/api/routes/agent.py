@@ -1,9 +1,12 @@
-"""Authenticated, read-only Aura explanation endpoint."""
+"""Authenticated Aura explanations with best-effort, content-free monitoring."""
 
 from datetime import UTC, date, datetime
-from typing import Annotated
+import logging
+from time import perf_counter
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from app.agents.agent import AuraAgentContextUnavailableError, AuraAgentOutputError
 from app.agents.groq_provider import GroqProvider
@@ -14,9 +17,12 @@ from app.agents.provider import (
     LLMProviderTimeoutError,
     LLMProviderUnavailableError,
 )
+from app.agents.telemetry import AgentExecutionTrace
 from app.api.dependencies import CurrentUser, DatabaseSession
 from app.core.config import settings
 from app.schemas.agent import AgentExplainRequest, AgentExplainResponse
+from app.schemas.ai_monitoring import AIRequestEvent
+from app.services.ai_monitoring_service import AIMonitoringService
 from app.services.agent_service import AgentService
 from app.services.analysis_reporting_service import ReportNotFoundError
 from app.services.market_data_service import MarketDataUnavailableError
@@ -29,6 +35,7 @@ from app.services.simulation_history_service import SimulationNotFoundError
 
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
+logger = logging.getLogger(__name__)
 
 
 def _current_utc_date() -> date:
@@ -118,7 +125,18 @@ def get_agent_provider() -> LLMProvider:
         raise _provider_unavailable() from error
 
 
-AgentProvider = Annotated[LLMProvider, Depends(get_agent_provider)]
+def _store_monitoring(session: Session, **values) -> None:
+    """API-owned commit; telemetry failure must preserve the primary response."""
+    try:
+        AIMonitoringService(session).record(AIRequestEvent(**values))
+        session.commit()
+    except Exception:
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        # Never log payloads, exception strings, SQL, or connection details.
+        logger.warning("AI monitoring metadata could not be stored")
 
 
 @router.post(
@@ -130,32 +148,65 @@ def explain(
     request: AgentExplainRequest,
     session: DatabaseSession,
     current_user: CurrentUser,
-    provider: AgentProvider,
 ) -> AgentExplainResponse:
     """Explain only data owned by the authenticated Aura user."""
+    started_at = datetime.now(UTC)
+    started = perf_counter()
+    trace = AgentExecutionTrace()
+    provider_kind = settings.aura_llm_provider
+    response = None
+    problem = None
+    failure = None
+    code = None
     try:
-        return AgentService(session, provider).explain(
+        # Resolve after auth/body validation so unavailable configuration is
+        # observed alongside other handler outcomes, without logging bad bodies.
+        provider = get_agent_provider()
+        provider_kind = "groq" if isinstance(provider, GroqProvider) else "openai" if isinstance(provider, OpenAIProvider) else "custom"
+        response = AgentService(session, provider, trace=trace).explain(
             user_id=current_user.id,
             request=request,
             valuation_date=_current_utc_date(),
         )
-    except AuraAgentContextUnavailableError as error:
-        raise _portfolio_not_found() from error
-    except ReportNotFoundError as error:
-        raise _report_not_found() from error
-    except SimulationNotFoundError as error:
-        raise _simulation_not_found() from error
-    except MarketDataUnavailableError as error:
-        raise _current_market_data_unavailable() from error
-    except (
-        InvalidHoldingModeError,
-        InvalidPortfolioValueError,
-        UnsupportedHoldingInstrumentError,
-    ) as error:
-        raise _portfolio_holding_conflict() from error
-    except (LLMProviderTimeoutError, LLMProviderUnavailableError) as error:
-        raise _provider_unavailable() from error
-    except (LLMProviderResponseError, AuraAgentOutputError) as error:
-        raise _invalid_provider_response() from error
     except Exception as error:
-        raise _internal_error() from error
+        failure = error
+        if isinstance(error, AuraAgentContextUnavailableError):
+            problem, code = _portfolio_not_found(), "CONTEXT_UNAVAILABLE"
+        elif isinstance(error, ReportNotFoundError):
+            problem, code = _report_not_found(), "REPORT_UNAVAILABLE"
+        elif isinstance(error, SimulationNotFoundError):
+            problem, code = _simulation_not_found(), "SIMULATION_UNAVAILABLE"
+        elif isinstance(error, MarketDataUnavailableError):
+            problem, code = _current_market_data_unavailable(), "MARKET_DATA_UNAVAILABLE"
+        elif isinstance(error, (InvalidHoldingModeError, InvalidPortfolioValueError, UnsupportedHoldingInstrumentError)):
+            problem, code = _portfolio_holding_conflict(), "HOLDING_STATE_INVALID"
+        elif isinstance(error, LLMProviderTimeoutError):
+            problem, code = _provider_unavailable(), "PROVIDER_TIMEOUT"
+        elif isinstance(error, LLMProviderUnavailableError) or (isinstance(error, HTTPException) and error.status_code == 503):
+            problem, code = _provider_unavailable(), "PROVIDER_UNAVAILABLE"
+        elif isinstance(error, LLMProviderResponseError):
+            problem, code = _invalid_provider_response(), "INVALID_PROVIDER_RESPONSE"
+        elif isinstance(error, AuraAgentOutputError):
+            problem, code = _invalid_provider_response(), "UNSAFE_PROVIDER_OUTPUT"
+        else:
+            problem, code = _internal_error(), "INTERNAL_ERROR"
+        if isinstance(error, SQLAlchemyError):
+            try:
+                session.rollback()
+            except Exception:
+                pass
+    source_types = {source.type for source in response.sources} if response is not None else set()
+    _store_monitoring(
+        session, started_at=started_at, duration_ms=round((perf_counter() - started) * 1000, 3),
+        outcome="ERROR" if problem is not None else "REFUSED" if trace.refusal_stage else "COMPLETED",
+        http_status=problem.status_code if problem is not None else 200,
+        provider_kind=provider_kind, provider_called=trace.provider_called,
+        refusal_stage=trace.refusal_stage if problem is None else None,
+        guardrail_reason=trace.guardrail_reason.value if trace.guardrail_reason else None,
+        error_code=code, has_portfolio_source="portfolio" in source_types,
+        has_report_source="report" in source_types, has_simulation_source="simulation" in source_types,
+        limitation_count=len(response.limitations) if response is not None else 0,
+    )
+    if problem is not None:
+        raise problem from failure
+    return response

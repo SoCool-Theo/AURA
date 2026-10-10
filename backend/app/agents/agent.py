@@ -22,6 +22,7 @@ from .guardrails import (
 from .prompts import build_system_instructions
 from .provider import LLMProvider, ProviderRequest
 from .tools import AuraAgentTools
+from .telemetry import AgentExecutionTrace
 
 
 class AuraAgentContextUnavailableError(RuntimeError):
@@ -44,11 +45,15 @@ class AuraAgent:
 
     tools: AuraAgentTools
     provider: LLMProvider
+    trace: AgentExecutionTrace | None = None
 
     def explain(self, request: AgentExplainRequest) -> AgentExplainResponse:
         """Return one guardrailed explanation from deterministic Aura context."""
         decision = evaluate_user_message(request.message)
         if not decision.allowed:
+            if self.trace is not None:
+                self.trace.refusal_stage = "INPUT"
+                self.trace.guardrail_reason = decision.reason
             return AgentExplainResponse(
                 answer=decision.response or "I can explain Aura's historical risk results.",
                 sources=[],
@@ -81,12 +86,17 @@ class AuraAgent:
                 for item in request.history
             ],
         )
+        if self.trace is not None:
+            self.trace.provider_called = True
         provider_response = self.provider.generate(provider_request)
         output_decision = validate_provider_output(
             provider_response.text,
             planned_context=has_planned_context,
         )
         if output_decision.reason is GuardrailReason.INVESTMENT_ADVICE:
+            if self.trace is not None:
+                self.trace.refusal_stage = "OUTPUT"
+                self.trace.guardrail_reason = output_decision.reason
             return AgentExplainResponse(
                 answer=output_decision.response
                 or "I can explain Aura's historical risk results.",
@@ -94,6 +104,8 @@ class AuraAgent:
                 limitations=[],
             )
         if not output_decision.allowed:
+            if self.trace is not None:
+                self.trace.guardrail_reason = output_decision.reason
             raise AuraAgentOutputError()
 
         sources = [

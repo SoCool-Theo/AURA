@@ -3615,3 +3615,53 @@ remain separate follow-on work.
   Work remains on `feat/admin-web-foundation`; unrelated untracked docs/report
   content is preserved. AI Monitoring, user mutations, manual market refresh,
   and admin web/shared-login integration remain subsequent work.
+
+### Admin backend AI Monitoring metadata — 2026-10-10
+
+- Added protected read-only `GET /api/admin/ai-monitoring` for retained completed,
+  refused, and error counts, actual provider-call attempts, input/output refusal
+  counts, measured average handler duration, recording ranges, and configuration
+  presence flags. Configuration readiness does not prove provider connectivity;
+  the endpoint never constructs or calls a provider. Empty history returns zero
+  counts with null duration/ranges. Inclusive aware time bounds normalize to UTC.
+- Added protected `GET /api/admin/ai-monitoring/requests` with bounded pagination,
+  allowlisted outcome/provider/refusal/error filters, inclusive creation-time
+  bounds, deterministic newest timestamp/UUID ordering, and filtered totals even
+  beyond the last page. Each admin read uses one repository SQL statement after
+  authorization, without resource joins, provider probes, or row mutations.
+- Instrumented the existing explanation pipeline with request-local observations
+  of actual input/output guardrail decisions and provider calls. The authorized,
+  validated explanation handler records a best-effort outcome, safe error code,
+  measured duration, returned source-type flags, and limitation count. Public
+  answers, refusals, ownership checks, and sanitized errors retain their existing
+  contracts. Provider resolution occurs inside the handler so configuration
+  failures can be observed. Authentication/body-validation failures are excluded.
+- Added anonymous `ai_request_logs` storage, schema validation and database
+  constraints, and migration `a9b1c3d5e7f0` after `f8a0b2c4d6e9`. No conversation
+  text, history, account/portfolio/report/simulation identifiers, secrets, model
+  names, token estimates, or invented billing data are persisted. Source fields
+  are booleans only. Creation time is a database transaction timestamp, not proof
+  of transport completion. Handler timing excludes auth, logging, and transport.
+- Monitoring validation/storage/commit failures roll back the attempted log row,
+  emit a constant warning, and preserve the established customer response. Admin
+  storage/read-validation failures return sanitized 503; non-admins receive 403
+  before monitoring reads. Metadata is best-effort operational history, not a
+  complete traffic counter, tamper-proof audit, or durable chat record. Existing
+  advice protection remains enabled; no admin disable endpoint was added.
+- Updated agent/admin/database migration regressions and added synthetic SQLite
+  persistence/API tests, actual trace/refusal/error and rollback tests, privacy
+  allowlist checks, stable pagination/time aggregates, PostgreSQL SQL compilation,
+  and migration/model parity checks. Verification: 1,518 selected admin/agent/
+  database/schema/provider/service/market-worker/scheduler/bootstrap regressions
+  passed in 22.70 seconds. The run uses synthetic SQLite/fake providers and
+  disables live-test database access. OpenAPI confirms 43 paths/54 operations;
+  whitespace checks passed. A sandbox-local event-loop socket stall required
+  running the affected suite outside the sandbox; no live database/provider
+  acceptance is inferred from these automated results.
+- Updated admin/public contracts and the contract index. No new dependencies,
+  frontend/mobile changes, real-provider calls, model training/evaluation, staging,
+  commit, or push. The application migration has not been applied; live PostgreSQL
+  and browser/provider acceptance remain pending. Work remains on
+  `feat/admin-web-foundation`; unrelated untracked docs/report content is preserved.
+  User mutations, manual market refresh, and admin web/shared-login integration
+  remain subsequent work.

@@ -26,6 +26,7 @@ from backend.app.database import (
 
 
 EXPECTED_TABLES = {
+    "ai_request_logs",
     "audit_logs",
     "market_data_refresh_state",
     "notifications",

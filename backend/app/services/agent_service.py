@@ -10,15 +10,17 @@ from sqlalchemy.orm import Session
 from ..agents.agent import AuraAgent
 from ..agents.provider import LLMProvider
 from ..agents.tools import AuraAgentTools
+from ..agents.telemetry import AgentExecutionTrace
 from ..schemas.agent import AgentExplainRequest, AgentExplainResponse
 
 
 class AgentService:
     """Bind trusted caller identity to the read-only Aura agent workflow."""
 
-    def __init__(self, session: Session, provider: LLMProvider) -> None:
+    def __init__(self, session: Session, provider: LLMProvider, *, trace: AgentExecutionTrace | None = None) -> None:
         self._session = session
         self._provider = provider
+        self._trace = trace
 
     def explain(
         self,
@@ -34,7 +36,8 @@ class AgentService:
             portfolio_id=request.portfolio_id,
             valuation_date=valuation_date,
         )
-        return AuraAgent(tools=tools, provider=self._provider).explain(request)
+        options = {"trace": self._trace} if self._trace is not None else {}
+        return AuraAgent(tools=tools, provider=self._provider, **options).explain(request)
 
 
 __all__ = ["AgentService"]

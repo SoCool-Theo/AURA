@@ -2,8 +2,8 @@
 
 The backend supplies the access boundary, Audit Log storage/query API, Dashboard
 statistics, a read-only Users directory, Market Data inventory/status/history,
-and System Health checks for Aura's separate admin website. User mutations,
-Market Data refresh requests, AI Monitoring, and admin web integration remain
+System Health checks, and content-free AI Monitoring for Aura's separate admin
+website. User mutations, Market Data refresh requests, and admin web integration remain
 subsequent work.
 
 ## Persisted roles
@@ -466,3 +466,120 @@ writes or refresh, failure/unknown precedence, safe failures, actual timed-ping
 mapping, and mocked PostgreSQL transaction-local timeout SQL/order. This does
 not establish live PostgreSQL cancellation/reset behavior, real-provider
 connectivity, analytics execution, deployment health, or browser integration.
+
+## AI Monitoring
+
+Migration `a9b1c3d5e7f0`, after `f8a0b2c4d6e9`, adds `ai_request_logs`.
+It introduces no new dependency or provider behavior. Apply the migration to
+the explicitly selected deployment database before using the monitoring APIs;
+this implementation does not migrate an application/remote database or contact
+a real provider. Missing storage causes admin reads to return sanitized 503;
+customer explanations retain their existing behavior when telemetry cannot be
+stored. There is no startup migration, historical backfill, retention cleanup,
+or model training/evaluation.
+
+### What is recorded
+
+Each authorized, schema-valid `POST /api/agent/explain` invocation that reaches
+the handler attempts one event with:
+
+| Fields | Meaning |
+| --- | --- |
+| `id` | Random log UUID; not a user/resource identifier |
+| `started_at`, `duration_ms` | UTC handler start and actual monotonic-clock processing duration, rounded to milliseconds with three decimal places; includes provider resolution/context work, excludes authentication, telemetry commit, transport, and client time |
+| `created_at` | Database creation timestamp; PostgreSQL `now()` reflects the recording transaction's start, which may precede handler start when the existing read transaction is reused |
+| `outcome`, `http_status` | `COMPLETED`, `REFUSED`, or `ERROR` and the selected response status; not proof of client delivery |
+| `provider_kind`, `provider_called` | Actual adapter kind (`openai`, `groq`, `custom`), or selected configured kind/null when resolution fails; whether the adapter's `generate` was invoked, including failed attempts |
+| `refusal_stage`, `guardrail_reason` | Observed input/output refusal stage and allowlisted deterministic guardrail reason; unsafe-output errors also carry their reason |
+| `error_code` | Allowlisted failure classification, never exception text |
+| `has_portfolio_source`, `has_report_source`, `has_simulation_source`, `limitation_count` | Returned source categories and limitation count for completed explanations; refusals/errors have false flags and zero count |
+
+No prompt, message, answer, conversation history, system instruction, raw
+provider payload, account/email/phone/user ID, portfolio/report/simulation ID,
+holdings, balance, financial snapshot, model string, credential, URL, arbitrary
+JSON, or free-text error is stored. Only anonymous operational metadata is
+retained. There are no foreign keys to accounts/resources, so their deletion
+does not change aggregate history. No API exposes update/delete or guardrail/
+logging-disable controls. Application recording is insert-only; it is not a
+database tamper-evident archive or a retention-policy implementation.
+
+The actual agent observes input guardrail refusals before any tool lookup or
+provider call, output advice refusals after a provider call, and unsafe output
+rejections without returning the unsafe text. Both advice refusals retain their
+existing successful HTTP 200 response; monitoring distinguishes them from
+completed explanations without inspecting answer strings. The existing public
+request/response bodies and domain ownership rules are unchanged. Provider
+resolution now happens after authentication and schema validation inside the
+handler, so configuration failures are observable; malformed bodies receive 422
+before provider construction. Authentication failures, validation failures,
+requests that never reach/finish the handler, crashes, and failed telemetry
+commits are not counted. Internal service/agent calls outside this HTTP boundary
+do not persist events.
+
+Error codes are `CONTEXT_UNAVAILABLE`, `REPORT_UNAVAILABLE`,
+`SIMULATION_UNAVAILABLE`, `MARKET_DATA_UNAVAILABLE`, `HOLDING_STATE_INVALID`,
+`PROVIDER_UNAVAILABLE`, `PROVIDER_TIMEOUT`, `INVALID_PROVIDER_RESPONSE`,
+`UNSAFE_PROVIDER_OUTPUT`, and `INTERNAL_ERROR`. Guardrail reasons use the
+existing catalog: `empty_message`, `investment_advice`, `invalid_output`,
+`output_too_long`, `system_leakage`, `planned_ownership_claim`. Empty input is
+normally rejected by public schema validation before orchestration. No
+guardrail policy is disabled or changed.
+
+Recording uses a typed, revalidated event and database constraints for outcomes,
+safe enums, provider-call/refusal consistency, and count/source semantics. The
+API owns the event commit. Agent tools/services remain domain-read-only; SQL
+context failures reset their failed read transaction before attempting telemetry.
+Insert/validation/commit failure rolls back the event, emits only the constant
+warning `AI monitoring metadata could not be stored`, and preserves the primary
+answer or established error status/detail. No raw exception is logged. This is
+best-effort monitoring: persisted counts are not complete lifetime traffic,
+unique users, billing, token consumption, or proof of remote-provider receipt.
+The provider contract exposes only text, so token usage/cost is not invented.
+
+### Summary and configuration
+
+`GET /api/admin/ai-monitoring` requires the persisted admin role. Optional
+timezone-aware `created_from`/`created_to` bound database creation timestamps
+inclusively and normalize to UTC. Reversed or naive ranges return 422.
+One SQL statement returns `total`, `completed`, `refused`, `errors`,
+`provider_calls`, `input_refusals`, `output_refusals`, `average_duration_ms`,
+`first_recorded_at`, and `last_recorded_at` for the selected retained rows.
+The average covers all selected outcomes. Empty storage returns zero counts
+and null average/first/last timestamps. `checked_at` is the UTC generation clock;
+no provider/analytics operation runs to produce these metrics.
+
+`configuration` reports only the selected configured provider, whether a model
+and the selected provider's key are present, and `ready` (all required settings
+present). Model/key text is never returned. `connectivity` is always
+`not_checked`, `telemetry_mode` is `best_effort_metadata`, and
+`advice_guard_enabled` is true for the always-on current deterministic policy.
+Configuration presence is not a network probe or proof of provider availability.
+The provider per event is observed separately from current configuration.
+
+### Request metadata directory
+
+`GET /api/admin/ai-monitoring/requests` is admin-only and read-only.
+
+| Query | Meaning |
+| --- | --- |
+| `limit` | 1–100, default 25 |
+| `offset` | 0–10000, default 0 |
+| `outcome` | Optional `COMPLETED`, `REFUSED`, `ERROR` |
+| `provider_kind` | Optional `openai`, `groq`, `custom` |
+| `refusal_stage` | Optional `INPUT`, `OUTPUT` |
+| `error_code` | Optional allowlisted code above |
+| `created_from`, `created_to` | Optional timezone-aware inclusive creation bounds |
+
+Filters combine with AND. Items sort newest database timestamp/UUID first for
+deterministic ties. One SQL statement supplies the bounded page and matching
+total, including offsets beyond the last match. Each item exposes only the
+fields above. Summary and list are independent reads and can observe different
+commits. Customers/demoted accounts receive 403 before monitoring queries;
+missing/invalid credentials receive 401. Invalid filters receive 422. Database
+or persisted-metadata validation failures return sanitized 503 with
+`AI monitoring summary unavailable` or `AI monitoring requests unavailable`.
+Reads never create events, commit, resolve providers, contact providers, or run
+models. Frontend integration and live PostgreSQL/provider verification remain
+pending; automated coverage uses real synthetic SQLite/FastAPI/Bearer recording,
+fake providers/tools, constraint/rollback checks, and offline PostgreSQL migration
+and SQL compilation.

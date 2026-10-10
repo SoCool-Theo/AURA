@@ -1,6 +1,7 @@
 """Registered Aura ORM models."""
 
 from .analysis import Analysis
+from .ai_request_log import AIRequestLog
 from .audit_log import AuditLog
 from .holding import Holding
 from .market_data import MarketData
@@ -13,6 +14,7 @@ from .notification import Notification, NotificationPreferences
 
 __all__ = [
     "Analysis",
+    "AIRequestLog",
     "AuditLog",
     "Holding",
     "MarketData",

@@ -23,6 +23,10 @@ from app.schemas.admin_market_data import (
     AdminMarketObservationsResponse,
 )
 from app.schemas.admin_system_health import AdminSystemHealthResponse
+from app.schemas.ai_monitoring import (
+    AIErrorCode, AIOutcome, AIProviderKind, AIRefusalStage,
+    AIMonitoringSummaryResponse, AIMonitoringTimeQuery, AIRequestsListResponse, AIRequestsQuery,
+)
 from app.schemas.audit_log import (
     AuditAction,
     AuditActorKind,
@@ -34,6 +38,7 @@ from app.schemas.market_data_status import MarketDataStatusResponse
 from app.services.admin_market_data_service import AdminMarketDataService
 from app.services.admin_overview_service import AdminOverviewService
 from app.services.admin_system_health_service import AdminSystemHealthService
+from app.services.ai_monitoring_service import AIMonitoringService
 from app.services.audit_log_service import AuditLogService
 from app.services.market_data_status_service import MarketDataStatusService
 
@@ -141,6 +146,52 @@ def get_admin_system_health(
         return AdminSystemHealthService(session).get()
     except (SQLAlchemyError, ValidationError) as error:
         raise HTTPException(status_code=503, detail="Admin system health unavailable") from error
+
+
+@router.get("/ai-monitoring", response_model=AIMonitoringSummaryResponse)
+def get_ai_monitoring_summary(
+    session: DatabaseSession,
+    current_admin: CurrentAdmin,
+    created_from: Annotated[AwareDatetime | None, Query()] = None,
+    created_to: Annotated[AwareDatetime | None, Query()] = None,
+) -> AIMonitoringSummaryResponse:
+    """Read retained metadata counts and configuration presence, without AI calls."""
+    try:
+        query = AIMonitoringTimeQuery(created_from=created_from, created_to=created_to)
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail="Invalid AI monitoring time range") from error
+    try:
+        return AIMonitoringService(session).summary(query)
+    except (SQLAlchemyError, ValidationError) as error:
+        raise HTTPException(status_code=503, detail="AI monitoring summary unavailable") from error
+
+
+@router.get("/ai-monitoring/requests", response_model=AIRequestsListResponse)
+def list_ai_monitoring_requests(
+    session: DatabaseSession,
+    current_admin: CurrentAdmin,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
+    outcome: Annotated[AIOutcome | None, Query()] = None,
+    provider_kind: Annotated[AIProviderKind | None, Query()] = None,
+    refusal_stage: Annotated[AIRefusalStage | None, Query()] = None,
+    error_code: Annotated[AIErrorCode | None, Query()] = None,
+    created_from: Annotated[AwareDatetime | None, Query()] = None,
+    created_to: Annotated[AwareDatetime | None, Query()] = None,
+) -> AIRequestsListResponse:
+    """Browse safe operational outcomes without prompts, answers, or identities."""
+    try:
+        query = AIRequestsQuery(
+            limit=limit, offset=offset, outcome=outcome, provider_kind=provider_kind,
+            refusal_stage=refusal_stage, error_code=error_code,
+            created_from=created_from, created_to=created_to,
+        )
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail="Invalid AI monitoring filters") from error
+    try:
+        return AIMonitoringService(session).list(query)
+    except (SQLAlchemyError, ValidationError) as error:
+        raise HTTPException(status_code=503, detail="AI monitoring requests unavailable") from error
 
 
 @router.get("/audit-logs", response_model=AuditLogListResponse)

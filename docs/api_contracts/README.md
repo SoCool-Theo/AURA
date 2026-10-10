@@ -9,7 +9,7 @@ This directory documents Aura's current Pydantic and HTTP contracts.
 - [Portfolio analytics response](analytics_response.md)
 - [Final public HTTP API, holding modes, valuation, versioning, and errors](public_api.md)
 - [Approved planned-portfolio target contract](planned_portfolios.md)
-- [Administrator access, audit history, Dashboard statistics, Users directory, Market Data administration, and System Health](admin.md)
+- [Administrator access, audit history, Dashboard statistics, Users directory, Market Data administration, System Health, and AI Monitoring](admin.md)
 
 Canonical JSON examples:
 

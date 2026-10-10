@@ -20,6 +20,7 @@ from backend.app.database import Base
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_CONFIG_PATH = BACKEND_ROOT / "alembic.ini"
 EXPECTED_TABLES = {
+    "ai_request_logs",
     "audit_logs",
     "market_data_refresh_state",
     "notifications",
@@ -44,6 +45,7 @@ NOTIFICATION_REVISION = "c3d5e7f9a2b4"
 REFRESH_REVISION = "d6e8f0a2b4c6"
 ADMIN_ROLE_REVISION = "e7f9a1b3c5d8"
 AUDIT_REVISION = "f8a0b2c4d6e9"
+AI_MONITORING_REVISION = "a9b1c3d5e7f0"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -351,6 +353,15 @@ def _captured_upgrade() -> tuple[
         (call.args[1], call.args[0], tuple(call.args[2]), call.kwargs.get("unique", False))
         for call in audit_indexes.call_args_list
     )
+    ai_revision = _script_directory().get_revision(AI_MONITORING_REVISION).module
+    with patch.object(ai_revision.op, "create_table") as ai_table, patch.object(ai_revision.op, "create_index") as ai_indexes:
+        ai_revision.upgrade()
+    for create_call in ai_table.call_args_list:
+        sa.Table(create_call.args[0], metadata, *create_call.args[1:])
+    indexes.extend(
+        (call.args[1], call.args[0], tuple(call.args[2]), call.kwargs.get("unique", False))
+        for call in ai_indexes.call_args_list
+    )
     return metadata, indexes
 
 
@@ -405,11 +416,12 @@ def _model_indexes() -> set[tuple[str, str, tuple[str, ...], bool]]:
     }
 
 
-def test_revisions_form_a_single_audit_head() -> None:
+def test_revisions_form_a_single_ai_monitoring_head() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
+        AI_MONITORING_REVISION,
         AUDIT_REVISION,
         ADMIN_ROLE_REVISION,
         REFRESH_REVISION,
@@ -423,7 +435,7 @@ def test_revisions_form_a_single_audit_head() -> None:
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert script.get_current_head() == AUDIT_REVISION
+    assert script.get_current_head() == AI_MONITORING_REVISION
     for index, revision in enumerate(revisions):
         expected_parent = revisions[index + 1].revision if index + 1 < len(revisions) else None
         assert revision.down_revision == expected_parent
@@ -518,6 +530,7 @@ def test_uuid_identifiers_have_no_database_generated_defaults() -> None:
         "watchlist_items",
         "notifications",
         "audit_logs",
+        "ai_request_logs",
     ):
         id_column = migration_metadata.tables[table_name].c.id
         assert isinstance(id_column.type, sa.Uuid)
