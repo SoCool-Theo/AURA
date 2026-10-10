@@ -133,8 +133,9 @@ def test_directory_is_safe_includes_legacy_and_correct_portfolio_counts(harness:
     assert by_id[str(harness.admin_id)]["portfolio_count"] == 0
     legacy = by_id[str(harness.legacy_id)]
     assert legacy["account_type"] == "LEGACY" and legacy["email"] is None and legacy["portfolio_count"] == 1
-    assert set(legacy) == {"id", "email", "display_name", "role", "account_type", "created_at", "updated_at", "portfolio_count"}
-    for sensitive in ["password", "private-hash", "phone_number", "+66 123456", "private_payload", "Private portfolio", "status"]:
+    assert set(legacy) == {"id", "email", "display_name", "role", "account_type", "status", "created_at", "updated_at", "portfolio_count"}
+    assert legacy["status"] == "ACTIVE"
+    for sensitive in ["password", "private-hash", "phone_number", "+66 123456", "private_payload", "Private portfolio", "auth_version"]:
         assert sensitive not in response.text
 
 

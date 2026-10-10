@@ -55,9 +55,17 @@ Admin/
 
 Dashboard, Users, Market Data, System Health, AI Monitoring, and Activity Logs now
 read the existing FastAPI admin endpoints. Portfolios and Reports show supported
-aggregate counts; global directories, deletion, report downloads, account creation/
-suspension, manual market refresh, notifications, and system/security mutations
+aggregate counts; global directories, deletion, report downloads, account creation,
+role changes, manual market refresh, notifications, and system/security mutations
 remain unavailable. These controls never simulate a successful server operation.
+
+Users supports Active/Suspended status filtering and suspend/reactivate actions.
+The existing themed confirmation explains the access change and preserves user
+records. Pending requests disable repeat submissions; errors remain visible and
+the directory reloads from the API. Your own suspension is disabled; backend
+checks also protect the last active administrator. Activity Logs displays both
+status transitions with the actual actor and target UUIDs. Reactivated users
+must sign in again because previous sessions remain invalid.
 
 Settings shows the verified read-only identity. Only appearance and compact
 sidebar are saved locally, separately for each administrator on this device.
@@ -119,6 +127,9 @@ The previously prepared migrations and deliberate first-admin provisioning must
 already be applied to the intended database; see the
 [admin contract](../docs/api_contracts/admin.md#first-admin-provisioning).
 There are no default administrator credentials.
+Account status requires migration `b0c2d4e6f8a1`. The approved persistent local
+Docker test database is upgraded during this feature's local acceptance; remote
+databases require a separately authorized migration before using this version.
 
 The token is stored only in this tab's session storage under
 `aura.admin.accessToken`. Passwords are not retained, and tokens are not copied

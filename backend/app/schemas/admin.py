@@ -19,6 +19,18 @@ class AdminIdentityResponse(AuraBaseModel):
 
 AdminUserRole = Literal["CUSTOMER", "ADMIN"]
 AdminAccountType = Literal["REGISTERED", "LEGACY"]
+AdminAccountStatus = Literal["ACTIVE", "SUSPENDED"]
+
+
+class AdminUserStatusRequest(AuraBaseModel):
+    status: AdminAccountStatus
+    expected_status: AdminAccountStatus
+
+
+class AdminUserStatusResponse(AuraBaseModel):
+    id: UUID
+    status: AdminAccountStatus
+    updated_at: AwareDatetime
 
 
 class AdminUsersQuery(AuraBaseModel):
@@ -27,6 +39,7 @@ class AdminUsersQuery(AuraBaseModel):
     q: str | None = Field(default=None, max_length=100)
     role: AdminUserRole | None = None
     account_type: AdminAccountType | None = None
+    status: AdminAccountStatus | None = None
 
     @field_validator("q")
     @classmethod
@@ -42,6 +55,7 @@ class AdminUserResponse(AuraBaseModel):
     display_name: str | None
     role: AdminUserRole
     account_type: AdminAccountType
+    status: AdminAccountStatus
     created_at: AwareDatetime
     updated_at: AwareDatetime
     portfolio_count: int = Field(ge=0)

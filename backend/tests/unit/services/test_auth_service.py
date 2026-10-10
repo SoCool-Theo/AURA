@@ -252,7 +252,7 @@ def test_token_issuance_delegates_user_uuid_to_phase3_helper() -> None:
         result = service.create_access_token_for_user(user)
 
     assert result == "encoded-token"
-    create_access_token.assert_called_once_with(user.id)
+    create_access_token.assert_called_once_with(user.id, auth_version=0)
     _assert_session_lifecycle_untouched(session)
 
 

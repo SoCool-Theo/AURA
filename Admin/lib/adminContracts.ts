@@ -5,6 +5,8 @@ const timestamp = z.string().datetime({ offset: true });
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const nullableTime = timestamp.nullable();
 const role = z.enum(["CUSTOMER", "ADMIN"]);
+const accountStatus = z.enum(["ACTIVE", "SUSPENDED"]);
+export type AdminAccountStatus = z.infer<typeof accountStatus>;
 const healthStatus = z.enum(["healthy", "degraded", "unavailable", "unknown", "not_checked"]);
 const outcome = z.enum(["COMPLETED", "REFUSED", "ERROR"]);
 const provider = z.enum(["openai", "groq", "custom"]);
@@ -30,9 +32,10 @@ export const dashboardSchema = z.object({
 export type Dashboard = z.infer<typeof dashboardSchema>;
 export const usersSchema = pageSchema(z.object({
   id: z.string().uuid(), email: z.string().email().nullable(), display_name: z.string().nullable(), role,
-  account_type: z.enum(["REGISTERED", "LEGACY"]), created_at: timestamp, updated_at: timestamp, portfolio_count: count,
+  account_type: z.enum(["REGISTERED", "LEGACY"]), status: accountStatus, created_at: timestamp, updated_at: timestamp, portfolio_count: count,
 }));
 export type AdminUser = z.infer<typeof usersSchema>["items"][number];
+export const userStatusSchema = z.object({ id: z.string().uuid(), status: accountStatus, updated_at: timestamp });
 
 export const inventorySchema = z.object({
   checked_at: timestamp, total_records: count, stored_symbols: count, required_symbols: count,
@@ -68,11 +71,15 @@ export const healthSchema = z.object({
 });
 export type Health = z.infer<typeof healthSchema>;
 
-export const auditSchema = pageSchema(z.object({
+const auditFields = {
   id: z.string().uuid(), created_at: timestamp, actor_kind: z.enum(["OPERATOR", "ADMIN"]), actor_user_id: z.string().uuid().nullable(),
-  action: z.literal("ADMIN_BOOTSTRAPPED"), target_type: z.literal("USER"), target_id: z.string().uuid(),
-  details: z.object({ previous_role: z.literal("CUSTOMER"), new_role: z.literal("ADMIN") }),
-}));
+  target_type: z.literal("USER"), target_id: z.string().uuid(),
+};
+export const auditSchema = pageSchema(z.discriminatedUnion("action", [
+  z.object({ ...auditFields, actor_kind: z.literal("OPERATOR"), actor_user_id: z.null(), action: z.literal("ADMIN_BOOTSTRAPPED"), details: z.object({ previous_role: z.literal("CUSTOMER"), new_role: z.literal("ADMIN") }) }),
+  z.object({ ...auditFields, actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("USER_SUSPENDED"), details: z.object({ previous_status: z.literal("ACTIVE"), new_status: z.literal("SUSPENDED") }) }),
+  z.object({ ...auditFields, actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("USER_REACTIVATED"), details: z.object({ previous_status: z.literal("SUSPENDED"), new_status: z.literal("ACTIVE") }) }),
+]));
 export type AuditEvent = z.infer<typeof auditSchema>["items"][number];
 
 export const aiSummarySchema = z.object({

@@ -17,6 +17,7 @@ class AdminOverviewRepository:
     def list_users(
         self, *, limit: int, offset: int, q: str | None = None,
         role: str | None = None, account_type: str | None = None,
+        status: str | None = None,
     ) -> tuple[list[Mapping[str, Any]], int]:
         kind = case((User.email.is_not(None), "REGISTERED"), else_="LEGACY")
         conditions = []
@@ -24,6 +25,8 @@ class AdminOverviewRepository:
             conditions.append(User.role == role)
         if account_type is not None:
             conditions.append(kind == account_type)
+        if status is not None:
+            conditions.append(User.is_suspended == (status == "SUSPENDED"))
         if q is not None:
             conditions.append(or_(
                 func.lower(User.email).contains(q.lower(), autoescape=True),
@@ -34,6 +37,7 @@ class AdminOverviewRepository:
         matching = select(
             User.id, User.email, User.display_name, User.role,
             kind.label("account_type"), User.created_at, User.updated_at,
+            case((User.is_suspended.is_(True), "SUSPENDED"), else_="ACTIVE").label("status"),
         ).where(*conditions).cte("matching_admin_users")
         page = (
             select(matching).order_by(matching.c.created_at.desc(), matching.c.id.desc())

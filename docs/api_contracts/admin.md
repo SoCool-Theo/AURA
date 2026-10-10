@@ -1,10 +1,10 @@
 # Administration backend contracts
 
 The backend supplies the access boundary, Audit Log storage/query API, Dashboard
-statistics, a read-only Users directory, Market Data inventory/status/history,
+statistics, a Users directory with account suspension/reactivation, Market Data inventory/status/history,
 System Health checks, and content-free AI Monitoring for Aura's separate admin
-website. Its read-only frontend integration is implemented in `Admin/`.
-User mutations and Market Data refresh requests remain subsequent work.
+website. Its frontend integration is implemented in `Admin/`.
+Account creation/deletion, role management and Market Data refresh requests remain subsequent work.
 
 ## Persisted roles
 
@@ -18,7 +18,8 @@ requests reject `role` as an unknown field. Existing customer identity and
 token response shapes are unchanged. There is no public role mutation API.
 
 Admin requests use the existing signed Bearer token and resolve the persisted
-User on every request. `get_current_admin` requires the exact `ADMIN` role and
+User on every request, rejects suspended accounts and checks the signed session
+version against the persisted account version. `get_current_admin` requires the exact `ADMIN` role and
 credentials; a token role claim, client state, or `X-User-ID` cannot grant access.
 A demoted account loses admin access on its next request even with an unexpired
 token. Existing customer endpoints retain their ownership checks for admins.
@@ -72,8 +73,8 @@ the command for the same sole admin is idempotent. The caller commits once on
 success and rolls back failures, closing the session and disposing the engine.
 Database failures are sanitized in CLI output.
 
-Provisioning additional admins, role-management UI, account
-suspension, and more granular permissions are outside this phase. Downgrading
+Provisioning additional admins, role-management UI and more granular permissions
+remain outside this phase. Suspended accounts cannot be bootstrapped. Downgrading
 the migration removes the role column and all stored role assignments.
 
 ## Audit history
@@ -92,8 +93,12 @@ flushes, never commits, rolls back, or closes the session. There is no HTTP even
 creation, update, or deletion endpoint. Application recording is insert-only;
 this phase does not add database triggers or a tamper-evident archive.
 
-The current allowlist contains `ADMIN_BOOTSTRAPPED`, target type `USER`, with
-only `previous_role: CUSTOMER` and `new_role: ADMIN` details. Unknown actions,
+The allowlist contains `ADMIN_BOOTSTRAPPED`, target type `USER`, with
+only `previous_role: CUSTOMER` and `new_role: ADMIN` details, plus
+`USER_SUSPENDED` (`previous_status: ACTIVE`, `new_status: SUSPENDED`) and
+`USER_REACTIVATED` (the reverse transition). Status events require an `ADMIN`
+actor with a non-null UUID; provisioning requires an `OPERATOR` with no actor UUID.
+Unknown actions,
 extra keys, free text, and arbitrary payloads are rejected before persistence.
 Future admin mutations must deliberately extend the typed event/detail catalog
 and record their action in the same transaction as the mutation.
@@ -103,8 +108,8 @@ Successful first-admin provisioning records an `OPERATOR` actor with null
 is the promoted account. Recording failure rolls back the promotion; repeating
 bootstrap for the same sole admin does not duplicate the event. Existing roles
 are not backfilled, and rejected/failed attempts, sign-ins, and history reads
-are not currently recorded. `ADMIN` actor storage is reserved for future
-authenticated admin mutations, which are not implemented in this phase.
+are not currently recorded. Successful status transitions record authenticated
+`ADMIN` actors in the same transaction; idempotent retries add no event.
 
 ### Read endpoint
 
@@ -116,7 +121,7 @@ customer data. It never writes events or commits.
 | --- | --- |
 | `limit` | 1–100; default 25 |
 | `offset` | 0–10000; default 0 |
-| `action` | Optional `ADMIN_BOOTSTRAPPED` |
+| `action` | Optional `ADMIN_BOOTSTRAPPED`, `USER_SUSPENDED` or `USER_REACTIVATED` |
 | `actor_kind` | Optional `OPERATOR` or `ADMIN` |
 | `actor_user_id` | Optional account UUID; operator events have no account actor |
 | `target_type` | Optional `USER` |
@@ -204,7 +209,7 @@ independently before joining, so multiple reports or simulations do not
 multiply account/portfolio counts. Totals and trends share one SQL statement
 snapshot. `generated_at` is a request clock value, not a historical as-of filter.
 
-There is no invented active-user count, suspension state, AI request count,
+There is no invented active-user count, AI request count,
 health verdict, growth percentage, most-analyzed-assets ranking, or customer
 risk/portfolio detail. These require separate tracking/contracts before UI
 integration. Existing market status and audit history endpoints remain separate.
@@ -214,7 +219,7 @@ overview service is called. Database/response-validation failures return
 sanitized `503`, `{"detail":"Admin dashboard unavailable"}`, without a fake
 healthy or zero-count fallback. The endpoint performs no writes or commits.
 
-## Read-only user directory
+## User directory
 
 `GET /api/admin/users` requires the persisted admin role and returns global
 directory metadata rather than granting access to account-owned resources.
@@ -226,6 +231,7 @@ directory metadata rather than granting access to account-owned resources.
 | `q` | Up to 100 characters; trimmed, case-insensitive literal substring of email or display name; blank means no search |
 | `role` | Optional `CUSTOMER` or `ADMIN` |
 | `account_type` | Optional `REGISTERED` or `LEGACY` |
+| `status` | Optional `ACTIVE` or `SUSPENDED` |
 
 Filters combine with AND. `%`, `_`, backslash, and SQL-like text in `q` are
 literal search input, not wildcard/SQL expressions. Default results include
@@ -245,6 +251,7 @@ and the matching `total`.
       "display_name": "Aura User",
       "role": "CUSTOMER",
       "account_type": "REGISTERED",
+      "status": "ACTIVE",
       "created_at": "2026-10-10T00:00:00Z",
       "updated_at": "2026-10-10T00:00:00Z",
       "portfolio_count": 2
@@ -258,17 +265,69 @@ and the matching `total`.
 
 Legacy account emails and display names may be null. Timestamps are UTC. No
 password hashes, tokens, phone numbers, preferences, holdings, result snapshots,
-or fabricated active/suspended status are selected/returned by the directory
-query. There are no account-create/edit/delete, suspend, or role-change methods
-on this endpoint; existing customer self-service APIs retain their ownership
+or session versions are selected/returned by the directory
+query. The directory endpoint stays GET-only; account access changes use the
+dedicated endpoint below. Existing customer self-service APIs retain their ownership
 checks.
 
 Authentication errors return `401`/`403`, invalid filters return `422`, and
 database/response-validation failures return sanitized `503`,
 `{"detail":"Admin user directory unavailable"}`. Reads do not write audit
-events, change accounts, or commit. Browser integration and live PostgreSQL
-acceptance remain pending; automated endpoint acceptance uses synthetic SQLite
-with real Bearer authentication, plus PostgreSQL SQL compilation checks.
+events, change accounts, or commit. Endpoint checks use synthetic SQLite and
+the approved Docker PostgreSQL database, with real Bearer authentication.
+
+## Suspend/reactivate account access
+
+Migration `b0c2d4e6f8a1`, after `a9b1c3d5e7f0`, adds non-null
+`users.is_suspended` (false) and `users.auth_version` (zero, nonnegative).
+Existing accounts remain active with unchanged roles and records. Apply it
+explicitly to the selected database before starting the updated backend;
+application startup never migrates storage. Downgrade removes this state and
+the session-revocation history; use only as an explicit operator operation.
+
+`PATCH /api/admin/users/{user_id}/status` requires persisted active ADMIN
+permission and accepts exactly:
+
+```json
+{"status":"SUSPENDED","expected_status":"ACTIVE"}
+```
+
+Both fields use `ACTIVE`/`SUSPENDED`. Reactivation reverses them. The successful
+response contains only `id`, `status`, and UTC `updated_at`. Status is separate
+from role and REGISTERED/LEGACY classification; either account type can be
+suspended. No passwords, profile changes, role changes or free-text reasons are
+accepted. Portfolios, holdings, saved results and account identity are preserved.
+
+The transaction takes the same PostgreSQL `SHARE ROW EXCLUSIVE` users-table lock
+as bootstrap, then refreshes and rechecks the acting administrator and session
+generation. This serializes status decisions and prevents mutually competing
+administrators from suspending each other. Self-suspension and suspension of
+the last credential-bearing active administrator return `409`. A missing target
+returns `404`; stale expected state returns `409`; malformed/extra fields return
+`422`. A target already in the requested state is an idempotent success with
+no duplicate event or version increment. Status transitions record the allowlisted
+ADMIN audit event before the route commits once. Persistence, audit or commit
+failure rolls back and returns sanitized `503`; authorization remains `401`/`403`.
+
+Suspension increments `auth_version`. New signed access tokens carry `ver`;
+tokens issued before this migration use version zero. Every shared protected
+request checks both persisted status and version, so customer and admin access
+are blocked on the next request (already-running requests are not cancelled).
+Login for a suspended account returns the same generic `401` as invalid
+credentials. Reactivation allows fresh login; pre-suspension tokens never become
+valid again. Public registration/profile contracts still reject status/version
+fields, and customer web/mobile response shapes are unchanged.
+
+The Users page displays real status, filters on the server and uses themed
+confirmations, pending/error feedback and verified response-driven refresh.
+Self-suspension is disabled in the UI and enforced by the API. Activity Logs
+displays/filter both status events and provisioning events. Account creation,
+deletion, role management and manual market refresh remain separate features.
+
+Verification covers rollback, idempotency, invalid inputs, actor revalidation,
+shared token enforcement, fresh-login reactivation and safe event details;
+Docker checks exercise real migration defaults and concurrent status locking in
+a disposable schema with fingerprints of all existing public data before/after.
 
 ## Read-only Market Data administration
 
@@ -602,7 +661,8 @@ AI summary counts cover all retained events; request filters apply to the list.
 
 Portfolios and Reports show dashboard aggregate counts because there are no
 global admin detail/list/download/delete endpoints. No customer ownership
-endpoint is used to simulate global access. User creation/suspension, manual
+endpoint is used to simulate global access. Users supports the status actions
+and audit events described above. User creation/deletion, role changes, manual
 market refresh, account editing, security/session administration, notifications,
 and platform-setting mutations are unavailable. Only theme/compact-sidebar
 preferences are persisted locally. Existing colors and component styles remain.
@@ -610,5 +670,5 @@ preferences are persisted locally. Existing colors and component styles remain.
 Development uses a Vite `/api` proxy to the configured backend origin. Production
 requires a configured backend origin plus exact-origin CORS, or a separately
 provided same-origin reverse proxy. See `Admin/README.md` for setup and the
-synthetic acceptance harness. This integration adds no backend routes, migrations,
-dependencies, model execution, or remote-data changes.
+synthetic acceptance harness. Account status adds only the dedicated route and
+additive migration above, without new dependencies, model execution or remote-data changes.

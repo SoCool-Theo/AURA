@@ -28,6 +28,7 @@ REFRESH_REVISION = "d6e8f0a2b4c6"
 ADMIN_ROLE_REVISION = "e7f9a1b3c5d8"
 AUDIT_REVISION = "f8a0b2c4d6e9"
 AI_MONITORING_REVISION = "a9b1c3d5e7f0"
+ACCOUNT_STATUS_REVISION = "b0c2d4e6f8a1"
 
 
 def _alembic_config() -> Config:
@@ -93,7 +94,7 @@ def test_alembic_configuration_loads_without_connecting(
     script = ScriptDirectory.from_config(config)
 
     assert script.dir == str(ALEMBIC_DIRECTORY)
-    assert len(list(script.walk_revisions())) == 13
+    assert len(list(script.walk_revisions())) == 14
 
 
 def test_offline_migration_operation_does_not_connect(
@@ -118,10 +119,11 @@ def test_quantity_only_revision_extends_planned_portfolios() -> None:
         if path.name != "__init__.py"
     ]
 
-    assert len(revision_files) == 13
+    assert len(revision_files) == 14
     script = ScriptDirectory.from_config(_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        ACCOUNT_STATUS_REVISION,
         AI_MONITORING_REVISION,
         AUDIT_REVISION,
         ADMIN_ROLE_REVISION,
@@ -138,4 +140,4 @@ def test_quantity_only_revision_extends_planned_portfolios() -> None:
     ]
     for index, revision in enumerate(revisions):
         assert revision.down_revision == (revisions[index + 1].revision if index + 1 < len(revisions) else None)
-    assert script.get_current_head() == AI_MONITORING_REVISION
+    assert script.get_current_head() == ACCOUNT_STATUS_REVISION

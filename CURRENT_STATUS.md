@@ -3821,3 +3821,55 @@ remain separate follow-on work.
   Updated `Admin/README.md` with startup, credentials and verification commands.
   Work stays on `feat/admin-web-foundation`; unrelated untracked files were
   preserved. No staging, commit, push, remote migration or deployment occurred.
+
+### Admin account suspension and reactivation — 2026-10-10
+
+- Added migration `b0c2d4e6f8a1` after `a9b1c3d5e7f0` for non-null
+  `users.is_suspended` (false) and nonnegative `auth_version` (zero). Existing
+  accounts remain active, with unchanged roles and owned records. Shared login
+  denies suspended accounts using the existing generic credentials error;
+  protected requests reject suspended accounts and stale signed session versions.
+  Reactivation requires fresh login and never revives pre-suspension tokens.
+  Pre-migration tokens remain version zero for never-suspended accounts.
+- Added `PATCH /api/admin/users/{user_id}/status` with typed desired/expected
+  statuses, safe confirmation DTOs, refreshed actor authorization under the
+  existing PostgreSQL users-table lock, self/last-active-admin safeguards,
+  idempotent retries and stale-confirmation handling. Status mutation and typed
+  `USER_SUSPENDED`/`USER_REACTIVATED` audit events commit atomically; audit/commit
+  failures roll back both account state and session version. No free-text event
+  details, role mutations, account creation/deletion or new dependencies.
+- Updated directory projections/DTOs with actual status and a server status
+  filter. Connected the existing Users page to themed suspend/reactivate
+  confirmations, pending/error/success feedback, verified server refresh and
+  keyboard focus restoration. Self-suspension is disabled visibly and enforced
+  in the backend. Activity Logs now filters/displays status and bootstrap events.
+  Colors, component styles, customer web/mobile contracts and architecture remain
+  unchanged; shared backend enforcement applies to both customer clients.
+- Automated verification: 454 relevant backend tests passed, covering account
+  status, shared authentication, admin authorization, directory/audit storage,
+  migration-chain/model consistency, rollback and safe inputs. All 23 admin Node
+  tests passed against the final build; TypeScript, ESLint and production build
+  passed, with the existing large-chunk warning. Restricted-sandbox native test
+  startup failures passed when rerun outside the process sandbox.
+- Docker PostgreSQL verification used disposable schemas, real Alembic
+  migrations/FastAPI services and independent sessions. Verified preserved active
+  legacy defaults, old-token denial, fresh-login reactivation, idempotent audit,
+  status filtering and competing administrator suspensions leaving one active.
+  All 10 frontend-client response contracts, concurrent reads, pagination,
+  filters and cleared-session checks passed. One transient client connection
+  failure passed on a separate rerun. Browser verification covered confirmation
+  cancel, suspension/reactivation, filtered empty/refreshed results, persisted
+  audit details, disabled self action, focus restoration and logout/reload.
+  Saved an actual Users-page screenshot outside the repository.
+- Verification servers stopped gracefully; disposable schemas and generated
+  fixture credentials were removed. Public table fingerprints matched before
+  and after fixture cleanup. Applied only the verified new migration to the
+  approved persistent local Docker `aura_test` public schema; fingerprints of
+  every original row value matched afterward and all accounts remained active
+  with session version zero. Normal application login, directory/status filter,
+  rejected self-suspension and audit reads passed with no persistent data change.
+  Existing local admin credentials/configuration remain ignored; remote backend
+  configuration was preserved. Updated admin contract and README. No remote
+  migration, real-account status change, provider/model run, deployment, staging,
+  commit or push occurred. Unrelated untracked files remain preserved on
+  `feat/admin-web-foundation`.

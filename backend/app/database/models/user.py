@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, Text, UniqueConstraint, false, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -47,6 +47,7 @@ class User(Base):
         ),
         UniqueConstraint("email", name="uq_users_email"),
         CheckConstraint("role IN ('CUSTOMER', 'ADMIN')", name="ck_users_role"),
+        CheckConstraint("auth_version >= 0", name="ck_users_auth_version"),
         CheckConstraint(
             "role != 'ADMIN' OR (email IS NOT NULL AND password_hash IS NOT NULL)",
             name="ck_users_admin_credentials",
@@ -90,6 +91,12 @@ class User(Base):
         nullable=False,
         default="CUSTOMER",
         server_default="CUSTOMER",
+    )
+    is_suspended: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false(),
+    )
+    auth_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0",
     )
 
     portfolios: Mapped[list[Portfolio]] = relationship(

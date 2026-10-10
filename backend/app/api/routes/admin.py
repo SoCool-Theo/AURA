@@ -11,11 +11,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.dependencies import CurrentAdmin, DatabaseSession, get_current_admin
 from app.schemas.admin import (
     AdminAccountType,
+    AdminAccountStatus,
     AdminDashboardResponse,
     AdminIdentityResponse,
     AdminUserRole,
     AdminUsersListResponse,
     AdminUsersQuery,
+    AdminUserStatusRequest,
+    AdminUserStatusResponse,
 )
 from app.schemas.admin_market_data import (
     AdminMarketDataQuery,
@@ -37,6 +40,7 @@ from app.schemas.audit_log import (
 from app.schemas.market_data_status import MarketDataStatusResponse
 from app.services.admin_market_data_service import AdminMarketDataService
 from app.services.admin_overview_service import AdminOverviewService
+from app.services.admin_user_service import AdminUserService, AdminUserStatusError
 from app.services.admin_system_health_service import AdminSystemHealthService
 from app.services.ai_monitoring_service import AIMonitoringService
 from app.services.audit_log_service import AuditLogService
@@ -81,15 +85,35 @@ def list_admin_users(
     q: Annotated[str | None, Query(max_length=100)] = None,
     role: Annotated[AdminUserRole | None, Query()] = None,
     account_type: Annotated[AdminAccountType | None, Query()] = None,
+    status: Annotated[AdminAccountStatus | None, Query()] = None,
 ) -> AdminUsersListResponse:
     """Return safe directory metadata; no account or portfolio mutations."""
     query = AdminUsersQuery(
-        limit=limit, offset=offset, q=q, role=role, account_type=account_type
+        limit=limit, offset=offset, q=q, role=role, account_type=account_type, status=status,
     )
     try:
         return AdminOverviewService(session).list_users(query)
     except (SQLAlchemyError, ValidationError) as error:
         raise HTTPException(status_code=503, detail="Admin user directory unavailable") from error
+
+
+@router.patch("/users/{user_id}/status", response_model=AdminUserStatusResponse)
+def change_admin_user_status(
+    user_id: UUID, request: AdminUserStatusRequest,
+    session: DatabaseSession, current_admin: CurrentAdmin,
+) -> AdminUserStatusResponse:
+    """Commit status and its allowlisted audit event atomically."""
+    try:
+        response = AdminUserService(session).set_status(current_admin, user_id, request)
+        session.commit()
+        return response
+    except AdminUserStatusError as error:
+        session.rollback()
+        headers = {"WWW-Authenticate": "Bearer"} if error.status_code == 401 else None
+        raise HTTPException(status_code=error.status_code, detail=str(error), headers=headers) from error
+    except (SQLAlchemyError, ValidationError) as error:
+        session.rollback()
+        raise HTTPException(status_code=503, detail="Account status update unavailable") from error
 
 
 @router.get("/market-data", response_model=AdminMarketInventoryResponse)

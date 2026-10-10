@@ -36,6 +36,7 @@ class AdminOverviewService:
                 display_name=row["display_name"],
                 role=row["role"],
                 account_type=row["account_type"],
+                status=row["status"],
                 created_at=_utc(row["created_at"]),
                 updated_at=_utc(row["updated_at"]),
                 portfolio_count=row["portfolio_count"],

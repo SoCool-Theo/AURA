@@ -12,6 +12,7 @@ from backend.app.core.security import (
     SecurityConfigurationError,
     create_access_token,
     decode_access_token,
+    decode_access_token_session,
     hash_password,
     verify_dummy_password,
     verify_password,
@@ -161,7 +162,7 @@ def test_access_token_signed_with_unapproved_algorithm_is_rejected() -> None:
         decode_access_token(token)
 
 
-def test_access_token_uses_configured_expiration_and_no_extra_claims(
+def test_access_token_uses_configured_expiration_and_session_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -181,10 +182,27 @@ def test_access_token_uses_configured_expiration_and_no_extra_claims(
         options={"verify_exp": False, "verify_iat": False},
     )
 
-    assert set(claims) == {"sub", "iat", "exp"}
+    assert set(claims) == {"sub", "iat", "exp", "ver"}
+    assert claims["ver"] == 0
     assert claims["sub"] == str(subject)
     assert claims["exp"] - claims["iat"] == 7 * 60
     assert issued_at == original_issued_at
+
+
+def test_session_version_and_legacy_tokens():
+    subject = uuid4()
+    assert decode_access_token_session(create_access_token(subject, auth_version=3)) == (subject, 3)
+    legacy = jwt.encode(_claims(subject), TEST_SECRET, algorithm="HS256")
+    assert decode_access_token_session(legacy) == (subject, 0)
+
+
+@pytest.mark.parametrize("version", [-1, True, 1.5, "1", None])
+def test_invalid_session_versions_are_rejected(version):
+    claims = {**_claims(uuid4()), "ver": version}
+    with pytest.raises(InvalidAccessTokenError):
+        decode_access_token_session(jwt.encode(claims, TEST_SECRET, algorithm="HS256"))
+    with pytest.raises(ValueError):
+        create_access_token(uuid4(), auth_version=version)
 
 
 @pytest.mark.parametrize(

@@ -23,7 +23,7 @@ class AdminAccessService:
         """Promote one existing account; concurrent attempts are serialized."""
         self._repository.lock_admin_bootstrap()
         user = self._repository.get_by_id(user_id)
-        if user is None or not user.email or not user.password_hash:
+        if user is None or not user.email or not user.password_hash or user.is_suspended:
             raise AdminBootstrapError("An existing credential-bearing account is required")
         if self._repository.has_other_admin(user_id):
             raise AdminBootstrapError("An administrator already exists; bootstrap is closed")

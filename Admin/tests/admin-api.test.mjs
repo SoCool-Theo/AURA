@@ -104,3 +104,31 @@ test("decimal prices stay exact and metadata contracts strip unrecognized privat
   assert.equal(page.items[0].adjusted_close, "123.45678901");
   assert.deepEqual(contracts.identitySchema.parse({ ...identity, password_hash: "private" }), identity);
 });
+
+test("status actions use PATCH, carry the expected status and validate the server confirmation", async () => {
+  const { api } = setup(async (url, init) => {
+    assert.equal(url, `http://127.0.0.1:8000/api/admin/users/${identity.id}/status`);
+    assert.equal(init.method, "PATCH");
+    assert.equal(init.headers.Authorization, "Bearer token");
+    assert.deepEqual(JSON.parse(init.body), { status: "SUSPENDED", expected_status: "ACTIVE" });
+    return response({ id: identity.id, status: "SUSPENDED", updated_at: "2026-10-10T00:00:00Z" });
+  }, "token");
+  assert.equal((await api.setUserStatus(identity.id, "SUSPENDED", "ACTIVE")).status, "SUSPENDED");
+  const wrong = setup(async () => response({ id: identity.id, status: "ACTIVE", updated_at: "2026-10-10T00:00:00Z" }), "token");
+  await assert.rejects(wrong.api.setUserStatus(identity.id, "SUSPENDED", "ACTIVE"), /invalid status confirmation/);
+});
+
+test("status conflicts retain the session and only expose allowlisted safeguards", async () => {
+  for (const detail of ["You cannot suspend your own account", "The last active administrator cannot be suspended", "private database password"]) {
+    const { api } = setup(async () => response({ detail }, 409), "token");
+    await assert.rejects(api.setUserStatus(identity.id, "SUSPENDED", "ACTIVE"), error => error.status === 409 && !error.message.includes("password"));
+    assert.equal(api.readToken(), "token");
+  }
+});
+
+test("audit schema accepts safe status changes and rejects mismatched events", () => {
+  const event = { id: identity.id, created_at: "2026-10-10T00:00:00Z", actor_kind: "ADMIN", actor_user_id: identity.id,
+    action: "USER_SUSPENDED", target_type: "USER", target_id: identity.id, details: { previous_status: "ACTIVE", new_status: "SUSPENDED" } };
+  assert.equal(contracts.auditSchema.parse({ items: [event], total: 1, limit: 25, offset: 0 }).items[0].action, "USER_SUSPENDED");
+  assert.throws(() => contracts.auditSchema.parse({ items: [{ ...event, details: { previous_status: "SUSPENDED", new_status: "ACTIVE" } }], total: 1, limit: 25, offset: 0 }));
+});

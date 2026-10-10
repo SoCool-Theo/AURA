@@ -73,3 +73,15 @@ def test_response_refuses_corrupted_secret_details() -> None:
         repository.return_value.list.return_value = ([row], 1)
         with pytest.raises(ValidationError):
             module.AuditLogService(MagicMock(spec=Session)).list(AuditLogQuery())
+
+
+@pytest.mark.parametrize("change", [{"actor_kind": "OPERATOR", "actor_user_id": None},
+    {"actor_user_id": None}, {"details": {"previous_status": "SUSPENDED", "new_status": "ACTIVE"}},
+    {"details": {"previous_status": "ACTIVE", "new_status": "SUSPENDED", "reason": "private text"}}])
+def test_status_events_reject_wrong_actor_direction_or_free_text(change):
+    data = {"actor_kind": "ADMIN", "actor_user_id": uuid4(), "action": "USER_SUSPENDED",
+            "target_type": "USER", "target_id": uuid4(),
+            "details": {"previous_status": "ACTIVE", "new_status": "SUSPENDED"}}
+    data.update(change)
+    with pytest.raises(ValidationError):
+        AuditEventCreate.model_validate(data)

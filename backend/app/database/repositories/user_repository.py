@@ -35,6 +35,28 @@ class UserRepository:
     def get_by_id(self, user_id: UUID) -> User | None:
         return self._session.get(User, user_id)
 
+    def lock_account_status_changes(self) -> None:
+        """Serialize status decisions with bootstrap and other users-table writes."""
+        if self._session.get_bind().dialect.name == "postgresql":
+            self._session.execute(text("LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE"))
+
+    def get_current_by_id(self, user_id: UUID) -> User | None:
+        """Refresh after acquiring the lock, including already-loaded actors."""
+        return self._session.get(User, user_id, populate_existing=True)
+
+    def has_other_active_admin(self, user_id: UUID) -> bool:
+        statement = select(User.id).where(
+            User.id != user_id, User.role == "ADMIN", User.is_suspended.is_(False),
+            User.email.is_not(None), User.password_hash.is_not(None),
+        ).limit(1)
+        return self._session.scalars(statement).first() is not None
+
+    def set_suspension(self, user: User, *, suspended: bool) -> None:
+        user.is_suspended = suspended
+        if suspended:
+            user.auth_version = (user.auth_version or 0) + 1
+        self._session.flush()
+
     def has_other_admin(self, user_id: UUID) -> bool:
         statement = (
             select(User.id)

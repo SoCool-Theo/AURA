@@ -9,7 +9,7 @@ from pydantic import AwareDatetime, Field, model_validator
 from .common import AuraBaseModel
 
 
-AuditAction = Literal["ADMIN_BOOTSTRAPPED"]
+AuditAction = Literal["ADMIN_BOOTSTRAPPED", "USER_SUSPENDED", "USER_REACTIVATED"]
 AuditActorKind = Literal["OPERATOR", "ADMIN"]
 AuditTargetType = Literal["USER"]
 
@@ -21,6 +21,11 @@ class AuditRoleChangeDetails(AuraBaseModel):
     new_role: Literal["ADMIN"]
 
 
+class AuditStatusChangeDetails(AuraBaseModel):
+    previous_status: Literal["ACTIVE", "SUSPENDED"]
+    new_status: Literal["ACTIVE", "SUSPENDED"]
+
+
 class AuditEventCreate(AuraBaseModel):
     """Trusted internal callers only; not an HTTP request model."""
 
@@ -29,12 +34,23 @@ class AuditEventCreate(AuraBaseModel):
     action: AuditAction
     target_type: AuditTargetType
     target_id: UUID
-    details: AuditRoleChangeDetails
+    details: AuditRoleChangeDetails | AuditStatusChangeDetails
 
     @model_validator(mode="after")
     def validate_actor(self) -> Self:
-        if self.actor_kind != "OPERATOR" or self.actor_user_id is not None:
-            raise ValueError("First-admin provisioning requires an operator actor")
+        if self.action == "ADMIN_BOOTSTRAPPED":
+            if self.actor_kind != "OPERATOR" or self.actor_user_id is not None:
+                raise ValueError("First-admin provisioning requires an operator actor")
+            if not isinstance(self.details, AuditRoleChangeDetails):
+                raise ValueError("Bootstrap requires role details")
+        else:
+            if self.actor_kind != "ADMIN" or self.actor_user_id is None:
+                raise ValueError("Status changes require an administrator actor")
+            expected = ("ACTIVE", "SUSPENDED") if self.action == "USER_SUSPENDED" else ("SUSPENDED", "ACTIVE")
+            if not isinstance(self.details, AuditStatusChangeDetails) or (
+                self.details.previous_status, self.details.new_status
+            ) != expected:
+                raise ValueError("Status details must match the action")
         return self
 
 

@@ -13,6 +13,7 @@ from decimal import Decimal
 import json
 from pathlib import Path
 from secrets import token_urlsafe
+from threading import Barrier
 import sys
 from uuid import UUID, uuid4
 
@@ -102,7 +103,7 @@ def seed(factory, password):
         session.commit()
 
 
-def check_http(app, password):
+def check_http(app, password, factory):
     paths = ["me", "dashboard", "users", "market-data", "market-data/status",
              "market-data/observations", "system-health", "ai-monitoring",
              "ai-monitoring/requests", "audit-logs"]
@@ -140,6 +141,60 @@ def check_http(app, password):
             statuses = list(executor.map(lambda path: client.get(f"/api/admin/{path}", headers=admin).status_code, paths * 3))
         assert statuses == [200] * 30
         print("PASS PostgreSQL: 30 concurrent reads with independent sessions", flush=True)
+        check_account_status(client, password, factory, admin, customer)
+
+
+def check_account_status(client, password, factory, admin, customer):
+    def change(target, headers=admin, status="SUSPENDED", expected="ACTIVE"):
+        return client.patch(f"/api/admin/users/{UUID(int=target)}/status", headers=headers,
+                            json={"status": status, "expected_status": expected})
+
+    assert change(1).status_code == 409
+    assert change(2, headers=customer).status_code == 403
+    assert change(2).status_code == 200
+    assert change(2).status_code == 200
+    assert client.get("/api/auth/me", headers=customer).status_code == 401
+    assert client.post("/api/auth/login", json={"email": "customer00@example.com", "password": password}).status_code == 401
+    assert client.get("/api/admin/users", headers=admin, params={"status": "SUSPENDED"}).json()["total"] == 1
+    assert change(2, status="ACTIVE", expected="SUSPENDED").status_code == 200
+    assert client.get("/api/auth/me", headers=customer).status_code == 401
+    login = client.post("/api/auth/login", json={"email": "customer00@example.com", "password": password})
+    assert login.status_code == 200
+    assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {login.json()['access_token']}"}).status_code == 200
+    events = client.get("/api/admin/audit-logs", headers=admin, params={"target_id": str(UUID(int=2))}).json()
+    assert events["total"] == 2
+    assert {event["action"] for event in events["items"]} == {"USER_SUSPENDED", "USER_REACTIVATED"}
+    assert all(event["actor_user_id"] == str(UUID(int=1)) for event in events["items"])
+    print("PASS PostgreSQL: suspension, fresh-login reactivation, idempotency, status filters and atomic audit", flush=True)
+
+    # Fixture-only second admin setup; no production role-management API exists.
+    with factory() as session:
+        session.get(User, UUID(int=3)).role = "ADMIN"
+        session.commit()
+    login = client.post("/api/auth/login", json={"email": "customer01@example.com", "password": password})
+    second = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    barrier = Barrier(2)
+
+    def competing(request):
+        barrier.wait(timeout=10)
+        target, headers = request
+        return change(target, headers=headers).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(competing, [(3, admin), (1, second)]))
+    assert sorted(outcomes) == [200, 401], outcomes
+    with factory() as session:
+        active = session.query(User).filter(User.role == "ADMIN", User.is_suspended.is_(False)).all()
+        assert len(active) == 1
+        winner_id = active[0].id
+    winner = admin if winner_id == UUID(int=1) else second
+    loser = 3 if winner_id == UUID(int=1) else 1
+    assert change(loser, headers=winner, status="ACTIVE", expected="SUSPENDED").status_code == 200
+    # Return to the fixture's single-admin browser baseline without touching public.
+    with factory() as session:
+        session.get(User, UUID(int=3)).role = "CUSTOMER"
+        session.commit()
+    print("PASS PostgreSQL: competing administrators cannot suspend each other; one remains active", flush=True)
 
 
 def main():
@@ -172,7 +227,9 @@ def main():
         command.upgrade(config, "head")
         with engine.connect() as connection:
             assert connection.scalar(text("SELECT role FROM users WHERE id = :id"), {"id": UUID(int=99)}) == "CUSTOMER"
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "a9b1c3d5e7f0"
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "b0c2d4e6f8a1"
+            assert connection.scalar(text("SELECT is_suspended FROM users WHERE id = :id"), {"id": UUID(int=99)}) is False
+            assert connection.scalar(text("SELECT auth_version FROM users WHERE id = :id"), {"id": UUID(int=99)}) == 0
         print("PASS PostgreSQL: migration chain to head preserves existing customer role", flush=True)
         settings.database_url = scoped_url.render_as_string(hide_password=False)
         settings.market_data_worker_database_url = None
@@ -192,7 +249,7 @@ def main():
                 yield session
 
         app.dependency_overrides[get_database_session] = isolated_session
-        check_http(app, password)
+        check_http(app, password, factory)
         if not args.check_only:
             output.parent.mkdir(exist_ok=True)
             output.write_text(json.dumps({"admin": "admin@example.com", "customer": "customer00@example.com", "password": password}), encoding="utf-8")

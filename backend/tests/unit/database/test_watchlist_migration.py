@@ -10,7 +10,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_CONFIG_PATH = BACKEND_ROOT / "alembic.ini"
 REVISION = "a8d3f1c6b2e7"
 PREVIOUS_REVISION = "f2c8e9a1b3d4"
-CURRENT_HEAD = "a9b1c3d5e7f0"
+CURRENT_HEAD = "b0c2d4e6f8a1"
 
 
 def _revision_module():  # type: ignore[no-untyped-def]

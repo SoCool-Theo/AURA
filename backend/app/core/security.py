@@ -53,8 +53,11 @@ def create_access_token(
     subject: UUID,
     *,
     issued_at: datetime | None = None,
+    auth_version: int = 0,
 ) -> str:
-    """Issue a signed access token containing only sub, iat, and exp."""
+    """Issue a signed subject/expiry token with a revocable session version."""
+    if type(auth_version) is not int or auth_version < 0:
+        raise ValueError("auth_version must be a nonnegative integer")
     secret = _configured_jwt_secret()
     issued_at_utc = _utc_datetime(issued_at)
     expires_at = issued_at_utc + timedelta(
@@ -65,6 +68,7 @@ def create_access_token(
             "sub": str(subject),
             "iat": issued_at_utc,
             "exp": expires_at,
+            "ver": auth_version,
         },
         secret,
         algorithm=settings.jwt_algorithm,
@@ -73,6 +77,11 @@ def create_access_token(
 
 def decode_access_token(token: str) -> UUID:
     """Validate a signed access token and return its UUID subject."""
+    return decode_access_token_session(token)[0]
+
+
+def decode_access_token_session(token: str) -> tuple[UUID, int]:
+    """Return trusted subject/version; pre-migration tokens have version zero."""
     secret = _configured_jwt_secret()
     try:
         claims = jwt.decode(
@@ -84,7 +93,10 @@ def decode_access_token(token: str) -> UUID:
         subject = claims["sub"]
         if not isinstance(subject, str):
             raise ValueError("access-token subject must be a string")
-        return UUID(subject)
+        version = claims.get("ver", 0)
+        if type(version) is not int or version < 0:
+            raise ValueError("invalid access-token version")
+        return UUID(subject), version
     except (InvalidTokenError, KeyError, TypeError, ValueError) as error:
         raise InvalidAccessTokenError from error
 

@@ -148,6 +148,7 @@ def test_user_account_constraints_match_persistence_contract() -> None:
     }
 
     assert check_constraints == {
+        "ck_users_auth_version": "auth_version >= 0",
         "ck_users_role": "role IN ('CUSTOMER', 'ADMIN')",
         "ck_users_admin_credentials": (
             "role != 'ADMIN' OR (email IS NOT NULL AND password_hash IS NOT NULL)"

@@ -8,7 +8,7 @@ from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.core.security import InvalidAccessTokenError, decode_access_token
+from app.core.security import InvalidAccessTokenError, decode_access_token_session
 from app.database.connection import (
     SessionFactory,
     create_database_engine,
@@ -56,12 +56,12 @@ def get_current_user(
         raise _authentication_error()
 
     try:
-        user_id = decode_access_token(credentials.credentials)
+        user_id, auth_version = decode_access_token_session(credentials.credentials)
     except InvalidAccessTokenError as error:
         raise _authentication_error() from error
 
     user = session.get(User, user_id)
-    if user is None:
+    if user is None or user.is_suspended or (user.auth_version or 0) != auth_version:
         raise _authentication_error()
     return user
 

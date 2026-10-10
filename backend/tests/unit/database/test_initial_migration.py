@@ -46,6 +46,7 @@ REFRESH_REVISION = "d6e8f0a2b4c6"
 ADMIN_ROLE_REVISION = "e7f9a1b3c5d8"
 AUDIT_REVISION = "f8a0b2c4d6e9"
 AI_MONITORING_REVISION = "a9b1c3d5e7f0"
+ACCOUNT_STATUS_REVISION = "b0c2d4e6f8a1"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -362,6 +363,13 @@ def _captured_upgrade() -> tuple[
         (call.args[1], call.args[0], tuple(call.args[2]), call.kwargs.get("unique", False))
         for call in ai_indexes.call_args_list
     )
+    status_revision = _script_directory().get_revision(ACCOUNT_STATUS_REVISION).module
+    with patch.object(status_revision.op, "add_column") as status_columns, patch.object(status_revision.op, "create_check_constraint") as status_checks:
+        status_revision.upgrade()
+    for call in status_columns.call_args_list:
+        metadata.tables[call.args[0]].append_column(call.args[1])
+    for call in status_checks.call_args_list:
+        metadata.tables[call.args[1]].append_constraint(sa.CheckConstraint(call.args[2], name=call.args[0]))
     return metadata, indexes
 
 
@@ -416,11 +424,12 @@ def _model_indexes() -> set[tuple[str, str, tuple[str, ...], bool]]:
     }
 
 
-def test_revisions_form_a_single_ai_monitoring_head() -> None:
+def test_revisions_form_a_single_account_status_head() -> None:
     script = _script_directory()
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
+        ACCOUNT_STATUS_REVISION,
         AI_MONITORING_REVISION,
         AUDIT_REVISION,
         ADMIN_ROLE_REVISION,
@@ -435,7 +444,7 @@ def test_revisions_form_a_single_ai_monitoring_head() -> None:
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert script.get_current_head() == AI_MONITORING_REVISION
+    assert script.get_current_head() == ACCOUNT_STATUS_REVISION
     for index, revision in enumerate(revisions):
         expected_parent = revisions[index + 1].revision if index + 1 < len(revisions) else None
         assert revision.down_revision == expected_parent

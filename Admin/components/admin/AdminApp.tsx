@@ -78,7 +78,7 @@ function AdminWorkspace({ identity, onSignOut }: { identity: AdminIdentity; onSi
   function saveSettings(next: AppearanceSettings) { localStorage.setItem(settingsKey, JSON.stringify(next)); setSettings(next); }
   let content: React.ReactNode;
   if (page === "dashboard") content = <DashboardPage navigate={setPage}/>;
-  else if (page === "users") content = <UsersPage/>;
+  else if (page === "users") content = <UsersPage identity={identity}/>;
   else if (page === "portfolios") content = <PortfoliosPage/>;
   else if (page === "market") content = <MarketDataPage/>;
   else if (page === "reports") content = <ReportsPage/>;

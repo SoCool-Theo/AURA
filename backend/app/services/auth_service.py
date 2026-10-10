@@ -69,13 +69,13 @@ class AuthService:
             verify_dummy_password(plaintext_password)
             raise InvalidCredentialsError(_INVALID_CREDENTIALS_MESSAGE)
 
-        if not verify_password(plaintext_password, user.password_hash):
+        if not verify_password(plaintext_password, user.password_hash) or user.is_suspended:
             raise InvalidCredentialsError(_INVALID_CREDENTIALS_MESSAGE)
         return user
 
     def create_access_token_for_user(self, user: User) -> str:
         """Delegate access-token issuance using the User UUID as subject."""
-        return create_access_token(user.id)
+        return create_access_token(user.id, auth_version=user.auth_version or 0)
 
     def update_profile(
         self,
