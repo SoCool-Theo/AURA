@@ -126,6 +126,16 @@ VITE_API_BASE_URL=http://127.0.0.1:8000
 Vite reads this file when the frontend development server starts. Restart Vite
 after changing the file.
 
+## Admin website environment
+
+For the separate admin website, copy `Admin/.env.example` to ignored
+`Admin/.env.local`. Set `VITE_API_BASE_URL` to the existing FastAPI HTTP(S) origin
+only (default `http://127.0.0.1:8000`), then restart its Vite server. Development
+forwards `/api` to that backend. The customer and admin forms use the same login
+API; only a persisted administrator role can enter the admin website. Production
+needs its own reverse proxy or a reachable backend origin and exact-origin CORS.
+See `Admin/README.md` for Windows commands and disposable acceptance verification.
+
 ## Generated database configuration
 
 `.env.test-database` contains only non-secret Compose values:

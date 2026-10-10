@@ -1,5 +1,7 @@
 export type PageKey = "dashboard" | "users" | "portfolios" | "market" | "reports" | "health" | "ai" | "activity" | "settings";
 
+export type AppearanceSettings = { appearance: "dark" | "light" | "system"; compactSidebar: boolean };
+
 export type UserRecord = {
   id: number;
   name: string;

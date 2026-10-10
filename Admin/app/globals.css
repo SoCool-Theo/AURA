@@ -53,3 +53,22 @@
 @media (max-width:520px){.stat-grid,.stat-grid.four{grid-template-columns:1fr}.stat-card{min-height:100px}.admin-content{padding:12px}.aura-card{padding:14px}.page-controls{flex-direction:column}.page-search{width:100%}.settings-save-bar{align-items:flex-start;flex-direction:column}.settings-save-bar button{width:100%}.setting-row{align-items:flex-start}.setting-row .setting-select{min-width:125px}.full-activity article{grid-template-columns:38px 1fr}.full-activity time{grid-column:2}.top-actions{gap:6px}.health-hero,.coming-soon{padding:28px 18px}}
 
 .chart-box .recharts-default-tooltip{background:var(--popover)!important;border-color:var(--border)!important;color:var(--popover-foreground)!important}.chart-box .recharts-tooltip-label{color:var(--popover-foreground)}.avatar{color:var(--primary-foreground)}
+
+/* API-backed states reuse the existing Aura palette and component layout. */
+.admin-auth { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.admin-auth .aura-card { width: min(100%, 460px); }
+.admin-auth .settings-form { grid-template-columns: 1fr; }
+.api-message { color: var(--muted-foreground); padding: 16px 0; line-height: 1.6; }
+.api-message p { margin-bottom: 12px; }
+.api-caption { color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
+.api-controls { flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 16px; }
+.api-filter { display: grid; gap: 6px; color: var(--muted-foreground); font-size: 12px; max-width: 240px; }
+.api-filter select { height: 36px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); border-radius: 8px; padding: 0 10px; }
+.api-pagination { margin-top: 16px; gap: 12px; flex-wrap: wrap; color: var(--muted-foreground); font-size: 13px; }
+.status-pill.api-status-healthy, .status-pill.api-status-current, .status-pill.api-status-success, .status-pill.api-status-online { color: var(--success); background: var(--success-bg); }
+.status-pill.api-status-stale, .status-pill.api-status-partial, .status-pill.api-status-degraded { color: var(--warning); background: var(--warning-bg); }
+.status-pill.api-status-failed, .status-pill.api-status-unavailable, .status-pill.api-status-offline, .status-pill.api-status-missing { color: var(--destructive); background: var(--danger-bg); }
+.status-pill.api-status-unknown, .status-pill.api-status-not_checked, .status-pill.api-status-never { color: var(--muted-foreground); background: var(--muted); }
+.data-pairs b { overflow-wrap: anywhere; }
+.admin-identity strong { overflow-wrap: anywhere; }
+.top-actions .date-button { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; white-space: nowrap; }

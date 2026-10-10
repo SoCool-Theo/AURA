@@ -1,38 +1,18 @@
 "use client";
-
-import { useMemo, useState } from "react";
-import { Plus, Search, UserCheck, UserX } from "lucide-react";
-import { toast } from "sonner";
+import { useCallback, useState } from "react";
+import { Plus, Search } from "lucide-react";
+import { adminApi } from "@/lib/adminApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SectionCard } from "../SectionCard";
-import type { UserRecord } from "../types";
+import { ApiState, Filter, Pagination, humanize, utc } from "../ApiState";
+import { useAdminQuery } from "../useAdminQuery";
 
-export function UsersPage({ users, setUsers }: { users: UserRecord[]; setUsers: React.Dispatch<React.SetStateAction<UserRecord[]>> }) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"Investor" | "Admin">("Investor");
-  const filtered = useMemo(() => users.filter(u => `${u.name} ${u.email}`.toLowerCase().includes(query.toLowerCase())), [query, users]);
-
-  function createUser() {
-    if (!name.trim() || !email.includes("@")) { toast.error("Enter a name and valid email."); return; }
-    setUsers(current => [...current, { id: Date.now(), name: name.trim(), email: email.trim(), role, status: "Active", portfolios: 0 }]);
-    setName(""); setEmail(""); setRole("Investor"); setOpen(false); toast.success("User created.");
-  }
-  function toggleStatus(id: number) {
-    setUsers(current => current.map(u => u.id === id ? { ...u, status: u.status === "Active" ? "Suspended" : "Active" } : u));
-    toast.success("User status updated.");
-  }
-
-  return <div className="page-stack">
-    <div className="page-controls"><label className="page-search"><Search/><Input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by name or email"/></label>
-      <Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button className="gradient-button"><Plus/>Add New User</Button></DialogTrigger><DialogContent className="admin-dialog"><DialogHeader><DialogTitle>Create user</DialogTitle><DialogDescription>Add an investor or another administrator.</DialogDescription></DialogHeader><div className="form-grid"><label>Full name<Input value={name} onChange={e=>setName(e.target.value)} placeholder="Alex Morgan"/></label><label>Email address<Input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="alex@example.com"/></label><label>Role<Select value={role} onValueChange={v=>setRole(v as "Investor"|"Admin")}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="Investor">Investor</SelectItem><SelectItem value="Admin">Admin</SelectItem></SelectContent></Select></label></div><DialogFooter><Button variant="outline" onClick={()=>setOpen(false)}>Cancel</Button><Button onClick={createUser}>Create user</Button></DialogFooter></DialogContent></Dialog>
-    </div>
-    <SectionCard title="User Accounts" description={`${filtered.length} accounts shown`}><Table><TableHeader><TableRow><TableHead>User</TableHead><TableHead>Role</TableHead><TableHead>Portfolios</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader><TableBody>{filtered.map(u=><TableRow key={u.id}><TableCell><div className="table-user"><span>{u.name.split(" ").map(x=>x[0]).join("").slice(0,2)}</span><div><b>{u.name}</b><small>{u.email}</small></div></div></TableCell><TableCell>{u.role}</TableCell><TableCell>{u.portfolios}</TableCell><TableCell><span className={`status-pill ${u.status.toLowerCase()}`}>{u.status}</span></TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={()=>toggleStatus(u.id)}>{u.status === "Active" ? <UserX/> : <UserCheck/>}{u.status === "Active" ? "Suspend" : "Activate"}</Button></TableCell></TableRow>)}</TableBody></Table></SectionCard>
-  </div>;
+export function UsersPage() {
+  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState({ q: "", role: "", account_type: "", offset: 0 });
+  const load = useCallback((signal: AbortSignal) => adminApi.users({ ...filters, limit: 25 }, signal), [filters]);
+  const query = useAdminQuery(load);
+  return <div className="page-stack"><form className="page-controls api-controls" onSubmit={event => { event.preventDefault(); setFilters(value => ({ ...value, q: search.trim(), offset: 0 })); }}><label className="page-search"><Search/><Input value={search} maxLength={100} onChange={event => setSearch(event.target.value)} placeholder="Search by name or email" aria-label="Search users"/></label><Button type="submit" variant="outline">Search</Button><Filter label="Role" value={filters.role} options={["CUSTOMER", "ADMIN"]} onChange={role => setFilters(value => ({ ...value, role, offset: 0 }))}/><Filter label="Account type" value={filters.account_type} options={["REGISTERED", "LEGACY"]} onChange={account_type => setFilters(value => ({ ...value, account_type, offset: 0 }))}/><Button type="button" className="gradient-button" disabled title="User creation is not supported by the admin API"><Plus/>Add New User</Button></form><SectionCard title="User Accounts" description="Read-only account directory. Creation and suspension are not available."><ApiState {...query}/>{query.data && <><Table><TableHeader><TableRow><TableHead>User</TableHead><TableHead>Role</TableHead><TableHead>Portfolios</TableHead><TableHead>Account type</TableHead><TableHead>Created (UTC)</TableHead></TableRow></TableHeader><TableBody>{query.data.items.map(user => <TableRow key={user.id}><TableCell><div className="table-user"><span>{(user.display_name || user.email || "Legacy").slice(0, 2).toUpperCase()}</span><div><b>{user.display_name || "Unnamed account"}</b><small>{user.email || "No email · legacy account"}</small></div></div></TableCell><TableCell>{humanize(user.role)}</TableCell><TableCell>{user.portfolio_count}</TableCell><TableCell>{humanize(user.account_type)}</TableCell><TableCell>{utc(user.created_at)}</TableCell></TableRow>)}</TableBody></Table>{query.data.items.length === 0 && <p className="api-message">No accounts match these filters.</p>}<Pagination {...query.data} onChange={offset => setFilters(value => ({ ...value, offset }))}/></>}</SectionCard></div>;
 }

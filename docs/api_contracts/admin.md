@@ -3,8 +3,8 @@
 The backend supplies the access boundary, Audit Log storage/query API, Dashboard
 statistics, a read-only Users directory, Market Data inventory/status/history,
 System Health checks, and content-free AI Monitoring for Aura's separate admin
-website. User mutations, Market Data refresh requests, and admin web integration remain
-subsequent work.
+website. Its read-only frontend integration is implemented in `Admin/`.
+User mutations and Market Data refresh requests remain subsequent work.
 
 ## Persisted roles
 
@@ -579,7 +579,36 @@ missing/invalid credentials receive 401. Invalid filters receive 422. Database
 or persisted-metadata validation failures return sanitized 503 with
 `AI monitoring summary unavailable` or `AI monitoring requests unavailable`.
 Reads never create events, commit, resolve providers, contact providers, or run
-models. Frontend integration and live PostgreSQL/provider verification remain
-pending; automated coverage uses real synthetic SQLite/FastAPI/Bearer recording,
+models. Frontend integration is implemented; live PostgreSQL/provider verification
+remains pending. Automated coverage uses real synthetic SQLite/FastAPI/Bearer recording,
 fake providers/tools, constraint/rollback checks, and offline PostgreSQL migration
 and SQL compilation.
+
+## Admin website integration
+
+The separate admin frontend shares `/api/auth/login` with the customer clients
+and verifies `/api/admin/me` before exposing the workspace. Its tab-local token
+uses a distinct `aura.admin.accessToken` session-storage key. Tokens and passwords
+are not transferred via URLs; decoded token claims never grant admin access.
+The backend still resolves the persisted role for every protected request.
+401/403 remove the current frontend session; transient failures allow retry.
+
+The dashboard, account directory, market inventory/status/observations, system
+health, AI metadata, and audit log pages use the endpoints above. Lists use
+bounded server pagination and supported filters, rather than filtering only a
+loaded page. DTOs are runtime validated; malformed payloads show an error, never
+prototype data. Decimal prices remain strings. Date labels and filters use UTC.
+AI summary counts cover all retained events; request filters apply to the list.
+
+Portfolios and Reports show dashboard aggregate counts because there are no
+global admin detail/list/download/delete endpoints. No customer ownership
+endpoint is used to simulate global access. User creation/suspension, manual
+market refresh, account editing, security/session administration, notifications,
+and platform-setting mutations are unavailable. Only theme/compact-sidebar
+preferences are persisted locally. Existing colors and component styles remain.
+
+Development uses a Vite `/api` proxy to the configured backend origin. Production
+requires a configured backend origin plus exact-origin CORS, or a separately
+provided same-origin reverse proxy. See `Admin/README.md` for setup and the
+synthetic acceptance harness. This integration adds no backend routes, migrations,
+dependencies, model execution, or remote-data changes.

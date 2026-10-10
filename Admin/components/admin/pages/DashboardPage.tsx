@@ -1,68 +1,37 @@
 "use client";
-
-import { Activity, ArrowUpRight, BriefcaseBusiness, ChartNoAxesCombined, Check, Database, FileText, HeartPulse, ShieldCheck, TriangleAlert, Users } from "lucide-react";
+import { Activity, BriefcaseBusiness, Database, FileText, HeartPulse, Users } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { adminApi } from "@/lib/adminApi";
 import { SectionCard } from "../SectionCard";
+import { ApiState, humanize, utc } from "../ApiState";
+import { useAdminQuery } from "../useAdminQuery";
 import type { PageKey } from "../types";
 
-const bars = [
-  { day: "Mon", analyses: 40 }, { day: "Tue", analyses: 53 }, { day: "Wed", analyses: 69 },
-  { day: "Thu", analyses: 82 }, { day: "Fri", analyses: 95 }, { day: "Sat", analyses: 114 },
-];
-const trend = [
-  { day: "Aug 5", analyses: 36, reports: 12 }, { day: "Aug 10", analyses: 57, reports: 23 },
-  { day: "Aug 15", analyses: 45, reports: 18 }, { day: "Aug 20", analyses: 75, reports: 31 },
-  { day: "Aug 25", analyses: 61, reports: 27 }, { day: "Sep 2", analyses: 98, reports: 55 },
-];
-
-export function DashboardPage({ navigate, records, lastUpdate, onUpdate }: {
-  navigate: (page: PageKey) => void; records: number; lastUpdate: string; onUpdate: () => void;
-}) {
+const loadRecentActivity = (signal: AbortSignal) => adminApi.audit({ limit: 4 }, signal);
+export function DashboardPage({ navigate }: { navigate: (page: PageKey) => void }) {
+  const overview = useAdminQuery(adminApi.dashboard);
+  const inventory = useAdminQuery(adminApi.inventory);
+  const market = useAdminQuery(adminApi.marketStatus);
+  const health = useAdminQuery(adminApi.health);
+  const activity = useAdminQuery(loadRecentActivity);
+  const data = overview.data;
+  if (!data) return <SectionCard title="Dashboard"><ApiState {...overview}/></SectionCard>;
   const stats = [
-    ["Total Users", "324", "+8 this week", Users, "cyan"],
-    ["Total Portfolios", "587", "+14 this week", BriefcaseBusiness, "purple"],
-    ["Analyses Today", "43", "+12 vs yesterday", ChartNoAxesCombined, "cyan"],
-    ["Reports", "1,203", "+56 this week", FileText, "orange"],
-    ["System Health", "Healthy", "All systems operational", HeartPulse, "green"],
+    ["Total Users", data.users.total.toLocaleString(), `${data.users.new_last_7_days} new in 7 days`, Users, "cyan"],
+    ["Total Portfolios", data.portfolios.total.toLocaleString(), `${data.portfolios.new_last_7_days} new in 7 days`, BriefcaseBusiness, "purple"],
+    ["Reports Saved Today", data.saved_reports.today.toLocaleString(), `${data.saved_reports.yesterday} yesterday · UTC`, Activity, "cyan"],
+    ["Saved Reports", data.saved_reports.total.toLocaleString(), `${data.saved_reports.last_7_days} retained from last 7 days`, FileText, "orange"],
+    ["System Health", health.data ? humanize(health.data.status) : health.error ? "Unavailable" : "Checking", "Partial check coverage", HeartPulse, health.data?.status === "healthy" ? "green" : "orange"],
   ] as const;
-  return (
-    <div className="page-stack">
-      <div className="stat-grid">
-        {stats.map(([label, value, change, Icon, tone]) => (
-          <article className={`stat-card ${tone}`} key={label}><div className="stat-icon"><Icon /></div><div><span>{label}</span><strong>{value}</strong><small>{change}</small></div></article>
-        ))}
-      </div>
-
-      <div className="dashboard-grid">
-        <SectionCard title="Market Data Health" action={<Button variant="outline" size="sm" onClick={() => navigate("market")}>View details</Button>}>
-          <div className="market-summary">
-            <div className="data-pairs"><p><span>Data source</span><b>Yahoo Finance <Badge>Connected</Badge></b></p><p><span>Last successful update</span><b>{lastUpdate}</b></p><p><span>Tracked symbols</span><b>17</b></p><p><span>Total records</span><b>{records.toLocaleString()}</b></p></div>
-            <div className="orbit"><Database /><i /><i /><i /></div>
-          </div>
-          <Button className="gradient-button" onClick={onUpdate}><Database /> Update Market Data <ArrowUpRight /></Button>
-        </SectionCard>
-
-        <SectionCard title="Attention Required">
-          <div className="attention-list"><button onClick={() => navigate("market")}><TriangleAlert /><span><b>Market data may be outdated</b><small>Last successful update was several hours ago.</small></span></button><button onClick={() => navigate("market")}><TriangleAlert /><span><b>2 symbols have missing data</b><small>BTC-USD and GLD have data gaps.</small></span></button><div><Check /><span><b>0 failed updates</b><small>All scheduled jobs completed.</small></span></div></div>
-        </SectionCard>
-
-        <SectionCard title="Analyses Overview" description="Last 7 days">
-          <div className="chart-number"><strong>285</strong><span>↑ 12.5%</span></div>
-          <div className="chart-box small"><ResponsiveContainer width="100%" height="100%"><BarChart data={bars}><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="day" stroke="var(--muted-foreground)" fontSize={12} /><YAxis stroke="var(--muted-foreground)" fontSize={12} /><Tooltip /><Bar dataKey="analyses" fill="var(--primary)" radius={[5,5,0,0]} /></BarChart></ResponsiveContainer></div>
-        </SectionCard>
-      </div>
-
-      <div className="dashboard-grid lower">
-        <SectionCard title="Recent Analyses" action={<Button variant="ghost" size="sm" onClick={() => navigate("reports")}>View all</Button>}>
-          <div className="row-list">{[["Tech Portfolio","Yan Lin Oo","72"],["Balanced Portfolio","Alex Morgan","48"],["Retirement Fund","Sarah Lee","32"],["Long Term Growth","John Smith","68"]].map(x => <button key={x[0]} onClick={() => navigate("reports")}><Activity /><span><b>{x[0]}</b><small>{x[1]}</small></span><strong className={Number(x[2]) > 65 ? "risk-high" : "risk-low"}>{x[2]}</strong></button>)}</div>
-        </SectionCard>
-        <SectionCard title="Most Analyzed Assets" description="Last 7 days"><div className="asset-list">{[["NVDA",87],["AAPL",76],["TSLA",63],["SPY",59],["MSFT",52]].map(([name,count], i) => <p key={String(name)}><i style={{background:["var(--primary)","var(--blue)","var(--purple)","var(--warning)","var(--primary-hover)"][i]}}/><b>{name}</b><span>{count} analyses</span></p>)}</div></SectionCard>
-        <SectionCard title="Recent Admin Activity" action={<Button variant="ghost" size="sm" onClick={() => navigate("activity")}>View all</Button>}><div className="activity-mini">{["Market data update completed","Viewed system health report","User account created","Settings updated"].map((x,i)=><p key={x}><span>{i === 0 ? <Database /> : i === 1 ? <ShieldCheck /> : i === 2 ? <Users /> : <Activity />}</span><b>{x}</b><small>{i+1}h</small></p>)}</div></SectionCard>
-      </div>
-
-      <SectionCard title="Analyses Trend" description="Last 30 days"><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><AreaChart data={trend}><defs><linearGradient id="purple" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--primary)" stopOpacity=".5"/><stop offset="1" stopColor="var(--primary)" stopOpacity="0"/></linearGradient></defs><CartesianGrid stroke="var(--border)" vertical={false}/><XAxis dataKey="day" stroke="var(--muted-foreground)"/><YAxis stroke="var(--muted-foreground)"/><Tooltip/><Area type="monotone" dataKey="analyses" stroke="var(--primary)" fill="url(#purple)" strokeWidth={3}/><Area type="monotone" dataKey="reports" stroke="var(--blue)" fill="transparent" strokeWidth={3}/></AreaChart></ResponsiveContainer></div></SectionCard>
-    </div>
-  );
+  const lastSeven = data.daily.slice(-7);
+  return <div className="page-stack"><p className="api-caption">Snapshot {utc(data.generated_at)} · Counts describe retained records.</p><div className="stat-grid">{stats.map(([label, value, change, Icon, tone]) => <article className={`stat-card ${tone}`} key={label}><div className="stat-icon"><Icon/></div><div><span>{label}</span><strong>{value}</strong><small>{change}</small></div></article>)}</div>
+    <div className="dashboard-grid"><SectionCard title="Market Data Health" action={<Button variant="outline" size="sm" onClick={() => navigate("market")}>View details</Button>}><ApiState {...inventory}/><ApiState {...market}/>{inventory.data && market.data && <><div className="market-summary"><div className="data-pairs"><p><span>Data status</span><b>{humanize(market.data.data_status)}</b></p><p><span>Last complete refresh</span><b>{utc(market.data.last_complete_at)}</b></p><p><span>Stored / required symbols</span><b>{inventory.data.stored_symbols} / {inventory.data.required_symbols}</b></p><p><span>Total records</span><b>{inventory.data.total_records.toLocaleString()}</b></p></div><div className="orbit"><Database/><i/><i/><i/></div></div><Button className="gradient-button" disabled title="A manual refresh API is not available"><Database/>Update Market Data</Button></>}</SectionCard>
+    <SectionCard title="Attention Required"><ApiState {...health}/>{health.data && <div className="attention-list">{health.data.checks.filter(check => check.status !== "healthy").map(check => <button key={check.component} onClick={() => navigate("health")}><HeartPulse/><span><b>{humanize(check.component)} · {humanize(check.status)}</b><small>{humanize(check.reason)}</small></span></button>)}{health.data.checks.every(check => check.status === "healthy") && <p>All reported checks are healthy. Coverage is partial.</p>}</div>}</SectionCard>
+    <SectionCard title="Saved Reports Overview" description="Last 7 UTC days"><div className="chart-number"><strong>{data.saved_reports.last_7_days}</strong><span>retained reports</span></div><div className="chart-box small"><ResponsiveContainer width="100%" height="100%"><BarChart data={lastSeven}><CartesianGrid stroke="var(--border)" vertical={false}/><XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={12} tickFormatter={value => String(value).slice(5)}/><YAxis stroke="var(--muted-foreground)" fontSize={12} allowDecimals={false}/><Tooltip/><Bar dataKey="saved_reports" name="Saved reports" fill="var(--primary)" radius={[5, 5, 0, 0]}/></BarChart></ResponsiveContainer></div></SectionCard></div>
+    <div className="dashboard-grid lower"><SectionCard title="Retained Analysis Records" action={<Button variant="ghost" size="sm" onClick={() => navigate("reports")}>View totals</Button>}><div className="data-pairs"><p><span>Reports saved today</span><b>{data.saved_reports.today}</b></p><p><span>Simulations saved today</span><b>{data.saved_simulations.today}</b></p><p><span>Total saved simulations</span><b>{data.saved_simulations.total}</b></p></div><p className="api-caption">Individual report browsing is not available to administrators yet.</p></SectionCard>
+    <SectionCard title="Required Instrument Coverage" description="Stored observations; historical gaps are not assessed."><ApiState {...inventory}/>{inventory.data && <div className="data-pairs"><p><span>Current</span><b>{inventory.data.current_required_symbols}</b></p><p><span>Stale</span><b>{inventory.data.stale_required_symbols}</b></p><p><span>Missing</span><b>{inventory.data.missing_required_symbols}</b></p></div>}</SectionCard>
+    <SectionCard title="Recent Admin Activity" action={<Button variant="ghost" size="sm" onClick={() => navigate("activity")}>View all</Button>}><ApiState {...activity}/>{activity.data && <div className="activity-mini">{activity.data.items.map(event => <p key={event.id}><span><Users/></span><b>{humanize(event.action)}</b><small>{utc(event.created_at)}</small></p>)}{activity.data.items.length === 0 && <p>No retained audit events.</p>}</div>}</SectionCard></div>
+    <SectionCard title="Saved Records Trend" description={`${data.window_start} to ${data.window_end} · UTC`}><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data.daily}><defs><linearGradient id="reports-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--primary)" stopOpacity=".5"/><stop offset="1" stopColor="var(--primary)" stopOpacity="0"/></linearGradient></defs><CartesianGrid stroke="var(--border)" vertical={false}/><XAxis dataKey="date" stroke="var(--muted-foreground)" tickFormatter={value => String(value).slice(5)}/><YAxis stroke="var(--muted-foreground)" allowDecimals={false}/><Tooltip/><Area type="monotone" dataKey="saved_reports" name="Saved reports" stroke="var(--primary)" fill="url(#reports-gradient)" strokeWidth={3}/><Area type="monotone" dataKey="saved_simulations" name="Saved simulations" stroke="var(--blue)" fill="transparent" strokeWidth={3}/></AreaChart></ResponsiveContainer></div></SectionCard>
+  </div>;
 }

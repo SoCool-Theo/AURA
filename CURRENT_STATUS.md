@@ -3695,3 +3695,48 @@ remain separate follow-on work.
   remain unresolved; no claim of a fully passing admin test suite is made.
 - Work remains on `feat/admin-web-foundation`; unrelated untracked docs/report
   content is preserved. Admin web/shared-login/API integration remains next work.
+
+### Admin website connected to existing APIs — 2026-10-10
+
+- Added a dedicated runtime-validated client for shared login, admin identity,
+  dashboard, users, market inventory/status/observations, system health, AI
+  monitoring summary/requests, and persisted audit history. Uses existing Zod;
+  no dependencies or backend endpoints were added. Development proxies `/api`
+  to the configured FastAPI origin; production origin/reverse-proxy and CORS
+  requirements are documented in `Admin/README.md` and the environment example.
+- Added a themed sign-in/access guard that verifies persisted ADMIN permission
+  before exposing pages or saving the tab-local token. Rechecks restored tokens,
+  clears current sessions on protected 401/403, and offers retry for transient
+  failures. Sign-out unmounts data pages and clears local credentials. Passwords
+  are never retained; tokens are not transferred through URLs. Reads cancel on
+  navigation/filter changes, reject malformed data, and never use mock fallback.
+- Replaced dashboard/list/status prototype content with backend DTOs, UTC dates,
+  bounded server pagination and filters, exact decimal strings, measured health
+  observations, safe AI metadata, and actual bootstrap audit history. Retained
+  the navy/teal theme and existing components. Portfolios/Reports show supported
+  aggregates with honest limits; global browsing/deletion/downloads, user
+  mutations, manual refresh, notifications and platform/security mutations are
+  unavailable. Settings exposes verified read-only identity and local appearance
+  preferences only. Production components no longer import `mockData.ts`.
+- Verification: 15 new API-client/auth/contract tests passed; scoped ESLint passed;
+  production Vinext build passed with its existing large-chunk warning. Full Node
+  suite: 18 passed, 2 pre-existing failures (preview metadata and thin-scrollbar
+  utility). TypeScript retains only the 3 existing Cloudflare worker diagnostics.
+  Real FastAPI routers with generated synthetic accounts/in-memory SQLite passed
+  all 10 response contracts directly and through the Vite development proxy,
+  plus customer denial, directory pagination/search/
+  role/account-type filters, empty results, and cleared-session checks. The test
+  harness serializes its single SQLite connection; three additional
+  rounds of parallel dashboard reads passed after correcting that test-harness
+  concurrency issue. Browser
+  verification against the built frontend covers customer rejection, admin login,
+  dashboard and all connected pages, directory search/pagination/empty results,
+  AI empty filtering, read-only profile, session restoration, and logout/reload.
+  The test-only local preview serves built assets and proxies to the fixture;
+  development preview had a JavaScript-entry loading issue during browser checks.
+- Live PostgreSQL, real-provider, and hosting/deployment acceptance remain pending.
+  Prepared backend migrations were not applied. No real data, backend/customer
+  web/mobile code, architecture, model runs, staging, commit, push, or deployment
+  changed. Work stays on `feat/admin-web-foundation`; untracked docs/report is
+  preserved. Local fixture credentials/output are generated under ignored
+  `Admin/.wrangler` and are not committed.

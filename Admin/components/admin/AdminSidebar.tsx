@@ -2,6 +2,7 @@
 
 import { Activity, Bot, BriefcaseBusiness, ChartNoAxesCombined, Database, FileText, Gauge, HeartPulse, Settings, Users, X } from "lucide-react";
 import type { PageKey } from "./types";
+import type { AdminIdentity } from "@/lib/adminContracts";
 
 const items: Array<{ key: PageKey; label: string; icon: typeof Gauge; badge?: string }> = [
   { key: "dashboard", label: "Dashboard", icon: Gauge },
@@ -10,14 +11,17 @@ const items: Array<{ key: PageKey; label: string; icon: typeof Gauge; badge?: st
   { key: "market", label: "Market Data", icon: ChartNoAxesCombined },
   { key: "reports", label: "Reports", icon: FileText },
   { key: "health", label: "System Health", icon: HeartPulse },
-  { key: "ai", label: "AI Oversight", icon: Bot, badge: "Soon" },
+  { key: "ai", label: "AI Monitoring", icon: Bot },
   { key: "activity", label: "Activity Logs", icon: Activity },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
-export function AdminSidebar({ current, onNavigate, open, onClose, compact }: {
+export function AdminSidebar({ current, onNavigate, open, onClose, compact, identity }: {
   current: PageKey; onNavigate: (page: PageKey) => void; open: boolean; onClose: () => void; compact: boolean;
+  identity: AdminIdentity;
 }) {
+  const name = identity.display_name || identity.email;
+  const initials = name.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
   return (
     <aside className={`admin-sidebar ${open ? "is-open" : ""} ${compact ? "is-compact" : ""}`}>
       <div className="brand-row">
@@ -34,10 +38,10 @@ export function AdminSidebar({ current, onNavigate, open, onClose, compact }: {
       </nav>
       {!compact && (
         <div className="sidebar-bottom">
-          <div className="admin-identity"><div className="avatar">YL</div><div><strong>Yan Lin Oo</strong><span>System Admin</span></div></div>
+          <div className="admin-identity"><div className="avatar">{initials}</div><div><strong>{name}</strong><span>System Admin</span></div></div>
           <div className="quick-actions"><p>Quick actions</p><div>
-            <button onClick={() => onNavigate("market")}><Database />Update data</button>
-            <button onClick={() => onNavigate("users")}><Users />Add user</button>
+            <button onClick={() => { onNavigate("market"); onClose(); }}><Database />View data</button>
+            <button onClick={() => { onNavigate("users"); onClose(); }}><Users />View users</button>
           </div></div>
         </div>
       )}

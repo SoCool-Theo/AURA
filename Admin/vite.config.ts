@@ -1,5 +1,6 @@
 import vinext from "vinext";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
+import { apiOrigin } from "./lib/adminApi";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
 
@@ -33,7 +34,7 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ mode }) => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
@@ -42,11 +43,13 @@ export default defineConfig(async () => {
 
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import("@cloudflare/vite-plugin");
+  const backendOrigin = apiOrigin(loadEnv(mode, process.cwd(), "VITE_").VITE_API_BASE_URL ?? "http://127.0.0.1:8000") || "http://127.0.0.1:8000";
 
   return {
     server: {
       host: "0.0.0.0",
       allowedHosts: ["terminal.local"],
+      proxy: { "/api": { target: backendOrigin, changeOrigin: true } },
       ...(isCodexSeatbeltSandbox
         ? { watch: { useFsEvents: false, usePolling: true } }
         : {}),
