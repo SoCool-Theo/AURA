@@ -8,7 +8,14 @@ from pydantic import AwareDatetime, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.dependencies import CurrentAdmin, DatabaseSession, get_current_admin
-from app.schemas.admin import AdminIdentityResponse
+from app.schemas.admin import (
+    AdminAccountType,
+    AdminDashboardResponse,
+    AdminIdentityResponse,
+    AdminUserRole,
+    AdminUsersListResponse,
+    AdminUsersQuery,
+)
 from app.schemas.audit_log import (
     AuditAction,
     AuditActorKind,
@@ -17,6 +24,7 @@ from app.schemas.audit_log import (
     AuditTargetType,
 )
 from app.services.audit_log_service import AuditLogService
+from app.services.admin_overview_service import AdminOverviewService
 
 
 router = APIRouter(
@@ -35,6 +43,37 @@ def get_admin_identity(current_admin: CurrentAdmin) -> AdminIdentityResponse:
         display_name=current_admin.display_name,
         role=current_admin.role,
     )
+
+
+@router.get("/dashboard", response_model=AdminDashboardResponse)
+def get_admin_dashboard(
+    session: DatabaseSession, current_admin: CurrentAdmin
+) -> AdminDashboardResponse:
+    """Return counts of retained rows and a fixed 30-day UTC trend."""
+    try:
+        return AdminOverviewService(session).dashboard()
+    except (SQLAlchemyError, ValidationError) as error:
+        raise HTTPException(status_code=503, detail="Admin dashboard unavailable") from error
+
+
+@router.get("/users", response_model=AdminUsersListResponse)
+def list_admin_users(
+    session: DatabaseSession,
+    current_admin: CurrentAdmin,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
+    q: Annotated[str | None, Query(max_length=100)] = None,
+    role: Annotated[AdminUserRole | None, Query()] = None,
+    account_type: Annotated[AdminAccountType | None, Query()] = None,
+) -> AdminUsersListResponse:
+    """Return safe directory metadata; no account or portfolio mutations."""
+    query = AdminUsersQuery(
+        limit=limit, offset=offset, q=q, role=role, account_type=account_type
+    )
+    try:
+        return AdminOverviewService(session).list_users(query)
+    except (SQLAlchemyError, ValidationError) as error:
+        raise HTTPException(status_code=503, detail="Admin user directory unavailable") from error
 
 
 @router.get("/audit-logs", response_model=AuditLogListResponse)

@@ -1,9 +1,9 @@
-# Administrator access foundation
+# Administration backend contracts
 
-The backend establishes the access boundary and Audit Log storage/query API for
-Aura's separate admin website. Dashboard statistics, Users management, Market
-Data administration, AI Monitoring, and System Health aggregation require
-subsequent backend work before web integration.
+The backend supplies the access boundary, Audit Log storage/query API, Dashboard
+statistics, and a read-only Users directory for Aura's separate admin website.
+User mutations, Market Data administration, AI Monitoring, System Health
+aggregation, and admin web integration remain subsequent work.
 
 ## Persisted roles
 
@@ -166,3 +166,105 @@ after account deletion. PostgreSQL upgrade/downgrade SQL generation is offline;
 the bootstrap SQL lock is mocked. These checks do not establish live PostgreSQL
 migration or concurrent-lock acceptance. No real account was promoted and no
 application database was migrated; web/browser integration remains pending.
+
+## Dashboard statistics
+
+`GET /api/admin/dashboard` requires the persisted admin role and has no query
+parameters. It counts retained database rows and returns a fixed 30-day UTC
+calendar trend. No new migration or dependency is introduced for this endpoint.
+
+| Field | Meaning |
+| --- | --- |
+| `generated_at` | UTC request-generation timestamp |
+| `timezone` | Always `UTC` |
+| `window_start`, `window_end` | Inclusive calendar dates, today minus 29 days through today |
+| `users` | `total`, `customers`, `admins`, `registered`, `legacy`, `new_last_7_days` |
+| `portfolios` | `total`, `current`, `planned`, `legacy`, `new_last_7_days` |
+| `saved_reports`, `saved_simulations` | Each has `total`, `today`, `yesterday`, `last_7_days` |
+| `daily` | Exactly 30 ascending date rows, each with `date`, `new_users`, `new_portfolios`, `saved_reports`, `saved_simulations` |
+
+User totals include admin accounts and legacy owners without credentials.
+`REGISTERED` accounts have a non-null email (the existing database constraint
+requires a matching password hash); `LEGACY` account rows have no credentials.
+Account classification is distinct from a portfolio's holding mode.
+
+Each saved `analyses` row represents one report, not every analysis request.
+Each saved `simulations` row represents one simulation history entry. All
+portfolio modes and saved result versions are counted without reading their
+holdings or snapshots. Deleted rows disappear from these counts; these metrics
+are not durable lifetime activity counters. No analysis or forecast is run.
+
+Today/yesterday use UTC midnight bounds: start is inclusive, next midnight is
+exclusive. Seven-day metrics cover today plus six preceding calendar days.
+Thirty-day trends include today plus 29 preceding days and zero-fill missing
+dates. The current day is in progress. PostgreSQL date buckets explicitly use
+UTC regardless of the database session timezone. Aggregate each resource table
+independently before joining, so multiple reports or simulations do not
+multiply account/portfolio counts. Totals and trends share one SQL statement
+snapshot. `generated_at` is a request clock value, not a historical as-of filter.
+
+There is no invented active-user count, suspension state, AI request count,
+health verdict, growth percentage, most-analyzed-assets ranking, or customer
+risk/portfolio detail. These require separate tracking/contracts before UI
+integration. Existing market status and audit history endpoints remain separate.
+
+Missing/invalid credentials return `401`; customers return `403` before the
+overview service is called. Database/response-validation failures return
+sanitized `503`, `{"detail":"Admin dashboard unavailable"}`, without a fake
+healthy or zero-count fallback. The endpoint performs no writes or commits.
+
+## Read-only user directory
+
+`GET /api/admin/users` requires the persisted admin role and returns global
+directory metadata rather than granting access to account-owned resources.
+
+| Query | Meaning |
+| --- | --- |
+| `limit` | 1–100, default 25 |
+| `offset` | 0–10000, default 0 |
+| `q` | Up to 100 characters; trimmed, case-insensitive literal substring of email or display name; blank means no search |
+| `role` | Optional `CUSTOMER` or `ADMIN` |
+| `account_type` | Optional `REGISTERED` or `LEGACY` |
+
+Filters combine with AND. `%`, `_`, backslash, and SQL-like text in `q` are
+literal search input, not wildcard/SQL expressions. Default results include
+customers, admins, and legacy owners. Order is newest `created_at` first, then
+UUID descending for deterministic ties. Portfolio counts include all holding
+modes owned by each displayed account, without returning any portfolio contents.
+The page, matching total, and portfolio counts use one SQL statement with no
+per-user queries. An offset beyond the matches returns an empty `items` list
+and the matching `total`.
+
+```json
+{
+  "items": [
+    {
+      "id": "62a1279e-bc8d-4c89-876d-a09250b50395",
+      "email": "user@example.com",
+      "display_name": "Aura User",
+      "role": "CUSTOMER",
+      "account_type": "REGISTERED",
+      "created_at": "2026-10-10T00:00:00Z",
+      "updated_at": "2026-10-10T00:00:00Z",
+      "portfolio_count": 2
+    }
+  ],
+  "total": 1,
+  "limit": 25,
+  "offset": 0
+}
+```
+
+Legacy account emails and display names may be null. Timestamps are UTC. No
+password hashes, tokens, phone numbers, preferences, holdings, result snapshots,
+or fabricated active/suspended status are selected/returned by the directory
+query. There are no account-create/edit/delete, suspend, or role-change methods
+on this endpoint; existing customer self-service APIs retain their ownership
+checks.
+
+Authentication errors return `401`/`403`, invalid filters return `422`, and
+database/response-validation failures return sanitized `503`,
+`{"detail":"Admin user directory unavailable"}`. Reads do not write audit
+events, change accounts, or commit. Browser integration and live PostgreSQL
+acceptance remain pending; automated endpoint acceptance uses synthetic SQLite
+with real Bearer authentication, plus PostgreSQL SQL compilation checks.

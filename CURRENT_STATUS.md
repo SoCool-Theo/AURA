@@ -1280,8 +1280,9 @@ Search, Notifications, support/contact APIs, report export/share/delete
 actions, and user-level report/simulation history optimization.
 
 Aura's Admin web/backend integration remains a separate workstream. The backend
-role/authorization and Audit Log foundations are documented in the 2026-10-10
-progress entries below; Admin web integration and the remaining modules are pending.
+role/authorization, Audit Log, Dashboard statistics, and read-only Users APIs are
+documented in the 2026-10-10 progress entries below; Admin web integration and
+the remaining modules are pending.
 
 ## Backend AI Agent
 
@@ -3485,3 +3486,38 @@ remain separate follow-on work.
   frontend/mobile changes, model work, staging, commit, or push. The branch remains
   `feat/admin-web-foundation`; untracked docs/report content is preserved. Remaining
   admin module APIs and web integration are subsequent work.
+
+### Admin backend Dashboard statistics and Users directory — 2026-10-10
+
+- Added protected `GET /api/admin/dashboard` for retained account counts by
+  role/registered-vs-legacy type, portfolio counts by holding mode, saved report
+  and simulation totals/today/yesterday/last-seven-day counts, and a fixed 30-day
+  UTC daily trend. Missing dates are zero-filled. Saved analyses mean persisted
+  reports, not all analysis requests; deleted rows leave the counts. Independent
+  table aggregates prevent duplicate counting. Totals and trends share one SQL
+  statement, with explicit UTC PostgreSQL date buckets and half-open day bounds.
+- Added protected `GET /api/admin/users` with bounded pagination, trimmed literal
+  case-insensitive email/name search, and role/account-type filters. Results
+  include nullable legacy identity fields, UTC creation/update timestamps, and
+  per-account portfolio counts. Page, filtered total, and portfolio counts use
+  one query without per-user queries. Credential hashes, phones, preferences,
+  holdings, and result snapshots are not selected/returned by overview queries.
+- These APIs are read-only and reuse persisted admin authorization. Missing
+  credentials and customers receive 401/403; invalid filters receive 422;
+  database/response-validation failures receive sanitized 503. No active-user,
+  suspended-account, AI-request, risk-score, growth-percentage, or healthy-system
+  figures are invented. Admin frontend design and mock controls are untouched.
+- Verification: 483 relevant tests passed in 13.62 seconds, including synthetic
+  SQLite-backed real FastAPI/Bearer/role/query acceptance, UTC midnight and
+  seven/thirty-day boundaries, zero filling, literal wildcard/injection search,
+  stable pagination/empty-page totals, legacy rows and portfolio counts, safe
+  projections, fixed query counts/no writes, access revocation, PostgreSQL SQL
+  compilation/UTC buckets, and existing audit/auth/portfolio/database/schema/
+  bootstrap regressions. OpenAPI confirms 37 paths/48 operations; whitespace
+  checks passed. Live PostgreSQL and browser acceptance remain pending.
+- Updated admin/public contracts, contract index, and admin route inventory
+  regression. No new migration, dependency, application database write, frontend/
+  mobile change, model work, staging, commit, or push. Work remains on
+  `feat/admin-web-foundation`; unrelated docs/report content is preserved.
+  Market Data administration, AI Monitoring, System Health, user mutations,
+  and admin web/shared-login integration remain subsequent work.
