@@ -144,7 +144,10 @@ def test_admin_role_does_not_bypass_customer_portfolio_ownership(harness):
 def test_admin_openapi_requires_bearer_and_exposes_no_role_write():
     paths = {path: methods for path, methods in app.openapi()["paths"].items()
              if path.startswith("/api/admin")}
-    assert set(paths) == {"/api/admin/me", "/api/admin/audit-logs", "/api/admin/dashboard", "/api/admin/users"}
+    assert set(paths) == {
+        "/api/admin/me", "/api/admin/audit-logs", "/api/admin/dashboard", "/api/admin/users",
+        "/api/admin/market-data", "/api/admin/market-data/status", "/api/admin/market-data/observations",
+    }
     assert set(paths["/api/admin/me"]) == {"get"}
     operation = paths["/api/admin/me"]["get"]
     assert operation["security"] == [{"HTTPBearer": []}]

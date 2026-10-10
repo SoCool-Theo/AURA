@@ -1,5 +1,6 @@
 """Restricted administration entry point."""
 
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
@@ -16,6 +17,11 @@ from app.schemas.admin import (
     AdminUsersListResponse,
     AdminUsersQuery,
 )
+from app.schemas.admin_market_data import (
+    AdminMarketDataQuery,
+    AdminMarketInventoryResponse,
+    AdminMarketObservationsResponse,
+)
 from app.schemas.audit_log import (
     AuditAction,
     AuditActorKind,
@@ -23,8 +29,11 @@ from app.schemas.audit_log import (
     AuditLogQuery,
     AuditTargetType,
 )
-from app.services.audit_log_service import AuditLogService
+from app.schemas.market_data_status import MarketDataStatusResponse
+from app.services.admin_market_data_service import AdminMarketDataService
 from app.services.admin_overview_service import AdminOverviewService
+from app.services.audit_log_service import AuditLogService
+from app.services.market_data_status_service import MarketDataStatusService
 
 
 router = APIRouter(
@@ -74,6 +83,51 @@ def list_admin_users(
         return AdminOverviewService(session).list_users(query)
     except (SQLAlchemyError, ValidationError) as error:
         raise HTTPException(status_code=503, detail="Admin user directory unavailable") from error
+
+
+@router.get("/market-data", response_model=AdminMarketInventoryResponse)
+def get_admin_market_inventory(
+    session: DatabaseSession, current_admin: CurrentAdmin,
+) -> AdminMarketInventoryResponse:
+    """Read stored counts, dates, prices, and required-instrument freshness."""
+    try:
+        return AdminMarketDataService(session).inventory()
+    except (SQLAlchemyError, ValidationError) as error:
+        raise HTTPException(status_code=503, detail="Admin market-data inventory unavailable") from error
+
+
+@router.get("/market-data/status", response_model=MarketDataStatusResponse)
+def get_admin_market_status(
+    session: DatabaseSession, current_admin: CurrentAdmin,
+) -> MarketDataStatusResponse:
+    """Reuse the shared worker status without starting a refresh or provider call."""
+    try:
+        return MarketDataStatusService(session).get()
+    except (SQLAlchemyError, ValidationError) as error:
+        raise HTTPException(status_code=503, detail="Admin market-data status unavailable") from error
+
+
+@router.get("/market-data/observations", response_model=AdminMarketObservationsResponse)
+def list_admin_market_observations(
+    session: DatabaseSession,
+    current_admin: CurrentAdmin,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
+    symbol: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+    date_from: Annotated[date | None, Query()] = None,
+    date_to: Annotated[date | None, Query()] = None,
+) -> AdminMarketObservationsResponse:
+    """Browse exact stored observations, including internal FX and unexpected symbols."""
+    try:
+        query = AdminMarketDataQuery(
+            limit=limit, offset=offset, symbol=symbol, date_from=date_from, date_to=date_to,
+        )
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail="Invalid market-data filters") from error
+    try:
+        return AdminMarketDataService(session).observations(query)
+    except (SQLAlchemyError, ValidationError) as error:
+        raise HTTPException(status_code=503, detail="Admin market-data observations unavailable") from error
 
 
 @router.get("/audit-logs", response_model=AuditLogListResponse)

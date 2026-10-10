@@ -1,8 +1,9 @@
 # Administration backend contracts
 
 The backend supplies the access boundary, Audit Log storage/query API, Dashboard
-statistics, and a read-only Users directory for Aura's separate admin website.
-User mutations, Market Data administration, AI Monitoring, System Health
+statistics, a read-only Users directory, and Market Data inventory/status/history
+for Aura's separate admin website. User mutations, Market Data refresh requests,
+AI Monitoring, System Health
 aggregation, and admin web integration remain subsequent work.
 
 ## Persisted roles
@@ -268,3 +269,113 @@ database/response-validation failures return sanitized `503`,
 events, change accounts, or commit. Browser integration and live PostgreSQL
 acceptance remain pending; automated endpoint acceptance uses synthetic SQLite
 with real Bearer authentication, plus PostgreSQL SQL compilation checks.
+
+## Read-only Market Data administration
+
+All three endpoints below require the persisted admin role. They read PostgreSQL
+observations and existing refresh state, never CSV files or live provider prices.
+No new migration or dependency is needed. Authentication is the same shared
+Bearer login as the other admin modules; customers receive `403` before the
+market service runs.
+
+### Inventory
+
+`GET /api/admin/market-data` returns `checked_at` in UTC and:
+
+| Field | Meaning |
+| --- | --- |
+| `total_records` | All retained market observation rows, including internal FX and unexpected symbols |
+| `stored_symbols` | Number of distinct symbols with stored rows |
+| `required_symbols` | Current update universe: 17 user assets plus `THB=X` (18 total) |
+| `present_required_symbols` | Required symbols with at least one stored observation |
+| `current_required_symbols`, `stale_required_symbols`, `missing_required_symbols` | Partition of the required universe under the existing daily refresh freshness rule |
+| `unexpected_symbols` | Stored symbols outside the required update universe |
+| `instruments` | Required symbols in registry order, including missing ones, followed by unexpected symbols alphabetically |
+
+Each instrument includes `symbol`, `required_for_refresh`, `kind` (`asset`, `fx`,
+or `unknown`), `quote_currency`, `base_currency`, `total_records`,
+`first_price_date`, `latest_price_date`, `latest_adjusted_close`, `latest_volume`,
+`latest_source`, `age_days`, and `freshness`. Count/date ranges and the latest
+observation's price/volume/source come from one SQL statement, without querying
+each symbol separately. The `(symbol, date)` primary key prevents latest-row
+joins from multiplying counts. Missing instruments have zero records and null
+dates/latest-observation fields.
+
+Prices are serialized as decimal strings without conversion to float. Assets
+are quoted in USD; `THB=X` is THB per USD (`base_currency: USD`,
+`quote_currency: THB`). FX remains internal infrastructure, never a customer
+holding choice. Unsupported stored instruments retain their counts/prices but
+have `kind: unknown`, null currency metadata, and `freshness: unknown`; no
+supported-instrument freshness or currency is invented for them.
+
+Freshness reuses the worker's rule: completed dates must precede today UTC;
+crypto needs yesterday's observation, while stocks/ETFs/FX allow four calendar
+days. Present required instruments outside that rule are `stale`, including
+today/future dates. `age_days` is null for missing/future observations, zero for
+today. It describes price-date age, not a download timestamp. The rule does not
+prove gap-free trading-day history or model holidays. Missing required symbols
+remain visible even in an entirely empty database. No live provider connectivity,
+data-gap count, or completeness/coverage percentage is fabricated.
+
+### Worker status
+
+`GET /api/admin/market-data/status` reuses `MarketDataStatusService` and exactly
+the [shared daily status contract](market_data.md#daily-refresh-status). It
+reports the existing singleton's latest run, attempts, stored count, updated/
+failed symbols, sanitized error code, worker heartbeat/liveness, schedule, and
+required-instrument freshness. Worker liveness is distinct from observation
+freshness and provider connectivity. Its `stored_count` belongs to the last run,
+whereas inventory `total_records` counts all retained observations. This is the
+latest operational state, not durable multi-run history. Inventory and status
+are separate reads and can change between requests when the worker commits.
+
+### Observation history
+
+`GET /api/admin/market-data/observations` supports:
+
+| Query | Meaning |
+| --- | --- |
+| `limit` | 1–100, default 25 |
+| `offset` | 0–10000, default 0 |
+| `symbol` | Optional 1–64 characters, trimmed and uppercased; literal exact match, including internal FX or unexpected stored symbols |
+| `date_from`, `date_to` | Optional ISO calendar dates; inclusive observation-date bounds |
+
+Filters combine with AND. Blank symbols, invalid dates, and reversed bounds
+return `422`. Unknown symbols without stored matches return an empty page;
+wildcards and SQL-like text are literal input. Results sort by date descending,
+then symbol ascending for deterministic ties. A single SQL statement supplies
+the page and matching `total`; an offset beyond the last match retains that
+total. Missing trading dates are not interpolated or invented. Observations
+retain actual stored dates, including today/future anomalies, for admin review.
+
+```json
+{
+  "items": [{
+    "symbol": "THB=X",
+    "date": "2026-10-09",
+    "adjusted_close": "35.250000000000",
+    "volume": null,
+    "source": "Synthetic FX example"
+  }],
+  "total": 1,
+  "limit": 25,
+  "offset": 0
+}
+```
+
+Database or persisted-response validation failures return sanitized `503` with
+`Admin market-data inventory unavailable`, `Admin market-data status unavailable`,
+or `Admin market-data observations unavailable`, respectively. No successful
+empty/healthy fallback is used. Reads never write audit events, flush/commit,
+start a worker, download prices, or run analytics/models. No HTTP mutations are
+exposed. The prototype's manual update control requires a separate authenticated,
+audited request flow to the locked worker before integration; it is not connected
+by this phase. Historical refresh-run storage, gap-calendar analysis, provider
+probes, and frontend wiring remain subsequent work.
+
+Automated acceptance uses synthetic SQLite storage with real FastAPI/Bearer
+authorization, shared status/freshness checks, fixed query-count/read-only checks,
+and offline PostgreSQL SQL compilation. Decimal mapping also verifies full
+`Numeric(28,12)` precision with a synthetic Decimal fixture, because SQLite's
+numeric storage does not establish PostgreSQL numeric precision. Live PostgreSQL,
+real-provider, worker-deployment, and browser acceptance remain pending.

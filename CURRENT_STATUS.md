@@ -3521,3 +3521,49 @@ remain separate follow-on work.
   `feat/admin-web-foundation`; unrelated docs/report content is preserved.
   Market Data administration, AI Monitoring, System Health, user mutations,
   and admin web/shared-login integration remain subsequent work.
+
+### Admin backend Market Data inventory, status, and observation history — 2026-10-10
+
+- Added protected read-only `GET /api/admin/market-data` for retained observation
+  counts, per-symbol date ranges/latest price/volume/source, currency metadata,
+  and current/stale/missing required-instrument counts. All 17 supported assets
+  plus internal `THB=X` remain visible even without data. Unexpected stored
+  symbols are included with unknown currency/freshness rather than silently
+  omitted. Registry order is preserved; unexpected symbols follow alphabetically.
+  Aggregate counts and latest rows share one SQL statement without per-symbol
+  queries or join multiplication. Prices map directly to decimal JSON strings.
+- Added protected `GET /api/admin/market-data/status`, reusing the existing
+  shared worker status contract/service. Inventory freshness reuses the same
+  completed-day rule: crypto yesterday, stocks/ETFs/FX within four calendar days.
+  Today/future dates cannot claim current. Worker heartbeat, last-run stored count,
+  and total retained rows are distinct; neither proves provider connectivity,
+  gap-free history, or completeness percentages. Status and inventory are
+  separate requests and may observe different worker commits.
+- Added protected `GET /api/admin/market-data/observations` with bounded pagination,
+  trimmed uppercase literal symbol selection (including FX/unexpected data), and
+  inclusive date bounds. Newest date/symbol ordering is deterministic; page and
+  filtered total share one SQL statement, retaining totals beyond the last page.
+  Actual stored observations, including date anomalies, are returned without
+  interpolation, price downloads, portfolio calculations, or model work.
+- Customers receive 403 before services run; invalid filters return 422;
+  database/response-validation failures return sanitized 503. No writes, commits,
+  audit events, worker start, provider request, HTTP refresh mutation, migration,
+  or dependency was added. The frontend manual-update control and fabricated
+  gap/quality/update-history cards remain untouched. An audited manual-refresh
+  request flow to the locked worker and durable multi-run history are follow-on
+  work; this phase completes the read-only Market Data API surface only.
+- Verification: 1,243 relevant tests passed in 23.65 seconds, covering synthetic
+  SQLite-backed real FastAPI/Bearer/role/query acceptance, missing/empty/unexpected
+  inventory, freshness boundaries/FX, stored prices, inclusive filters, stable
+  pagination, sanitized failures, fixed read query counts/no commits or refresh,
+  exact Decimal mapping, PostgreSQL SQL compilation, and existing admin/audit/
+  auth/market-status/update/scheduler/database/schema/bootstrap regressions.
+  OpenAPI confirms 40 paths/51 operations; whitespace checks passed. SQLite does
+  not establish PostgreSQL numeric precision; the full precision mapping uses a
+  synthetic Decimal fixture. Live PostgreSQL, real-provider, deployed-worker,
+  and browser acceptance remain pending; no application database was changed.
+- Updated admin/public contracts, contract index, and route inventory regression.
+  Work remains on `feat/admin-web-foundation`; unrelated untracked docs/report
+  content is preserved. No frontend/mobile changes, staging, commit, or push.
+  AI Monitoring, System Health, user mutations, manual refresh, and admin web/
+  shared-login integration remain subsequent work.
