@@ -17,7 +17,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.core.config import settings
 from app.core.logging import configure_logging
-from app.scheduler.market_data_job import catch_up_market_data, run_scheduled_market_data_update
+from app.scheduler.market_data_job import catch_up_market_data, run_scheduled_market_data_update, process_manual_market_data_request
 from app.scheduler.market_data_scheduler import create_market_data_scheduler
 from app.scheduler.market_data_lock import WORKER_LOCK_KEY, market_data_lease
 from app.scheduler.market_data_worker import MarketDataWorker
@@ -33,7 +33,8 @@ def _run_worker(lease) -> None:
     worker.heartbeat()
     scheduled_time = settings.market_data_update_time_utc
     scheduler = create_market_data_scheduler(run_scheduled_market_data_update,
-        heartbeat_callable=worker.heartbeat, catch_up_callable=catch_up_market_data)
+        heartbeat_callable=worker.heartbeat, catch_up_callable=catch_up_market_data,
+        manual_callable=process_manual_market_data_request)
     heartbeat_failed = False
 
     def stop_on_heartbeat_failure(event) -> None:

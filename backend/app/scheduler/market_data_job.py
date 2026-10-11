@@ -6,6 +6,7 @@ import logging
 
 from ..core.instruments import MARKET_UPDATE_SYMBOLS
 from ..services.market_data_refresh_service import run_market_data_refresh as update_market_data_and_persist
+from ..services.market_data_refresh_service import MarketDataRefreshError
 from .market_data_lock import MarketDataRefreshBusyError
 
 
@@ -17,7 +18,7 @@ def run_scheduled_market_data_update() -> None:
     logger.info("Scheduled market-data update starting.")
     try:
         persisted_result = update_market_data_and_persist(
-            symbols=MARKET_UPDATE_SYMBOLS
+            symbols=MARKET_UPDATE_SYMBOLS, trigger="SCHEDULED"
         )
     except MarketDataRefreshBusyError:
         logger.info("Scheduled market-data update skipped: another update is active.")
@@ -49,6 +50,16 @@ def run_scheduled_market_data_update() -> None:
 def catch_up_market_data() -> None:
     """One refresh covers missed slots; do not replay every missed day."""
     try:
-        update_market_data_and_persist(symbols=MARKET_UPDATE_SYMBOLS, only_if_due=True)
+        update_market_data_and_persist(symbols=MARKET_UPDATE_SYMBOLS, only_if_due=True, trigger="CATCH_UP")
     except MarketDataRefreshBusyError:
         logger.info("Market-data catch-up skipped: another update is active.")
+
+
+def process_manual_market_data_request() -> None:
+    """Consume one persisted request through the same locked update pipeline."""
+    try:
+        update_market_data_and_persist(symbols=MARKET_UPDATE_SYMBOLS, queued_only=True)
+    except MarketDataRefreshBusyError:
+        return
+    except MarketDataRefreshError:
+        logger.error("Manual market-data refresh failed; consult persisted run status.")

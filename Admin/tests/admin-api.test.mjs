@@ -132,3 +132,31 @@ test("audit schema accepts safe status changes and rejects mismatched events", (
   assert.equal(contracts.auditSchema.parse({ items: [event], total: 1, limit: 25, offset: 0 }).items[0].action, "USER_SUSPENDED");
   assert.throws(() => contracts.auditSchema.parse({ items: [{ ...event, details: { previous_status: "SUSPENDED", new_status: "ACTIVE" } }], total: 1, limit: 25, offset: 0 }));
 });
+
+
+const refreshRun = { id: identity.id, trigger: "ADMIN", requested_by: identity.id, status: "queued", requested_at: "2026-10-11T00:00:00Z", started_at: null, finished_at: null, attempt_count: 0, stored_count: 0, updated_symbols: [], failed_symbols: [], error_code: null };
+test("manual refresh posts only a replayable request id and validates confirmation", async () => {
+  const { api } = setup(async (url, init) => {
+    assert.equal(url, "http://127.0.0.1:8000/api/admin/market-data/refresh");
+    assert.equal(init.method, "POST");
+    assert.deepEqual(JSON.parse(init.body), { request_id: identity.id });
+    return response(refreshRun, 202);
+  }, "token");
+  assert.deepEqual(await api.requestMarketRefresh(identity.id), refreshRun);
+  const wrong = setup(async () => response({ ...refreshRun, id: "00000000-0000-4000-8000-000000000002" }, 202), "token");
+  await assert.rejects(wrong.api.requestMarketRefresh(identity.id), /invalid refresh confirmation/);
+});
+test("manual refresh conflicts are allowlisted and keep the administrator session", async () => {
+  const { api } = setup(async () => response({ detail: "Market-data worker is offline" }, 409), "token");
+  await assert.rejects(api.requestMarketRefresh(identity.id), /worker is offline/);
+  assert.equal(api.readToken(), "token");
+  const privateFailure = setup(async () => response({ detail: "private database details" }, 503), "token");
+  await assert.rejects(privateFailure.api.requestMarketRefresh(identity.id), /currently unavailable/);
+});
+test("run history and audit reject invented states and non-daily refresh events", () => {
+  assert.equal(contracts.marketRefreshRunSchema.safeParse({ ...refreshRun, status: "live" }).success, false);
+  assert.equal(contracts.marketRefreshRunSchema.safeParse({ ...refreshRun, error_code: "private error" }).success, false);
+  const event = { id: identity.id, created_at: refreshRun.requested_at, actor_kind: "ADMIN", actor_user_id: identity.id, target_type: "MARKET_REFRESH", target_id: identity.id, action: "MARKET_REFRESH_REQUESTED", details: { mode: "daily" } };
+  assert.equal(contracts.auditSchema.safeParse({ items: [event], total: 1, limit: 25, offset: 0 }).success, true);
+  assert.equal(contracts.auditSchema.safeParse({ items: [{ ...event, target_type: "USER" }], total: 1, limit: 25, offset: 0 }).success, false);
+});

@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 import logging
 import time
+from uuid import uuid4
 
 import pandas as pd
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
@@ -18,6 +19,8 @@ from ..data_pipeline.providers import MarketDataProvider, MarketDataProviderErro
 from ..data_pipeline.providers.market_provider import _normalize_symbols
 from ..data_pipeline.updater import PROCESSED_DATA_PATH, RAW_DATA_PATH, _update_market_data_with_frame
 from ..database.repositories.market_data_refresh_repository import MarketDataRefreshRepository
+from ..database.repositories.market_data_refresh_run_repository import MarketDataRefreshRunRepository
+from ..database.models.user import User
 from ..scheduler.market_data_lock import REFRESH_LOCK_KEY, MarketDataLockLostError, MarketDataRefreshBusyError, market_data_lease
 from .market_data_service import MAX_LATEST_OBSERVATION_AGE_DAYS, MarketDataService
 from .market_data_update_service import PersistedMarketDataUpdateResult
@@ -68,6 +71,8 @@ def _run_market_data_refresh(
     raw_path: Path = RAW_DATA_PATH,
     processed_path: Path = PROCESSED_DATA_PATH,
     only_if_due: bool = False,
+    trigger: str = "OPERATOR",
+    queued_only: bool = False,
 ) -> PersistedMarketDataUpdateResult | None:
     """Lock across fetch/retries/write; commit observations and final state together.
 
@@ -89,11 +94,30 @@ def _run_market_data_refresh(
     with market_data_lease(REFRESH_LOCK_KEY) as lease:
         with Session(bind=lease.connection) as session:
             repository = MarketDataRefreshRepository(session)
+            runs = MarketDataRefreshRunRepository(session)
+            if runs.recover_interrupted(now):
+                repository.save(status="failed", last_finished_at=now, error_code="lock_lost")
+            pending = runs.pending() if queued_only else None
+            if queued_only and pending is None:
+                session.commit()
+                return None
+            if pending is not None:
+                actor = session.get(User, pending.requested_by)
+                if actor is None or actor.is_suspended or actor.role != "ADMIN" or not actor.email or not actor.password_hash:
+                    runs.save(pending.id, status="failed", finished_at=now, error_code="authorization_changed")
+                    session.commit()
+                    return None
             state = repository.get()
             if only_if_due and state and state.status == "success" and state.last_complete_slot and state.last_complete_slot >= slot:
                 dates = repository.latest_dates(MARKET_UPDATE_SYMBOLS)
                 if all(observation_is_current(symbol, dates.get(symbol), now.date()) for symbol in MARKET_UPDATE_SYMBOLS):
+                    session.commit()
                     return None
+            run_id = pending.id if pending is not None else uuid4()
+            if pending is not None:
+                runs.save(run_id, status="running", started_at=now)
+            else:
+                runs.create(id=run_id, trigger=trigger, status="running", requested_at=now, started_at=now)
             repository.save(status="running", last_attempt_at=now, last_finished_at=None,
                 attempt_count=0, stored_count=0, updated_symbols=[], failed_symbols=[], error_code=None)
             session.commit()
@@ -104,6 +128,7 @@ def _run_market_data_refresh(
                 lease.verify()
                 with Session(bind=lease.connection) as session:
                     MarketDataRefreshRepository(session).save(status="running", last_finished_at=None, attempt_count=attempt)
+                    MarketDataRefreshRunRepository(session).save(run_id, attempt_count=attempt)
                     session.commit()
                 result, data = _update_market_data_with_frame(symbols=selected,
                     start_date=start_date, end_date=cutoff, provider=provider,
@@ -135,6 +160,11 @@ def _run_market_data_refresh(
                     if full_complete:
                         values.update(last_complete_at=datetime.now(UTC), last_complete_slot=slot)
                     repository.save(**values)
+                    MarketDataRefreshRunRepository(session).save(run_id,
+                        status=values["status"] if not failed_symbols or attempt == settings.market_data_refresh_max_attempts else "running",
+                        finished_at=values["last_finished_at"] if not failed_symbols or attempt == settings.market_data_refresh_max_attempts else None,
+                        stored_count=stored_count, updated_symbols=list(result.symbols), failed_symbols=failed_symbols,
+                        error_code=values["error_code"])
                     session.commit()
                 summary = result if result.failed_symbols == tuple(failed_symbols) else replace(result, failed_symbols=tuple(failed_symbols))
                 last_result = PersistedMarketDataUpdateResult(summary, stored_count)
@@ -154,6 +184,10 @@ def _run_market_data_refresh(
                     with Session(bind=lease.connection) as session:
                         MarketDataRefreshRepository(session).save(status="partial" if last_result else "failed",
                             last_finished_at=datetime.now(UTC), error_code=code)
+                        terminal = not retryable or attempt == settings.market_data_refresh_max_attempts
+                        MarketDataRefreshRunRepository(session).save(run_id,
+                            status=("partial" if last_result else "failed") if terminal else "running",
+                            finished_at=datetime.now(UTC) if terminal else None, error_code=code)
                         session.commit()
                 except Exception:
                     raise MarketDataRefreshError("database_unavailable") from None
@@ -173,11 +207,16 @@ def run_market_data_refresh(
     raw_path: Path = RAW_DATA_PATH,
     processed_path: Path = PROCESSED_DATA_PATH,
     only_if_due: bool = False,
+    trigger: str = "OPERATOR",
+    queued_only: bool = False,
 ) -> PersistedMarketDataUpdateResult | None:
     """Sanitize initialization/connection failures as well as run failures."""
     try:
+        if trigger not in {"OPERATOR", "SCHEDULED", "CATCH_UP"}:
+            raise ValueError("Invalid market-data refresh trigger")
         return _run_market_data_refresh(symbols=symbols, start_date=start_date, end_date=end_date,
-            provider=provider, raw_path=raw_path, processed_path=processed_path, only_if_due=only_if_due)
+            provider=provider, raw_path=raw_path, processed_path=processed_path, only_if_due=only_if_due,
+            trigger=trigger, queued_only=queued_only)
     except (MarketDataRefreshBusyError, MarketDataRefreshError):
         raise
     except Exception as error:

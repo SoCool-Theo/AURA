@@ -23,6 +23,7 @@ def test_declarative_base_contains_registered_domain_tables() -> None:
         "ai_request_logs",
         "audit_logs",
         "market_data_refresh_state",
+        "market_data_refresh_runs",
         "notifications",
         "notification_preferences",
         "analyses",

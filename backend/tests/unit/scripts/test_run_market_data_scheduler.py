@@ -64,7 +64,7 @@ def test_runner_configures_constructs_logs_and_starts_once(
     configure.assert_called_once_with()
     create_scheduler.assert_called_once_with(scheduled_job,
         heartbeat_callable=runner.MarketDataWorker.return_value.heartbeat,
-        catch_up_callable=runner.catch_up_market_data)
+        catch_up_callable=runner.catch_up_market_data, manual_callable=runner.process_manual_market_data_request)
     scheduler.start.assert_called_once_with()
     scheduler.shutdown.assert_not_called()
     scheduled_job.assert_not_called()

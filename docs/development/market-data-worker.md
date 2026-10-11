@@ -62,6 +62,13 @@ and [Supabase direct/session/transaction connection guidance](https://supabase.c
   are not replayed individually. No persistent APScheduler job store is needed.
 - Full/current successful coverage skips redundant catch-up. Partial/stale runs
   are retried on later checks. Each invocation has its own bounded attempts.
+- After migration `c1d3e5f7a9b2`, this same worker also polls durable administrator
+  refresh requests every 10 seconds. It processes them under the existing update
+  lease and records run history for manual, scheduled, catch-up and operator runs.
+  The daily trigger, heartbeat and hourly catch-up remain unchanged. Restart the
+  worker after upgrading its code/schema. API startup never runs this consumer.
+  The admin website requires a current worker heartbeat before accepting a new
+  request; acceptance is not a completed refresh. Pending requests survive restart.
 - The pipeline still uses its existing full historical range (2010 onward by
   default), cleaning, validation, `(symbol,date)` upserts, and batching. This
   intentionally avoids introducing incremental adjusted-price reconciliation.

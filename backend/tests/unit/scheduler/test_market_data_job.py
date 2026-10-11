@@ -53,7 +53,7 @@ def test_success_calls_helper_once_and_logs_result(
         result = job_module.run_scheduled_market_data_update()
 
     assert result is None
-    update.assert_called_once_with(symbols=job_module.MARKET_UPDATE_SYMBOLS)
+    update.assert_called_once_with(symbols=job_module.MARKET_UPDATE_SYMBOLS, trigger="SCHEDULED")
     assert "Scheduled market-data update starting" in caplog.text
     assert "processed_rows=2" in caplog.text
     assert "stored_rows=2" in caplog.text
@@ -104,7 +104,7 @@ def test_helper_failure_is_logged_and_original_exception_is_reraised_once(
             job_module.run_scheduled_market_data_update()
 
     assert raised.value is failure
-    update.assert_called_once_with(symbols=job_module.MARKET_UPDATE_SYMBOLS)
+    update.assert_called_once_with(symbols=job_module.MARKET_UPDATE_SYMBOLS, trigger="SCHEDULED")
     assert "Scheduled market-data update failed" in caplog.text
 
 
@@ -113,5 +113,5 @@ def test_duplicate_daily_or_catchup_jobs_skip_without_error():
     with patch.object(job_module, "update_market_data_and_persist", side_effect=MarketDataRefreshBusyError()) as update:
         job_module.run_scheduled_market_data_update()
         job_module.catch_up_market_data()
-    assert update.call_args_list[0].kwargs == {"symbols": job_module.MARKET_UPDATE_SYMBOLS}
-    assert update.call_args_list[1].kwargs == {"symbols": job_module.MARKET_UPDATE_SYMBOLS, "only_if_due": True}
+    assert update.call_args_list[0].kwargs == {"symbols": job_module.MARKET_UPDATE_SYMBOLS, "trigger": "SCHEDULED"}
+    assert update.call_args_list[1].kwargs == {"symbols": job_module.MARKET_UPDATE_SYMBOLS, "only_if_due": True, "trigger": "CATCH_UP"}

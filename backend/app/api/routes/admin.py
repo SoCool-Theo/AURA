@@ -38,6 +38,9 @@ from app.schemas.audit_log import (
     AuditTargetType,
 )
 from app.schemas.market_data_status import MarketDataStatusResponse
+from app.schemas.admin_market_refresh import AdminMarketRefreshRequest, AdminMarketRefreshRunResponse, AdminMarketRefreshRunsResponse
+from app.services.admin_market_refresh_service import AdminMarketRefreshService, AdminMarketRefreshError
+from app.scheduler.market_data_lock import MarketDataRefreshBusyError
 from app.services.admin_market_data_service import AdminMarketDataService
 from app.services.admin_overview_service import AdminOverviewService
 from app.services.admin_user_service import AdminUserService, AdminUserStatusError
@@ -136,6 +139,34 @@ def get_admin_market_status(
         return MarketDataStatusService(session).get()
     except (SQLAlchemyError, ValidationError) as error:
         raise HTTPException(status_code=503, detail="Admin market-data status unavailable") from error
+
+
+@router.post("/market-data/refresh", response_model=AdminMarketRefreshRunResponse, status_code=202)
+def request_admin_market_refresh(request: AdminMarketRefreshRequest, session: DatabaseSession, current_admin: CurrentAdmin) -> AdminMarketRefreshRunResponse:
+    try:
+        response = AdminMarketRefreshService(session).request(current_admin, request)
+        session.commit()
+        return response
+    except AdminMarketRefreshError as error:
+        session.rollback()
+        headers = {"WWW-Authenticate": "Bearer"} if error.status_code == 401 else None
+        raise HTTPException(status_code=error.status_code, detail=str(error), headers=headers) from error
+    except MarketDataRefreshBusyError as error:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="A market-data refresh is already running") from error
+    except (SQLAlchemyError, ValidationError) as error:
+        session.rollback()
+        raise HTTPException(status_code=503, detail="Market-data refresh request unavailable") from error
+
+
+@router.get("/market-data/refresh-runs", response_model=AdminMarketRefreshRunsResponse)
+def list_admin_market_refresh_runs(session: DatabaseSession, current_admin: CurrentAdmin,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25, offset: Annotated[int, Query(ge=0, le=10000)] = 0,
+) -> AdminMarketRefreshRunsResponse:
+    try:
+        return AdminMarketRefreshService(session).history(limit=limit, offset=offset)
+    except (SQLAlchemyError, ValidationError) as error:
+        raise HTTPException(status_code=503, detail="Market-data refresh history unavailable") from error
 
 
 @router.get("/market-data/observations", response_model=AdminMarketObservationsResponse)

@@ -21,6 +21,7 @@ def create_market_data_scheduler(
     update_time: time | None = None,
     heartbeat_callable: Callable[[], Any] | None = None,
     catch_up_callable: Callable[[], Any] | None = None,
+    manual_callable: Callable[[], Any] | None = None,
 ) -> BlockingScheduler:
     """Return a stopped scheduler containing one daily UTC update job."""
     scheduled_time = update_time or settings.market_data_update_time_utc
@@ -45,4 +46,7 @@ def create_market_data_scheduler(
         scheduler.add_job(catch_up_callable, "interval", hours=1,
             next_run_time=datetime.now(UTC), id="market-data-catch-up",
             coalesce=True, max_instances=1, misfire_grace_time=None)
+    if manual_callable is not None:
+        scheduler.add_job(manual_callable, "interval", seconds=10,
+            id="market-data-manual-refresh", coalesce=True, max_instances=1, misfire_grace_time=None)
     return scheduler

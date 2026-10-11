@@ -9,9 +9,9 @@ from pydantic import AwareDatetime, Field, model_validator
 from .common import AuraBaseModel
 
 
-AuditAction = Literal["ADMIN_BOOTSTRAPPED", "USER_SUSPENDED", "USER_REACTIVATED"]
+AuditAction = Literal["ADMIN_BOOTSTRAPPED", "USER_SUSPENDED", "USER_REACTIVATED", "MARKET_REFRESH_REQUESTED"]
 AuditActorKind = Literal["OPERATOR", "ADMIN"]
-AuditTargetType = Literal["USER"]
+AuditTargetType = Literal["USER", "MARKET_REFRESH"]
 
 
 class AuditRoleChangeDetails(AuraBaseModel):
@@ -26,6 +26,10 @@ class AuditStatusChangeDetails(AuraBaseModel):
     new_status: Literal["ACTIVE", "SUSPENDED"]
 
 
+class AuditMarketRefreshDetails(AuraBaseModel):
+    mode: Literal["daily"] = "daily"
+
+
 class AuditEventCreate(AuraBaseModel):
     """Trusted internal callers only; not an HTTP request model."""
 
@@ -34,10 +38,16 @@ class AuditEventCreate(AuraBaseModel):
     action: AuditAction
     target_type: AuditTargetType
     target_id: UUID
-    details: AuditRoleChangeDetails | AuditStatusChangeDetails
+    details: AuditRoleChangeDetails | AuditStatusChangeDetails | AuditMarketRefreshDetails
 
     @model_validator(mode="after")
     def validate_actor(self) -> Self:
+        if self.action == "MARKET_REFRESH_REQUESTED":
+            if self.actor_kind != "ADMIN" or self.actor_user_id is None or self.target_type != "MARKET_REFRESH" or not isinstance(self.details, AuditMarketRefreshDetails):
+                raise ValueError("Refresh requests require administrator, refresh target and daily mode")
+            return self
+        if self.target_type != "USER":
+            raise ValueError("Account changes require a user target")
         if self.action == "ADMIN_BOOTSTRAPPED":
             if self.actor_kind != "OPERATOR" or self.actor_user_id is not None:
                 raise ValueError("First-admin provisioning requires an operator actor")

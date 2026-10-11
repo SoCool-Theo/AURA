@@ -4,7 +4,68 @@ The backend supplies the access boundary, Audit Log storage/query API, Dashboard
 statistics, a Users directory with account suspension/reactivation, Market Data inventory/status/history,
 System Health checks, and content-free AI Monitoring for Aura's separate admin
 website. Its frontend integration is implemented in `Admin/`.
-Account creation/deletion, role management and Market Data refresh requests remain subsequent work.
+Account creation/deletion and role management remain subsequent work. Manual
+Market Data refresh requests use the existing separate worker and tracked pipeline.
+
+## Manual market-data refresh and run history
+
+Migration `c1d3e5f7a9b2` adds `market_data_refresh_runs`, leaving observations,
+accounts, financial calculations and saved snapshots unchanged. History begins
+with this migration; earlier runs are not reconstructed.
+
+- `POST /api/admin/market-data/refresh` takes exactly `{ "request_id": "<UUID>" }`.
+  Returns HTTP 202 and the persisted run. This confirms acceptance, not successful
+  data acquisition. A replay of the same ID by the same administrator returns its
+  current outcome without another run or audit event, including while execution
+  is in progress or the worker is offline. Use the same ID after an uncertain
+  response. Request IDs belonging to another actor or trigger return 409.
+- `GET /api/admin/market-data/refresh-runs?limit=25&offset=0` returns `items`,
+  `total`, `limit` and `offset`. Limit is 1–100 and offset is 0–10000. Order is
+  requested UTC time descending, then UUID descending. All administrators can
+  read this safe operational directory; customer access is forbidden.
+- Run fields: `id`, `trigger` (`ADMIN`, `SCHEDULED`, `CATCH_UP`, `OPERATOR`),
+  `requested_by` (administrator UUID or null), `status` (`queued`, `running`,
+  `success`, `partial`, `failed`), UTC `requested_at`, nullable `started_at` and
+  `finished_at`, `attempt_count`, `stored_count`, `updated_symbols`,
+  `failed_symbols`, and allowlisted nullable `error_code`. No provider exception,
+  credentials, database URL or arbitrary error text is exposed.
+
+Request acceptance rechecks persisted administrator role, credentials, suspension
+and authenticated session generation under the existing users transaction lock.
+It requires a running worker heartbeat within 180 seconds and rejects future
+heartbeats. A transaction advisory lock uses the same key as the existing session
+refresh lease: scheduled/CLI execution causes immediate 409, and parallel admin
+requests serialize. One queued admin request is accepted at a time. Offline or
+stale workers return 409 without creating a request. Request and typed
+`MARKET_REFRESH_REQUESTED` audit event commit together; failures roll back both
+and return sanitized 503. The audit target is `MARKET_REFRESH`, target UUID is the
+request UUID, and details contain exactly `{ "mode": "daily" }`.
+
+The existing worker polls every 10 seconds, consumes one queued request under
+the shared refresh lease, rechecks the requesting account's active administrator
+permission, and uses the same full-universe daily fetch/clean/validate/retry/upsert
+pipeline. HTTP callers cannot choose provider, dates, symbols, paths or database.
+The daily UTC schedule remains unchanged. API startup never starts the worker or
+contacts a provider. Queued requests survive restart. Lost permissions produce
+`authorization_changed` without fetching. A running history row found while
+holding a newly acquired refresh lease is recorded as failed with `lock_lost`,
+and singleton status is repaired. Interrupted execution is not automatically
+reported as successful or retried as a new manual request.
+
+Observation writes, singleton outcome and history outcome commit together.
+Partial retry history remains running until the final outcome. Valid partial
+data preserves old observations for failed symbols. Failed writes roll back;
+safe failure bookkeeping is committed separately, as in the existing pipeline.
+Run history is retained independently of account records. Authorization errors
+remain 401/403; malformed/extra request fields return 422; request/history storage
+or response validation failures return sanitized 503.
+
+The Market Data page provides a themed confirmation, queued feedback, run history
+and visible-page polling every 10 seconds. It disables repeat/offline requests,
+preserves the request UUID on uncertain responses, and cancels transport on
+unmount without cancelling an accepted server job. The Dashboard update button
+opens Market Data for confirmation and progress. This refreshes completed daily
+observations through yesterday UTC; it does not provide streaming quotes.
 
 ## Persisted roles
 

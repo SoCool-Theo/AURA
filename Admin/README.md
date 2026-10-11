@@ -56,7 +56,7 @@ Admin/
 Dashboard, Users, Market Data, System Health, AI Monitoring, and Activity Logs now
 read the existing FastAPI admin endpoints. Portfolios and Reports show supported
 aggregate counts; global directories, deletion, report downloads, account creation,
-role changes, manual market refresh, notifications, and system/security mutations
+role changes, notifications, and system/security mutations
 remain unavailable. These controls never simulate a successful server operation.
 
 Users supports Active/Suspended status filtering and suspend/reactivate actions.
@@ -66,6 +66,23 @@ the directory reloads from the API. Your own suspension is disabled; backend
 checks also protect the last active administrator. Activity Logs displays both
 status transitions with the actual actor and target UUIDs. Reactivated users
 must sign in again because previous sessions remain invalid.
+
+Market Data now accepts manual refresh requests and shows persisted run history.
+The existing confirmation requests daily historical data through yesterday UTC.
+Accepted requests are queued for the separate worker; progress/results update
+every 10 seconds while this page is visible. Existing observations for failed
+instruments are preserved. Duplicate/running/offline requests return honest
+feedback. The Dashboard update button opens this page. No streaming prices or
+automatic schedule changes are introduced.
+
+Apply migration `c1d3e5f7a9b2` to the intended database and restart the separate
+worker with its existing configuration to process manual requests. New run
+history starts after that migration. Starting FastAPI alone does not run the
+worker. Hosting and remote migrations require separate authorization.
+The approved persistent local Docker test database is upgraded to this revision;
+all existing table contents were preserved and its new history table is empty.
+The worker remains stopped during local acceptance, so the normal page correctly
+disables manual updates until it is started deliberately.
 
 Settings shows the verified read-only identity. Only appearance and compact
 sidebar are saved locally, separately for each administrator on this device.
@@ -111,6 +128,20 @@ The default backend origin is `http://127.0.0.1:8000`; change
 an HTTP(S) origin only, without `/api`, credentials, query strings, or fragments.
 During development, requests to `/api` use Vite's reverse proxy, so the admin
 port does not require a new backend CORS entry.
+
+When you deliberately want real daily provider updates in the local Docker test
+database, start the separate worker from the repository root with the same local
+override. The installed dotenv CLI was checked and the resolved worker database
+configuration was validated as the approved Docker target; this worker command
+was not started during verification:
+
+```powershell
+.\.venv\Scripts\python.exe -m dotenv -f backend/.env.local run --override -- .\.venv\Scripts\python.exe -m backend.scripts.run_market_data_scheduler
+```
+
+This starts automatic catch-up/daily execution and the manual-request consumer;
+it makes real-provider calls. Do not use the bare worker command in a terminal
+that selects the saved remote configuration. Stop with Ctrl+C when finished.
 
 For production, set `VITE_API_BASE_URL` before building to a reachable backend
 origin and allow the admin website's exact origin in the backend CORS settings.
@@ -208,13 +239,19 @@ repository root:
 .\.venv\Scripts\python.exe Admin/tests/serve-postgres-fixture.py --check-only
 ```
 
+For browser testing of manual refresh without real provider calls, start the
+same fixture with `--manual-refresh-preview`, then start the built preview.
+This opt-in consumer uses synthetic daily observations and the isolated schema;
+it does not start the daily/catch-up scheduler. Stop it gracefully for cleanup.
+
 It creates a unique temporary schema with a search path that excludes `public`,
 runs the actual Alembic migration chain, checks preservation of a pre-existing
 customer, provisions the synthetic first administrator using the real service,
-and checks all ten admin routes, permissions, aggregates, audit persistence,
-decimal observations and concurrent reads. Cleanup removes only the schema it
+and checks the ten baseline admin read routes plus manual refresh/history,
+permissions, aggregates, audit persistence, decimal observations and concurrent
+reads. Cleanup removes only the schema it
 created. Fingerprints of all existing public tables are compared before/after.
-No provider calls, worker startup or model execution occur.
+No real-provider calls, production worker startup or model execution occur.
 
 For client/browser acceptance, omit `--check-only`, then start the existing built
 preview and client check in separate terminals from `Admin`:

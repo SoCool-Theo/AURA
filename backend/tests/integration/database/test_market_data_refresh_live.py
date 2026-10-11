@@ -22,7 +22,7 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.core.instruments import MARKET_UPDATE_SYMBOLS
 from backend.app.data_pipeline.updater import MarketDataUpdateResult
-from backend.app.database.models import MarketData, MarketDataRefreshState
+from backend.app.database.models import MarketData, MarketDataRefreshState, MarketDataRefreshRun
 from backend.app.database.repositories.market_data_refresh_repository import MarketDataRefreshRepository
 import backend.app.scheduler.market_data_lock as locks
 from backend.app.scheduler.market_data_worker import MarketDataWorker
@@ -52,6 +52,9 @@ def database(monkeypatch, tmp_path):
             with Operations.context(MigrationContext.configure(connection)):
                 revision.upgrade()
             MarketData.__table__.create(connection)
+            run_revision = importlib.import_module("backend.alembic.versions.c1d3e5f7a9b2_add_market_refresh_runs")
+            with Operations.context(MigrationContext.configure(connection)):
+                run_revision.upgrade()
         monkeypatch.setattr(locks, "create_database_engine", lambda *args, **kwargs: engine)
         monkeypatch.setattr(locks.settings, "database_url", raw)
         monkeypatch.setattr(locks.settings, "market_data_worker_database_url", None)
@@ -79,7 +82,7 @@ def database(monkeypatch, tmp_path):
 def test_real_migration_and_status_price_commit_then_restart_skip(database):
     engine, pipeline, result, frame = database
     with engine.connect() as connection:
-        assert set(inspect(connection).get_table_names()) == {"market_data", "market_data_refresh_state"}
+        assert set(inspect(connection).get_table_names()) == {"market_data", "market_data_refresh_state", "market_data_refresh_runs"}
     refresh.run_market_data_refresh()
     with Session(engine) as session:
         state = session.get(MarketDataRefreshState, 1)

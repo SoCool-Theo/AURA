@@ -77,6 +77,7 @@
 .status-pill.api-status-stale, .status-pill.api-status-partial, .status-pill.api-status-degraded { color: var(--warning); background: var(--warning-bg); }
 .status-pill.api-status-failed, .status-pill.api-status-unavailable, .status-pill.api-status-offline, .status-pill.api-status-missing { color: var(--destructive); background: var(--danger-bg); }
 .status-pill.api-status-unknown, .status-pill.api-status-not_checked, .status-pill.api-status-never { color: var(--muted-foreground); background: var(--muted); }
+.status-pill.api-status-queued, .status-pill.api-status-running { color: var(--primary); background: var(--muted); }
 .data-pairs b { overflow-wrap: anywhere; }
 .admin-identity strong { overflow-wrap: anywhere; }
 .top-actions .date-button { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; white-space: nowrap; }

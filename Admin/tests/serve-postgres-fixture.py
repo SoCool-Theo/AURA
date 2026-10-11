@@ -92,7 +92,7 @@ def seed(factory, password):
                      created_at=now - timedelta(days=index))
             for index in range(8)
         ])
-        session.add(MarketData(symbol="AAPL", date=now.date(), adjusted_close=Decimal("123.45678901"), volume=1000, source="Synthetic"))
+        session.add(MarketData(symbol="AAPL", date=now.date()-timedelta(days=1), adjusted_close=Decimal("123.45678901"), volume=1000, source="Synthetic"))
         session.add(AIRequestLog(
             started_at=now, duration_ms=1.25, outcome="REFUSED", http_status=200,
             provider_kind=None, provider_called=False, refusal_stage="INPUT",
@@ -142,6 +142,8 @@ def check_http(app, password, factory):
         assert statuses == [200] * 30
         print("PASS PostgreSQL: 30 concurrent reads with independent sessions", flush=True)
         check_account_status(client, password, factory, admin, customer)
+        from check_market_refresh import check_manual_refresh
+        check_manual_refresh(client, factory, admin, login("customer00@example.com"))
 
 
 def check_account_status(client, password, factory, admin, customer):
@@ -200,6 +202,7 @@ def check_account_status(client, password, factory, admin, customer):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check-only", action="store_true", help="Run checks and clean up without starting a server")
+    parser.add_argument("--manual-refresh-preview", action="store_true", help="Serve with a fixture-only synthetic refresh consumer; no real provider or scheduler")
     args = parser.parse_args()
     preflight = read_only_preflight()
     print(f"Verified PostgreSQL {preflight.postgresql_version}; public revision={preflight.alembic_revision}", flush=True)
@@ -213,6 +216,7 @@ def main():
     engine = None
     created = False
     credentials_written = False
+    preview = None
     output = ROOT / "Admin" / ".wrangler" / "admin-fixture-credentials.json"
     try:
         with control.begin() as connection:
@@ -227,7 +231,7 @@ def main():
         command.upgrade(config, "head")
         with engine.connect() as connection:
             assert connection.scalar(text("SELECT role FROM users WHERE id = :id"), {"id": UUID(int=99)}) == "CUSTOMER"
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "b0c2d4e6f8a1"
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "c1d3e5f7a9b2"
             assert connection.scalar(text("SELECT is_suspended FROM users WHERE id = :id"), {"id": UUID(int=99)}) is False
             assert connection.scalar(text("SELECT auth_version FROM users WHERE id = :id"), {"id": UUID(int=99)}) == 0
         print("PASS PostgreSQL: migration chain to head preserves existing customer role", flush=True)
@@ -251,12 +255,17 @@ def main():
         app.dependency_overrides[get_database_session] = isolated_session
         check_http(app, password, factory)
         if not args.check_only:
+            if args.manual_refresh_preview:
+                from check_market_refresh import SyntheticRefreshPreview
+                preview = SyntheticRefreshPreview()
             output.parent.mkdir(exist_ok=True)
             output.write_text(json.dumps({"admin": "admin@example.com", "customer": "customer00@example.com", "password": password}), encoding="utf-8")
             credentials_written = True
             print("PostgreSQL acceptance ready on http://127.0.0.1:8019 (isolated schema)", flush=True)
             uvicorn.run(app, host="127.0.0.1", port=8019, log_level="warning")
     finally:
+        if preview is not None:
+            preview.close()
         if engine is not None:
             engine.dispose()
         if created:

@@ -109,3 +109,15 @@ def test_deployment_scheduler_registers_heartbeat_and_immediate_hourly_catchup()
     assert jobs["market-data-catch-up"].next_run_time.tzinfo is not None
     assert all(entry.coalesce and entry.max_instances == 1 and entry.misfire_grace_time is None for entry in jobs.values())
     job.assert_not_called(); heartbeat.assert_not_called(); catchup.assert_not_called()
+
+
+def test_manual_poll_is_separate_from_daily_trigger_and_never_starts_on_import():
+    manual = Mock()
+    scheduler = create_market_data_scheduler(Mock(), manual_callable=manual)
+    jobs = {job.id: job for job in scheduler.get_jobs()}
+    assert jobs["market-data-manual-refresh"].func is manual
+    assert jobs["market-data-manual-refresh"].max_instances == 1
+    assert jobs["market-data-manual-refresh"].trigger.interval.total_seconds() == 10
+    assert isinstance(jobs[MARKET_DATA_JOB_ID].trigger, CronTrigger)
+    assert scheduler.state == STATE_STOPPED
+    manual.assert_not_called()

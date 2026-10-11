@@ -1,5 +1,6 @@
 """Deterministic reliability tests: never contact providers or production DBs."""
 
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
@@ -41,6 +42,10 @@ def harness(monkeypatch, tmp_path):
     repository.get.return_value = None
     repository.latest_dates.return_value = dict.fromkeys(service.MARKET_UPDATE_SYMBOLS, CUTOFF)
     monkeypatch.setattr(service, "MarketDataRefreshRepository", Mock(return_value=repository))
+    runs = Mock()
+    runs.pending.return_value = None
+    runs.recover_interrupted.return_value = 0
+    monkeypatch.setattr(service, "MarketDataRefreshRunRepository", Mock(return_value=runs))
     storage = Mock()
     storage.store.return_value = 18
     monkeypatch.setattr(service, "MarketDataService", Mock(return_value=storage))
@@ -52,7 +57,7 @@ def harness(monkeypatch, tmp_path):
     sleep = Mock()
     monkeypatch.setattr(service.time, "sleep", sleep)
     return SimpleNamespace(lease=lease, session=session, repository=repository, storage=storage,
-        result=result, frame=frame, pipeline=pipeline, sleep=sleep)
+        result=result, frame=frame, pipeline=pipeline, sleep=sleep, runs=runs)
 
 
 def test_full_update_uses_completed_utc_day_and_commits_status_with_prices(harness):
@@ -209,3 +214,44 @@ def test_schedule_slot_uses_utc_and_handles_before_schedule(hour, expected_day):
     ("ETH-USD", CUTOFF, True), ("THB=X", CUTOFF, True), ("AAPL", NOW.date(), False), ("AAPL", None, False)])
 def test_freshness_handles_weekends_crypto_and_missing_or_unfinished_dates(symbol, observed, current):
     assert service.observation_is_current(symbol, observed, NOW.date()) is current
+
+
+def test_empty_manual_queue_never_calls_provider(harness):
+    assert service.run_market_data_refresh(queued_only=True) is None
+    harness.pipeline.assert_not_called()
+    harness.repository.save.assert_not_called()
+
+
+def test_manual_request_uses_shared_pipeline_and_records_the_same_id(harness):
+    from uuid import uuid4
+    run_id = uuid4()
+    harness.runs.pending.return_value = SimpleNamespace(id=run_id, requested_by=uuid4())
+    harness.session.get.return_value = SimpleNamespace(is_suspended=False, role="ADMIN", email="admin@example.com", password_hash="synthetic")
+    result = service.run_market_data_refresh(queued_only=True)
+    assert result.stored_count == 18
+    harness.runs.create.assert_not_called()
+    assert all(call.args[0] == run_id for call in harness.runs.save.call_args_list)
+    assert harness.runs.save.call_args.kwargs["status"] == "success"
+    assert harness.runs.save.call_args.kwargs["stored_count"] == 18
+    assert harness.pipeline.call_args.kwargs["end_date"] == CUTOFF
+
+
+@pytest.mark.parametrize("actor", [None, SimpleNamespace(is_suspended=True), SimpleNamespace(is_suspended=False, role="CUSTOMER")])
+def test_changed_permission_rejects_queued_request_without_fetch(harness, actor):
+    from uuid import uuid4
+    harness.runs.pending.return_value = SimpleNamespace(id=uuid4(), requested_by=uuid4())
+    harness.session.get.return_value = actor
+    assert service.run_market_data_refresh(queued_only=True) is None
+    harness.pipeline.assert_not_called()
+    assert harness.runs.save.call_args.kwargs["error_code"] == "authorization_changed"
+
+
+def test_history_stays_running_during_partial_retry(harness):
+    partial = replace(harness.result, symbols=harness.result.symbols[:-1], failed_symbols=harness.result.symbols[-1:])
+    harness.pipeline.side_effect = [(partial, harness.frame.iloc[:-1]), (harness.result, harness.frame)]
+    service.run_market_data_refresh(trigger="SCHEDULED")
+    assert harness.runs.create.call_args.kwargs["trigger"] == "SCHEDULED"
+    saves = [call.kwargs for call in harness.runs.save.call_args_list if "status" in call.kwargs]
+    assert [item["status"] for item in saves] == ["running", "success"]
+    assert saves[0]["finished_at"] is None
+    assert saves[1]["finished_at"] == NOW

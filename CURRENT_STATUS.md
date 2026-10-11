@@ -3873,3 +3873,54 @@ remain separate follow-on work.
   migration, real-account status change, provider/model run, deployment, staging,
   commit or push occurred. Unrelated untracked files remain preserved on
   `feat/admin-web-foundation`.
+
+### Admin manual market-data refresh and run history — 2026-10-11
+
+- Added migration `c1d3e5f7a9b2` after `b0c2d4e6f8a1` for durable
+  `market_data_refresh_runs`. Added administrator-only POST request and paginated
+  GET history contracts. Requests accept a replayable UUID only; administrators
+  cannot select arbitrary symbols, ranges, providers, paths or databases.
+- Reused the existing separate worker and fetch/clean/validate/retry/upsert
+  pipeline. A 10-second worker poll consumes queued requests under the existing
+  refresh lease. Daily scheduling, heartbeat and hourly catch-up are unchanged.
+  API startup never starts provider work. Current heartbeat and persisted actor
+  checks, shared transaction/session advisory locking, queued-request exclusion,
+  idempotent replay and atomic typed audit protect request acceptance. Lost actor
+  permission prevents execution. Interrupted running rows and singleton status
+  are repaired under a newly acquired lease. Observation writes and final run
+  outcomes commit together; partial retries remain running until completion.
+- Connected Market Data to themed confirmation, queued feedback, actual run
+  history, visible-page polling, offline/busy disabling and uncertain-response
+  replay. Dashboard opens Market Data for confirmation/progress. Activity Logs
+  displays and filters `MARKET_REFRESH_REQUESTED` events with actual actor/target
+  UUIDs. Added theme-token colors for queued/running pills; retained the existing
+  page layout and customer/mobile behavior. No new dependencies or architecture.
+- Automated verification: 436 focused backend tests passed; 6 additional guarded
+  PostgreSQL refresh reliability tests passed with real session locks, rollback,
+  lost-connection recovery and disposable-schema cleanup. All 26 admin Node
+  tests, TypeScript, ESLint and production build passed. Restricted sandbox
+  native-runtime failures passed outside the sandbox. Existing large-chunk and
+  unknown route-classification build messages remain informational.
+- PostgreSQL acceptance verified migration/model consistency, all ten baseline
+  admin read contracts, permissions and shared-login suspension regressions,
+  competing refresh requests, idempotent replay under a held execution lock,
+  actual synthetic fetch/clean/validate/storage, partial FX preservation, forced
+  write rollback, interrupted recovery and persisted audit/history. Existing
+  API-client contracts/concurrent reads passed. An initial fixture assertion used
+  a token revoked by its preceding suspension test; fresh customer login fixed
+  the fixture. Docker was initially unavailable, then passed after it was running.
+- Browser verification used the built preview and real PostgreSQL-backed API
+  with a fixture-only synthetic request consumer: dashboard navigation, themed
+  cancel/focus restoration, request acceptance, polling to persisted success,
+  refresh audit filter, narrow responsive navigation and logout/reload passed.
+  No console errors/warnings were recorded. Saved a real Market Data screenshot
+  outside the repository. Temporary servers, credentials and schemas were removed
+  gracefully; fingerprints of all public table contents matched after cleanup.
+- Applied only the verified new migration to the approved local Docker public
+  schema. All existing table contents were preserved; the new history table is
+  empty. Normal application login, history reads, truthful offline status and
+  rejected offline requests passed with unchanged persistent data. Local worker
+  remains stopped. Existing ignored credentials/configuration and saved remote
+  configuration are retained. No real-provider calls, model runs, remote migration,
+  deployment, staging, commit or push occurred. Unrelated untracked files remain
+  preserved on `feat/admin-web-foundation`.

@@ -21,6 +21,7 @@ EXPECTED_TABLES = {
     "ai_request_logs",
     "audit_logs",
     "market_data_refresh_state",
+    "market_data_refresh_runs",
     "notifications",
     "notification_preferences",
     "users",

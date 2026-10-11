@@ -62,6 +62,14 @@ export const marketStatusSchema = z.object({
   observations: z.array(z.object({ symbol: z.string(), kind: z.enum(["asset", "fx"]), latest_price_date: date.nullable(), age_days: count.nullable(), is_current: z.boolean() })),
 });
 export type MarketStatus = z.infer<typeof marketStatusSchema>;
+export const marketRefreshRunSchema = z.object({
+  id: z.string().uuid(), trigger: z.enum(["ADMIN", "SCHEDULED", "CATCH_UP", "OPERATOR"]), requested_by: z.string().uuid().nullable(),
+  status: z.enum(["queued", "running", "success", "partial", "failed"]), requested_at: timestamp, started_at: nullableTime, finished_at: nullableTime,
+  attempt_count: count, stored_count: count, updated_symbols: z.array(z.string()), failed_symbols: z.array(z.string()),
+  error_code: z.enum(["provider_unavailable", "database_unavailable", "validation_failed", "update_failed", "lock_lost", "incomplete_coverage", "authorization_changed"]).nullable(),
+});
+export const marketRefreshRunsSchema = pageSchema(marketRefreshRunSchema);
+export type MarketRefreshRun = z.infer<typeof marketRefreshRunSchema>;
 export const healthSchema = z.object({
   checked_at: timestamp, status: z.enum(["healthy", "degraded", "unavailable", "unknown"]), coverage: z.literal("partial"),
   checks: z.array(z.object({
@@ -79,6 +87,7 @@ export const auditSchema = pageSchema(z.discriminatedUnion("action", [
   z.object({ ...auditFields, actor_kind: z.literal("OPERATOR"), actor_user_id: z.null(), action: z.literal("ADMIN_BOOTSTRAPPED"), details: z.object({ previous_role: z.literal("CUSTOMER"), new_role: z.literal("ADMIN") }) }),
   z.object({ ...auditFields, actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("USER_SUSPENDED"), details: z.object({ previous_status: z.literal("ACTIVE"), new_status: z.literal("SUSPENDED") }) }),
   z.object({ ...auditFields, actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("USER_REACTIVATED"), details: z.object({ previous_status: z.literal("SUSPENDED"), new_status: z.literal("ACTIVE") }) }),
+  z.object({ ...auditFields, target_type: z.literal("MARKET_REFRESH"), actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("MARKET_REFRESH_REQUESTED"), details: z.object({ mode: z.literal("daily") }) }),
 ]));
 export type AuditEvent = z.infer<typeof auditSchema>["items"][number];
 

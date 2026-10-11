@@ -6,6 +6,7 @@ from .audit_log import AuditLog
 from .holding import Holding
 from .market_data import MarketData
 from .market_data_refresh import MarketDataRefreshState
+from .market_data_refresh_run import MarketDataRefreshRun
 from .portfolio import Portfolio, PortfolioType
 from .simulation import Simulation
 from .user import User
@@ -19,6 +20,7 @@ __all__ = [
     "Holding",
     "MarketData",
     "MarketDataRefreshState",
+    "MarketDataRefreshRun",
     "Portfolio",
     "PortfolioType",
     "Simulation",

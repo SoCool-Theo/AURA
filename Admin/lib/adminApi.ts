@@ -53,6 +53,10 @@ export function createAdminApi(options: ApiOptions = {}) {
           const allowed: Record<string, string> = {
             "You cannot suspend your own account": "You cannot suspend your own account.",
             "The last active administrator cannot be suspended": "The last active administrator cannot be suspended.",
+            "Market-data worker is offline": "The market-data worker is offline. Start the worker before requesting an update.",
+            "A market-data refresh is already pending": "A market-data refresh is already queued. Check its progress below.",
+            "A market-data refresh is already running": "A market-data refresh is already running. Check its progress below.",
+            "Refresh request identifier already used": "This refresh request could not be confirmed. Reload the page and check its history.",
           };
           const payload = await response.json().catch(() => null);
           if (payload && typeof payload === "object" && "detail" in payload && typeof payload.detail === "string" && Object.hasOwn(allowed, payload.detail)) messages[409] = allowed[payload.detail];
@@ -97,6 +101,12 @@ export function createAdminApi(options: ApiOptions = {}) {
     },
     inventory: (signal?: AbortSignal) => get("/api/admin/market-data", contracts.inventorySchema, signal),
     marketStatus: (signal?: AbortSignal) => get("/api/admin/market-data/status", contracts.marketStatusSchema, signal),
+    refreshRuns: (query: Query, signal?: AbortSignal) => get("/api/admin/market-data/refresh-runs", contracts.marketRefreshRunsSchema, signal, query),
+    async requestMarketRefresh(requestId: string, signal?: AbortSignal) {
+      const result = await request("/api/admin/market-data/refresh", contracts.marketRefreshRunSchema, readToken(), signal, { request_id: requestId });
+      if (result.id !== requestId || result.trigger !== "ADMIN") throw new AdminApiError("The API returned an invalid refresh confirmation. Check run history before retrying.");
+      return result;
+    },
     observations: (query: Query, signal?: AbortSignal) => get("/api/admin/market-data/observations", contracts.observationsSchema, signal, query),
     health: (signal?: AbortSignal) => get("/api/admin/system-health", contracts.healthSchema, signal),
     audit: (query: Query, signal?: AbortSignal) => get("/api/admin/audit-logs", contracts.auditSchema, signal, query),
