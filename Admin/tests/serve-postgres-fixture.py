@@ -142,8 +142,10 @@ def check_http(app, password, factory):
         assert statuses == [200] * 30
         print("PASS PostgreSQL: 30 concurrent reads with independent sessions", flush=True)
         check_account_status(client, password, factory, admin, customer)
+        from check_user_roles import check_user_roles
+        check_user_roles(client, factory, password)
         from check_market_refresh import check_manual_refresh
-        check_manual_refresh(client, factory, admin, login("customer00@example.com"))
+        check_manual_refresh(client, factory, login("admin@example.com"), login("customer00@example.com"))
 
 
 def check_account_status(client, password, factory, admin, customer):

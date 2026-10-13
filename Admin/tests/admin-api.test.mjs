@@ -160,3 +160,36 @@ test("run history and audit reject invented states and non-daily refresh events"
   assert.equal(contracts.auditSchema.safeParse({ items: [event], total: 1, limit: 25, offset: 0 }).success, true);
   assert.equal(contracts.auditSchema.safeParse({ items: [{ ...event, target_type: "USER" }], total: 1, limit: 25, offset: 0 }).success, false);
 });
+
+
+test("role changes send expected state and validate server confirmation", async () => {
+  const result = { id: identity.id, role: "ADMIN", updated_at: "2026-10-13T00:00:00Z" };
+  const { api } = setup(async (url, init) => {
+    assert.equal(url, `http://127.0.0.1:8000/api/admin/users/${identity.id}/role`);
+    assert.equal(init.method, "PATCH");
+    assert.deepEqual(JSON.parse(init.body), { role: "ADMIN", expected_role: "CUSTOMER" });
+    return response(result);
+  }, "token");
+  assert.deepEqual(await api.setUserRole(identity.id, "ADMIN", "CUSTOMER"), result);
+  const wrongRole = setup(async () => response({ ...result, role: "CUSTOMER" }), "token");
+  await assert.rejects(wrongRole.api.setUserRole(identity.id, "ADMIN", "CUSTOMER"), /invalid role confirmation/);
+  const wrongId = setup(async () => response({ ...result, id: "00000000-0000-4000-8000-000000000002" }), "token");
+  await assert.rejects(wrongId.api.setUserRole(identity.id, "ADMIN", "CUSTOMER"), /invalid role confirmation/);
+});
+test("role safeguards retain the actor session and expose only allowlisted detail", async () => {
+  for (const detail of ["You cannot remove your own administrator access", "The last active administrator cannot be demoted", "Only registered accounts can become administrators", "Reactivate the account before granting administrator access"]) {
+    const { api } = setup(async () => response({ detail }, 409), "token");
+    await assert.rejects(api.setUserRole(identity.id, "ADMIN", "CUSTOMER"), error => error.message === detail + ".");
+    assert.equal(api.readToken(), "token");
+  }
+  const failure = setup(async () => response({ detail: "private SQL credentials" }, 409), "token");
+  await assert.rejects(failure.api.setUserRole(identity.id, "ADMIN", "CUSTOMER"), /Account role changed/);
+});
+test("role audit accepts both transitions and rejects unchanged roles or wrong actors", () => {
+  const event = { id: identity.id, created_at: "2026-10-13T00:00:00Z", actor_kind: "ADMIN", actor_user_id: identity.id, target_type: "USER", target_id: identity.id, action: "USER_ROLE_CHANGED", details: { previous_role: "CUSTOMER", new_role: "ADMIN" } };
+  const valid = value => contracts.auditSchema.safeParse({ items: [value], total: 1, limit: 25, offset: 0 }).success;
+  assert.equal(valid(event), true);
+  assert.equal(valid({ ...event, details: { previous_role: "ADMIN", new_role: "CUSTOMER" } }), true);
+  assert.equal(valid({ ...event, details: { previous_role: "ADMIN", new_role: "ADMIN" } }), false);
+  assert.equal(valid({ ...event, actor_kind: "OPERATOR", actor_user_id: null }), false);
+});

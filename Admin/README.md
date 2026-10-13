@@ -56,7 +56,7 @@ Admin/
 Dashboard, Users, Market Data, System Health, AI Monitoring, and Activity Logs now
 read the existing FastAPI admin endpoints. Portfolios and Reports show supported
 aggregate counts; global directories, deletion, report downloads, account creation,
-role changes, notifications, and system/security mutations
+notifications, and system/security mutations
 remain unavailable. These controls never simulate a successful server operation.
 
 Users supports Active/Suspended status filtering and suspend/reactivate actions.
@@ -66,6 +66,16 @@ the directory reloads from the API. Your own suspension is disabled; backend
 checks also protect the last active administrator. Activity Logs displays both
 status transitions with the actual actor and target UUIDs. Reactivated users
 must sign in again because previous sessions remain invalid.
+
+Users also grants/removes administrator access through the guarded role API.
+Only active registered customers can be promoted; legacy and suspended accounts
+show disabled grant actions. Your own administrator access cannot be removed,
+and the backend protects the last active administrator. The themed confirmation
+explains the permission change and fresh-login requirement. Both transitions
+invalidate previous sessions and preserve owned records. Role filters reload
+from the server, and Activity Logs shows `USER_ROLE_CHANGED` details. Account
+creation remains unavailable. This feature reuses existing role/session/audit
+columns and requires no additional migration or dependency.
 
 Market Data now accepts manual refresh requests and shows persisted run history.
 The existing confirmation requests daily historical data through yesterday UTC.

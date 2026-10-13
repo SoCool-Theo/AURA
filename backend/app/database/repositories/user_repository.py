@@ -57,6 +57,14 @@ class UserRepository:
             user.auth_version = (user.auth_version or 0) + 1
         self._session.flush()
 
+    def set_role(self, user: User, *, role: str) -> None:
+        """Persist an authorized transition and invalidate all previous sessions."""
+        if role not in {"CUSTOMER", "ADMIN"}:
+            raise ValueError("Unsupported account role")
+        user.role = role
+        user.auth_version = (user.auth_version or 0) + 1
+        self._session.flush()
+
     def has_other_admin(self, user_id: UUID) -> bool:
         statement = (
             select(User.id)

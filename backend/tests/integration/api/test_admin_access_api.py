@@ -141,7 +141,7 @@ def test_admin_role_does_not_bypass_customer_portfolio_ownership(harness):
     session.flush.assert_not_called()
 
 
-def test_admin_openapi_requires_bearer_and_exposes_no_role_write():
+def test_admin_openapi_requires_bearer_and_exposes_only_guarded_role_write():
     paths = {path: methods for path, methods in app.openapi()["paths"].items()
              if path.startswith("/api/admin")}
     assert set(paths) == {
@@ -150,9 +150,13 @@ def test_admin_openapi_requires_bearer_and_exposes_no_role_write():
         "/api/admin/system-health",
         "/api/admin/ai-monitoring", "/api/admin/ai-monitoring/requests",
         "/api/admin/users/{user_id}/status",
+        "/api/admin/users/{user_id}/role",
         "/api/admin/market-data/refresh", "/api/admin/market-data/refresh-runs",
     }
     assert set(paths["/api/admin/me"]) == {"get"}
     operation = paths["/api/admin/me"]["get"]
     assert operation["security"] == [{"HTTPBearer": []}]
     assert "requestBody" not in operation
+    role_operation = paths["/api/admin/users/{user_id}/role"]["patch"]
+    assert role_operation["security"] == [{"HTTPBearer": []}]
+    assert set(paths["/api/admin/users/{user_id}/role"]) == {"patch"}

@@ -85,3 +85,26 @@ def test_status_events_reject_wrong_actor_direction_or_free_text(change):
     data.update(change)
     with pytest.raises(ValidationError):
         AuditEventCreate.model_validate(data)
+
+
+@pytest.mark.parametrize("previous,new", [("CUSTOMER", "ADMIN"), ("ADMIN", "CUSTOMER")])
+def test_role_events_accept_only_real_transitions(previous, new):
+    event = AuditEventCreate(actor_kind="ADMIN", actor_user_id=uuid4(), action="USER_ROLE_CHANGED",
+        target_type="USER", target_id=uuid4(), details={"previous_role": previous, "new_role": new})
+    assert event.details.previous_role == previous and event.details.new_role == new
+
+
+@pytest.mark.parametrize("change", [{"actor_kind": "OPERATOR", "actor_user_id": None}, {"actor_user_id": None},
+    {"details": {"previous_role": "ADMIN", "new_role": "ADMIN"}}, {"target_type": "MARKET_REFRESH"},
+    {"details": {"previous_role": "CUSTOMER", "new_role": "ADMIN", "password": "private"}}])
+def test_role_events_reject_wrong_actor_noop_target_or_sensitive_fields(change):
+    data = {"actor_kind": "ADMIN", "actor_user_id": uuid4(), "action": "USER_ROLE_CHANGED", "target_type": "USER", "target_id": uuid4(),
+            "details": {"previous_role": "CUSTOMER", "new_role": "ADMIN"}}
+    data.update(change)
+    with pytest.raises(ValidationError): AuditEventCreate.model_validate(data)
+
+
+def test_bootstrap_still_rejects_reverse_role_transition():
+    data = payload()
+    data["details"] = {"previous_role": "ADMIN", "new_role": "CUSTOMER"}
+    with pytest.raises(ValidationError): AuditEventCreate.model_validate(data)

@@ -46,13 +46,17 @@ export function createAdminApi(options: ApiOptions = {}) {
         const messages: Record<number, string> = {
           401: path === "/api/auth/login" ? "Email or password is incorrect." : "Your session has expired. Sign in again.",
           403: "Administrator access is required for this account.", 404: "This account is no longer available. Refresh the directory.",
-          409: "Account status changed. Refresh the directory and try again.", 422: "Check the supplied fields or filters.",
+          409: path.endsWith("/role") ? "Account role changed. Refresh the directory and try again." : "Account status changed. Refresh the directory and try again.", 422: "Check the supplied fields or filters.",
           503: "This service is currently unavailable. Try again shortly.",
         };
         if (response.status === 409) {
           const allowed: Record<string, string> = {
             "You cannot suspend your own account": "You cannot suspend your own account.",
             "The last active administrator cannot be suspended": "The last active administrator cannot be suspended.",
+            "You cannot remove your own administrator access": "You cannot remove your own administrator access.",
+            "The last active administrator cannot be demoted": "The last active administrator cannot be demoted.",
+            "Only registered accounts can become administrators": "Only registered accounts can become administrators.",
+            "Reactivate the account before granting administrator access": "Reactivate the account before granting administrator access.",
             "Market-data worker is offline": "The market-data worker is offline. Start the worker before requesting an update.",
             "A market-data refresh is already pending": "A market-data refresh is already queued. Check its progress below.",
             "A market-data refresh is already running": "A market-data refresh is already running. Check its progress below.",
@@ -100,6 +104,12 @@ export function createAdminApi(options: ApiOptions = {}) {
       return result;
     },
     inventory: (signal?: AbortSignal) => get("/api/admin/market-data", contracts.inventorySchema, signal),
+    async setUserRole(userId: string, role: contracts.AdminUserRole, expectedRole: contracts.AdminUserRole, signal?: AbortSignal) {
+      const result = await request(`/api/admin/users/${encodeURIComponent(userId)}/role`, contracts.userRoleSchema, readToken(), signal,
+        { role, expected_role: expectedRole }, "PATCH");
+      if (result.id !== userId || result.role !== role) throw new AdminApiError("The API returned an invalid role confirmation. Refresh the directory.");
+      return result;
+    },
     marketStatus: (signal?: AbortSignal) => get("/api/admin/market-data/status", contracts.marketStatusSchema, signal),
     refreshRuns: (query: Query, signal?: AbortSignal) => get("/api/admin/market-data/refresh-runs", contracts.marketRefreshRunsSchema, signal, query),
     async requestMarketRefresh(requestId: string, signal?: AbortSignal) {

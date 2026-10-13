@@ -22,6 +22,17 @@ AdminAccountType = Literal["REGISTERED", "LEGACY"]
 AdminAccountStatus = Literal["ACTIVE", "SUSPENDED"]
 
 
+class AdminUserRoleRequest(AuraBaseModel):
+    role: AdminUserRole
+    expected_role: AdminUserRole
+
+
+class AdminUserRoleResponse(AuraBaseModel):
+    id: UUID
+    role: AdminUserRole
+    updated_at: AwareDatetime
+
+
 class AdminUserStatusRequest(AuraBaseModel):
     status: AdminAccountStatus
     expected_status: AdminAccountStatus

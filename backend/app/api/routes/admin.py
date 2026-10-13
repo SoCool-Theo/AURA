@@ -19,6 +19,8 @@ from app.schemas.admin import (
     AdminUsersQuery,
     AdminUserStatusRequest,
     AdminUserStatusResponse,
+    AdminUserRoleRequest,
+    AdminUserRoleResponse,
 )
 from app.schemas.admin_market_data import (
     AdminMarketDataQuery,
@@ -117,6 +119,22 @@ def change_admin_user_status(
     except (SQLAlchemyError, ValidationError) as error:
         session.rollback()
         raise HTTPException(status_code=503, detail="Account status update unavailable") from error
+
+
+@router.patch("/users/{user_id}/role", response_model=AdminUserRoleResponse)
+def set_admin_user_role(user_id: UUID, request: AdminUserRoleRequest, session: DatabaseSession, current_admin: CurrentAdmin) -> AdminUserRoleResponse:
+    """Commit a guarded role transition, session revocation and audit together."""
+    try:
+        response = AdminUserService(session).set_role(current_admin, user_id, request)
+        session.commit()
+        return response
+    except AdminUserStatusError as error:
+        session.rollback()
+        headers = {"WWW-Authenticate": "Bearer"} if error.status_code == 401 else None
+        raise HTTPException(status_code=error.status_code, detail=str(error), headers=headers) from error
+    except (SQLAlchemyError, ValidationError) as error:
+        session.rollback()
+        raise HTTPException(status_code=503, detail="Account role update unavailable") from error
 
 
 @router.get("/market-data", response_model=AdminMarketInventoryResponse)

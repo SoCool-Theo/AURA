@@ -3924,3 +3924,80 @@ remain separate follow-on work.
   configuration are retained. No real-provider calls, model runs, remote migration,
   deployment, staging, commit or push occurred. Unrelated untracked files remain
   preserved on `feat/admin-web-foundation`.
+
+### AURA technical presentation Version 1 — 2026-10-13
+
+- Created `docs/report/presentation-v1/AURA_Presentation_V1.pptx` with 32 main
+  slides and six hidden technical backup slides for a one-hour presentation.
+  The speaking notes allocate about 44 minutes to explanation and live demos,
+  with 15 minutes reserved for committee questions.
+- Based the presentation on the final report, relevant project documentation
+  and inspected backend/web/mobile implementation. Included portfolio modes,
+  data preparation and freshness, historical formulas, risk contributions,
+  simulations, immutable snapshots, authentication, forecasting evaluation and
+  composition, grounded AI, client integration and recorded verification limits.
+- Used the report title-page team names and student IDs in the supplied team
+  deck's three-member arrangement. Actual photograph slots remain editable.
+  Included two actual web screenshot previews and separate timed website and
+  React Native demo sections. Retained the report's six-module proposed
+  administration design as requested.
+- Added `docs/report/presentation-v1/README.md` with suggested speaking roles,
+  backup-slide navigation, demonstration preparation and presentation-day
+  meeting requirements. Source references and detailed explanations are in
+  the PowerPoint speaker notes.
+- Verification: all 38 final slides rendered and visually reviewed; package
+  integrity, layout/font policy and native chart checks passed, with zero layout
+  findings or warnings. Confirmed team fields, 38 note sections, six hidden
+  backups, illustrative allocation arithmetic, session timing and the delivered
+  file checksum. Application code and dependencies were not modified. Native
+  PowerPoint execution was not part of these checks. No commit was created.
+
+
+### Administrator role management — 2026-10-13
+
+- Added guarded `PATCH /api/admin/users/{user_id}/role` with desired and expected
+  CUSTOMER/ADMIN roles, safe response DTOs, fresh persisted actor authorization
+  under the existing users transaction lock, stale-confirmation handling and
+  idempotent retries. Active credential-bearing customers can be promoted;
+  legacy/suspended customers cannot. Self-demotion and loss of the last active
+  administrator are blocked. Suspended administrators can be demoted without
+  reactivating them. Role changes preserve owned records and account status.
+- Each real role transition increments the existing session generation, so
+  neither promotion nor later re-promotion upgrades/revives an older token.
+  Affected users must sign in again. Role, session version and typed
+  USER_ROLE_CHANGED audit details commit together; audit/commit failures roll
+  back every change. Existing bootstrap and suspension contracts remain intact.
+  Reused existing role/session/audit columns; no migration, dependency or
+  architecture change is needed. Public registration/profile still reject roles.
+- Connected the Users page to grant/remove actions with the existing themed
+  confirmation, scope/fresh-login explanation, duplicate-request guard, safe
+  errors, server-driven role-filter refresh and keyboard focus restoration.
+  Self and ineligible grant actions are disabled with explanatory titles.
+  Retained selected-account wording through dialog closing animation. Activity
+  Logs filters/displays role transitions with actual actor/target UUIDs.
+- Verification: 453 focused backend tests passed, including real authentication,
+  promotion/demotion/re-promotion, idempotency, actor revalidation, stale input,
+  rollback, retained ownership, strict audit shapes and existing admin/auth/
+  database regressions. All 29 admin Node tests, TypeScript, ESLint and final
+  production build passed. Restricted native-runtime sandbox failures passed
+  outside the sandbox; the existing chunk-size/route-classification notices
+  remain. No broader responsive/device coverage is inferred from desktop checks.
+- Guarded Docker PostgreSQL acceptance used disposable schemas and independent
+  sessions. Verified fresh-login enforcement, idempotent role events and
+  competing administrator demotions leaving one active administrator, alongside
+  existing suspension/market-refresh acceptance. Refreshed fixture login after
+  permission changes before subsequent tests. Real frontend API-client contracts,
+  concurrent dashboard reads, server filters and customer rejection passed.
+- Browser checks against the final built preview and synthetic PostgreSQL data
+  verified confirmation/cancel focus, both role transitions, role-filter removal,
+  retained portfolio counts, disabled self/legacy/suspended-account actions,
+  suspension/reactivation regression, actual audit filtering/details, session
+  restoration, corrected closing animation and logout/reload. Console errors/
+  warnings were empty. Saved a real role-management screenshot outside the repo.
+- Stopped temporary servers and removed disposable schemas/generated credentials
+  gracefully. All public table inventory/content fingerprints matched after
+  cleanup; no existing local or remote account roles were changed. Local Docker
+  remains at c1d3e5f7a9b2. No real-provider calls, model runs, application database
+  migrations, deployment, staging, commit or push occurred. Updated admin README
+  and API contracts;
+  unrelated untracked files remain preserved on feat/admin-web-foundation.

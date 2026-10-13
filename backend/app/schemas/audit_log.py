@@ -9,7 +9,7 @@ from pydantic import AwareDatetime, Field, model_validator
 from .common import AuraBaseModel
 
 
-AuditAction = Literal["ADMIN_BOOTSTRAPPED", "USER_SUSPENDED", "USER_REACTIVATED", "MARKET_REFRESH_REQUESTED"]
+AuditAction = Literal["ADMIN_BOOTSTRAPPED", "USER_SUSPENDED", "USER_REACTIVATED", "MARKET_REFRESH_REQUESTED", "USER_ROLE_CHANGED"]
 AuditActorKind = Literal["OPERATOR", "ADMIN"]
 AuditTargetType = Literal["USER", "MARKET_REFRESH"]
 
@@ -17,8 +17,8 @@ AuditTargetType = Literal["USER", "MARKET_REFRESH"]
 class AuditRoleChangeDetails(AuraBaseModel):
     """No free text, credentials, tokens, or arbitrary nested metadata."""
 
-    previous_role: Literal["CUSTOMER"]
-    new_role: Literal["ADMIN"]
+    previous_role: Literal["CUSTOMER", "ADMIN"]
+    new_role: Literal["CUSTOMER", "ADMIN"]
 
 
 class AuditStatusChangeDetails(AuraBaseModel):
@@ -51,8 +51,13 @@ class AuditEventCreate(AuraBaseModel):
         if self.action == "ADMIN_BOOTSTRAPPED":
             if self.actor_kind != "OPERATOR" or self.actor_user_id is not None:
                 raise ValueError("First-admin provisioning requires an operator actor")
-            if not isinstance(self.details, AuditRoleChangeDetails):
+            if not isinstance(self.details, AuditRoleChangeDetails) or (self.details.previous_role, self.details.new_role) != ("CUSTOMER", "ADMIN"):
                 raise ValueError("Bootstrap requires role details")
+        elif self.action == "USER_ROLE_CHANGED":
+            if self.actor_kind != "ADMIN" or self.actor_user_id is None:
+                raise ValueError("Role changes require an administrator actor")
+            if not isinstance(self.details, AuditRoleChangeDetails) or self.details.previous_role == self.details.new_role:
+                raise ValueError("Role details must describe a transition")
         else:
             if self.actor_kind != "ADMIN" or self.actor_user_id is None:
                 raise ValueError("Status changes require an administrator actor")

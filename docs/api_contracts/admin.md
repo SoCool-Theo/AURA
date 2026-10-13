@@ -4,7 +4,8 @@ The backend supplies the access boundary, Audit Log storage/query API, Dashboard
 statistics, a Users directory with account suspension/reactivation, Market Data inventory/status/history,
 System Health checks, and content-free AI Monitoring for Aura's separate admin
 website. Its frontend integration is implemented in `Admin/`.
-Account creation/deletion and role management remain subsequent work. Manual
+Account creation/deletion remain subsequent work. Administrator role management
+is available through the guarded account-role endpoint below. Manual
 Market Data refresh requests use the existing separate worker and tracked pipeline.
 
 ## Manual market-data refresh and run history
@@ -134,8 +135,9 @@ the command for the same sole admin is idempotent. The caller commits once on
 success and rolls back failures, closing the session and disposing the engine.
 Database failures are sanitized in CLI output.
 
-Provisioning additional admins, role-management UI and more granular permissions
-remain outside this phase. Suspended accounts cannot be bootstrapped. Downgrading
+The original bootstrap phase does not provision additional administrators.
+Additional role changes now use the authorized account-role API below; more
+granular permissions remain future work. Suspended accounts cannot be bootstrapped. Downgrading
 the migration removes the role column and all stored role assignments.
 
 ## Audit history
@@ -159,6 +161,11 @@ only `previous_role: CUSTOMER` and `new_role: ADMIN` details, plus
 `USER_SUSPENDED` (`previous_status: ACTIVE`, `new_status: SUSPENDED`) and
 `USER_REACTIVATED` (the reverse transition). Status events require an `ADMIN`
 actor with a non-null UUID; provisioning requires an `OPERATOR` with no actor UUID.
+`USER_ROLE_CHANGED` requires an `ADMIN` actor, a `USER` target, and exactly
+`previous_role`/`new_role` describing either CUSTOMER → ADMIN or ADMIN → CUSTOMER.
+An unchanged role is not a transition. Bootstrap retains its original direction
+and operator-only actor rule. `MARKET_REFRESH_REQUESTED` uses the separate
+`MARKET_REFRESH` target and daily-mode details described above.
 Unknown actions,
 extra keys, free text, and arbitrary payloads are rejected before persistence.
 Future admin mutations must deliberately extend the typed event/detail catalog
@@ -182,10 +189,10 @@ customer data. It never writes events or commits.
 | --- | --- |
 | `limit` | 1–100; default 25 |
 | `offset` | 0–10000; default 0 |
-| `action` | Optional `ADMIN_BOOTSTRAPPED`, `USER_SUSPENDED` or `USER_REACTIVATED` |
+| `action` | Optional `ADMIN_BOOTSTRAPPED`, `USER_SUSPENDED`, `USER_REACTIVATED`, `USER_ROLE_CHANGED`, or `MARKET_REFRESH_REQUESTED` |
 | `actor_kind` | Optional `OPERATOR` or `ADMIN` |
 | `actor_user_id` | Optional account UUID; operator events have no account actor |
-| `target_type` | Optional `USER` |
+| `target_type` | Optional `USER` or `MARKET_REFRESH` |
 | `target_id` | Optional target UUID |
 | `created_from`, `created_to` | Optional timezone-aware ISO timestamps, inclusive bounds |
 
@@ -382,8 +389,8 @@ fields, and customer web/mobile response shapes are unchanged.
 The Users page displays real status, filters on the server and uses themed
 confirmations, pending/error feedback and verified response-driven refresh.
 Self-suspension is disabled in the UI and enforced by the API. Activity Logs
-displays/filter both status events and provisioning events. Account creation,
-deletion, role management and manual market refresh remain separate features.
+displays/filter both status events and provisioning events. Account creation and deletion remain separate features. Role changes and manual refresh are
+implemented by their dedicated endpoints; they do not widen this status request.
 
 Verification covers rollback, idempotency, invalid inputs, actor revalidation,
 shared token enforcement, fresh-login reactivation and safe event details;
@@ -722,9 +729,10 @@ AI summary counts cover all retained events; request filters apply to the list.
 
 Portfolios and Reports show dashboard aggregate counts because there are no
 global admin detail/list/download/delete endpoints. No customer ownership
-endpoint is used to simulate global access. Users supports the status actions
-and audit events described above. User creation/deletion, role changes, manual
-market refresh, account editing, security/session administration, notifications,
+endpoint is used to simulate global access. Users supports the status and role
+actions and audit events described above. Market Data supports manual refresh
+and run history. User creation/deletion, account editing, security/session
+administration, notifications,
 and platform-setting mutations are unavailable. Only theme/compact-sidebar
 preferences are persisted locally. Existing colors and component styles remain.
 
@@ -733,3 +741,56 @@ requires a configured backend origin plus exact-origin CORS, or a separately
 provided same-origin reverse proxy. See `Admin/README.md` for setup and the
 synthetic acceptance harness. Account status adds only the dedicated route and
 additive migration above, without new dependencies, model execution or remote-data changes.
+
+
+## Administrator role management
+
+`PATCH /api/admin/users/{user_id}/role` is protected by the persisted ADMIN role,
+active credentials and signed session generation. The body accepts exactly:
+
+```json
+{ "role": "ADMIN", "expected_role": "CUSTOMER" }
+```
+
+Both fields support only `CUSTOMER` or `ADMIN`; omitted, unsupported and extra
+fields return 422. The safe 200 response contains `id`, `role` and UTC
+`updated_at`. Unknown targets return 404. Missing/stale/suspended authentication
+returns 401 with Bearer challenge; customers return 403.
+
+The service uses the same PostgreSQL users transaction lock as account status
+and first-admin bootstrap. It refreshes and rechecks the actor's identity,
+credentials, role and original authenticated session generation under that lock.
+It prevents self-demotion and removal of the last active credential-bearing
+administrator. Only active registered accounts can receive ADMIN permission;
+legacy owners and suspended customers cannot be promoted. Suspended administrators
+may be demoted without reactivating the account. These safeguards return
+allowlisted 409 details. A real transition requires the persisted role to match
+`expected_role`; a stale confirmation returns 409. A retry whose desired role is
+already persisted returns the current response without another event or version
+increment, even when its original expected role is stale.
+
+Every real transition increments `auth_version`. All previous customer/admin
+sessions become invalid; the user must sign in again. Promotion never upgrades
+an older customer token to administrator access. Demotion and later promotion
+never revive an old administrator session. Role assignments and existing owned
+records remain separate: portfolios, reports, simulations, account status,
+profile and credentials are preserved. Public registration/profile still reject
+role writes and create customers only. First-admin operator bootstrap retains
+its existing contract. This API introduces no granular permission model.
+
+Role, session-version change and typed `USER_ROLE_CHANGED` audit event commit in
+one transaction. Audit/commit or response-validation failure rolls back all
+changes and returns sanitized 503 `Account role update unavailable`. No secrets,
+credentials, free text or arbitrary event details are recorded. Page reads do
+not record mutation events. The existing role and audit migrations suffice;
+this feature adds no database migration.
+
+The Users page uses the existing themed confirmation for grant/remove admin
+access, describes the effect and fresh sign-in requirement, prevents duplicate
+pending submission and reloads verified server state after completion. Self,
+legacy and suspended-customer grant actions are disabled with explanatory titles.
+Failed/uncertain requests retain the confirmation and refresh the directory;
+client feedback never simulates a permission change. Closing animation retains
+the selected account wording. Focus returns to the action, or search when the
+row leaves a role filter. Activity Logs filters/displays role transitions with
+actual actor/target UUIDs and their previous/new roles.

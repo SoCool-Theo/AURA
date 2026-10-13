@@ -5,6 +5,7 @@ const timestamp = z.string().datetime({ offset: true });
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const nullableTime = timestamp.nullable();
 const role = z.enum(["CUSTOMER", "ADMIN"]);
+export type AdminUserRole = z.infer<typeof role>;
 const accountStatus = z.enum(["ACTIVE", "SUSPENDED"]);
 export type AdminAccountStatus = z.infer<typeof accountStatus>;
 const healthStatus = z.enum(["healthy", "degraded", "unavailable", "unknown", "not_checked"]);
@@ -36,6 +37,7 @@ export const usersSchema = pageSchema(z.object({
 }));
 export type AdminUser = z.infer<typeof usersSchema>["items"][number];
 export const userStatusSchema = z.object({ id: z.string().uuid(), status: accountStatus, updated_at: timestamp });
+export const userRoleSchema = z.object({ id: z.string().uuid(), role, updated_at: timestamp });
 
 export const inventorySchema = z.object({
   checked_at: timestamp, total_records: count, stored_symbols: count, required_symbols: count,
@@ -88,6 +90,7 @@ export const auditSchema = pageSchema(z.discriminatedUnion("action", [
   z.object({ ...auditFields, actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("USER_SUSPENDED"), details: z.object({ previous_status: z.literal("ACTIVE"), new_status: z.literal("SUSPENDED") }) }),
   z.object({ ...auditFields, actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("USER_REACTIVATED"), details: z.object({ previous_status: z.literal("SUSPENDED"), new_status: z.literal("ACTIVE") }) }),
   z.object({ ...auditFields, target_type: z.literal("MARKET_REFRESH"), actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("MARKET_REFRESH_REQUESTED"), details: z.object({ mode: z.literal("daily") }) }),
+  z.object({ ...auditFields, actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("USER_ROLE_CHANGED"), details: z.object({ previous_role: role, new_role: role }).refine(details => details.previous_role !== details.new_role) }),
 ]));
 export type AuditEvent = z.infer<typeof auditSchema>["items"][number];
 
