@@ -14,6 +14,7 @@ from .analytics import (
     PositiveInt,
 )
 from .common import AnalysisPeriod, AuraBaseModel
+from .currency_display import CurrencyDisplayContext
 from .portfolio import PortfolioHoldingInput, _validate_portfolio_holdings
 
 
@@ -274,6 +275,7 @@ class AllocationSimulationResponse(AnalysisPeriod):
     """Complete comparison for two allocations over one aligned period."""
 
     portfolio_id: UUID
+    currency_display: CurrencyDisplayContext | None = None
     portfolio_name: StrictString
     metadata: HistoricalScenarioSimulationMetadata
     original: AllocationSimulationResult
@@ -301,6 +303,7 @@ class CombinedSimulationResponse(AuraBaseModel):
     """Complete allocation comparison during one predefined scenario."""
 
     portfolio_id: UUID
+    currency_display: CurrencyDisplayContext | None = None
     portfolio_name: StrictString
     scenario: HistoricalScenarioResponse
     metadata: HistoricalScenarioSimulationMetadata
@@ -329,6 +332,7 @@ class HistoricalScenarioSimulationResponse(AuraBaseModel):
     """Complete JSON-safe result for an owned saved portfolio and scenario."""
 
     portfolio_id: UUID
+    currency_display: CurrencyDisplayContext | None = None
     portfolio_name: StrictString
     scenario: HistoricalScenarioResponse
     metadata: HistoricalScenarioSimulationMetadata

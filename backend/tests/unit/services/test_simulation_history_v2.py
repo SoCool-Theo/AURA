@@ -205,12 +205,14 @@ def test_real_save_creates_v2_and_returns_validated_immutable_detail(
 
     assert isinstance(detail, SimulationHistoryV2DetailResponse)
     assert detail.schema_version == _V2_VERSION_BY_TYPE[simulation_type]
-    assert detail.result == response
+    assert detail.result.model_dump(exclude={'currency_display'}) == response.model_dump(exclude={'currency_display'})
+    assert detail.result.currency_display is not None
+    assert len(detail.result.currency_display.views) == 1
     assert detail.baseline.valuation_date == VALUATION_DATE
     assert detail.baseline.total_current_value_usd == Decimal("100")
     saved = repository.create.call_args.kwargs
     assert saved["schema_version"] == _V2_VERSION_BY_TYPE[simulation_type]
-    assert saved["result_snapshot"]["result"] == response.model_dump(mode="json")
+    assert saved["result_snapshot"]["result"] == detail.result.model_dump(mode="json")
     assert saved["result_snapshot"]["baseline"] == detail.baseline.model_dump(
         mode="json"
     )

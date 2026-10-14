@@ -16,7 +16,8 @@ from app.forecasting.portfolio import InvalidForecastPortfolioError
 from app.forecasting.weekly_inference import WeeklyForecastInferenceService
 from app.forecasting.weekly_portfolio import WeeklyPortfolioForecastService
 from app.schemas.weekly_forecasting import WeeklyAssetOutlookResponse, WeeklyPortfolioOutlookResponse
-from app.services.market_data_service import MarketDataUnavailableError
+from app.services.market_data_service import MarketDataService, MarketDataUnavailableError
+from app.services.currency_display import with_forecast_currency_display
 from app.services.portfolio_service import PortfolioService
 from app.services.portfolio_valuation_service import PortfolioValuationError
 from app.services.weekly_forecasting_response_mapper import map_weekly_asset_outlook, map_weekly_portfolio_outlook
@@ -83,7 +84,7 @@ def get_weekly_portfolio_outlook(portfolio_id: UUID, horizon_days: HorizonPath,
         forecast = WeeklyPortfolioForecastService(session).predict(portfolio, horizon_days=horizon_days)
         if forecast.portfolio_id != portfolio_id or forecast.horizon_days != horizon_days:
             raise ForecastInferenceError("weekly response identity mismatch")
-        return map_weekly_portfolio_outlook(forecast)
+        return with_forecast_currency_display(map_weekly_portfolio_outlook(forecast), MarketDataService(session))
     except (InvalidForecastPortfolioError, PortfolioValuationError, ForecastSymbolUnsupportedError):
         raise HTTPException(status_code=409, detail="Portfolio cannot provide an outlook in its current holding state") from None
     except (ForecastInferenceError, MarketDataUnavailableError, ValidationError) as error:

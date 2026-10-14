@@ -1169,6 +1169,7 @@ def test_authenticated_combined_post_persists_and_preserves_response(
     )
     assert list(response.json()) == [
         "portfolio_id",
+        "currency_display",
         "portfolio_name",
         "scenario",
         "metadata",

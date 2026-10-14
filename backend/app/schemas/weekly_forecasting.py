@@ -9,6 +9,7 @@ from pydantic import Field, field_validator, model_validator
 
 from ..core.instruments import USER_ASSET_SYMBOLS
 from .common import AssetSymbol, AuraBaseModel
+from .currency_display import CurrencyDisplayContext, validate_forecast_currency_display
 from .forecasting_monetary import (
     PortfolioMonetaryProjectionResponse, validate_monetary_projection, validate_monetary_breakdown,
 )
@@ -115,6 +116,7 @@ class WeeklyPortfolioOutlookResponse(AuraBaseModel):
     predictive_quality_approved: Literal[False]
     quality_status: Literal["experimental_educational_not_predictive_quality_approved"]
     components: Annotated[list[WeeklyPortfolioOutlookComponent], Field(min_length=1)]
+    currency_display: CurrencyDisplayContext | None = None
     monetary_projection: PortfolioMonetaryProjectionResponse | None = None
     limitations: list[str]
 
@@ -132,6 +134,7 @@ class WeeklyPortfolioOutlookResponse(AuraBaseModel):
 
     @model_validator(mode="after")
     def composition_context(self) -> Self:
+        validate_forecast_currency_display(self.currency_display, self.baseline_kind, self.monetary_projection, self.components)
         validate_monetary_projection(self.monetary_projection, self.baseline_kind, self.expected_return)
         validate_monetary_breakdown(self.monetary_projection,
             [(c.monetary_projection, c.expected_return, c.current_weight) for c in self.components])

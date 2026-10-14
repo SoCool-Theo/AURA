@@ -64,7 +64,7 @@ test('web portfolio return table defaults newest first, toggles dates without ch
     max_drawdown: { max_drawdown: 0 },
     diversification: { overall_score: null, average_pairwise_correlation: null, weight_score: 0, correlation_score: null },
     concentration: { largest_weight: 0, top_n: 3, top_n_weight: 0, effective_number_of_assets: 0, hhi: 0 },
-    asset_metrics: [], risk_drivers: {}, correlation_matrix: {}, correlation_pairs: [],
+    asset_metrics: [], risk_drivers: { entries: [] }, correlation_matrix: {}, correlation_pairs: [],
     portfolio_returns: points, metadata: {},
   } };
   const { AnalysisResults } = load('src/pages/analytics/components/AnalysisResults.tsx', {

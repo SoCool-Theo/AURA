@@ -265,3 +265,25 @@ def test_weekly_openapi_is_read_only_authenticated_and_neutral_fields():
     assert "expected_return" in properties and "expected_return_30d" not in properties
     assert properties["horizon_days"]["enum"] == [7,14,21]
     assert not {"model_path", "final_test_evidence", "calibration_residual_q10"} & set(properties)
+
+@pytest.mark.parametrize("horizon", [7, 14, 21])
+def test_weekly_currency_views_convert_amounts_without_changing_models_or_quality(harness, horizon):
+    from types import SimpleNamespace
+    client, session, _, _, portfolios, _, _ = harness
+    market = MagicMock()
+    market.get_latest_usd_thb_fx_observation.side_effect = lambda requested_date: SimpleNamespace(
+        symbol="THB=X", adjusted_close=Decimal("40"), date=requested_date)
+    with patch.object(route, "MarketDataService", return_value=market):
+        response = client.get(portfolio_url(horizon), headers=headers())
+    assert response.status_code == 200
+    body = response.json()
+    source, alternate = body["currency_display"]["views"]
+    assert source["currency"] == body["monetary_projection"]["currency"] == "USD"
+    assert alternate["currency"] == "THB"
+    assert Decimal(alternate["baseline_amount"]) == Decimal("400000")
+    assert Decimal(alternate["expected_change_amount"]) == Decimal("40000")
+    assert Decimal(alternate["estimated_ending_value"]) == Decimal("440000")
+    assert body["horizon_days"] == horizon and body["experimental"] is True
+    assert body["predictive_quality_approved"] is False
+    portfolios.predict.assert_called_once()
+    session.commit.assert_not_called()

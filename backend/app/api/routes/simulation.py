@@ -309,7 +309,7 @@ def run_historical_scenario(
         raise
     except Exception as error:
         raise _internal_error() from error
-    return response
+    return response if execution.baseline.baseline_kind.value == 'legacy' else history.result
 
 
 @router.post(
@@ -380,7 +380,7 @@ def run_allocation_simulation(
         raise
     except Exception as error:
         raise _allocation_internal_error() from error
-    return response
+    return response if execution.baseline.baseline_kind.value == 'legacy' else history.result
 
 
 @router.post(
@@ -453,4 +453,4 @@ def run_combined_simulation(
         raise
     except Exception as error:
         raise _combined_internal_error() from error
-    return response
+    return response if execution.baseline.baseline_kind.value == 'legacy' else history.result

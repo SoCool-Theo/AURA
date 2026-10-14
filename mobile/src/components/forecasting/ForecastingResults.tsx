@@ -1,3 +1,4 @@
+import { outlookCurrencyView, type DisplayCurrency } from '../../currencyDisplay';
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Card } from '../ui/Card';
@@ -12,7 +13,8 @@ import { forecastingStyles as styles } from '../../forecasting/forecastingStyles
 function DataRow({ label, value, negative = false }: { label: string; value: string; negative?: boolean }) {
   return <View style={styles.dataRow}><Text style={styles.dataLabel}>{label}</Text><Text style={[styles.dataValue, negative && styles.negative]}>{value}</Text></View>;
 }
-export function ForecastingResults({ result, onAsset, showChart = true }: { result: OutlookResponse; onAsset: (symbol: string) => void; showChart?: boolean }) {
+export function ForecastingResults({ result: sourceResult, currency, onAsset, showChart = true }: { result: OutlookResponse; currency?: DisplayCurrency; onAsset: (symbol: string) => void; showChart?: boolean }) {
+  const result = outlookCurrencyView(sourceResult, currency);
   const [metric, setMetric] = useState<OutlookMetric>('return');
   const [details, setDetails] = useState(false);
   const asset = 'symbol' in result;

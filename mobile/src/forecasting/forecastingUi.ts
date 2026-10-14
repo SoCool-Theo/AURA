@@ -1,3 +1,4 @@
+import { validForecastCurrencyDisplay } from '../currencyDisplay';
 import { ApiError } from '../api/apiClient';
 import type { OutlookResponse, ForecastPredictionInterval, AnyAssetOutlookResponse, ForecastHorizon } from '../types/forecasting';
 import { monetaryContextKey, validPortfolioMoney } from './forecastingMoney';
@@ -42,7 +43,7 @@ export function validOutlookResponse(result: OutlookResponse, scope: 'portfolio'
       && item.artifact_version === result.artifact_version
       && finite(item.current_weight) && item.current_weight >= 0 && item.current_weight <= 1
       && finite(item.forecast_volatility_contribution) && finite(item.forecast_volatility_contribution_share))
-    && validPortfolioMoney(result);
+    && validPortfolioMoney(result) && validForecastCurrencyDisplay(result);
 }
 export function forecastPoints(result: OutlookResponse, metric: OutlookMetric): OutlookPoint[] {
   // One actual backend estimate. Never scale or interpolate a different horizon.

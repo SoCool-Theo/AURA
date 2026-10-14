@@ -1,3 +1,4 @@
+import { outlookCurrencyView, type DisplayCurrency } from '../../../currencyDisplay';
 import { useState } from 'react';
 import { go } from '../../../app/routes';
 import { Card } from '../../../components/ui/Card';
@@ -7,7 +8,8 @@ import { forecastBaselineLabel, forecastMoney, negativeMoney, forecastPercent, f
 import { OutlookChart } from './OutlookChart';
 import styles from '../Forecasting.module.css';
 
-export function ForecastingResults({ result, showChart = true }: { result: OutlookResponse; showChart?: boolean }) {
+export function ForecastingResults({ result: sourceResult, currency, showChart = true }: { result: OutlookResponse; currency?: DisplayCurrency; showChart?: boolean }) {
+  const result = outlookCurrencyView(sourceResult, currency);
   const [metric, setMetric] = useState<OutlookMetric>('return');
   const asset = 'symbol' in result;
   const money = asset ? null : result.monetary_projection;

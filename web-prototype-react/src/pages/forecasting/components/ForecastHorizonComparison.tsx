@@ -1,3 +1,4 @@
+import { outlookCurrencyView, type DisplayCurrency } from '../../../currencyDisplay';
 import { useState } from 'react';
 import { Card } from '../../../components/ui/Card';
 import { usePortfolioPrivacy, usePrivateValue } from '../../../privacy/PortfolioPrivacy';
@@ -6,9 +7,10 @@ import { comparisonPoints, forecastMoney, negativeMoney, forecastHorizons, forec
 import { OutlookChart } from './OutlookChart';
 import styles from '../Forecasting.module.css';
 
-export function ForecastHorizonComparison({ results, loading, unavailable }: {
-  results: OutlookResponse[]; loading: boolean; unavailable: ForecastHorizon[];
+export function ForecastHorizonComparison({ results: sourceResults, loading, unavailable, currency }: {
+  results: OutlookResponse[]; currency?: DisplayCurrency; loading: boolean; unavailable: ForecastHorizon[];
 }) {
+  const results = sourceResults.map(result => outlookCurrencyView(result, currency));
   const [metric, setMetric] = useState<OutlookMetric>('return');
   const { hideValues } = usePortfolioPrivacy();
   const privateValue = usePrivateValue();

@@ -1,3 +1,4 @@
+import { outlookCurrencyView, type DisplayCurrency } from '../../currencyDisplay';
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Card } from '../ui/Card';
@@ -16,9 +17,10 @@ export function ForecastQualityNotice({ results }: { results: OutlookResponse[] 
   </View>;
 }
 
-export function ForecastHorizonComparison({ results, loading, unavailable }: {
-  results: OutlookResponse[]; loading: boolean; unavailable: ForecastHorizon[];
+export function ForecastHorizonComparison({ results: sourceResults, loading, unavailable, currency }: {
+  results: OutlookResponse[]; currency?: DisplayCurrency; loading: boolean; unavailable: ForecastHorizon[];
 }) {
+  const results = sourceResults.map(result => outlookCurrencyView(result, currency));
   const [metric, setMetric] = useState<OutlookMetric>('return');
   const [details, setDetails] = useState(false);
   const { hideValues } = usePortfolioPrivacy();
