@@ -14,7 +14,11 @@ function load(file, mocks = {}, globals = {}) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true },
   }).outputText;
   vm.runInNewContext(code, { module, exports: module.exports, Date, AbortController, setTimeout, clearTimeout,
-    require(name) { assert.ok(name in mocks, 'Unmocked ' + name); return mocks[name]; }, ...globals });
+    require(name) {
+      if (!(name in mocks) && name.endsWith('/currencyDisplay')) return load('src/currencyDisplay.ts');
+      if (!(name in mocks) && name.endsWith('/ui/CurrencySwitch')) return { CurrencySwitch: 'CurrencySwitch' };
+      assert.ok(name in mocks, 'Unmocked ' + name); return mocks[name];
+    }, ...globals });
   return module.exports;
 }
 const money = load('src/forecasting/forecastingMoney.ts');
@@ -537,8 +541,8 @@ test('all native horizons require complete, consistent overall and holding monet
   }
 });
 
-function moneyResultsHarness(initialResult, initialHidden = false) {
-  const h = harness(); let result = initialResult, hidden = initialHidden;
+function moneyResultsHarness(initialResult, initialHidden = false, initialCurrency) {
+  const h = harness(); let result = initialResult, hidden = initialHidden, currency = initialCurrency;
   const destinations = [];
   const { ForecastingResults } = load('src/components/forecasting/ForecastingResults.tsx', {
     react: h.react, 'react-native': native, '../ui/Card': { Card: 'Card' }, '../ui/Button': { Button: 'Button' },
@@ -546,8 +550,8 @@ function moneyResultsHarness(initialResult, initialHidden = false) {
     '../../forecasting/forecastingUi': ui, '../../forecasting/forecastingStyles': { forecastingStyles: styles },
     '../../privacy/PortfolioPrivacy': { usePortfolioPrivacy: () => ({ hideValues: hidden }), usePrivateValue: () => value => hidden ? '••••' : value },
   });
-  h.mount(() => ForecastingResults({ result, onAsset: symbol => destinations.push(symbol) }));
-  return { h, destinations, change(next) { result = next; h.render(); }, hide(value) { hidden = value; h.render(); } };
+  h.mount(() => ForecastingResults({ result, currency, onAsset: symbol => destinations.push(symbol) }));
+  return { h, destinations, change(next) { result = next; h.render(); }, hide(value) { hidden = value; h.render(); }, currency(value) { currency = value; h.render(); } };
 }
 
 test('native summary and holding cards copy own backend amounts at every horizon and retain standalone drill-down', () => {
@@ -672,4 +676,113 @@ test('native loader rejects missing monetary context without stale values, fallb
   c.setOperation(async () => ({ ...portfolio, components: [{ ...portfolio.components[0], monetary_projection: null }] }));
   c.h.value.refresh(); await c.h.settle(); assert.equal(c.h.value.result, null); assert.ok(c.h.value.error);
   assert.ok(c.calls.every(call => ['asset', 'portfolio'].includes(call[0]) && call[2].body === undefined)); c.h.unmount();
+});
+
+function backendCurrencyFixture(source) {
+  const row = projection => ({
+    baseline_amount: projection.baseline_amount, expected_change_amount: projection.expected_change_amount,
+    estimated_ending_value: projection.estimated_ending_value,
+  });
+  const first = { currency: source.monetary_projection.currency, ...row(source.monetary_projection),
+    holdings: source.components.map(component => ({ symbol: component.symbol, ...row(component.monetary_projection) })) };
+  const convert = value => String(Number(value) * 40);
+  const alternate = { currency: 'THB', baseline_amount: convert(first.baseline_amount),
+    expected_change_amount: convert(first.expected_change_amount), estimated_ending_value: convert(first.estimated_ending_value),
+    holdings: first.holdings.map(holding => ({ symbol: holding.symbol, baseline_amount: convert(holding.baseline_amount),
+      expected_change_amount: convert(holding.expected_change_amount), estimated_ending_value: convert(holding.estimated_ending_value) })) };
+  return { ...source, currency_display: { baseline_kind: source.baseline_kind, source_currency: first.currency,
+    requested_date: '2026-10-07', fx: { pair: 'USD/THB', provider_symbol: 'THB=X', rate: '40', as_of: '2026-10-06' },
+    views: [first, alternate] } };
+}
+
+test('currency views change all forecast amounts and monetary chart points while preserving canonical results and privacy', () => {
+  const display = load('src/currencyDisplay.ts');
+  for (const horizon of [7, 14, 21, 30]) {
+    const source = backendCurrencyFixture(horizon === 30 ? portfolio : weekly(portfolio, horizon));
+    const before = plain(source);
+    assert.equal(ui.validOutlookResponse(source, 'portfolio', 'p', horizon), true);
+    const result = display.outlookCurrencyView(source, 'THB');
+    assert.equal(result.monetary_projection.currency, 'THB');
+    assert.equal(result.monetary_projection.baseline_amount, '400000');
+    assert.equal(ui.forecastReturn(result), ui.forecastReturn(source));
+    assert.equal(ui.forecastVolatility(result), ui.forecastVolatility(source));
+    assert.deepEqual(plain(result.components.map(item => [item.symbol, item.current_weight, item.forecast_volatility_contribution])),
+      plain(source.components.map(item => [item.symbol, item.current_weight, item.forecast_volatility_contribution])));
+    const c = moneyResultsHarness(source, false, 'THB');
+    assert.ok(text(c.h.value).includes('฿400,000.00'));
+    nodes(c.h.value).find(node => node.type === 'Pressable' && node.props.accessibilityLabel === 'Expected change (THB) chart').props.onPress();
+    c.h.render();
+    const chart = nodes(c.h.value).find(node => node.type === 'Chart');
+    assert.equal(chart.props.points[0].currency, 'THB');
+    assert.equal(chart.props.points[0].amount, result.monetary_projection.expected_change_amount);
+    c.currency('USD');
+    c.h.render();
+    assert.ok(text(c.h.value).includes('$10,000.00'));
+    assert.equal(nodes(c.h.value).find(node => node.type === 'Chart').props.points[0].currency, 'USD');
+    c.currency('THB'); c.hide(true);
+    assert.equal(nodes(c.h.value).find(node => node.type === 'Chart').props.metric, 'return');
+    assert.equal(text(c.h.value).includes('฿400,000.00'), false);
+    assert.deepEqual(plain(source), before);
+    const broken = plain(source); broken.currency_display.views[1].holdings.pop();
+    assert.equal(ui.validOutlookResponse(broken, 'portfolio', 'p', horizon), false);
+    const missing = plain(source); missing.currency_display.fx = null; missing.currency_display.views.pop();
+    assert.equal(display.forecastDisplayContext([source, missing]).views.length, 1);
+    assert.equal(display.outlookCurrencyView(missing, 'THB'), missing);
+    const inconsistent = plain(source); inconsistent.currency_display.views[0].baseline_amount = '1';
+    assert.equal(ui.validOutlookResponse(inconsistent, 'portfolio', 'p', horizon), false);
+    const future = plain(source); future.currency_display.fx.as_of = '2026-10-08';
+    assert.equal(ui.validOutlookResponse(future, 'portfolio', 'p', horizon), false);
+  }
+});
+
+test('currency control exposes accessible USD/THB selection and disables unavailable saved conversion', () => {
+  const h = harness(), chosen = [];
+  const { CurrencySwitch } = load('src/components/ui/CurrencySwitch.tsx', { react: h.react, 'react-native': { ...native, StyleSheet: { create: value => value } }, '../../theme/theme': { colors: {} } }, {});
+  const context = backendCurrencyFixture(portfolio).currency_display;
+  const render = display => nodes(CurrencySwitch({ display, value: 'USD', saved: true, onChange: value => chosen.push(value) }));
+  const controls = render(context).filter(node => node.type === 'Pressable');
+  assert.equal(controls.length, 2);
+  assert.equal(controls[0].props.accessibilityState.selected, true);
+  controls[1].props.onPress();
+  assert.deepEqual(chosen, ['THB']);
+  const unavailable = { ...context, fx: null, views: context.views.slice(0, 1) };
+  assert.equal(render(unavailable).filter(node => node.type === 'Pressable')[1].props.disabled, true);
+});
+
+test('live and saved simulation baseline amounts switch by symbol and old snapshots retain only their saved currency', () => {
+  const h = harness(); let hidden = false;
+  const { SimulationResults } = load('src/components/simulations/SimulationResults.tsx', { react: h.react, 'react-native': { ...native, StyleSheet: { create: value => value } },
+  '../../privacy/PortfolioPrivacy': { usePrivateValue: () => value => hidden ? '••••' : value },
+  '../../simulation/simulationFormatting': { formatSimulationNumber: String, formatSimulationPercent: String, savedAnalysisTrajectory: () => [], simulationTypeLabel: String },
+  '../../portfolio/portfolioFormatting': { formatPortfolioMoney: (value, currency) => currency + ':' + value, formatCurrentAllocation: String, formatPortfolioQuantity: String },
+  '../../theme/theme': { colors: {}, spacing: {} }, '../charts/SimulationTrajectoryChart': { SimulationTrajectoryChart: 'Trajectory' },
+  '../ui/Button': { Button: 'Button' }, '../ui/Card': { Card: 'Card' }, '../../report/reportFormatting': { formatReportTimestamp: String } }, {});
+  const display = backendCurrencyFixture(portfolio).currency_display;
+  const baseline = { valuation_currency: 'USD', valuation_date: '2026-10-07', oldest_price_as_of: '2026-10-05', newest_price_as_of: '2026-10-06',
+    total_current_value_usd: '10000', holdings: portfolio.components.map((component, index) => ({
+      symbol: component.symbol, current_value_usd: component.monetary_projection.baseline_amount,
+      current_allocation: String(component.current_weight), shares: '2', asset_price: '50', position: index,
+    })) };
+  const response = { portfolio_id: 'p', portfolio_name: 'Example', currency_display: display, metadata: {},
+    scenario: { display_name: 'Example scenario', requested_start_date: '2020-01-01', requested_end_date: '2020-02-01' }, trajectory: [] };
+  for (const saved of [undefined, baseline]) {
+    const tree = SimulationResults({ result: { type: 'historical-scenario', response }, baseline: saved });
+    const card = nodes(tree).find(node => typeof node.type === 'function' && node.type.name === 'BaselineCard');
+    h.mount(() => card.type(card.props));
+    const control = () => nodes(h.value).find(node => node.type === 'CurrencySwitch');
+    assert.equal(control().props.value, 'USD');
+    control().props.onChange('THB'); h.render();
+    assert.equal(control().props.value, 'THB');
+    assert.ok(text(h.value).includes('THB:400000'));
+    assert.ok(text(h.value).includes('THB:160000'));
+    assert.ok(text(h.value).includes('THB:240000'));
+    control().props.onChange('USD'); h.render();
+    assert.ok(text(h.value).includes('USD:10000'));
+    hidden = true; h.render(); assert.equal(text(h.value).includes('USD:10000'), false); hidden = false;
+  }
+  const before = plain(baseline);
+  const old = load('src/currencyDisplay.ts').simulationCurrencyDisplay(null, baseline);
+  assert.deepEqual(plain(old.views.map(view => view.currency)), ['USD']);
+  assert.equal(old.fx, null);
+  assert.deepEqual(plain(baseline), before);
 });

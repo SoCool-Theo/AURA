@@ -3,6 +3,7 @@
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
@@ -216,3 +217,34 @@ def test_portfolio_openapi_has_only_uuid_path_and_existing_bearer():
     assert [(p["name"],p["in"]) for p in get["parameters"]] == [("portfolio_id","path")]
     assert get["security"] == [{"HTTPBearer":[]}]
     assert {"200","401","404","409","422","503"} <= set(get["responses"])
+
+@pytest.mark.parametrize("currency", ["USD", "THB"])
+def test_currency_display_uses_persisted_fx_and_keeps_canonical_forecast(harness, currency):
+    client, session, _, _, service, _ = harness
+    original = forecast()
+    if currency == "THB":
+        planned_money = replace(original.monetary_projection, currency="THB", baseline_source="planned_investment",
+            hypothetical=True, assumes_unchanged_fx=True, valuation_requested_date=None, oldest_price_as_of=None, newest_price_as_of=None)
+        original = replace(original, baseline_kind="planned", monetary_projection=planned_money,
+            components=(replace(original.components[0], monetary_projection=planned_money),))
+    service.predict.return_value = original
+    market = MagicMock()
+    market.get_latest_usd_thb_fx_observation.side_effect = lambda requested_date: SimpleNamespace(
+        symbol="THB=X", adjusted_close=Decimal("40"), date=requested_date)
+    with patch.object(route, "MarketDataService", return_value=market):
+        response = client.get(URL, headers=headers())
+    assert response.status_code == 200
+    body = response.json()
+    canonical = body["monetary_projection"]
+    source, alternate = body["currency_display"]["views"]
+    assert source["currency"] == canonical["currency"] == currency
+    assert source["baseline_amount"] == canonical["baseline_amount"]
+    assert source["holdings"][0]["baseline_amount"] == canonical["baseline_amount"]
+    assert Decimal(alternate["baseline_amount"]) == (Decimal("400000") if currency == "USD" else Decimal("250"))
+    assert Decimal(alternate["expected_change_amount"]) == (Decimal("12000") if currency == "USD" else Decimal("7.5"))
+    assert body["expected_return_30d"] == original.expected_return_30d
+    assert body["forecast_realized_volatility_30d"] == original.forecast_realized_volatility_30d
+    assert body["components"][0]["current_weight"] == 1
+    PortfolioOutlookResponse.model_validate(body)
+    service.predict.assert_called_once()
+    session.commit.assert_not_called()

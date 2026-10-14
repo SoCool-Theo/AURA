@@ -312,6 +312,20 @@ def restore_simulation_snapshot(
         else _V3_SNAPSHOT_SCHEMAS[simulation_type]
     )
     validated = snapshot_schema.model_validate(payload)
+    display = validated.result.currency_display
+    if display is not None:
+        baseline = validated.baseline
+        planned = isinstance(baseline, PlannedPortfolioBaselineContext)
+        currency = baseline.plan_currency if planned else "USD"
+        total = baseline.total_proposed_amount if planned else baseline.total_current_value_usd
+        amounts = {holding.symbol: holding.proposed_amount if planned else holding.current_value_usd
+                   for holding in baseline.holdings}
+        source = display.views[0]
+        if (display.baseline_kind != ("planned" if planned else "current")
+                or display.source_currency != currency or source.baseline_amount != total
+                or {holding.symbol: holding.baseline_amount for holding in source.holdings} != amounts
+                or source.expected_change_amount is not None):
+            raise ValueError("simulation currency amounts must match the saved baseline")
     return RestoredSimulationSnapshot(
         response=validated.result,
         baseline=validated.baseline,

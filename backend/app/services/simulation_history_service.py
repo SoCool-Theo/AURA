@@ -23,6 +23,8 @@ from .portfolio_baseline_resolver import (
     PortfolioBaselineResolution,
 )
 from .portfolio_service import PortfolioService
+from .currency_display import simulation_currency_display
+from .market_data_service import MarketDataService
 from .simulation_history_mapper import (
     simulation_response_to_snapshot,
     simulation_response_to_v2_snapshot,
@@ -126,6 +128,10 @@ class SimulationHistoryService:
         ):
             if baseline.valuation is None:
                 raise ValueError("real simulation baseline requires valuation")
+            response = response.model_copy(update={
+                "currency_display": simulation_currency_display(baseline, MarketDataService(self._session)),
+            })
+
             schema_version = simulation_type_to_v2_schema_version(
                 simulation_type
             )
@@ -145,6 +151,10 @@ class SimulationHistoryService:
                 raise ValueError(
                     "planned simulation baseline requires planned allocation"
                 )
+            response = response.model_copy(update={
+                "currency_display": simulation_currency_display(baseline, MarketDataService(self._session)),
+            })
+
             schema_version = simulation_type_to_v3_schema_version(
                 simulation_type
             )

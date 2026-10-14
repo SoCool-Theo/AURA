@@ -1,3 +1,5 @@
+import type { CurrencyDisplayContext } from '../currencyDisplay';
+
 export type ForecastPredictionInterval = { lower: number; upper: number; coverage: 0.80 };
 export type PortfolioMonetaryProjection = {
   currency: 'USD' | 'THB';
@@ -45,6 +47,7 @@ export type PortfolioOutlookResponse = {
   market_data_as_of: string;
   artifact_version: string;
   components: PortfolioOutlookComponent[];
+  currency_display?: CurrencyDisplayContext | null;
   monetary_projection: PortfolioMonetaryProjection | null;
   limitations: string[];
 };

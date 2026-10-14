@@ -245,7 +245,9 @@ def test_planned_save_creates_v3_and_returns_immutable_detail(
 
     assert isinstance(detail, SimulationHistoryV3DetailResponse)
     assert detail.schema_version == _V3_VERSION_BY_TYPE[simulation_type]
-    assert detail.result == response
+    assert detail.result.model_dump(exclude={'currency_display'}) == response.model_dump(exclude={'currency_display'})
+    assert detail.result.currency_display is not None
+    assert len(detail.result.currency_display.views) == 1
     assert detail.baseline.plan_currency == "USD"
     assert detail.baseline.total_proposed_amount == Decimal("1000")
     saved = repository.create.call_args.kwargs

@@ -3433,3 +3433,31 @@ remain separate follow-on work.
   66 passed, one pre-existing documentation-branding failure. TypeScript and
   the production build passed with the existing bundle-size warning.
 - No staging, commit or push was performed.
+
+
+### USD/THB display controls for Simulation and Forecast Outlook — 2026-10-14
+
+- Added accessible USD/THB controls to web and mobile current/planned portfolio
+  simulation amounts and Forecast Outlook. Outlook summary, holding breakdowns,
+  selected-horizon monetary charts and comparisons use the same selected currency.
+- Added an optional backend currency-display contract and a shared Decimal
+  conversion helper using fresh persisted USD/THB observations. Canonical
+  projections, allocations, percentages, model outputs and risk metrics remain
+  authoritative and unchanged. No client FX arithmetic, new dependency,
+  migration, provider request or model fitting is introduced.
+- New V2/V3 simulations save complete currency views and FX with their result;
+  immediate responses and history share those amounts. History validates the
+  views against the frozen baseline without market reads or revaluation.
+  Old snapshots remain unchanged and offer their original currency only.
+  Missing/stale FX disables the alternate currency without blocking results.
+- Kept account/portfolio selections isolated, comparison currencies available
+  across all displayed horizons, FX-aware monetary chart gaps, and privacy
+  masking. Standalone asset and legacy percentage-only outlooks remain compatible.
+  Public asset prices in saved simulation details stay explicitly USD quoted.
+- Verification: 537 affected backend tests passed; mobile client suite 104 passed;
+  web/shared-client suite 141 passed with the one pre-existing documentation
+  branding failure. Web TypeScript/production build and mobile TypeScript passed;
+  the existing web bundle-size warning remains. Currency controls and amount
+  rendering were verified with the existing component harnesses; live browser
+  and physical-device visual acceptance remain manual.
+- Updated the public API documentation. No staging, commit or push was performed.

@@ -16,7 +16,8 @@ from app.forecasting.inference_errors import (
 from app.forecasting.portfolio import InvalidForecastPortfolioError, PortfolioForecastService
 from app.schemas.forecasting import AssetOutlookResponse, PortfolioOutlookResponse
 from app.services.forecasting_response_mapper import map_asset_outlook, map_portfolio_outlook
-from app.services.market_data_service import MarketDataUnavailableError
+from app.services.market_data_service import MarketDataService, MarketDataUnavailableError
+from app.services.currency_display import with_forecast_currency_display
 from app.services.portfolio_service import PortfolioService
 from app.services.portfolio_valuation_service import PortfolioValuationError
 
@@ -103,7 +104,8 @@ def get_portfolio_outlook(
     if portfolio is None:
         raise HTTPException(status_code=404, detail="Portfolio not found") from None
     try:
-        return map_portfolio_outlook(PortfolioForecastService(session).predict(portfolio))
+        response = map_portfolio_outlook(PortfolioForecastService(session).predict(portfolio))
+        return with_forecast_currency_display(response, MarketDataService(session))
     except (InvalidForecastPortfolioError, PortfolioValuationError, ForecastSymbolUnsupportedError):
         raise HTTPException(status_code=409, detail="Portfolio cannot provide an outlook in its current holding state") from None
     except ForecastDataStaleError:
