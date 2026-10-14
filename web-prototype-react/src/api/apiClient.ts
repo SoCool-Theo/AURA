@@ -10,6 +10,7 @@ type ParsedResponseBody = JsonValue | string | null;
 type ApiAuthentication = {
   getAccessToken: () => string | null;
   onUnauthorized: (rejectedToken: string) => void;
+  refreshAccessToken?: (rejectedToken: string) => Promise<string | null>;
 };
 
 let apiAuthentication: ApiAuthentication | null = null;
@@ -128,10 +129,12 @@ function httpErrorMessage(
 export async function apiRequest<TResponse, TBody = never>(
   path: string,
   options: ApiRequestOptions<TBody> = {},
+  retryAuthentication = true,
 ): Promise<TResponse> {
   const { body, headers: suppliedHeaders, token, ...requestOptions } = options;
+  const authentication = apiAuthentication;
   const accessToken = token === undefined
-    ? apiAuthentication?.getAccessToken() ?? null
+    ? authentication?.getAccessToken() ?? null
     : token;
   const headers = new Headers(suppliedHeaders);
   headers.set('Accept', 'application/json');
@@ -144,6 +147,7 @@ export async function apiRequest<TResponse, TBody = never>(
   let response: Response;
   try {
     response = await fetch(buildApiUrl(path), {
+      credentials: 'include',
       ...requestOptions,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -157,14 +161,40 @@ export async function apiRequest<TResponse, TBody = never>(
     });
   }
 
-  if (response.status === 204) return undefined as TResponse;
+  if (response.status === 204) {
+    if (accessToken && (
+      (path === '/api/auth/me/password' && options.method === 'PUT')
+      || (path === '/api/auth/me' && options.method === 'DELETE')
+    )) {
+      try { authentication?.onUnauthorized(accessToken); } catch {
+        // The mutation succeeded and authenticated UI was cleared in finally;
+        // storage failures must not be presented as a failed account mutation.
+      }
+    }
+    return undefined as TResponse;
+  }
 
   const responseBody = await parseResponseBody(response);
 
   if (!response.ok) {
     const detail = extractDetail(responseBody);
     if (response.status === 401 && accessToken) {
-      apiAuthentication?.onUnauthorized(accessToken);
+      if (retryAuthentication && authentication?.refreshAccessToken) {
+        let renewedToken: string | null;
+        try {
+          renewedToken = await authentication.refreshAccessToken(accessToken);
+        } catch (error) {
+          // Connection/server failures must not be treated as session expiry.
+          if (error instanceof ApiError && error.status === 401) {
+            authentication.onUnauthorized(accessToken);
+          }
+          throw error;
+        }
+        if (renewedToken && !options.signal?.aborted) {
+          return apiRequest<TResponse, TBody>(path, { ...options, token: renewedToken }, false);
+        }
+      }
+      authentication?.onUnauthorized(accessToken);
     }
     throw new ApiError({
       kind: 'http',

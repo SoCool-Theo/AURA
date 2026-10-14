@@ -3312,3 +3312,36 @@ remain separate follow-on work.
   rendering were verified with the existing component harnesses; live browser
   and physical-device visual acceptance remain manual.
 - Updated the public API documentation. No staging, commit or push was performed.
+
+### Web refresh sessions — 2026-10-14
+
+- Added persisted web sessions and hashed, one-use refresh credentials through
+  migration `e9a1c3f5b7d2`, extending `d6e8f0a2b4c6`. Access tokens remain
+  30 minutes; sessions expire after seven days without authenticated activity
+  or 30 days from original sign-in. Activity and rotation never move the fixed
+  maximum, and token/cookie expiration is capped by that deadline.
+- Added web login, refresh and logout endpoints with an HttpOnly cookie,
+  production Secure enforcement, explicit Origin/custom-header protection,
+  credentialed CORS and no-store responses. Rotation retains token digests for
+  reuse detection; brief concurrent exchanges return a retryable conflict
+  without issuing credentials for a consumed token. Later replay revokes the
+  session. Logout and password changes revoke web sessions; account deletion
+  cascades session/token rows. The mobile login contract remains compatible.
+- Connected web startup restoration and one-attempt API renewal. Concurrent
+  renewals share one request, cookie operations use Web Locks across tabs when
+  available, and late responses cannot restore a signed-out account. Session
+  identity checks prevent a second tab's sign-in from silently replacing the
+  first tab's account or being revoked by its stale logout. Failed server logout
+  remains visible; successful password changes/deletion clear local auth.
+- Labeled all backend environment-example settings blocks, added refresh
+  configuration to the local environment generator, and documented the policy,
+  cookie deployment requirements, migration and isolated database test workflow.
+  Existing local environment secrets were preserved. No new dependency was added.
+- Verification: 799 affected backend regression tests passed (39 live checks
+  skipped in that run); 30 dedicated PostgreSQL session/migration checks passed
+  against temporary databases inside `aura-postgres-test`, preserving existing
+  `aura_test` tables, data and its other branch's migration revision. All 162
+  web tests, TypeScript and the production build passed. Existing AI fixture
+  JWT-key-length warnings and the web bundle-size warning remain. Live browser
+  acceptance is still manual. Production migration/deployment was not performed.
+- No staging, commit or push was performed.

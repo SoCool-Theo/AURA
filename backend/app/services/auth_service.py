@@ -1,5 +1,7 @@
 """Authentication application workflows within a caller-owned transaction."""
 
+from datetime import UTC, datetime
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,7 @@ from ..core.security import (
 )
 from ..database.models import User
 from ..database.repositories import UserRepository
+from ..database.repositories.web_session_repository import WebSessionRepository
 from ..schemas.auth import (
     AccountDeletionRequest,
     LoginRequest,
@@ -133,6 +136,7 @@ class AuthService:
         request: PasswordChangeRequest,
     ) -> None:
         """Verify the current password and persist a new encoded secret."""
+        self._session.refresh(user, with_for_update=True)
         if user.password_hash is None or not verify_password(
             request.current_password.get_secret_value(),
             user.password_hash,
@@ -144,6 +148,7 @@ class AuthService:
                 request.new_password.get_secret_value()
             ),
         )
+        WebSessionRepository(self._session).revoke_for_user(user.id, datetime.now(UTC))
 
 
 def _constraint_name(error: IntegrityError) -> str | None:

@@ -12,6 +12,9 @@ from backend.app.core.security import (
     SecurityConfigurationError,
     create_access_token,
     decode_access_token,
+    decode_access_token_context,
+    generate_refresh_token,
+    hash_refresh_token,
     hash_password,
     verify_dummy_password,
     verify_password,
@@ -20,6 +23,32 @@ from backend.app.core.security import (
 
 TEST_SECRET = "test-only-signing-secret-with-at-least-thirty-two-bytes"
 OTHER_TEST_SECRET = "other-test-only-signing-secret-with-thirty-two-bytes"
+
+
+def test_web_access_token_validates_session_and_caps_expiration():
+    subject, session_id = uuid4(), uuid4()
+    now = datetime.now(UTC)
+    deadline = now + timedelta(minutes=2)
+    token = create_access_token(subject, issued_at=now, session_id=session_id, maximum_expires_at=deadline)
+    assert decode_access_token_context(token) == (subject, session_id)
+    claims = jwt.decode(token, TEST_SECRET, algorithms=["HS256"])
+    assert claims["exp"] == int(deadline.timestamp())
+
+
+@pytest.mark.parametrize("session_id", [None, "", "not-a-uuid", 42])
+def test_malformed_signed_session_claim_is_rejected(session_id):
+    claims = _claims(uuid4())
+    claims["sid"] = session_id
+    with pytest.raises(InvalidAccessTokenError):
+        decode_access_token_context(jwt.encode(claims, TEST_SECRET, algorithm="HS256"))
+
+
+def test_refresh_tokens_are_random_opaque_secrets_and_hashes_are_stable():
+    first, second = generate_refresh_token(), generate_refresh_token()
+    assert len(first) == 43 and first != second
+    assert len(hash_refresh_token(first)) == 64
+    assert hash_refresh_token(first) == hash_refresh_token(first)
+    assert hash_refresh_token(first) != hash_refresh_token(second)
 
 
 @pytest.fixture(autouse=True)

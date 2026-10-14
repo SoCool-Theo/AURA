@@ -8,7 +8,7 @@ from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.core.security import InvalidAccessTokenError, decode_access_token
+from app.core.security import InvalidAccessTokenError, decode_access_token_context
 from app.database.connection import (
     SessionFactory,
     create_database_engine,
@@ -16,6 +16,7 @@ from app.database.connection import (
     session_scope,
 )
 from app.database.models import User
+from app.services.web_session_service import WebSessionService
 
 
 @lru_cache(maxsize=1)
@@ -56,13 +57,19 @@ def get_current_user(
         raise _authentication_error()
 
     try:
-        user_id = decode_access_token(credentials.credentials)
+        context = decode_access_token_context(credentials.credentials)
     except InvalidAccessTokenError as error:
         raise _authentication_error() from error
 
-    user = session.get(User, user_id)
+    user = session.get(User, context.user_id)
     if user is None:
         raise _authentication_error()
+    if context.session_id is not None:
+        if not WebSessionService(session).record_activity(context.session_id, user.id):
+            raise _authentication_error()
+        # Commit only the short authentication bookkeeping transaction before the
+        # endpoint starts its own work; expensive analytics never hold this lock.
+        session.commit()
     return user
 
 

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, PositiveInt, PostgresDsn, SecretStr, field_validator
+from pydantic import Field, PositiveInt, PostgresDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     jwt_secret_key: SecretStr | None = None
     jwt_algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: PositiveInt = 30
+    refresh_session_idle_days: Annotated[int, Field(ge=1, le=365)] = 7
+    refresh_session_max_days: Annotated[int, Field(ge=1, le=365)] = 30
+    refresh_cookie_secure: bool = True
+    refresh_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     market_data_update_time_utc: time = time(hour=2)
     market_data_refresh_max_attempts: Annotated[int, Field(ge=1, le=5)] = 3
     market_data_refresh_retry_seconds: Annotated[int, Field(ge=1, le=60)] = 10
@@ -48,6 +52,16 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     )
+
+    @model_validator(mode="after")
+    def validate_refresh_session_policy(self) -> "Settings":
+        if self.refresh_session_idle_days > self.refresh_session_max_days:
+            raise ValueError("refresh inactivity cannot exceed maximum session lifetime")
+        if self.refresh_cookie_samesite == "none" and not self.refresh_cookie_secure:
+            raise ValueError("SameSite=None requires a Secure refresh cookie")
+        if self.app_env.casefold() == "production" and not self.refresh_cookie_secure:
+            raise ValueError("production refresh cookies must be Secure")
+        return self
 
     @field_validator("database_url", "market_data_worker_database_url")
     @classmethod

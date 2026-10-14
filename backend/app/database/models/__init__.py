@@ -7,6 +7,7 @@ from .market_data_refresh import MarketDataRefreshState
 from .portfolio import Portfolio, PortfolioType
 from .simulation import Simulation
 from .user import User
+from .web_session import WebRefreshToken, WebSession
 from .watchlist import WatchlistItem
 from .notification import Notification, NotificationPreferences
 
@@ -19,6 +20,8 @@ __all__ = [
     "PortfolioType",
     "Simulation",
     "User",
+    "WebSession",
+    "WebRefreshToken",
     "WatchlistItem",
     "Notification",
     "NotificationPreferences",

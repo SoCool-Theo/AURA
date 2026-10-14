@@ -56,6 +56,8 @@ def test_alembic_environment_uses_aura_base_metadata() -> None:
     assert "target_metadata = Base.metadata" in environment_source
     assert set(Base.metadata.tables) == {
         "market_data_refresh_state",
+        "web_sessions",
+        "web_refresh_tokens",
         "notifications",
         "notification_preferences",
         "analyses",
@@ -88,7 +90,7 @@ def test_alembic_configuration_loads_without_connecting(
     script = ScriptDirectory.from_config(config)
 
     assert script.dir == str(ALEMBIC_DIRECTORY)
-    assert len(list(script.walk_revisions())) == 10
+    assert len(list(script.walk_revisions())) == 11
 
 
 def test_offline_migration_operation_does_not_connect(
@@ -113,10 +115,11 @@ def test_quantity_only_revision_extends_planned_portfolios() -> None:
         if path.name != "__init__.py"
     ]
 
-    assert len(revision_files) == 10
+    assert len(revision_files) == 11
     script = ScriptDirectory.from_config(_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        "e9a1c3f5b7d2",
         REFRESH_REVISION,
         NOTIFICATION_REVISION,
         PROFILE_REVISION,
@@ -130,4 +133,4 @@ def test_quantity_only_revision_extends_planned_portfolios() -> None:
     ]
     for index, revision in enumerate(revisions):
         assert revision.down_revision == (revisions[index + 1].revision if index + 1 < len(revisions) else None)
-    assert script.get_current_head() == REFRESH_REVISION
+    assert script.get_current_head() == "e9a1c3f5b7d2"

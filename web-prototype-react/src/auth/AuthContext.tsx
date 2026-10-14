@@ -7,7 +7,7 @@ import {
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
-import { getCurrentUser, loginUser, registerUser } from '../api/authApi';
+import { getCurrentUser, loginUser, logoutWebSession, refreshWebSession, registerUser } from '../api/authApi';
 import { ApiError, configureApiAuthentication } from '../api/apiClient';
 import type {
   AuthenticatedUserResponse,
@@ -35,7 +35,7 @@ export type AuthContextValue = {
     request: RegistrationRequest,
   ) => Promise<AuthenticatedUserResponse>;
   setCurrentUser: (user: AuthenticatedUserResponse) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   retrySessionRestore: () => Promise<void>;
 };
 
@@ -43,6 +43,22 @@ export const AuthContext = createContext<AuthContextValue | undefined>(undefined
 
 function isAuthenticationFailure(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
+}
+
+function webSessionIdentity(token: string): { sub: string; sid: string } | null {
+  // These tokens come from the API; parsing here only guards UI identity.
+  // Signature validation and authorization remain exclusively in the backend.
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, '=')));
+    return typeof claims.sub === 'string' && claims.sub
+      && typeof claims.sid === 'string' && claims.sid ? claims : null;
+  } catch { return null; }
+}
+
+function sameWebSession(previous: string, next: string): boolean {
+  const a = webSessionIdentity(previous), b = webSessionIdentity(next);
+  return Boolean(a && b && a.sub === b.sub && a.sid === b.sid);
 }
 
 function sessionRestoreMessage(error: unknown): string {
@@ -57,9 +73,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('initializing');
   const [sessionError, setSessionError] = useState<string | null>(null);
   const restorationStarted = useRef(false);
+  const sessionVersion = useRef(0);
+  const pendingRefresh = useRef<Promise<string | null> | null>(null);
+  const replacedAccessToken = useRef<string | null>(null);
 
   const invalidateSession = useCallback((rejectedToken?: string) => {
     if (rejectedToken && readAccessToken() !== rejectedToken) return;
+    sessionVersion.current += 1;
+    replacedAccessToken.current = null;
 
     try {
       clearAccessToken();
@@ -71,42 +92,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const restoreSession = useCallback(async () => {
-    const token = readAccessToken();
-    if (!token) {
-      setUser(null);
-      setSessionError(null);
-      setStatus('unauthenticated');
-      return;
+  const refreshAccessToken = useCallback((rejectedToken?: string): Promise<string | null> => {
+    const currentToken = readAccessToken();
+    if (rejectedToken && currentToken !== rejectedToken) {
+      return Promise.resolve(replacedAccessToken.current === rejectedToken ? currentToken : null);
+    }
+    if (pendingRefresh.current) {
+      return pendingRefresh.current.then(token => {
+        if (token && rejectedToken && !sameWebSession(rejectedToken, token)) {
+          throw new ApiError({ kind: 'http', status: 401,
+            message: 'Your sign-in session changed. Please sign in again.' });
+        }
+        return token;
+      });
     }
 
+    const version = sessionVersion.current;
+    const renewal = refreshWebSession().then(response => {
+      // A late response must never restore a signed-out or replaced account.
+      if (sessionVersion.current !== version) return null;
+      if (rejectedToken && !sameWebSession(rejectedToken, response.access_token)) {
+        throw new ApiError({ kind: 'http', status: 401,
+          message: 'Your sign-in session changed. Please sign in again.' });
+      }
+      replacedAccessToken.current = currentToken;
+      storeAccessToken(response.access_token);
+      return response.access_token;
+    }).finally(() => {
+      if (pendingRefresh.current === renewal) pendingRefresh.current = null;
+    });
+    pendingRefresh.current = renewal;
+    return renewal;
+  }, []);
+
+  const restoreSession = useCallback(async () => {
+    const version = sessionVersion.current;
     setStatus('initializing');
     setSessionError(null);
 
     try {
-      const currentUser = await getCurrentUser({ token });
-      if (readAccessToken() !== token) return;
+      const token = await refreshAccessToken();
+      if (!token || sessionVersion.current !== version) return;
+      const currentUser = await getCurrentUser();
+      if (sessionVersion.current !== version) return;
 
       setUser(currentUser);
       setStatus('authenticated');
     } catch (error) {
-      if (readAccessToken() !== token) return;
+      if (sessionVersion.current !== version) return;
 
       setUser(null);
       if (isAuthenticationFailure(error)) {
-        invalidateSession(token);
+        invalidateSession();
         return;
       }
 
       setSessionError(sessionRestoreMessage(error));
       setStatus('error');
     }
-  }, [invalidateSession]);
+  }, [invalidateSession, refreshAccessToken]);
 
   useEffect(() => configureApiAuthentication({
     getAccessToken: readAccessToken,
     onUnauthorized: invalidateSession,
-  }), [invalidateSession]);
+    refreshAccessToken,
+  }), [invalidateSession, refreshAccessToken]);
 
   useEffect(() => {
     if (restorationStarted.current) return;
@@ -115,7 +165,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [restoreSession]);
 
   const login = useCallback(async (request: LoginRequest) => {
+    const version = ++sessionVersion.current;
+    replacedAccessToken.current = null;
     const tokenResponse = await loginUser(request);
+    if (sessionVersion.current !== version) return;
     storeAccessToken(tokenResponse.access_token);
     setStatus('initializing');
     setSessionError(null);
@@ -124,11 +177,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const currentUser = await getCurrentUser({
         token: tokenResponse.access_token,
       });
-      if (readAccessToken() !== tokenResponse.access_token) return;
+      if (sessionVersion.current !== version) return;
 
       setUser(currentUser);
       setStatus('authenticated');
     } catch (error) {
+      if (sessionVersion.current !== version) return;
       if (isAuthenticationFailure(error)) {
         invalidateSession(tokenResponse.access_token);
       } else {
@@ -144,8 +198,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     registerUser(request)
   ), []);
 
-  const logout = useCallback(() => {
-    invalidateSession();
+  const logout = useCallback(async () => {
+    const version = ++sessionVersion.current;
+    // Keep failures visible to the caller. A failed server logout must not
+    // appear successful while leaving a restorable browser cookie behind.
+    await logoutWebSession(webSessionIdentity(readAccessToken() ?? '')?.sid);
+    if (sessionVersion.current === version) invalidateSession();
   }, [invalidateSession]);
 
   const value = useMemo<AuthContextValue>(() => ({

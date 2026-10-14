@@ -448,7 +448,7 @@ test('account deletion password field matches mobile dark red without changing o
   assert.doesNotMatch(read('src/pages/settings/SettingsPage.tsx'), /deletePassword/);
 });
 
-test('web sign out clears authenticated state even when token storage removal fails', () => {
+test('web sign out clears authenticated state even when token storage removal fails', async () => {
   const updates = [];
   const react = {
     createContext: () => ({ Provider: 'Provider' }),
@@ -461,11 +461,11 @@ test('web sign out clears authenticated state even when token storage removal fa
   };
   const { AuthProvider } = load('src/auth/AuthContext.tsx', {
     react,
-    '../api/authApi': {},
+    '../api/authApi': { logoutWebSession: async () => {} },
     '../api/apiClient': { ApiError: Error, configureApiAuthentication: () => {} },
-    './authStorage': { clearAccessToken: () => { throw Error('storage unavailable'); } },
+    './authStorage': { readAccessToken: () => null, clearAccessToken: () => { throw Error('storage unavailable'); } },
   }, { React: react });
-  assert.throws(() => AuthProvider({}).logout(), /storage unavailable/);
+  await assert.rejects(() => AuthProvider({}).logout(), /storage unavailable/);
   assert.deepEqual(updates, [null, null, 'unauthenticated']);
 });
 
@@ -476,7 +476,10 @@ test('web account deletion uses authenticated DELETE and accepts an empty 204', 
   }, { fetch: async (url, options) => {
     calls.push({ url, options }); return { status: 204, ok: true, text: async () => '' };
   } });
-  const api = load('src/api/authApi.ts', { './apiClient': transport });
+  const api = load('src/api/authApi.ts', {
+    './apiClient': transport,
+    '../auth/webSessionLock': { withWebSessionLock: fn => fn() },
+  });
   assert.equal(await api.deleteCurrentUserAccount({ current_password: 'current-password' }, { token: 'token' }), undefined);
   assert.equal(calls[0].url, 'http://example.invalid/api/auth/me');
   assert.equal(calls[0].options.method, 'DELETE');
@@ -1600,6 +1603,7 @@ test('production web source has no direct market, database, or LLM provider auth
 test('web settings use the authenticated Backend Profile V1 contract', async () => {
   const calls = [];
   const auth = load('src/api/authApi.ts', {
+    '../auth/webSessionLock': { withWebSessionLock: fn => fn() },
     './apiClient': {
       apiRequest: async (requestPath, options = {}) => {
         calls.push({ path: requestPath, options });

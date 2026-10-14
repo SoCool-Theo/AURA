@@ -20,6 +20,8 @@ from backend.app.database import Base
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_CONFIG_PATH = BACKEND_ROOT / "alembic.ini"
 EXPECTED_TABLES = {
+    "web_sessions",
+    "web_refresh_tokens",
     "market_data_refresh_state",
     "notifications",
     "notification_preferences",
@@ -41,6 +43,7 @@ WATCHLIST_REVISION = "a8d3f1c6b2e7"
 PROFILE_REVISION = "b9e4d2f7c1a6"
 NOTIFICATION_REVISION = "c3d5e7f9a2b4"
 REFRESH_REVISION = "d6e8f0a2b4c6"
+WEB_SESSION_REVISION = "e9a1c3f5b7d2"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -324,6 +327,15 @@ def _captured_upgrade() -> tuple[
         refresh_revision.upgrade()
     for create_call in refresh_table.call_args_list:
         sa.Table(create_call.args[0], metadata, *create_call.args[1:])
+    web_revision = _script_directory().get_revision(WEB_SESSION_REVISION).module
+    with (
+        patch.object(web_revision.op, "create_table") as web_tables,
+        patch.object(web_revision.op, "create_index") as web_indexes,
+    ):
+        web_revision.upgrade()
+    for create_call in web_tables.call_args_list:
+        sa.Table(create_call.args[0], metadata, *create_call.args[1:])
+    indexes.extend((call.args[1], call.args[0], tuple(call.args[2]), call.kwargs.get("unique", False)) for call in web_indexes.call_args_list)
     return metadata, indexes
 
 
@@ -383,6 +395,7 @@ def test_revisions_form_a_single_refresh_head() -> None:
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
+        WEB_SESSION_REVISION,
         REFRESH_REVISION,
         NOTIFICATION_REVISION,
         PROFILE_REVISION,
@@ -394,7 +407,7 @@ def test_revisions_form_a_single_refresh_head() -> None:
         AUTHENTICATION_REVISION,
         INITIAL_REVISION,
     ]
-    assert script.get_current_head() == REFRESH_REVISION
+    assert script.get_current_head() == WEB_SESSION_REVISION
     for index, revision in enumerate(revisions):
         expected_parent = revisions[index + 1].revision if index + 1 < len(revisions) else None
         assert revision.down_revision == expected_parent

@@ -8,7 +8,15 @@ import type {
   ProfileUpdateRequest,
   RegistrationRequest,
 } from '../types/auth';
-import { apiRequest } from './apiClient';
+import { ApiError, apiRequest } from './apiClient';
+import { withWebSessionLock } from '../auth/webSessionLock';
+
+const webSessionOptions = {
+  method: 'POST' as const,
+  credentials: 'include' as const,
+  headers: { 'X-Aura-Web-Session': '1' },
+  token: null,
+};
 
 export function registerUser(
   request: RegistrationRequest,
@@ -24,12 +32,33 @@ export function loginUser(
   request: LoginRequest,
   signal?: AbortSignal,
 ): Promise<AccessTokenResponse> {
-  return apiRequest<AccessTokenResponse, LoginRequest>('/api/auth/login', {
-    method: 'POST',
+  return withWebSessionLock(() => apiRequest<AccessTokenResponse, LoginRequest>('/api/auth/web/login', {
+    ...webSessionOptions,
     body: request,
     signal,
-    token: null,
+  }));
+}
+
+export function refreshWebSession(): Promise<AccessTokenResponse> {
+  return withWebSessionLock(async () => {
+    try {
+      return await apiRequest<AccessTokenResponse>('/api/auth/web/refresh', webSessionOptions);
+    } catch (error) {
+      // An overlapping tab may have updated the shared cookie. Retry once;
+      // a conflict never grants tokens for a previously used refresh secret.
+      if (!(error instanceof ApiError) || error.status !== 409) throw error;
+      return apiRequest<AccessTokenResponse>('/api/auth/web/refresh', webSessionOptions);
+    }
   });
+}
+
+export function logoutWebSession(expectedSessionId?: string): Promise<void> {
+  return withWebSessionLock(() => apiRequest<void>('/api/auth/web/logout', {
+    ...webSessionOptions,
+    headers: { ...webSessionOptions.headers,
+      ...(expectedSessionId ? { 'X-Aura-Web-Session-Id': expectedSessionId } : {}),
+    },
+  }));
 }
 
 export function getCurrentUser(
