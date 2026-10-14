@@ -3925,34 +3925,6 @@ remain separate follow-on work.
   deployment, staging, commit or push occurred. Unrelated untracked files remain
   preserved on `feat/admin-web-foundation`.
 
-### AURA technical presentation Version 1 — 2026-10-13
-
-- Created `docs/report/presentation-v1/AURA_Presentation_V1.pptx` with 32 main
-  slides and six hidden technical backup slides for a one-hour presentation.
-  The speaking notes allocate about 44 minutes to explanation and live demos,
-  with 15 minutes reserved for committee questions.
-- Based the presentation on the final report, relevant project documentation
-  and inspected backend/web/mobile implementation. Included portfolio modes,
-  data preparation and freshness, historical formulas, risk contributions,
-  simulations, immutable snapshots, authentication, forecasting evaluation and
-  composition, grounded AI, client integration and recorded verification limits.
-- Used the report title-page team names and student IDs in the supplied team
-  deck's three-member arrangement. Actual photograph slots remain editable.
-  Included two actual web screenshot previews and separate timed website and
-  React Native demo sections. Retained the report's six-module proposed
-  administration design as requested.
-- Added `docs/report/presentation-v1/README.md` with suggested speaking roles,
-  backup-slide navigation, demonstration preparation and presentation-day
-  meeting requirements. Source references and detailed explanations are in
-  the PowerPoint speaker notes.
-- Verification: all 38 final slides rendered and visually reviewed; package
-  integrity, layout/font policy and native chart checks passed, with zero layout
-  findings or warnings. Confirmed team fields, 38 note sections, six hidden
-  backups, illustrative allocation arithmetic, session timing and the delivered
-  file checksum. Application code and dependencies were not modified. Native
-  PowerPoint execution was not part of these checks. No commit was created.
-
-
 ### Administrator role management — 2026-10-13
 
 - Added guarded `PATCH /api/admin/users/{user_id}/role` with desired and expected
@@ -4002,43 +3974,6 @@ remain separate follow-on work.
   and API contracts;
   unrelated untracked files remain preserved on feat/admin-web-foundation.
 
-### Technical presentation Version 2 — 2026-10-13
-
-- Created `docs/report/presentation-v2/AURA_Presentation_V2.pptx` from the V1
-  technical baseline and final report, with 32 main slides and six hidden
-  technical backups. Added explicit portfolio-risk pain points and AURA's
-  solution. Removed the session-planning page, presentation durations, reserved
-  question allocation and suggested presenter assignments from slides and notes.
-- Introduced glass and crystal artwork, data-terrain backgrounds, cyan/violet
-  typography, six editable charts and nine native tables. The team introduction
-  retains the supplied example's blue design, with the report's three names and
-  IDs and editable photograph slots. Two actual report web captures accompany
-  website and React Native demo sections. Administration remains the requested
-  report proposal.
-- Added a usage guide and saved six generated/themed assets with prompt
-  specifications. Re-imported and rendered the final export for visual review;
-  package integrity, layout/font policy and native-chart checks passed with zero
-  findings or warnings. Content checks confirmed 38 slides and notes, hidden
-  backups, team fields, native data and removal of timing/presenter labels.
-  Delivered file checksum matches the validated export. Native PowerPoint
-  execution was not part of verification. No application code, dependency,
-  architecture, V1 deliverable or unrelated work was changed. No commit created.
-
-#### V2 readability revision — 2026-10-13
-
-- Updated the V2 PowerPoint with light cyan/lavender titles, native navy panels
-  at 18% transparency and subtle cyan borders. Customer Workflow and similar
-  step layouts use one continuous panel per number/heading/description group.
-  Added three lightly blurred artwork variants; the cover keeps its sharp
-  original artwork. Updated the guide and asset prompt record.
-- Verified all 38 slide texts and notes against the technical baseline, native
-  chart data, the four workflow panels and their encoded opacity. Cover,
-  screenshots and report diagrams remain unchanged. Rendered and inspected the
-  export; package, native-chart, layout and font checks passed with zero findings
-  or warnings. Confirmed the final spacing repair changed only slide 8's note
-  panel pixels and the delivered checksum matches the validated file. No
-  application code, dependencies or unrelated work changed; no commit created.
-
 ### Administrator customer account creation — 2026-10-14
 
 - Added protected POST /api/admin/users using the existing registration,
@@ -4075,8 +4010,8 @@ remain separate follow-on work.
   matched before/after cleanup; separate check-only acceptance also verified
   preservation. Existing accounts, local public data and remote configuration
   were untouched. No deployment, real-provider/model execution, database migration,
-  staging, commit or push. Preserved independent presentation progress and
-  unrelated untracked files on feat/admin-web-foundation.
+  staging, commit or push. Preserved unrelated untracked files on
+  feat/admin-web-foundation.
 
 ### Administrator portfolio directory and details — 2026-10-14
 
@@ -4169,3 +4104,4 @@ remain separate follow-on work.
   user development servers, remote configuration and unrelated report files were
   preserved. No staging, commit, push, deployment or model execution. Branch is
   feat/admin-web-foundation; report downloads remain a follow-on feature.
+
