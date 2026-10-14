@@ -2774,23 +2774,6 @@ remain separate follow-on work.
   whitespace checks passed. Existing bundle warning remains; browser visual
   acceptance was not run. No dependencies, migrations, commits, or pushes.
 
-### AURA Senior Project 1 report outline — 2026-10-06
-
-- Added `docs/report/AURA_Senior_Project_1_Report_Outline.md` with the supplied
-  VMES template's front matter and six-chapter structure, References, and
-  supporting appendices, using one-sentence content placeholders.
-- Reviewed the supplied AU Document Wallet and Libby-bot reports, AURA proposal,
-  current implementation records, contracts, and relevant source code to define
-  the report scope around AURA's delivered portfolio risk education workflows.
-- Included 30-day asset and portfolio forecasting in the report's implemented
-  feature scope at the user's request. The backend is implemented; the user is
-  completing its frontend, and final UI screenshots and integration evidence
-  will be incorporated when the complete report is drafted.
-- The outline separates recorded verification from pending user, device, live
-  database, and deployment acceptance, without inventing results or feedback.
-- Documentation structure and placeholder checks passed. No application code,
-  dependencies, migrations, commits, or pushes were changed by this report task.
-
 ### Deployment-ready backend market-data refresh — 2026-10-06
 
 - Added tracked refresh orchestration around the existing fetch/clean/validate
@@ -2829,8 +2812,7 @@ remain separate follow-on work.
 - No real-provider download, production migration, worker activation, Windows
   task, deployment, frontend change, analytics-formula change, production model training,
   artifact regeneration, dependency, commit, or push was performed. Real-provider
-  and chosen-host acceptance remain deployment prerequisites. Unrelated report
-  outline/documentation edits in the shared workspace were preserved.
+  and chosen-host acceptance remain deployment prerequisites.
 
 ### Web/mobile daily market-data integration — 2026-10-06
 
@@ -2853,31 +2835,14 @@ remain separate follow-on work.
 - Added shared market-data tests to the web authority runner and updated the
   market-data contract/integration backlog. Validation: 17 new shared regressions,
   91 existing web/shared regressions, and 69 mobile regressions passed (177 total).
-  One pre-existing branding regression fails on the unrelated report-outline entry
-  in this file, preserved unchanged. Both TypeScript checks, web production build,
+  One pre-existing documentation-branding regression failed at this checkpoint.
+  Both TypeScript checks, web production build,
   and whitespace checks passed; the existing bundle-size warning remains.
 - Browser/device and authenticated runtime acceptance remain pending. No backend
   code, migration application, worker activation, deployment, Windows task,
   provider download, forecasting artifact, dependency, commit, or push was added.
   Migration d6e8f0a2b4c6 and separately supervised worker activation are still
-  runtime prerequisites; client Refresh reads saved data only. Unrelated
-  docs/report files were preserved.
-
-### Academic report first draft — 2026-10-07
-
-- Created `docs/report/AURA_Senior_Project_1_Report_V1.docx`, a 41-page report
-  using the supplied university template and the user's revised chapter scope.
-- Updated the companion outline to place the overview first, combine the
-  existing-system review/comparison, shorten methodology, remove the requested
-  standalone design and feedback sections, and retain two supporting appendices.
-- Included recorded implementation and verification evidence, verified external
-  references, illustrative calculation examples, and the complete forecasting
-  selection table without inventing final-test performance or feedback results.
-- Preserved 15 labeled visual placeholders and student, advisor, committee, and
-  academic-detail placeholders. Refreshed the contents and figure/table indexes.
-- Verified all 41 rendered pages, native equations, structure, pagination, table
-  layout, and preservation of the original template geometry and opaque parts.
-- No application code, dependencies, database records, commits, or pushes changed.
+  runtime prerequisites; client Refresh reads saved data only.
 
 ### Web forecasting V1 outlook preview — 2026-10-07
 
@@ -2899,15 +2864,14 @@ remain separate follow-on work.
   are interpolated or fabricated. Return/volatility have separate chart views.
 - Added 13 forecasting regressions and the web integration/acceptance report at
   docs/development/web-forecasting-v1.md. Full web/shared-client runner: 121 passed,
-  one pre-existing branding failure on unrelated report-outline wording retained
-  unchanged. TypeScript, production build, and whitespace checks passed; the
+  one pre-existing documentation-branding failure at this checkpoint.
+  TypeScript, production build, and whitespace checks passed; the
   existing bundle-size warning remains. Browser confirmed the protected route
   redirects to login; authenticated real-data/responsive visual acceptance is
   pending because no signed-in session was available.
 - Mobile, backend, frozen artifacts, dependencies, migrations, model training,
-  provider downloads, commits, pushes, and deployments are unchanged. Unrelated
-  report files and concurrent report status entries were preserved. Weekly model
-  support and forecast-specific AI/persistence remain separate follow-on work.
+  provider downloads, commits, pushes, and deployments are unchanged. Weekly
+  model support and forecast-specific AI/persistence remain separate follow-on work.
 
 ### Mobile forecasting V1 outlook preview — 2026-10-07
 
@@ -2925,15 +2889,15 @@ remain separate follow-on work.
   intervals, risk classifications or client financial forecasts are invented.
 - Mobile TypeScript and 84 regressions passed (15 new forecasting checks).
   Shared market-data/notifications and web forecasting: 56 passed. Full web
-  runner: 121 passed with the same unrelated report-wording branding failure
-  preserved. Android Hermes export passed after approved compiler execution;
+  runner: 121 passed with the same documentation-branding failure at this
+  checkpoint. Android Hermes export passed after approved compiler execution;
   ignored build output stays under mobile/.expo/. Whitespace checks passed.
 - Added docs/development/mobile-forecasting-v1.md with file purposes, verification
   and phone acceptance steps. Device visual/authenticated real-model acceptance
   is pending; Node orchestration tests and export are not device E2E checks.
 - Backend, frozen artifacts, models, migrations, web production code, dependencies,
-  provider data, commits, pushes and deployments remain unchanged. Concurrent
-  report content was preserved. Weekly model support remains follow-on work.
+  provider data, commits, pushes and deployments remain unchanged. Weekly model
+  support remains follow-on work.
 
 ### Multi-horizon forecasting offline selection foundation — 2026-10-07
 
@@ -2959,7 +2923,7 @@ remain separate follow-on work.
   and client horizon activation remain pending. Weekly controls stay disabled.
 - Frozen 30-day artifacts, original forecasting source/tests/APIs, database data,
   provider data, frontend code, dependencies, architecture files, commits and
-  pushes remain unchanged. Unrelated report work is preserved. The recorded
+  pushes remain unchanged. The recorded
   frozen snapshot is reusable for comparisons, not a new untouched project-level
   final holdout; fresh-period acceptance must be distinguished from that reuse.
 
@@ -2982,25 +2946,7 @@ remain separate follow-on work.
   training, provider requests or database operations occurred. New-horizon model
   fitting, selection review, calibration, final testing, deployment artifacts
   and client activation remain pending. Original V1 models and application
-  databases were not replaced; unrelated report status/content was preserved.
-
-### Report Version 2 review and wording — 2026-10-07
-
-- Created `docs/report/AURA_Senior_Project_1_Report_V2.docx` from the saved
-  report and its two reviewer comments; Version 1 remains unchanged.
-- Removed the abstract's final paragraph and all of Appendix B.2, including
-  its table. Rewrote the main prose with shorter sentences, simpler wording,
-  and necessary technical terms, while preserving formulas and evidence limits.
-- Updated forecasting descriptions to include the implemented web and mobile
-  outlook screens, their recorded checks, the active 30-day horizon, and pending
-  authenticated runtime and device acceptance. No weekly runtime capability
-  or user feedback results are claimed.
-- Updated the companion outline to match revised headings and appendix scope.
-  Retained 15 visual placeholders and student, advisor, and committee fields.
-- Refreshed the contents and figure/table indexes in Word and visually checked
-  all 40 rendered pages. Structure, equations, template fidelity, comment removal,
-  source preservation, text bounds, and document field checks passed.
-- No application code, dependencies, database data, commits, or pushes changed.
+  databases were not replaced.
 
 ### Reviewed weekly selection and prepared offline freeze — 2026-10-07
 
@@ -3022,7 +2968,7 @@ remain separate follow-on work.
   final-test evidence or model artifact was generated by the agent.
 - Original 30-day source/package, runtime APIs, clients, environment files,
   databases and dependencies remain unchanged. Weekly controls stay disabled.
-  Unrelated report work was preserved; no commit, push or deployment occurred.
+  No commit, push or deployment occurred.
 
 ### Verified weekly freeze and prepared manual calibration — 2026-10-07
 
@@ -3050,29 +2996,7 @@ remain separate follow-on work.
   database operation or provider request occurred in this checkpoint.
 - Original V1 source/models, APIs, clients, dependencies and environment files
   remain unchanged. Final testing, artifacts, runtime support and weekly client
-  activation remain pending. No commit or push; unrelated report work preserved.
-
-### Report Version 3 comments and scope — 2026-10-07
-
-- Created `docs/report/AURA_Senior_Project_1_Report_V3.docx` from the six saved
-  Version 2 comments, preserving the commented source document unchanged.
-- Revised forecasting wording to explain its practical value, expanded the
-  LEGACY definition with an allocation example, explained FR identifiers, and
-  distinguished the 90-day historical averaging window from forecast horizons.
-- Included the 7/14/21-day extension in methodology and scope while retaining
-  the established 30-day results and separate verification boundaries. No
-  weekly predictive-performance or authenticated-runtime results were invented.
-- Added the user-confirmed admin scope: Dashboard, Users, Market Data, AI
-  Monitoring, System Health, and Audit Log. Requirements, diagrams, UI, audit
-  design, and acceptance placeholders reflect these modules. Forecasting
-  Monitoring and analysis/simulation dashboard statistics remain recommendations.
-- Updated the companion outline. Kept two appendices, 15 visual placeholders,
-  editable equations, and student, advisor, and committee-name fields.
-- Refreshed Word indexes and checked all 41 final rendered pages. Structure,
-  comments, source preservation, template geometry and opaque parts, field
-  references, tables, page breaks, and text bounds passed document verification.
-- No application code, dependencies, database data, commits, or pushes changed
-  in this report task; concurrent forecasting development was preserved.
+  activation remain pending. No commit or push.
 
 ### Verified weekly calibration and prepared guarded final test — 2026-10-07
 
@@ -3100,33 +3024,7 @@ remain separate follow-on work.
   creation was performed by the agent in this implementation checkpoint.
 - No original 30-day source/models, APIs, clients, dependencies or environment
   files changed. Deployment-artifact fitting, acceptance review, runtime support
-  and weekly UI activation remain pending. No commit or push; unrelated report
-  content and concurrent status work preserved.
-
-### Report visuals and source links — 2026-10-07
-
-- Updated the existing V3 Word report in `docs/report/` in place. Added all
-  15 numbered figures with 31 panels: project diagrams, authenticated web
-  screenshots, and a graph of the recorded 30-day selection-fold MAE values.
-- Added 13 underlined Source links. Ten point to verified external sources;
-  three point to actual local project files. Student, advisor, and committee
-  names remain placeholders. Admin visuals are labelled as design evidence,
-  and final admin access verification remains pending.
-- With user authorization, created `Report Example Current` (five AAPL shares
-  and twenty BND shares) and `Report Example Planned` (USD 1,500 SPY and
-  USD 1,000 BND). Saved one historical analysis and one Combined Simulation
-  for the Current example, and captured real asset/portfolio 30-day outlooks
-  and an actual grounded AI explanation. These examples remain in the account.
-- Recorded the completed local web demonstration in the report. Weekly
-  controls remain disabled in the captured runtime. No weekly performance
-  results, admin statistics, or device-acceptance claims were invented.
-- Refreshed Word indexes and reviewed all 62 rendered pages, including the
-  changed pages after corrections. Verified image sources, 13 hyperlink
-  targets, equations, table structure, name fields, template geometry and
-  preserved parts. Updated the companion outline and retained visual sources
-  and capture notes under `docs/report/assets/`.
-- No application code, dependencies, forecasting artifacts, architecture,
-  commits, or pushes changed. Concurrent forecasting work was preserved.
+  and weekly UI activation remain pending. No commit or push.
 
 ### Reviewed weekly final test and prepared experimental artifact training — 2026-10-07
 
@@ -3157,30 +3055,8 @@ remain separate follow-on work.
   model fitting, artifact creation, commits or pushes occurred in this checkpoint.
 - Original 30-day V1 source/package, APIs, portfolio composition, web/mobile,
   dependencies, environment files and architecture remain unchanged. Weekly
-  runtime validation and client activation remain pending. Unrelated report
-  files/status were preserved; generated evidence/artifacts remain ignored.
-
-### Report V3 formatting and exhibition feedback — 2026-10-07
-
-- Updated the existing V3 document in place. Applied grayscale formatting to
-  30 visual panels and kept Figure 5.7 in its original colors, following the
-  new reviewer comment. Removed 15 figure source notes and placed all ten
-  numbered table captions below their tables.
-- Added 46 clickable citation numbers, including bibliography numbers, with
-  targets matching the existing 13 Source links. References 1–10 use external
-  source pages; references 11–13 use actual local project source files.
-- Added Section 5.6 Student and Exhibition Feedback from the team's reported
-  positive verbal comments. The section clearly identifies the feedback as
-  informal. No survey, ratings, participant counts, or quotations were invented.
-  Figure 5.8 remains a photograph placeholder. Renumbered Achievements and
-  Limitations to 5.7 and refreshed the contents and figure/table indexes.
-- Updated the companion outline and visual evidence notes. Verified source
-  targets, table-caption order, picture effects, equations, template parts,
-  and name placeholders. Reviewed all 62 rendered pages; after the final
-  photograph-caption alignment adjustment, reviewed its page again and
-  confirmed the other 61 page images were unchanged.
-- No application code, architecture, dependencies, model artifacts, commits,
-  or pushes changed. Concurrent forecasting work was preserved.
+  runtime validation and client activation remain pending. Generated
+  evidence/artifacts remain ignored.
 
 ### Weekly artifact test checksum false-positive correction — 2026-10-07
 
@@ -3193,27 +3069,6 @@ remain separate follow-on work.
 - Only the test and this status entry changed. Training code, models, frozen
   evidence, APIs and clients remain unchanged. New verification awaits the user's
   manual test rerun; no agent-run test, training, DB access, commit or push occurred.
-
-### Report V3 future work and limitation revision — 2026-10-07
-
-- Edited the user's latest manually revised V3 document in place and applied
-  reviewer comment 55. Updated Section 5.7 and Sections 6.2–6.5 to remove weekly
-  runtime, admin access, and deployment from the concluding limitations and
-  future-work priorities, without asserting that pending work was completed.
-- Future Work now discusses custom stress testing, transaction-aware analysis,
-  forecasting-model improvements, portfolio prediction intervals, and evaluation
-  of user learning and AI explanation quality. Retained simple academic wording
-  and updated the related outline placeholders.
-- Preserved 325 other non-index paragraphs, all tables, pictures, equations,
-  section geometry, external hyperlinks, styles, headers, and other package
-  parts from the user's saved version. Refreshed only the Word index blocks
-  through a working copy and kept the original navigation bookmarks.
-- Verified the 62-page final render. Inspected all six changed page images;
-  the other 56 images matched the previously inspected report exactly. The
-  user's removals and formatting edits were preserved. A backup of the latest
-  user-edited document and internal QA files are retained outside the report folder.
-- No application code, models, architecture, dependencies, commits, or pushes
-  changed. Concurrent forecasting work was preserved.
 
 ### Experimental weekly backend runtime preparation — 2026-10-07
 
@@ -3246,7 +3101,6 @@ remain separate follow-on work.
   No updated passing test count or verified live runtime is claimed.
 - No migrations, dependencies, training/evaluation reruns, environment changes,
   frontend activation, AI grounding, staging, commits or pushes were performed.
-  Concurrent report work and pre-existing status edits were preserved.
 
 ### Experimental weekly web integration — 2026-10-08
 
@@ -3276,8 +3130,6 @@ remain separate follow-on work.
   count is claimed. Mobile weekly parity remains the next checkpoint.
 - No backend, model/artifact, database, migration, training/evaluation, provider,
   AI grounding, dependency, architecture, staging, commit or push changes.
-  Unrelated untracked docs/report content is preserved and excluded from Git
-  staging guidance.
 
 ### Compact web forecast graphs — 2026-10-08
 
@@ -3286,7 +3138,7 @@ remain separate follow-on work.
   screens. Selected-horizon and comparison charts share this styling; their
   existing aspect ratio and narrow-screen scrolling remain unchanged.
 - Added a scoped sizing regression. Forecast values, axes, ranges, models,
-  APIs, mobile and unrelated report files are unchanged. Whitespace checks
+  APIs and mobile are unchanged. Whitespace checks
   passed; tests/build and signed-in visual acceptance remain for the user's
   manual verification. No staging, commit or push was performed.
 
@@ -3318,7 +3170,7 @@ remain separate follow-on work.
   change; no new verification success or predictive-quality approval is claimed.
 - Backend, models/artifacts, evidence, database, provider updates, AI, web,
   dependencies and navigation architecture are unchanged. No staging, commit or
-  push; unrelated untracked docs/report content is preserved.
+  push.
 
 ### Mobile Outlook x-axis label formatting — 2026-10-09
 
@@ -3347,9 +3199,8 @@ remain separate follow-on work.
   public contract. Whitespace/source review completed; tests remain pending the
   user's manual command, and no new passing count is claimed.
 - No frontend, database/migrations, models/artifacts, provider, training,
-  dependencies or AI-context changes. No staging, commit or push; unrelated
-  untracked docs/report content is preserved. Web/mobile money presentation is
-  the next integration step after backend tests pass.
+  dependencies or AI-context changes. No staging, commit or push. Web/mobile
+  money presentation is the next integration step after backend tests pass.
 
 ### Portfolio Outlook per-asset monetary breakdown backend — 2026-10-09
 
@@ -3366,7 +3217,7 @@ remain separate follow-on work.
   schema and API safety regressions; updated the public contract. Source and
   whitespace review completed; user-run tests are pending, with no passing count
   claimed. No frontend, migration, dependency, model/artifact, training or AI
-  changes. No staging/commit/push; unrelated docs/report content is preserved.
+  changes. No staging/commit/push.
 
 ### Portfolio Outlook monetary web integration — 2026-10-09
 
@@ -3385,12 +3236,12 @@ remain separate follow-on work.
 - With direct test execution now authorized, the backend forecasting/schema/API
   suite passed 1,061 tests in 52.28 seconds. Web forecasting passed 29 tests;
   full web/shared-client suite passed 138 with one pre-existing branding failure
-  in unrelated report-outline wording, retained unchanged. TypeScript and the
+  at this checkpoint. TypeScript and the
   production build passed with the existing bundle-size warning. Signed-in
   monetary visual acceptance remains pending; mobile is the next integration.
 - Updated the web integration report and focused regression coverage. No backend,
   mobile, migration, dependency, model/artifact or saved-data changes. No staging,
-  commit or push; unrelated untracked docs/report content remains untouched.
+  commit or push.
 
 ### Portfolio Outlook monetary mobile integration — 2026-10-09
 
@@ -3418,4 +3269,46 @@ remain separate follow-on work.
   passed. Physical-phone visual/large-text/theme acceptance remains pending.
 - Updated focused tests and the mobile integration report. No backend/web code,
   models/artifacts, migration, provider update, training or saved-data changes.
-  No staging, commit or push; unrelated untracked docs/report content is preserved.
+  No staging, commit or push.
+
+### Web per-asset card ordering — 2026-10-14
+
+- Display report asset cards in the same symbol order as the saved Risk Drivers
+  entries, including current V2, planned V3, and legacy reports. Updated the
+  section description to explain the displayed order.
+- Sorting uses a copy of the asset list and keeps saved metrics, snapshot
+  collections, and symbol-specific asset-detail navigation intact. Corrected
+  an existing test fixture to include the required risk-driver entries list.
+- Verification: six render checks across V1/V2/V3 and two rankings passed,
+  including frozen-input and asset-navigation checks. Web authority tests:
+  66 passed, one pre-existing documentation-branding failure. TypeScript and
+  the production build passed with the existing bundle-size warning.
+- No staging, commit or push was performed.
+
+
+### USD/THB display controls for Simulation and Forecast Outlook — 2026-10-14
+
+- Added accessible USD/THB controls to web and mobile current/planned portfolio
+  simulation amounts and Forecast Outlook. Outlook summary, holding breakdowns,
+  selected-horizon monetary charts and comparisons use the same selected currency.
+- Added an optional backend currency-display contract and a shared Decimal
+  conversion helper using fresh persisted USD/THB observations. Canonical
+  projections, allocations, percentages, model outputs and risk metrics remain
+  authoritative and unchanged. No client FX arithmetic, new dependency,
+  migration, provider request or model fitting is introduced.
+- New V2/V3 simulations save complete currency views and FX with their result;
+  immediate responses and history share those amounts. History validates the
+  views against the frozen baseline without market reads or revaluation.
+  Old snapshots remain unchanged and offer their original currency only.
+  Missing/stale FX disables the alternate currency without blocking results.
+- Kept account/portfolio selections isolated, comparison currencies available
+  across all displayed horizons, FX-aware monetary chart gaps, and privacy
+  masking. Standalone asset and legacy percentage-only outlooks remain compatible.
+  Public asset prices in saved simulation details stay explicitly USD quoted.
+- Verification: 537 affected backend tests passed; mobile client suite 104 passed;
+  web/shared-client suite 141 passed with the one pre-existing documentation
+  branding failure. Web TypeScript/production build and mobile TypeScript passed;
+  the existing web bundle-size warning remains. Currency controls and amount
+  rendering were verified with the existing component harnesses; live browser
+  and physical-device visual acceptance remain manual.
+- Updated the public API documentation. No staging, commit or push was performed.

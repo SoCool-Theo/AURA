@@ -62,6 +62,12 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
   const sortedReturns = useMemo(() => [...analysis.portfolio_returns].sort((left, right) =>
     returnDateOrder === 'ascending' ? left.date.localeCompare(right.date) : right.date.localeCompare(left.date),
   ), [analysis.portfolio_returns, returnDateOrder]);
+  const rankedAssets = useMemo(() => {
+    const driverOrder = new Map(analysis.risk_drivers.entries.map((driver, index) => [driver.symbol, index]));
+    return [...analysis.asset_metrics].sort((left, right) =>
+      (driverOrder.get(left.symbol) ?? Infinity) - (driverOrder.get(right.symbol) ?? Infinity),
+    );
+  }, [analysis.asset_metrics, analysis.risk_drivers.entries]);
   const metrics = analysis.portfolio_metrics;
   const drawdown = analysis.max_drawdown;
   const diversification = analysis.diversification;
@@ -185,11 +191,11 @@ export function AnalysisResults({ report }: { report: PortfolioReportResponse })
 
       <section id="per-asset-analysis" className={`card ${styles.section}`} style={{ scrollMarginTop: 18 }}>
         <div className={styles.sectionHeading}>
-          <div><h2>{reportV2 ? 'Per-Asset Valuation and Risk' : reportV3 ? 'Planned Asset Risk' : 'Individual Asset Metrics'}</h2><p>Values for the ordered holdings captured by this saved analysis.</p></div>
+          <div><h2>{reportV2 ? 'Per-Asset Valuation and Risk' : reportV3 ? 'Planned Asset Risk' : 'Individual Asset Metrics'}</h2><p>Assets shown in the same order as Risk Drivers above.</p></div>
           <span className={styles.badge}>{analysis.asset_metrics.length} assets</span>
         </div>
         <div className={styles.assetGrid}>
-          {analysis.asset_metrics.map(asset => (
+          {rankedAssets.map(asset => (
             <AssetAnalysisCard
               key={asset.symbol}
               asset={asset}

@@ -1,3 +1,4 @@
+import type { CurrencyDisplayContext } from '../currencyDisplay';
 import type { IsoDate, IsoDateTime, Uuid } from './api';
 import type { AnalysisPeriod, MaximumDrawdownMetrics } from './analytics';
 import type {
@@ -45,6 +46,7 @@ export type HistoricalScenarioMetrics = {
 };
 
 export type HistoricalScenarioSimulationResponse = {
+  currency_display?: CurrencyDisplayContext | null;
   portfolio_id: Uuid;
   portfolio_name: string;
   scenario: HistoricalScenarioResponse;
@@ -76,6 +78,7 @@ export type AllocationSimulationComparison = {
 };
 
 export type AllocationSimulationResponse = AnalysisPeriod & {
+  currency_display?: CurrencyDisplayContext | null;
   portfolio_id: Uuid;
   portfolio_name: string;
   metadata: HistoricalScenarioSimulationMetadata;
@@ -85,6 +88,7 @@ export type AllocationSimulationResponse = AnalysisPeriod & {
 };
 
 export type CombinedSimulationResponse = {
+  currency_display?: CurrencyDisplayContext | null;
   portfolio_id: Uuid;
   portfolio_name: string;
   scenario: HistoricalScenarioResponse;

@@ -1,5 +1,7 @@
+import { simulationCurrencyDisplay, type CurrencyDisplayContext } from '../../currencyDisplay';
+import { CurrencySwitch } from '../ui/CurrencySwitch';
 import { usePrivateValue } from '../../privacy/PortfolioPrivacy';
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { SimulationRunResult } from '../../simulation/SimulationProvider';
@@ -300,7 +302,8 @@ export function SimulationResults({
   onViewLatestAnalysis?: () => void;
   immutable?: boolean;
 }) {
-  const baselineCard = baseline ? <BaselineCard baseline={baseline} /> : null;
+  const currencyDisplay = simulationCurrencyDisplay(result.response.currency_display, baseline);
+  const baselineCard = currencyDisplay ? <BaselineCard baseline={baseline} display={currencyDisplay} /> : null;
   if (result.type === 'historical-scenario') {
     const response = result.response;
     const comparisonAllocation = originalAllocation ?? allocationFromBaseline(baseline);
@@ -403,63 +406,32 @@ export function SimulationResults({
   );
 }
 
-function BaselineCard({ baseline }: {
-  baseline: SimulationBaselineValuationContext | PlannedPortfolioBaselineContext;
+function BaselineCard({ baseline, display }: {
+  baseline?: SimulationBaselineValuationContext | PlannedPortfolioBaselineContext;
+  display: CurrencyDisplayContext;
 }) {
   const privateValue = usePrivateValue();
-  if ('portfolio_type' in baseline) {
-    return (
-      <Card style={styles.plannedBaselineCard}>
-        <Text style={styles.cardTitle}>Saved planned allocation</Text>
-        <Text style={styles.baselineValue}>
-          {privateValue(formatPortfolioMoney(baseline.total_proposed_amount, baseline.plan_currency))}
-        </Text>
-        <Text style={styles.baselineMeta}>{baseline.hypothetical_notice}</Text>
-        {baseline.holdings.map((holding) => (
-          <View key={holding.id} style={styles.baselineRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.allocationSymbol}>{holding.symbol}</Text>
-              <Text style={styles.baselineMeta}>
-                Proposed {privateValue(formatPortfolioMoney(holding.proposed_amount, baseline.plan_currency))}
-              </Text>
-            </View>
-            <Text style={styles.allocationWeight}>
-              {formatSimulationPercent(Number(holding.target_allocation))}
-            </Text>
-          </View>
-        ))}
-        <Text style={styles.baselineMeta}>
-          Estimated shares are for display only and do not affect this simulation.
-        </Text>
-      </Card>
-    );
-  }
-  return (
-    <Card style={styles.baselineCard}>
-      <Text style={styles.cardTitle}>Saved current holdings</Text>
-      <Text style={styles.baselineValue}>
-        {privateValue(formatPortfolioMoney(baseline.total_current_value_usd, 'USD'))}
-      </Text>
-      <Text style={styles.baselineMeta}>
-        Valued {baseline.valuation_date} · prices {baseline.oldest_price_as_of} to {baseline.newest_price_as_of}
-      </Text>
-      {baseline.holdings.map((holding) => (
-        <View key={`${holding.position}-${holding.symbol}`} style={styles.baselineRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.allocationSymbol}>{holding.symbol}</Text>
-            <Text style={styles.baselineMeta}>
-              {privateValue(formatPortfolioQuantity(holding.shares))} shares · price {formatPortfolioMoney(holding.asset_price, 'USD')}
-            </Text>
-          </View>
-          <View style={styles.baselineRight}>
-            <Text style={styles.allocationWeight}>{privateValue(formatPortfolioMoney(holding.current_value_usd, 'USD'))}</Text>
-            <Text style={styles.baselineMeta}>{formatCurrentAllocation(holding.current_allocation)}</Text>
-          </View>
+  const [selectedCurrency, setSelectedCurrency] = useState(display.source_currency);
+  const view = display.views.find(item => item.currency === selectedCurrency) ?? display.views[0];
+  const planned = display.baseline_kind === 'planned';
+  return <Card style={planned ? styles.plannedBaselineCard : styles.baselineCard}>
+    <Text style={styles.cardTitle}>{planned ? 'Saved planned allocation' : 'Saved current holdings'}</Text>
+    <Text style={styles.baselineValue}>{privateValue(formatPortfolioMoney(view.baseline_amount, view.currency))}</Text>
+    <CurrencySwitch display={display} value={view.currency} onChange={setSelectedCurrency} saved />
+    {baseline && 'portfolio_type' in baseline ? <Text style={styles.baselineMeta}>{baseline.hypothetical_notice}</Text>
+      : baseline && <Text style={styles.baselineMeta}>Valued {baseline.valuation_date} · prices {baseline.oldest_price_as_of} to {baseline.newest_price_as_of}</Text>}
+    {view.holdings.map(holding => {
+      const savedHolding = baseline?.holdings.find(item => item.symbol === holding.symbol);
+      return <View key={holding.symbol} style={styles.baselineRow}>
+        <View style={{ flex: 1 }}><Text style={styles.allocationSymbol}>{holding.symbol}</Text>
+          <Text style={styles.baselineMeta}>{planned ? 'Proposed ' : 'Saved value '}{privateValue(formatPortfolioMoney(holding.baseline_amount, view.currency))}</Text>
+          {savedHolding && 'shares' in savedHolding && <Text style={styles.baselineMeta}>{privateValue(formatPortfolioQuantity(savedHolding.shares))} shares · USD price {formatPortfolioMoney(savedHolding.asset_price, 'USD')}</Text>}
         </View>
-      ))}
-      <Text style={styles.baselineMeta}>These saved values are not updated with later market prices.</Text>
-    </Card>
-  );
+        {savedHolding && <Text style={styles.allocationWeight}>{formatCurrentAllocation('target_allocation' in savedHolding ? savedHolding.target_allocation : savedHolding.current_allocation)}</Text>}
+      </View>;
+    })}
+    <Text style={styles.baselineMeta}>{planned ? 'Estimated shares are for display only and do not affect this simulation.' : 'These saved amounts are not updated with later market prices.'}</Text>
+  </Card>;
 }
 
 function MetadataCard({ requested, metadata }: {

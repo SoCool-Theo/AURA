@@ -82,7 +82,7 @@ export function validPortfolioMoney(result: OutlookResponse): boolean {
 export function monetaryContextKey(result: OutlookResponse): string | undefined {
   if ('symbol' in result || !result.monetary_projection) return undefined;
   const money = result.monetary_projection;
-  return JSON.stringify([money.currency, money.baseline_source, money.baseline_amount, money.valuation_requested_date,
+  return JSON.stringify([result.currency_display?.fx ?? null, money.currency, money.baseline_source, money.baseline_amount, money.valuation_requested_date,
     money.oldest_price_as_of, money.newest_price_as_of,
     result.components.map(item => [item.symbol, item.monetary_projection?.baseline_amount]).sort((a, b) => a[0]!.localeCompare(b[0]!))]);
 }

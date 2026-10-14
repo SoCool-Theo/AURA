@@ -625,3 +625,45 @@ Repositories and services do not own commits. Successful writes commit at the
 outer API/request boundary. Valuation is read-only. Reports and simulations
 persist one immutable snapshot only after successful calculation at that outer
 boundary; failures do not commit partial snapshots.
+
+
+## USD/THB display views for simulations and portfolio outlooks
+
+Current and planned portfolio outlooks at 7/14/21/30 days and simulation
+results include an optional `currency_display` object. Canonical baseline,
+allocation, projection, return, risk, model and quality fields retain their
+existing meaning. Standalone asset outlooks and legacy percentage-only
+portfolios do not gain monetary amounts.
+
+`currency_display` contains `baseline_kind`, `source_currency`,
+`requested_date`, optional `fx` (`pair`, `provider_symbol`, `rate`,
+`as_of`), and ordered `views`. The first view is the source currency; a
+second USD/THB view is included only with a valid persisted exchange-rate
+observation, no more than four calendar days old. Each view contains
+`currency`, `baseline_amount`, and symbol-matched `holdings` with exact
+`baseline_amount` values. Forecast views also include each portfolio and
+holding's `expected_change_amount` and `estimated_ending_value`; these fields
+are null for simulation baseline views.
+
+The backend converts exact Decimal amounts using the observed THB-per-USD
+rate. Clients select complete returned views and format amounts; they do not
+calculate exchange rates, valuations or forecasts. Missing or stale FX keeps
+the original currency usable and disables the alternate option with an
+explanation. Outlook comparison enables a currency only when every displayed
+portfolio horizon can provide it. Monetary chart guides also require matching
+FX provenance and baseline context.
+
+Successful new V2/V3 simulations freeze the complete display context inside
+the saved result and return it with the immediate response. Reopening history
+validates those amounts against the frozen baseline and uses the same saved
+exchange rate, without market-data reads, writes, revaluation or rerunning the
+simulation. Existing snapshots remain readable and unchanged. Older snapshots
+without saved FX offer only their original currency.
+
+Web and mobile USD/THB controls change portfolio/holding amounts and forecast
+monetary charts together. Percentages, allocations, normalized simulation
+trajectories and risk metrics retain their original values. Public asset prices
+in simulation history remain explicitly USD quoted. The existing privacy
+setting masks personal amounts and removes monetary forecast chart data in
+either display currency. No migration, provider fetching, model fitting, new
+dependency or new endpoint is introduced.

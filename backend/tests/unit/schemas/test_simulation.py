@@ -889,6 +889,7 @@ def test_valid_combined_response_reuses_existing_nested_contracts() -> None:
     assert isinstance(response.comparison, AllocationSimulationComparison)
     assert list(response.model_dump()) == [
         "portfolio_id",
+        "currency_display",
         "portfolio_name",
         "scenario",
         "metadata",

@@ -1,3 +1,5 @@
+import { forecastDisplayContext, type DisplayCurrency } from '../../currencyDisplay';
+import { CurrencySwitch } from '../../components/ui/CurrencySwitch';
 import { useEffect, useRef, useState } from 'react';
 import { listPortfolios } from '../../api/portfoliosApi';
 import { useAuth } from '../../auth/useAuth';
@@ -27,6 +29,12 @@ export function ForecastingPage({ scope: initialScope = 'portfolio', selection: 
   const [horizon, setHorizon] = useState<ForecastHorizon>(30);
   const [compare, setCompare] = useState(false);
   const forecast = useForecasting(scope, scope === 'asset' ? symbol : portfolioId, horizon, compare);
+  const [currencySelection, setCurrencySelection] = useState<{ key: string; currency: DisplayCurrency } | null>(null);
+  const currencyKey = `${account ?? ''}:${scope}:${portfolioId}`;
+  const currencyDisplay = forecastDisplayContext(compare ? forecast.outlooks : forecast.result ? [forecast.result] : []);
+  const displayCurrency = currencyDisplay?.views.find(view => currencySelection?.key === currencyKey && view.currency === currencySelection.currency)?.currency
+    ?? currencyDisplay?.source_currency;
+
 
   useEffect(() => {
     if (!account) return;
@@ -65,13 +73,14 @@ export function ForecastingPage({ scope: initialScope = 'portfolio', selection: 
     <Card className={styles.controls}>
       <div className={styles.segmented} role="group" aria-label="Outlook scope">{(['portfolio', 'asset'] as const).map(value => <button type="button" key={value} aria-pressed={scope === value} className={scope === value ? styles.active : ''} onClick={() => setScope(value)}>{value === 'portfolio' ? 'Portfolio Outlook' : 'Asset Outlook'}</button>)}</div>
       <div className={styles.controlGrid}>{scope === 'portfolio' ? <div className={styles.field}><span>Portfolio</span><AuraSelect value={portfolioId} options={portfolioOptions} onChange={setPortfolioId} ariaLabel="Select portfolio for forecasting" disabled={loadingList} /></div> : <><label className={styles.field}>Search assets<input value={query} placeholder="Symbol or asset name" onChange={event => setQuery(event.target.value)} /></label><div className={styles.field}><span>Asset</span><AuraSelect value={symbol} options={assetOptions} onChange={setSymbol} ariaLabel="Select asset for forecasting" />{query.trim() && !available.length && <small>No matching assets. Your selected asset is retained.</small>}</div></>}<div className={styles.field}><span>Forecast horizon</span><div className={styles.horizons} role="group" aria-label="Forecast horizon">{forecastHorizons.map(days => <button type="button" key={days} aria-pressed={days === horizon} className={days === horizon ? styles.active : ''} onClick={() => setHorizon(days)} title={`${days} calendar days${days === 30 ? '' : ' · experimental'}`}>{days === 30 ? '30 days' : days / 7 + (days === 7 ? ' week' : ' weeks')}{days !== 30 && <small>Experimental</small>}</button>)}</div></div></div>
+      {currencyDisplay && displayCurrency && <CurrencySwitch display={currencyDisplay} value={displayCurrency} onChange={currency => setCurrencySelection({ key: currencyKey, currency })} />}
       <label className={styles.compareControl}><input type="checkbox" checked={compare} onChange={event => setCompare(event.target.checked)} />Compare all horizons</label>
       <p className={styles.note}>Each horizon uses its own backend model. Weekly V1 has mixed per-asset quality and is not approved as reliable predictions. Refresh reads frozen models and saved market data; it does not retrain or fetch live quotes.</p>
     </Card>
     <p className={styles.education}>Model-based estimates for educational use, not investment advice. Actual outcomes may differ. Prediction ranges are not guarantees or model accuracy scores.</p>
     {scope === 'portfolio' && Boolean(visibleListError) && <InlineErrorCard error={visibleListError} fallbackMessage="Unable to load your portfolios." onRetry={() => setListRevision(value => value + 1)} />}
     {Boolean(forecast.error) && <InlineErrorCard error={forecast.error} message={forecastErrorMessage(forecast.error, scope)} resourceName="Outlook" onRetry={forecast.refresh} onBack={scope === 'portfolio' && portfolioId ? () => go(`portfolio/${portfolioId}`) : undefined} backTitle="Review Portfolio" />}
-    {compare && Boolean(scope === 'asset' ? symbol : portfolioId) && <ForecastHorizonComparison results={forecast.outlooks} loading={forecast.comparisonLoading} unavailable={forecast.unavailableHorizons} />}
-    {forecast.loading ? <Card className={styles.state}><p role="status">Loading your {horizon}-day {scope} outlook…</p><small>Using saved market data and the configured model artifacts.</small></Card> : forecast.result ? <ForecastingResults key={`${scope}:${scope === 'asset' ? symbol : portfolioId}:${horizon}`} result={forecast.result} showChart={!compare} /> : scope === 'portfolio' && !portfolioId && !loadingList && !visibleListError ? <Card className={styles.state}><h2>No portfolios yet</h2><p>Create a portfolio or explore an asset outlook without one.</p><div className={styles.headerActions}><button type="button" className="primary-btn" onClick={() => go('create')}>Create Portfolio</button><button type="button" className="secondary-btn" onClick={() => setScope('asset')}>Explore Assets</button></div></Card> : scope === 'portfolio' && loadingList && !portfolioId ? <Card className={styles.state}><p role="status">Loading portfolios…</p><button type="button" className="secondary-btn" onClick={() => setScope('asset')}>Explore Assets</button></Card> : null}
+    {compare && Boolean(scope === 'asset' ? symbol : portfolioId) && <ForecastHorizonComparison results={forecast.outlooks} currency={displayCurrency} loading={forecast.comparisonLoading} unavailable={forecast.unavailableHorizons} />}
+    {forecast.loading ? <Card className={styles.state}><p role="status">Loading your {horizon}-day {scope} outlook…</p><small>Using saved market data and the configured model artifacts.</small></Card> : forecast.result ? <ForecastingResults key={`${scope}:${scope === 'asset' ? symbol : portfolioId}:${horizon}`} result={forecast.result} currency={displayCurrency} showChart={!compare} /> : scope === 'portfolio' && !portfolioId && !loadingList && !visibleListError ? <Card className={styles.state}><h2>No portfolios yet</h2><p>Create a portfolio or explore an asset outlook without one.</p><div className={styles.headerActions}><button type="button" className="primary-btn" onClick={() => go('create')}>Create Portfolio</button><button type="button" className="secondary-btn" onClick={() => setScope('asset')}>Explore Assets</button></div></Card> : scope === 'portfolio' && loadingList && !portfolioId ? <Card className={styles.state}><p role="status">Loading portfolios…</p><button type="button" className="secondary-btn" onClick={() => setScope('asset')}>Explore Assets</button></Card> : null}
   </div>;
 }
