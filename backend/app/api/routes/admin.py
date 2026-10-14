@@ -4,7 +4,10 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from pydantic import AwareDatetime, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -21,6 +24,8 @@ from app.schemas.admin import (
     AdminUserStatusResponse,
     AdminUserRoleRequest,
     AdminUserRoleResponse,
+    AdminUserCreateRequest,
+    AdminUserResponse,
 )
 from app.schemas.admin_market_data import (
     AdminMarketDataQuery,
@@ -50,6 +55,7 @@ from app.services.admin_system_health_service import AdminSystemHealthService
 from app.services.ai_monitoring_service import AIMonitoringService
 from app.services.audit_log_service import AuditLogService
 from app.services.market_data_status_service import MarketDataStatusService
+from app.services.auth_service import DuplicateEmailError
 
 
 router = APIRouter(
@@ -57,6 +63,39 @@ router = APIRouter(
     tags=["Administration"],
     dependencies=[Depends(get_current_admin)],
 )
+
+
+class _AccountCreationRoute(APIRoute):
+    """Sanitize credential-bearing input errors for this endpoint only."""
+    def get_route_handler(self):
+        handler = super().get_route_handler()
+        async def sanitized(request: Request):
+            try:
+                return await handler(request)
+            except RequestValidationError:
+                return JSONResponse(status_code=422, content={"detail": "Invalid account details"})
+        return sanitized
+
+
+def create_admin_user(request: AdminUserCreateRequest, session: DatabaseSession, current_admin: CurrentAdmin) -> AdminUserResponse:
+    try:
+        response = AdminUserService(session).create(current_admin, request)
+        session.commit()
+        return response
+    except DuplicateEmailError as error:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="Email already registered") from error
+    except AdminUserStatusError as error:
+        session.rollback()
+        headers = {"WWW-Authenticate": "Bearer"} if error.status_code == 401 else None
+        raise HTTPException(status_code=error.status_code, detail=str(error), headers=headers) from error
+    except Exception as error:
+        session.rollback()
+        raise HTTPException(status_code=503, detail="Account creation unavailable") from error
+
+
+router.add_api_route("/users", create_admin_user, methods=["POST"], response_model=AdminUserResponse,
+    status_code=201, summary="Create a customer account", route_class_override=_AccountCreationRoute)
 
 
 @router.get("/me", response_model=AdminIdentityResponse)

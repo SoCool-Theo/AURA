@@ -52,6 +52,7 @@ export function createAdminApi(options: ApiOptions = {}) {
         if (response.status === 409) {
           const allowed: Record<string, string> = {
             "You cannot suspend your own account": "You cannot suspend your own account.",
+            "Email already registered": "This email is already registered. Check the Users directory before trying again.",
             "The last active administrator cannot be suspended": "The last active administrator cannot be suspended.",
             "You cannot remove your own administrator access": "You cannot remove your own administrator access.",
             "The last active administrator cannot be demoted": "The last active administrator cannot be demoted.",
@@ -97,6 +98,8 @@ export function createAdminApi(options: ApiOptions = {}) {
     me: (signal?: AbortSignal) => get("/api/admin/me", contracts.identitySchema, signal),
     dashboard: (signal?: AbortSignal) => get("/api/admin/dashboard", contracts.dashboardSchema, signal),
     users: (query: Query, signal?: AbortSignal) => get("/api/admin/users", contracts.usersSchema, signal, query),
+    createUser: (fields: { email: string; password: string; display_name?: string }, signal?: AbortSignal) => request("/api/admin/users", contracts.userCreatedSchema, readToken(), signal,
+      { email: fields.email.trim(), password: fields.password, ...(fields.display_name?.trim() ? { display_name: fields.display_name.trim() } : {}) }),
     async setUserStatus(userId: string, status: contracts.AdminAccountStatus, expectedStatus: contracts.AdminAccountStatus, signal?: AbortSignal) {
       const result = await request(`/api/admin/users/${encodeURIComponent(userId)}/status`, contracts.userStatusSchema, readToken(), signal,
         { status, expected_status: expectedStatus }, "PATCH");

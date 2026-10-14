@@ -223,8 +223,9 @@ def test_database_failure_is_sanitized_503(harness: Harness, path, method, detai
 
 @pytest.mark.parametrize("path", PATHS)
 @pytest.mark.parametrize("method", ["post", "put", "patch", "delete"])
-def test_overview_has_no_write_methods(harness: Harness, path, method) -> None:
-    assert getattr(harness.client, method)(path, headers=harness.headers()).status_code == 405
+def test_overview_rejects_unsupported_mutations_or_missing_creation_fields(harness: Harness, path, method) -> None:
+    expected = 422 if path == "/api/admin/users" and method == "post" else 405
+    assert getattr(harness.client, method)(path, headers=harness.headers()).status_code == expected
 
 
 def test_empty_database_resources_zero_fill_dashboard(harness: Harness) -> None:
@@ -244,6 +245,6 @@ def test_empty_database_resources_zero_fill_dashboard(harness: Harness) -> None:
 def test_openapi_overview_is_protected_read_only() -> None:
     for path in PATHS:
         operations = app.openapi()["paths"][path]
-        assert set(operations) == {"get"}
+        assert set(operations) == ({"get", "post"} if path == "/api/admin/users" else {"get"})
         assert operations["get"]["security"] == [{"HTTPBearer": []}]
         assert "requestBody" not in operations["get"]

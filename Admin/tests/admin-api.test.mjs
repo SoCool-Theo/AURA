@@ -193,3 +193,30 @@ test("role audit accepts both transitions and rejects unchanged roles or wrong a
   assert.equal(valid({ ...event, details: { previous_role: "ADMIN", new_role: "ADMIN" } }), false);
   assert.equal(valid({ ...event, actor_kind: "OPERATOR", actor_user_id: null }), false);
 });
+
+
+test("account creation uses the admin endpoint, preserves password bytes and leaves actor session intact", async () => {
+  const result = { id: identity.id, email: "created@example.com", display_name: "New User", role: "CUSTOMER", account_type: "REGISTERED", status: "ACTIVE", created_at: "2026-10-13T00:00:00Z", updated_at: "2026-10-13T00:00:00Z", portfolio_count: 0 };
+  const { api } = setup(async (url, init) => {
+    assert.equal(url, "http://127.0.0.1:8000/api/admin/users");
+    assert.equal(init.method, "POST");
+    assert.deepEqual(JSON.parse(init.body), { email: result.email, password: "  synthetic password  ", display_name: "New User" });
+    return response(result, 201);
+  }, "actor-token");
+  assert.deepEqual(await api.createUser({ email: " created@example.com ", password: "  synthetic password  ", display_name: " New User " }), result);
+  assert.equal(api.readToken(), "actor-token");
+  const invalid = setup(async () => response({ ...result, role: "ADMIN" }, 201), "token");
+  await assert.rejects(invalid.api.createUser({ email: result.email, password: "synthetic password" }), /invalid response/);
+});
+test("duplicate account feedback is safe and never clears the creating administrator session", async () => {
+  const { api } = setup(async () => response({ detail: "Email already registered" }, 409), "token");
+  await assert.rejects(api.createUser({ email: "created@example.com", password: "synthetic password" }), /already registered/);
+  assert.equal(api.readToken(), "token");
+});
+test("account creation audit allows only registered customer metadata", () => {
+  const event = { id: identity.id, created_at: "2026-10-13T00:00:00Z", actor_kind: "ADMIN", actor_user_id: identity.id, target_type: "USER", target_id: identity.id, action: "USER_CREATED", details: { role: "CUSTOMER", account_type: "REGISTERED" } };
+  const valid = value => contracts.auditSchema.safeParse({ items: [value], total: 1, limit: 25, offset: 0 }).success;
+  assert.equal(valid(event), true);
+  assert.equal(valid({ ...event, details: { role: "ADMIN", account_type: "REGISTERED" } }), false);
+  assert.equal(valid({ ...event, actor_kind: "OPERATOR", actor_user_id: null }), false);
+});

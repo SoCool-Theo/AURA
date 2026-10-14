@@ -31,10 +31,12 @@ export const dashboardSchema = z.object({
   daily: z.array(z.object({ date, new_users: count, new_portfolios: count, saved_reports: count, saved_simulations: count })),
 });
 export type Dashboard = z.infer<typeof dashboardSchema>;
-export const usersSchema = pageSchema(z.object({
+export const adminUserSchema = z.object({
   id: z.string().uuid(), email: z.string().email().nullable(), display_name: z.string().nullable(), role,
   account_type: z.enum(["REGISTERED", "LEGACY"]), status: accountStatus, created_at: timestamp, updated_at: timestamp, portfolio_count: count,
-}));
+});
+export const usersSchema = pageSchema(adminUserSchema);
+export const userCreatedSchema = adminUserSchema.extend({ email: z.string().email(), role: z.literal("CUSTOMER"), account_type: z.literal("REGISTERED"), status: z.literal("ACTIVE"), portfolio_count: z.literal(0) });
 export type AdminUser = z.infer<typeof usersSchema>["items"][number];
 export const userStatusSchema = z.object({ id: z.string().uuid(), status: accountStatus, updated_at: timestamp });
 export const userRoleSchema = z.object({ id: z.string().uuid(), role, updated_at: timestamp });
@@ -91,6 +93,7 @@ export const auditSchema = pageSchema(z.discriminatedUnion("action", [
   z.object({ ...auditFields, actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("USER_REACTIVATED"), details: z.object({ previous_status: z.literal("SUSPENDED"), new_status: z.literal("ACTIVE") }) }),
   z.object({ ...auditFields, target_type: z.literal("MARKET_REFRESH"), actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("MARKET_REFRESH_REQUESTED"), details: z.object({ mode: z.literal("daily") }) }),
   z.object({ ...auditFields, actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("USER_ROLE_CHANGED"), details: z.object({ previous_role: role, new_role: role }).refine(details => details.previous_role !== details.new_role) }),
+  z.object({ ...auditFields, actor_kind: z.literal("ADMIN"), actor_user_id: z.string().uuid(), action: z.literal("USER_CREATED"), details: z.object({ role: z.literal("CUSTOMER"), account_type: z.literal("REGISTERED") }) }),
 ]));
 export type AuditEvent = z.infer<typeof auditSchema>["items"][number];
 

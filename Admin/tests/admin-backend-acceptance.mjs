@@ -29,7 +29,8 @@ try {
     await Promise.all([api.dashboard(), api.inventory(), api.marketStatus(), api.health(), api.audit({ limit: 4 })]);
   }
   console.log("PASS concurrent dashboard reads across three rounds");
-  assert.equal((await api.users({ limit: 25, offset: 25 })).items.length, 7);
+  const directory = await api.users({ limit: 25 });
+  assert.equal((await api.users({ limit: 25, offset: 25 })).items.length, Math.min(25, Math.max(0, directory.total - 25)));
   assert.equal((await api.users({ q: "customer00@example.com", limit: 25 })).total, 1);
   assert.equal((await api.users({ q: "doesnotexist", limit: 25 })).total, 0);
   assert.equal((await api.users({ role: "ADMIN", limit: 25 })).total, 1);

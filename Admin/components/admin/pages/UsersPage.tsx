@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { adminApi } from "@/lib/adminApi";
 import type { AdminIdentity, AdminUser } from "@/lib/adminContracts";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SectionCard } from "../SectionCard";
 import { ApiState, Filter, Pagination, humanize, utc } from "../ApiState";
 import { useAdminQuery } from "../useAdminQuery";
+import { CreateUserDialog } from "../CreateUserDialog";
 
 export function UsersPage({ identity }: { identity: AdminIdentity }) {
   const [search, setSearch] = useState("");
@@ -65,7 +66,10 @@ export function UsersPage({ identity }: { identity: AdminIdentity }) {
       <Filter label="Role" value={filters.role} options={["CUSTOMER", "ADMIN"]} onChange={role => setFilters(value => ({ ...value, role, offset: 0 }))}/>
       <Filter label="Account type" value={filters.account_type} options={["REGISTERED", "LEGACY"]} onChange={account_type => setFilters(value => ({ ...value, account_type, offset: 0 }))}/>
       <Filter label="Status" value={filters.status} options={["ACTIVE", "SUSPENDED"]} onChange={status => setFilters(value => ({ ...value, status, offset: 0 }))}/>
-      <Button type="button" className="gradient-button" disabled title="User creation is not supported by the admin API"><Plus/>Add New User</Button>
+      <CreateUserDialog disabled={busy} onStart={() => setNotice(undefined)} onUncertain={query.retry} onCreated={user => {
+        setNotice(`Account created for ${user.email}. Customer access is ready; administrator access can be granted separately.`);
+        setSearch(user.email || ""); setFilters({ q: user.email || "", role: "", account_type: "", status: "", offset: 0 }); query.retry();
+      }}/>
     </form>
     {notice && <p role="status" className="api-message">{notice}</p>}
     <SectionCard title="User Accounts" description="Manage account access and administrator roles while preserving portfolios and saved records.">

@@ -146,6 +146,8 @@ def check_http(app, password, factory):
         check_user_roles(client, factory, password)
         from check_market_refresh import check_manual_refresh
         check_manual_refresh(client, factory, login("admin@example.com"), login("customer00@example.com"))
+        from check_user_creation import check_user_creation
+        check_user_creation(client, factory, password)
 
 
 def check_account_status(client, password, factory, admin, customer):

@@ -7,9 +7,11 @@ from sqlalchemy.orm import Session
 
 from ..database.models import User
 from ..database.repositories.user_repository import UserRepository
-from ..schemas.admin import AdminUserStatusRequest, AdminUserStatusResponse, AdminUserRoleRequest, AdminUserRoleResponse
-from ..schemas.audit_log import AuditEventCreate, AuditStatusChangeDetails, AuditRoleChangeDetails
+from ..schemas.admin import AdminUserStatusRequest, AdminUserStatusResponse, AdminUserRoleRequest, AdminUserRoleResponse, AdminUserCreateRequest, AdminUserResponse
+from ..schemas.audit_log import AuditEventCreate, AuditStatusChangeDetails, AuditRoleChangeDetails, AuditUserCreatedDetails
+from ..schemas.auth import RegistrationRequest
 from .audit_log_service import AuditLogService
+from .auth_service import AuthService
 
 
 class AdminUserStatusError(ValueError):
@@ -20,8 +22,22 @@ class AdminUserStatusError(ValueError):
 
 class AdminUserService:
     def __init__(self, session: Session) -> None:
+        self._session = session
         self._repository = UserRepository(session)
         self._audit = AuditLogService(session)
+
+    def create(self, actor: User, request: AdminUserCreateRequest) -> AdminUserResponse:
+        request = AdminUserCreateRequest.model_validate(request.model_dump())
+        actor_id = self._authorize_actor(actor)
+        user = AuthService(self._session).register(RegistrationRequest(email=request.email, password=request.password))
+        if request.display_name is not None:
+            self._repository.update_profile(user, {"display_name": request.display_name})
+        self._audit.record(AuditEventCreate(actor_kind="ADMIN", actor_user_id=actor_id, action="USER_CREATED",
+            target_type="USER", target_id=user.id, details=AuditUserCreatedDetails(role="CUSTOMER", account_type="REGISTERED")))
+        created = user.created_at.replace(tzinfo=UTC) if user.created_at.tzinfo is None else user.created_at.astimezone(UTC)
+        updated = user.updated_at.replace(tzinfo=UTC) if user.updated_at.tzinfo is None else user.updated_at.astimezone(UTC)
+        return AdminUserResponse(id=user.id, email=user.email, display_name=user.display_name, role="CUSTOMER",
+            account_type="REGISTERED", status="ACTIVE", created_at=created, updated_at=updated, portfolio_count=0)
 
     def set_status(self, actor: User, user_id: UUID, request: AdminUserStatusRequest) -> AdminUserStatusResponse:
         request = AdminUserStatusRequest.model_validate(request.model_dump())

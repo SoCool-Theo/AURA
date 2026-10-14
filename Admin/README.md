@@ -55,7 +55,7 @@ Admin/
 
 Dashboard, Users, Market Data, System Health, AI Monitoring, and Activity Logs now
 read the existing FastAPI admin endpoints. Portfolios and Reports show supported
-aggregate counts; global directories, deletion, report downloads, account creation,
+aggregate counts; global directories, deletion, report downloads,
 notifications, and system/security mutations
 remain unavailable. These controls never simulate a successful server operation.
 
@@ -73,9 +73,18 @@ show disabled grant actions. Your own administrator access cannot be removed,
 and the backend protects the last active administrator. The themed confirmation
 explains the permission change and fresh-login requirement. Both transitions
 invalidate previous sessions and preserve owned records. Role filters reload
-from the server, and Activity Logs shows `USER_ROLE_CHANGED` details. Account
-creation remains unavailable. This feature reuses existing role/session/audit
+from the server, and Activity Logs shows `USER_ROLE_CHANGED` details. This feature reuses existing role/session/audit
 columns and requires no additional migration or dependency.
+
+Add New User now creates active registered customer accounts using the existing
+shared login/password rules. The themed form accepts email, optional display
+name, initial password and confirmation. Grant administrator access separately
+through the role action. Duplicate emails preserve existing credentials; pending
+requests disable repeat submission and errors never simulate creation. Passwords
+are cleared after requests/close and never stored in browser preferences or
+included in responses/audit details. Activity Logs records USER_CREATED. This
+feature adds no email invitation or forced first-login password change and needs
+no new migration or dependency.
 
 Market Data now accepts manual refresh requests and shows persisted run history.
 The existing confirmation requests daily historical data through yesterday UTC.

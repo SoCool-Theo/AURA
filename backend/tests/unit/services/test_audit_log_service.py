@@ -108,3 +108,13 @@ def test_bootstrap_still_rejects_reverse_role_transition():
     data = payload()
     data["details"] = {"previous_role": "ADMIN", "new_role": "CUSTOMER"}
     with pytest.raises(ValidationError): AuditEventCreate.model_validate(data)
+
+
+@pytest.mark.parametrize("change", [{"actor_kind": "OPERATOR", "actor_user_id": None}, {"actor_user_id": None}, {"target_type": "MARKET_REFRESH"},
+    {"details": {"role": "ADMIN", "account_type": "REGISTERED"}}, {"details": {"role": "CUSTOMER", "account_type": "LEGACY"}},
+    {"details": {"role": "CUSTOMER", "account_type": "REGISTERED", "password": "private"}}])
+def test_creation_events_reject_privileges_wrong_actor_target_and_secrets(change):
+    data = {"actor_kind": "ADMIN", "actor_user_id": uuid4(), "action": "USER_CREATED", "target_type": "USER", "target_id": uuid4(),
+            "details": {"role": "CUSTOMER", "account_type": "REGISTERED"}}
+    data.update(change)
+    with pytest.raises(ValidationError): AuditEventCreate.model_validate(data)

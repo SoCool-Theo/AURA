@@ -4,7 +4,7 @@ The backend supplies the access boundary, Audit Log storage/query API, Dashboard
 statistics, a Users directory with account suspension/reactivation, Market Data inventory/status/history,
 System Health checks, and content-free AI Monitoring for Aura's separate admin
 website. Its frontend integration is implemented in `Admin/`.
-Account creation/deletion remain subsequent work. Administrator role management
+Account deletion remains subsequent work. Customer account creation is implemented below. Administrator role management
 is available through the guarded account-role endpoint below. Manual
 Market Data refresh requests use the existing separate worker and tracked pipeline.
 
@@ -189,7 +189,7 @@ customer data. It never writes events or commits.
 | --- | --- |
 | `limit` | 1–100; default 25 |
 | `offset` | 0–10000; default 0 |
-| `action` | Optional `ADMIN_BOOTSTRAPPED`, `USER_SUSPENDED`, `USER_REACTIVATED`, `USER_ROLE_CHANGED`, or `MARKET_REFRESH_REQUESTED` |
+| `action` | Optional `ADMIN_BOOTSTRAPPED`, `USER_SUSPENDED`, `USER_REACTIVATED`, `USER_ROLE_CHANGED`, `USER_CREATED`, or `MARKET_REFRESH_REQUESTED` |
 | `actor_kind` | Optional `OPERATOR` or `ADMIN` |
 | `actor_user_id` | Optional account UUID; operator events have no account actor |
 | `target_type` | Optional `USER` or `MARKET_REFRESH` |
@@ -389,7 +389,7 @@ fields, and customer web/mobile response shapes are unchanged.
 The Users page displays real status, filters on the server and uses themed
 confirmations, pending/error feedback and verified response-driven refresh.
 Self-suspension is disabled in the UI and enforced by the API. Activity Logs
-displays/filter both status events and provisioning events. Account creation and deletion remain separate features. Role changes and manual refresh are
+displays/filter both status events and provisioning events. Account deletion remains separate work. Account creation, role changes and manual refresh are
 implemented by their dedicated endpoints; they do not widen this status request.
 
 Verification covers rollback, idempotency, invalid inputs, actor revalidation,
@@ -731,7 +731,7 @@ Portfolios and Reports show dashboard aggregate counts because there are no
 global admin detail/list/download/delete endpoints. No customer ownership
 endpoint is used to simulate global access. Users supports the status and role
 actions and audit events described above. Market Data supports manual refresh
-and run history. User creation/deletion, account editing, security/session
+and run history. Users also create customer accounts. User deletion, account editing, security/session
 administration, notifications,
 and platform-setting mutations are unavailable. Only theme/compact-sidebar
 preferences are persisted locally. Existing colors and component styles remain.
@@ -794,3 +794,60 @@ client feedback never simulates a permission change. Closing animation retains
 the selected account wording. Focus returns to the action, or search when the
 row leaves a role filter. Activity Logs filters/displays role transitions with
 actual actor/target UUIDs and their previous/new roles.
+
+
+## Customer account creation by administrators
+
+`POST /api/admin/users` requires verified administrator permission and creates
+one active, registered CUSTOMER account. Its request accepts canonical `email`,
+`password` using the existing minimum-eight-character authentication rule, and
+optional nullable `display_name` using the existing trimmed 1�100 character
+profile rule. Extra fields are forbidden, including role, status, user ID,
+password hash and session version. Password whitespace is significant and is
+not trimmed. Omitted/null name leaves the account unnamed. Public registration
+is unchanged and still creates customers only.
+
+The 201 response uses the safe Users-directory item contract: UUID `id`,
+canonical `email`, nullable `display_name`, CUSTOMER `role`, REGISTERED
+`account_type`, ACTIVE `status`, UTC `created_at`/`updated_at`, and zero
+`portfolio_count`. No password/hash, session token, private profile preferences
+or administrator impersonation is returned. The creator's session is unchanged.
+The account can use the existing shared login and change its password through
+existing authenticated account settings. Administrator access requires the
+separate role-management action and its confirmation/audit. There is no email
+invitation, generated default password, forced first-login password change or
+creation of a legacy/privileged/suspended account in this feature.
+
+Creation rechecks the actor's persisted credentials, role, suspension and original
+session generation under the same PostgreSQL users lock as status/role changes
+and bootstrap. AuthService owns canonical email lookup, salted password hashing,
+customer defaults and unique-email conflict classification. Optional name update,
+account and typed USER_CREATED audit commit together. Audit/commit/hash/response
+construction failure rolls back and returns sanitized 503 Account creation
+unavailable. Missing/stale credentials return 401 with Bearer challenge;
+authenticated customers return 403. Existing accounts and owned data are never
+updated by this endpoint.
+
+Canonical duplicate emails return 409 Email already registered and do not reset
+credentials or emit another event. Concurrent duplicate requests create exactly
+one account. If a successful response is lost, the same email's retry returns
+409; inspect the directory instead of assuming another account was created.
+The endpoint does not pretend that a duplicate request succeeded. Credential-
+bearing validation errors, including malformed bodies, return sanitized 422
+Invalid account details without input values or passwords. That error handling
+is scoped to this POST route; other endpoint validation contracts are unchanged.
+
+USER_CREATED audit events use an ADMIN actor, USER target UUID, and exactly
+role: CUSTOMER / account_type: REGISTERED metadata. Email, name, plaintext,
+hash, token and arbitrary free text are excluded. Account/event mutation is
+atomic. No new database migration or dependency is required.
+
+The existing Add New User button opens the themed form with optional name, email,
+initial password and confirmation. It checks password length/matching, prevents
+repeat submissions and closing while pending, clears password fields after each
+request and clears all form state on cancel/close. Secret input is never written
+to browser storage or displayed in success messages. Transport abort on unmount
+does not cancel a committed server operation. Failure/uncertainty retains safe
+feedback and refreshes the directory; success validates the server's customer
+response, resets stale filters to display the new account and restores focus.
+Activity Logs filters/displays the persisted creation event.

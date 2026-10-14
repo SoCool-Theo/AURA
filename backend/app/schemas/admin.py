@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, Field, field_validator
 
-from .auth import CanonicalEmail
+from .auth import CanonicalEmail, DisplayName, RegistrationRequest
 from .common import AuraBaseModel
 
 
@@ -20,6 +20,10 @@ class AdminIdentityResponse(AuraBaseModel):
 AdminUserRole = Literal["CUSTOMER", "ADMIN"]
 AdminAccountType = Literal["REGISTERED", "LEGACY"]
 AdminAccountStatus = Literal["ACTIVE", "SUSPENDED"]
+
+
+class AdminUserCreateRequest(RegistrationRequest):
+    display_name: DisplayName | None = None
 
 
 class AdminUserRoleRequest(AuraBaseModel):

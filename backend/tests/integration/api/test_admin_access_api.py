@@ -160,3 +160,5 @@ def test_admin_openapi_requires_bearer_and_exposes_only_guarded_role_write():
     role_operation = paths["/api/admin/users/{user_id}/role"]["patch"]
     assert role_operation["security"] == [{"HTTPBearer": []}]
     assert set(paths["/api/admin/users/{user_id}/role"]) == {"patch"}
+    assert set(paths["/api/admin/users"]) == {"get", "post"}
+    assert paths["/api/admin/users"]["post"]["security"] == [{"HTTPBearer": []}]

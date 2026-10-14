@@ -4001,3 +4001,79 @@ remain separate follow-on work.
   migrations, deployment, staging, commit or push occurred. Updated admin README
   and API contracts;
   unrelated untracked files remain preserved on feat/admin-web-foundation.
+
+### Technical presentation Version 2 — 2026-10-13
+
+- Created `docs/report/presentation-v2/AURA_Presentation_V2.pptx` from the V1
+  technical baseline and final report, with 32 main slides and six hidden
+  technical backups. Added explicit portfolio-risk pain points and AURA's
+  solution. Removed the session-planning page, presentation durations, reserved
+  question allocation and suggested presenter assignments from slides and notes.
+- Introduced glass and crystal artwork, data-terrain backgrounds, cyan/violet
+  typography, six editable charts and nine native tables. The team introduction
+  retains the supplied example's blue design, with the report's three names and
+  IDs and editable photograph slots. Two actual report web captures accompany
+  website and React Native demo sections. Administration remains the requested
+  report proposal.
+- Added a usage guide and saved six generated/themed assets with prompt
+  specifications. Re-imported and rendered the final export for visual review;
+  package integrity, layout/font policy and native-chart checks passed with zero
+  findings or warnings. Content checks confirmed 38 slides and notes, hidden
+  backups, team fields, native data and removal of timing/presenter labels.
+  Delivered file checksum matches the validated export. Native PowerPoint
+  execution was not part of verification. No application code, dependency,
+  architecture, V1 deliverable or unrelated work was changed. No commit created.
+
+#### V2 readability revision — 2026-10-13
+
+- Updated the V2 PowerPoint with light cyan/lavender titles, native navy panels
+  at 18% transparency and subtle cyan borders. Customer Workflow and similar
+  step layouts use one continuous panel per number/heading/description group.
+  Added three lightly blurred artwork variants; the cover keeps its sharp
+  original artwork. Updated the guide and asset prompt record.
+- Verified all 38 slide texts and notes against the technical baseline, native
+  chart data, the four workflow panels and their encoded opacity. Cover,
+  screenshots and report diagrams remain unchanged. Rendered and inspected the
+  export; package, native-chart, layout and font checks passed with zero findings
+  or warnings. Confirmed the final spacing repair changed only slide 8's note
+  panel pixels and the delivered checksum matches the validated file. No
+  application code, dependencies or unrelated work changed; no commit created.
+
+### Administrator customer account creation — 2026-10-14
+
+- Added protected POST /api/admin/users using the existing registration,
+  credential hashing, canonical email, customer defaults and profile validation.
+  Accounts start ACTIVE/REGISTERED/CUSTOMER with no portfolios. Creation rechecks
+  persisted administrator permission under the existing users transaction lock;
+  account, optional name and typed USER_CREATED audit commit together. Duplicate
+  emails return 409 without changing existing credentials. Validation and failure
+  responses omit secret input; audit/commit/hash failures roll back atomically.
+  Public registration and shared login remain intact. No migration or dependency.
+- Connected Add New User to the existing themed dialog with optional name, email,
+  initial password and confirmation; prevents duplicate pending submission,
+  clears secret fields, restores focus and displays verified directory state.
+  Activity Logs includes creation events with safe actor/target metadata.
+  Administrator access uses the separate role action. Email invitations and
+  forced first-login password changes are outside this completed feature.
+- Updated backend API/service/schema contracts, admin client contracts, README,
+  API documentation and focused regression/guarded PostgreSQL acceptance tests.
+  Verification: 528 relevant backend tests and all 32 admin tests passed;
+  TypeScript, ESLint and the final production build passed. Existing bundle-size
+  and route-classification build notices remain. Guarded Docker PostgreSQL 18.4
+  checks verified actual login, simultaneous duplicate creation (201/409), safe
+  audit metadata and atomic rollback alongside existing admin regressions.
+- Browser verification against the built admin and disposable PostgreSQL schema
+  covered cancellation/focus, cleared fields, mismatched passwords, account
+  creation and directory refresh, duplicate feedback, audit filtering and rejection
+  of the new customer from administrator access. Console warnings/errors were
+  empty. A real screenshot was saved outside the repository. These desktop checks
+  do not imply broader responsive or physical-device coverage.
+- Temporary verification servers were no longer running after the resumed turn.
+  Identified the one leftover browser fixture by generated schema name, matching
+  fixture credentials and this run's synthetic account; removed only that schema
+  and generated credentials. All public table inventory/content fingerprints
+  matched before/after cleanup; separate check-only acceptance also verified
+  preservation. Existing accounts, local public data and remote configuration
+  were untouched. No deployment, real-provider/model execution, database migration,
+  staging, commit or push. Preserved independent presentation progress and
+  unrelated untracked files on feat/admin-web-foundation.
