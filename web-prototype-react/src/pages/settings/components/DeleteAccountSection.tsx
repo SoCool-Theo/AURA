@@ -39,7 +39,7 @@ export function DeleteAccountSection({ disabled = false }: { disabled?: boolean 
     setDeleted(true);
     setOpen(false);
     setPassword('');
-    try { logout(); } catch { /* AuthProvider clears authenticated UI in finally. */ }
+    try { await logout(); } catch { /* Account deletion already revoked the session. */ }
     pendingRef.current = false;
     setBusy(false);
   }

@@ -1,7 +1,9 @@
 """Pure password and JWT security primitives for Aura authentication."""
 
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from secrets import token_urlsafe
+from typing import NamedTuple
 from uuid import UUID
 
 import jwt
@@ -53,19 +55,22 @@ def create_access_token(
     subject: UUID,
     *,
     issued_at: datetime | None = None,
+    session_id: UUID | None = None,
+    maximum_expires_at: datetime | None = None,
 ) -> str:
-    """Issue a signed access token containing only sub, iat, and exp."""
+    """Issue a short-lived token, optionally bound to a persisted web session."""
     secret = _configured_jwt_secret()
     issued_at_utc = _utc_datetime(issued_at)
     expires_at = issued_at_utc + timedelta(
         minutes=int(settings.access_token_expire_minutes)
     )
+    if maximum_expires_at is not None:
+        expires_at = min(expires_at, _utc_datetime(maximum_expires_at))
+    claims = {"sub": str(subject), "iat": issued_at_utc, "exp": expires_at}
+    if session_id is not None:
+        claims["sid"] = str(session_id)
     return jwt.encode(
-        {
-            "sub": str(subject),
-            "iat": issued_at_utc,
-            "exp": expires_at,
-        },
+        claims,
         secret,
         algorithm=settings.jwt_algorithm,
     )
@@ -73,6 +78,16 @@ def create_access_token(
 
 def decode_access_token(token: str) -> UUID:
     """Validate a signed access token and return its UUID subject."""
+    return decode_access_token_context(token).user_id
+
+
+class AccessTokenContext(NamedTuple):
+    user_id: UUID
+    session_id: UUID | None
+
+
+def decode_access_token_context(token: str) -> AccessTokenContext:
+    """Validate the subject and optional signed web-session identifier."""
     secret = _configured_jwt_secret()
     try:
         claims = jwt.decode(
@@ -84,9 +99,23 @@ def decode_access_token(token: str) -> UUID:
         subject = claims["sub"]
         if not isinstance(subject, str):
             raise ValueError("access-token subject must be a string")
-        return UUID(subject)
+        session_id = None
+        if "sid" in claims:
+            if not isinstance(claims["sid"], str):
+                raise ValueError("invalid web-session identifier")
+            session_id = UUID(claims["sid"])
+        return AccessTokenContext(UUID(subject), session_id)
     except (InvalidTokenError, KeyError, TypeError, ValueError) as error:
         raise InvalidAccessTokenError from error
+
+
+def generate_refresh_token() -> str:
+    """Generate a 256-bit opaque secret; only its digest is persisted."""
+    return token_urlsafe(32)
+
+
+def hash_refresh_token(token: str) -> str:
+    return sha256(token.encode("ascii")).hexdigest()
 
 
 def _configured_jwt_secret() -> str:

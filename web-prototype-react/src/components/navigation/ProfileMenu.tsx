@@ -35,18 +35,18 @@ export function ProfileMenu() {
     setSignOutError(null);
   }
 
-  function signOut() {
+  async function signOut() {
     if (!confirmationRef.current || pendingRef.current) return;
     pendingRef.current = true;
     setSignOutPending(true);
     setSignOutError(null);
     try {
-      logout();
+      await logout();
       confirmationRef.current = false;
       setConfirmingSignOut(false);
       go('login');
     } catch {
-      setSignOutError(new Error('Aura could not remove the saved session. Please retry sign out.'));
+      setSignOutError(new Error('Aura could not complete sign out. Check the service connection and try again.'));
     } finally {
       pendingRef.current = false;
       setSignOutPending(false);

@@ -708,7 +708,12 @@ def test_openapi_exposes_all_reporting_operations(
         {"$ref": "#/components/schemas/PortfolioReportV3Response"},
     ]
     methods = _registered_methods()
-    assert len(methods) == 42
+    assert len(methods) == 47
+    assert {
+        ("/api/auth/web/login", "POST"),
+        ("/api/auth/web/refresh", "POST"),
+        ("/api/auth/web/logout", "POST"),
+    } <= methods
     assert ("/api/market-data/status", "GET") in methods
     assert ("/api/portfolios/{portfolio_id}/simulations/{simulation_id}", "DELETE") in methods
     assert (

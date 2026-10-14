@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { go } from '../app/routes';
 import { Icon } from '../components/ui/Icon';
@@ -6,6 +6,7 @@ import { useAuth } from './useAuth';
 import styles from './ProtectedRoute.module.css';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const {
     logout,
     retrySessionRestore,
@@ -68,12 +69,14 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={() => {
-                logout();
-                go('login');
+                void logout().then(() => go('login')).catch(() => {
+                  setSignOutError('Aura could not complete sign out. Check the service connection and try again.');
+                });
               }}
             >
               Return to sign in
             </button>
+            {signOutError && <p role="alert">{signOutError}</p>}
           </div>
         </section>
       </main>

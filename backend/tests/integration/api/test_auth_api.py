@@ -115,6 +115,9 @@ def test_auth_router_exposes_profile_and_password_endpoints() -> None:
     assert auth_paths == {
         "/api/auth/register",
         "/api/auth/login",
+        "/api/auth/web/login",
+        "/api/auth/web/refresh",
+        "/api/auth/web/logout",
         "/api/auth/me",
         "/api/auth/me/password",
     }

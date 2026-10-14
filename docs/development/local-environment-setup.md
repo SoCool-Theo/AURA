@@ -108,12 +108,56 @@ DATABASE_URL=postgresql+psycopg://aura:GENERATED_DATABASE_PASSWORD@127.0.0.1:543
 JWT_SECRET_KEY=GENERATED_JWT_SECRET
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_SESSION_IDLE_DAYS=7
+REFRESH_SESSION_MAX_DAYS=30
+REFRESH_COOKIE_SECURE=false
+REFRESH_COOKIE_SAMESITE=lax
 MARKET_DATA_UPDATE_TIME_UTC=02:00
 CORS_ALLOWED_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173"]
 ```
 
 The generated database password uses hexadecimal characters, so it is already
 safe inside the URL and does not require percent-encoding.
+
+### Web refresh-session configuration
+
+Existing environments should add the four `REFRESH_*` settings above without
+regenerating their JWT secret or database credentials. The backend defaults to
+seven days of inactivity, a fixed 30-day maximum, a Secure cookie and SameSite
+`lax`. Local HTTP requires `REFRESH_COOKIE_SECURE=false`. Production requires
+`APP_ENV=production`, `DEBUG=false` and `REFRESH_COOKIE_SECURE=true`; an insecure
+production cookie or SameSite `none` without Secure fails configuration validation.
+No extra refresh-token secret or dependency is required.
+
+Use matching local hostnames: open `http://127.0.0.1:5173` with the API at
+`http://127.0.0.1:8000`, or use `localhost` for both. Mixing them changes the cookie
+site and can prevent session restoration. Keep `CORS_ALLOWED_ORIGINS` explicit
+and include the deployed web origin. Requests use cookie credentials and the
+`X-Aura-Web-Session` header; a proxy must preserve Origin and Set-Cookie headers.
+
+For production web/API subdomains sharing a site, SameSite `lax` is appropriate.
+Separate sites require SameSite `none` and HTTPS; browsers that block third-party
+cookies may still prevent restoration. Prefer deployment under the same site.
+
+Apply migration `e9a1c3f5b7d2` to a database with the develop migration history
+before starting the new backend/web. Restart the backend after configuration
+changes. Existing web sign-ins need one new login to obtain their refresh cookie.
+
+The PostgreSQL refresh-session tests require `AURA_TEST_DATABASE_URL` pointing
+to the approved local `aura_test` database at `127.0.0.1:5433` with role `aura`.
+They create a temporary `aura_test_web_sessions_*` database in that same Docker
+container, exercise migrations and session requests, and remove only that
+temporary database. Existing `aura_test` tables, data and migration version are
+preserved. No remote database is accepted. Run with the project's existing
+virtual environment:
+
+```powershell
+.venv\Scripts\python.exe -m pytest backend/tests/integration/api/test_web_sessions_postgresql.py -q
+```
+
+Keep the test URL in local configuration; do not put credentials in tracked
+files or terminal output. The local database role must be able to create a test
+database. These live tests skip when `AURA_TEST_DATABASE_URL` is absent.
 
 ## Generated frontend configuration
 
