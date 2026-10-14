@@ -3419,3 +3419,17 @@ remain separate follow-on work.
 - Updated focused tests and the mobile integration report. No backend/web code,
   models/artifacts, migration, provider update, training or saved-data changes.
   No staging, commit or push; unrelated untracked docs/report content is preserved.
+
+### Web per-asset card ordering — 2026-10-14
+
+- Display report asset cards in the same symbol order as the saved Risk Drivers
+  entries, including current V2, planned V3, and legacy reports. Updated the
+  section description to explain the displayed order.
+- Sorting uses a copy of the asset list and keeps saved metrics, snapshot
+  collections, and symbol-specific asset-detail navigation intact. Corrected
+  an existing test fixture to include the required risk-driver entries list.
+- Verification: six render checks across V1/V2/V3 and two rankings passed,
+  including frozen-input and asset-navigation checks. Web authority tests:
+  66 passed, one pre-existing documentation-branding failure. TypeScript and
+  the production build passed with the existing bundle-size warning.
+- No staging, commit or push was performed.
