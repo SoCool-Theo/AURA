@@ -19,10 +19,6 @@ function Dates({ from, to, change }: { from: string; to: string; change: (key: "
 }
 function timeRange(from: string, to: string) { return { created_from: from ? `${from}T00:00:00Z` : undefined, created_to: to ? `${to}T23:59:59.999999Z` : undefined }; }
 
-export function ReportsPage() {
-  const query = useAdminQuery(adminApi.dashboard);
-  return <div className="page-stack"><SectionCard title="Analysis Reports" description="Counts of retained saved records, not analysis executions."><ApiState {...query}/>{query.data && <RecordsTable headings={["Saved record", "Total", "Today (UTC)", "Yesterday (UTC)", "Last 7 days"]} rows={[["Reports", query.data.saved_reports], ["Simulations", query.data.saved_simulations]].map(([label, counts]) => { const value = counts as typeof query.data.saved_reports; return { id: String(label), cells: [String(label), value.total, value.today, value.yesterday, value.last_7_days] }; })}/>}<p className="api-message">Global admin report browsing and downloading are not supported yet.</p></SectionCard></div>;
-}
 
 export function MarketDataPage() {
   const [tick, setTick] = useState(0);

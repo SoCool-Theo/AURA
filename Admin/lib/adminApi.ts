@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import * as contracts from "./adminContracts";
+import * as reportContracts from "./adminReportContracts";
 
 export const ADMIN_TOKEN_KEY = "aura.admin.accessToken";
 export class AdminApiError extends Error {
@@ -45,7 +46,7 @@ export function createAdminApi(options: ApiOptions = {}) {
         if (token && (response.status === 401 || response.status === 403)) deny(token);
         const messages: Record<number, string> = {
           401: path === "/api/auth/login" ? "Email or password is incorrect." : "Your session has expired. Sign in again.",
-          403: "Administrator access is required for this account.", 404: path.startsWith("/api/admin/portfolios/") ? "This portfolio is no longer available. Refresh the directory." : "This account is no longer available. Refresh the directory.",
+          403: "Administrator access is required for this account.", 404: path.startsWith("/api/admin/reports/") ? "This report is no longer available. Refresh the directory." : path.startsWith("/api/admin/portfolios/") ? "This portfolio is no longer available. Refresh the directory." : "This account is no longer available. Refresh the directory.",
           409: path.endsWith("/role") ? "Account role changed. Refresh the directory and try again." : "Account status changed. Refresh the directory and try again.", 422: "Check the supplied fields or filters.",
           503: "This service is currently unavailable. Try again shortly.",
         };
@@ -98,6 +99,12 @@ export function createAdminApi(options: ApiOptions = {}) {
     me: (signal?: AbortSignal) => get("/api/admin/me", contracts.identitySchema, signal),
     dashboard: (signal?: AbortSignal) => get("/api/admin/dashboard", contracts.dashboardSchema, signal),
     users: (query: Query, signal?: AbortSignal) => get("/api/admin/users", contracts.usersSchema, signal, query),
+    reports: (query: Query, signal?: AbortSignal) => get("/api/admin/reports", reportContracts.reportsSchema, signal, query),
+    async report(reportId: string, signal?: AbortSignal) {
+      const result = await get(`/api/admin/reports/${encodeURIComponent(reportId)}`, reportContracts.reportDetailSchema, signal);
+      if (result.id !== reportId) throw new AdminApiError("The API returned invalid report details. Refresh the directory.");
+      return result;
+    },
     portfolios: (query: Query, signal?: AbortSignal) => get("/api/admin/portfolios", contracts.portfoliosSchema, signal, query),
     async portfolio(portfolioId: string, signal?: AbortSignal) {
       const result = await get(`/api/admin/portfolios/${encodeURIComponent(portfolioId)}`, contracts.portfolioDetailSchema, signal);

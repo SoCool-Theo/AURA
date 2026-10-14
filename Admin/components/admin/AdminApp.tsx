@@ -12,7 +12,8 @@ import { SectionCard } from "./SectionCard";
 import { DashboardPage } from "./pages/DashboardPage";
 import { UsersPage } from "./pages/UsersPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { ActivityPage, AiOversightPage, HealthPage, MarketDataPage, ReportsPage } from "./pages/OtherPages";
+import { ActivityPage, AiOversightPage, HealthPage, MarketDataPage } from "./pages/OtherPages";
+import { ReportsPage } from "./pages/ReportsPage";
 import { PortfoliosPage } from "./pages/PortfoliosPage";
 import type { AppearanceSettings, PageKey } from "./types";
 

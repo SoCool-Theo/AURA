@@ -4121,3 +4121,51 @@ remain separate follow-on work.
   Existing accounts/data, user development servers, remote configuration and
   unrelated report files were preserved. No staging, commit, push or deployment.
   Work remains on feat/admin-web-foundation; report browsing is the next feature.
+
+### Administrator saved-report browsing — 2026-10-14
+
+- Added administrator-only GET /api/admin/reports and /reports/{report_id}.
+  The global directory supports bounded pagination, literal case-insensitive
+  portfolio/owner search, owner and portfolio UUID filters, V1/V2/V3/OTHER format
+  filters and inclusive timezone-aware UTC save-time bounds. Metadata/page/total
+  use one SQL snapshot and do not load result payloads. Unsupported formats remain
+  visible; malformed filters, missing records and unavailable/corrupt snapshots
+  have explicit 422/404/sanitized 503 responses without storage exception text.
+- Details load one immutable snapshot with safe current portfolio/owner metadata
+  and reuse the established V1/V2/V3 reader, full validation and frozen monetary
+  display derivations. Portfolio renames/holding edits do not change saved names,
+  baselines, valuation or results. No live valuation, FX/provider request, new
+  analysis, write/audit event, dependency or migration; customer ownership routes
+  remain unchanged. Simulations retain aggregate counts; history/export/download
+  remain separate features.
+- Connected Reports to server filters, directory pagination and an existing themed
+  dialog. Details show saved/requested periods, historical portfolio/risk metrics,
+  per-asset results, signed volatility contributions, correlations, frozen current
+  values or hypothetical planned amounts and available backend monetary context.
+  Numeric/decimal shapes, formats, identities and periods are runtime-validated;
+  null Sharpe/legacy monetary fields are not invented. Preserved theme/components,
+  explicit loading/error/empty states, retry and close/Escape focus restoration.
+  Unsupported actions are disabled with explanatory titles. Updated README/API
+  contracts and canonical snapshot fixtures for acceptance.
+- Verification: all 263 relevant backend tests passed, including 37 new global
+  report cases and customer reporting/mapper/schema regressions. Replaced an old
+  global-route-count assertion with an exact check of the four customer report
+  operations. All 38 admin tests passed; the final client-contract rerun passed
+  33. Final TypeScript, ESLint and production build passed; existing chunk-size/
+  route-classification notices remain. Corrected a temporary text-encoding issue
+  during final review and rebuilt before browser verification.
+- Guarded PostgreSQL 18.4 acceptance verified all frozen versions, metadata-only
+  pagination, owner/time filters, unchanged snapshots after a directory rename,
+  unavailable formats and customer ownership; real frontend contracts against
+  the built preview passed for V1/V2/V3 and existing admin reads. Browser checks
+  covered pagination, all three report formats, signed contributions, null asset
+  Sharpe, saved values, hypothetical context, combined owner/portfolio/date filters,
+  empty results, disabled unsupported formats, session restoration, Escape/focus
+  and sign-out. Console warnings/errors were empty. A real screenshot is saved
+  outside the repository. Desktop checks do not imply wider device coverage.
+- Stopped temporary servers, closed the temporary tab and removed disposable
+  PostgreSQL schemas/generated credentials. Public table inventory and all content
+  fingerprints matched after both acceptance cleanups. Existing data/accounts,
+  user development servers, remote configuration and unrelated report files were
+  preserved. No staging, commit, push, deployment or model execution. Branch is
+  feat/admin-web-foundation; report downloads remain a follow-on feature.

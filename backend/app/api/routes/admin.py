@@ -59,6 +59,8 @@ from app.services.auth_service import DuplicateEmailError
 from app.schemas.admin_portfolio import AdminPortfolioDetail, AdminPortfoliosQuery, AdminPortfoliosResponse
 from app.database.models.portfolio import PortfolioType
 from app.services.admin_portfolio_service import AdminPortfolioService
+from app.schemas.admin_report import AdminReportDetail, AdminReportsQuery, AdminReportsResponse, AdminReportVersion
+from app.services.admin_report_service import AdminReportService
 
 
 router = APIRouter(
@@ -148,6 +150,38 @@ def get_admin_portfolio(portfolio_id: UUID, session: DatabaseSession, current_ad
         raise HTTPException(status_code=503, detail="Admin portfolio details unavailable") from error
     if result is None:
         raise HTTPException(status_code=404, detail="Portfolio not found")
+    return result
+
+
+@router.get("/reports", response_model=AdminReportsResponse)
+def list_admin_reports(
+    session: DatabaseSession, current_admin: CurrentAdmin,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
+    q: Annotated[str | None, Query(max_length=100)] = None,
+    owner_id: UUID | None = None, portfolio_id: UUID | None = None,
+    report_version: AdminReportVersion | None = None,
+    created_from: AwareDatetime | None = None, created_to: AwareDatetime | None = None,
+) -> AdminReportsResponse:
+    try:
+        query = AdminReportsQuery(limit=limit, offset=offset, q=q, owner_id=owner_id,
+            portfolio_id=portfolio_id, report_version=report_version, created_from=created_from, created_to=created_to)
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail="Invalid report filters") from error
+    try:
+        return AdminReportService(session).list(query)
+    except (SQLAlchemyError, ValueError) as error:
+        raise HTTPException(status_code=503, detail="Admin report directory unavailable") from error
+
+
+@router.get("/reports/{report_id}", response_model=AdminReportDetail)
+def get_admin_report(report_id: UUID, session: DatabaseSession, current_admin: CurrentAdmin) -> AdminReportDetail:
+    try:
+        result = AdminReportService(session).detail(report_id)
+    except (SQLAlchemyError, ValueError, ArithmeticError) as error:
+        raise HTTPException(status_code=503, detail="Admin report details unavailable") from error
+    if result is None:
+        raise HTTPException(status_code=404, detail="Report not found")
     return result
 
 

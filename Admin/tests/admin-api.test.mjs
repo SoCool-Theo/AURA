@@ -2,12 +2,51 @@ import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { readFile } from "node:fs/promises";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const vite = await createServer({ configFile: false, root, cacheDir: ".wrangler/admin-api-test-cache", appType: "custom", server: { middlewareMode: true, hmr: false, ws: false } });
 after(() => vite.close());
 const { createAdminApi, ADMIN_TOKEN_KEY, apiOrigin } = await vite.ssrLoadModule("/lib/adminApi.ts");
 const contracts = await vite.ssrLoadModule("/lib/adminContracts.ts");
+const reportContracts = await vite.ssrLoadModule("/lib/adminReportContracts.ts");
+const savedAnalysis = JSON.parse(await readFile(new URL("../../backend/examples/analysis_response.json", import.meta.url), "utf8"));
+
+const reportMetadata = { id: "00000000-0000-4000-8000-000000000258", portfolio_id: "00000000-0000-4000-8000-000000000064", portfolio_name: "Renamed portfolio", start_date: "2026-01-01", end_date: "2026-01-31", created_at: "2026-10-14T00:00:00Z", schema_version: "portfolio-analysis-response-v1", report_version: "V1", owner: { id: "00000000-0000-4000-8000-000000000002", email: null, display_name: null, account_type: "LEGACY", status: "ACTIVE" } };
+const savedReport = { ...reportMetadata, report: { id: reportMetadata.id, portfolio_id: reportMetadata.portfolio_id, created_at: reportMetadata.created_at, analysis: savedAnalysis } };
+
+test("global report reads encode filters and retain frozen names and metrics", async () => {
+  const calls = [];
+  const { api } = setup(async (url, init) => { calls.push([url, init]); return response(url.includes("?" ) ? { items: [reportMetadata], total: 1, limit: 25, offset: 0 } : savedReport); }, "token");
+  await api.reports({ q: "100%_\\", report_version: "V1", owner_id: reportMetadata.owner.id, created_from: "2026-10-14T00:00:00Z" });
+  assert.equal(new URL(calls[0][0]).searchParams.get("q"), "100%_\\");
+  assert.equal(calls[0][1].method, "GET");
+  const detail = await api.report(reportMetadata.id);
+  assert.equal(detail.portfolio_name, "Renamed portfolio");
+  assert.equal(detail.report.analysis.portfolio_name, "Synthetic Balanced Portfolio");
+  assert.equal(detail.report.analysis.portfolio_metrics.annualized_volatility, .18);
+  assert.equal(api.readToken(), "token");
+  await assert.rejects(api.report(reportMetadata.portfolio_id), /invalid report details/);
+});
+test("report contracts reject version, period, identity and nonnumeric result mismatches", () => {
+  assert.equal(reportContracts.reportDetailSchema.safeParse(savedReport).success, true);
+  for (const invalid of [
+    { ...savedReport, report_version: "V3", schema_version: "portfolio-analysis-response-v3" },
+    { ...savedReport, end_date: "2026-01-30" },
+    { ...savedReport, report: { ...savedReport.report, id: reportMetadata.portfolio_id } },
+    { ...savedReport, report: { ...savedReport.report, schema_version: "portfolio-analysis-response-v2" } },
+    { ...savedReport, report: { ...savedReport.report, analysis: { ...savedAnalysis, portfolio_metrics: { ...savedAnalysis.portfolio_metrics, annualized_volatility: "0.18" } } } },
+    { ...savedReport, report: { ...savedReport.report, analysis: { ...savedAnalysis, correlation_matrix: { symbols: ["AAPL"], values: [] } } } },
+  ]) assert.equal(reportContracts.reportDetailSchema.safeParse(invalid).success, false);
+  assert.equal(reportContracts.reportsSchema.safeParse({ items: [{ ...reportMetadata, report_version: "OTHER", schema_version: "future-format" }], total: 1, limit: 25, offset: 0 }).success, true);
+});
+test("missing or corrupt saved reports retain the session and hide private exceptions", async () => {
+  for (const status of [404, 503]) {
+    const { api } = setup(async () => response({ detail: "private saved credential" }, status), "token");
+    await assert.rejects(api.report(reportMetadata.id), error => error.status === status && !error.message.includes("credential") && (status !== 404 || error.message.includes("report")));
+    assert.equal(api.readToken(), "token");
+  }
+});
 
 const portfolio = {
   id: "00000000-0000-4000-8000-000000000064", name: "Saved portfolio", portfolio_type: "CURRENT", plan_currency: null,

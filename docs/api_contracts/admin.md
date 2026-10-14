@@ -2,7 +2,7 @@
 
 The backend supplies the access boundary, Audit Log storage/query API, Dashboard
 statistics, a Users directory with account suspension/reactivation, a global
-portfolio directory/details API, Market Data inventory/status/history,
+portfolio directory/details API, a saved-report directory/details API, Market Data inventory/status/history,
 System Health checks, and content-free AI Monitoring for Aura's separate admin
 website. Its frontend integration is implemented in `Admin/`.
 Account deletion remains subsequent work. Customer account creation is implemented below. Administrator role management
@@ -729,8 +729,8 @@ prototype data. Decimal prices remain strings. Date labels and filters use UTC.
 AI summary counts cover all retained events; request filters apply to the list.
 
 Portfolios supports the global read directory and saved details documented below.
-Reports still shows dashboard aggregate counts; global report browsing/downloads
-and portfolio deletion are subsequent features. No customer ownership endpoint
+Reports supports global saved-analysis browsing and frozen details below; report
+downloads and portfolio deletion are subsequent features. No customer ownership endpoint
 is used to simulate global access. Users supports the status and role
 actions and audit events described above. Market Data supports manual refresh
 and run history. Users also create customer accounts. User deletion, account editing, security/session
@@ -900,4 +900,64 @@ server search/type/owner filters, pagination, explicit loading/error/empty state
 and a themed details dialog with retry and focus restoration. It verifies the
 detail UUID, decimal strings, mode, counts and ordered holding shape at runtime.
 Proposed amounts are described as hypothetical; financial results are not
-recalculated in the dialog. Report browsing/downloads remain a separate feature.
+recalculated in the dialog. Saved-report browsing is documented below; downloads
+remain a separate feature.
+
+## Global saved-report directory and immutable details
+
+GET /api/admin/reports returns items, total, limit and offset, using the same
+administrator authorization and pagination bounds as the portfolio directory.
+Optional q is trimmed, at most 100 characters, and searches current portfolio name,
+owner email or owner display name case-insensitively with literal percent,
+underscore and backslash. Optional owner_id and portfolio_id accept UUIDs.
+report_version accepts V1, V2, V3 or OTHER, where the first three correspond
+exactly to portfolio-analysis-response-v1/v2/v3. OTHER includes unsupported stored
+formats without attempting to parse their snapshots. Filters combine with AND.
+created_from/created_to accept timezone-aware timestamps, normalize to UTC and
+include both boundaries. Naive/reversed ranges return 422 Invalid report filters.
+Order is created_at descending, then UUID descending; empty pages retain the
+matching total. Matching metadata and page share one SQL statement snapshot and
+never select result_snapshot, live holdings/prices, credentials or preferences.
+
+Directory fields: id, portfolio_id, current portfolio_name, safe owner metadata
+(the portfolio directory's id/email/display_name/account_type/status contract),
+start_date/end_date of the requested analysis period, UTC created_at, exact stored
+schema_version and report_version. Directory counts describe saved analyses only;
+simulations retain their separate aggregate counts. No risk score is guessed from
+metadata or current portfolio state.
+
+GET /api/admin/reports/{report_id} returns that metadata plus report using the
+existing PortfolioReportDetailResponse V1/V2/V3 union. One projection loads only
+the selected JSONB snapshot with its current portfolio/owner metadata. The existing
+analysis_record_to_report_response reader validates the exact version, immutable
+period and full saved payload. V1 keeps its original envelope without a schema
+field; V2/V3 retain their exact discriminator and frozen contexts. Existing
+monetary metrics/currency views are derived only from frozen report inputs and
+frozen FX. No current holdings, market observations, live FX, provider, valuation
+or new historical analysis are used. Relational/detail UUIDs, periods and save
+times agree. Decimal monetary/context values remain exact strings.
+
+Current portfolio renames or holding edits can change directory metadata, but
+never the saved analysis name, baseline, valuation or results. Details include
+the complete validated customer report payload while preserving customer
+ownership routes: being an admin still grants no cross-owner access through
+customer report endpoints. Missing/stale/invalid authorization returns 401 with
+Bearer challenge and customer permission returns 403, before report existence is
+revealed. A missing report returns 404 Report not found; malformed UUIDs/filters
+return 422. Database, unsupported schema, corrupt snapshot, mismatched period or
+invalid response failures return sanitized 503 Admin report directory unavailable
+or Admin report details unavailable, without storage contents/exception text.
+The metadata directory remains readable when a snapshot is unsupported/corrupt.
+
+The Reports page retains saved report/simulation totals and adds a searchable
+directory, owner/portfolio/format/UTC-date filters, pagination and refresh/clear
+controls. The existing themed dialog displays saved names/periods, historical risk
+metrics, asset results, signed risk contributions, correlations and frozen current
+valuation or hypothetical planned allocation, with available backend monetary
+context. Unavailable legacy monetary/asset values are not invented. Runtime
+validation checks displayed shapes, finite metrics, formats, identities and
+periods. Loading/error/empty states, retry and close/Escape focus restoration are
+explicit; unsupported format actions are disabled with an explanation.
+
+This feature adds no write, mutation audit, migration, dependency, export/download
+or simulation-history directory. Existing immutable snapshots are never rewritten.

@@ -1,0 +1,71 @@
+"use client";
+import { useCallback, useRef, useState, type ReactNode } from "react";
+import { Search } from "lucide-react";
+import { adminApi } from "@/lib/adminApi";
+import type { AdminReport } from "@/lib/adminReportContracts";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SectionCard } from "../SectionCard";
+import { ApiState, Filter, Pagination, humanize, utc } from "../ApiState";
+import { useAdminQuery } from "../useAdminQuery";
+
+const uuidPattern = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+const percent = (value: number) => new Intl.NumberFormat("en-GB", { style: "percent", maximumFractionDigits: 2 }).format(value);
+const number = (value: number | null) => value === null ? "Unavailable" : new Intl.NumberFormat("en-GB", { maximumFractionDigits: 2 }).format(value);
+const formats: Record<string, string> = { V1: "V1 · Legacy", V2: "V2 · Current", V3: "V3 · Planned", OTHER: "Unsupported format" };
+
+export function ReportsPage() {
+  const [fields, setFields] = useState({ q: "", owner_id: "", portfolio_id: "", from: "", to: "" });
+  const [filters, setFilters] = useState({ ...fields, report_version: "", offset: 0 });
+  const change = (key: keyof typeof fields, value: string) => setFields(previous => ({ ...previous, [key]: value }));
+  const load = useCallback((signal: AbortSignal) => adminApi.reports({ q: filters.q, owner_id: filters.owner_id, portfolio_id: filters.portfolio_id, report_version: filters.report_version, limit: 25, offset: filters.offset,
+    created_from: filters.from ? `${filters.from}T00:00:00Z` : undefined, created_to: filters.to ? `${filters.to}T23:59:59.999999Z` : undefined }, signal), [filters]);
+  const query = useAdminQuery(load);
+  const totals = useAdminQuery(adminApi.dashboard);
+  const [selected, setSelected] = useState<AdminReport>();
+  const action = useRef<HTMLButtonElement | null>(null);
+  return <div className="page-stack">
+    <SectionCard title="Analysis Reports" description="Retained saved records, not analysis executions."><ApiState {...totals}/>{totals.data && <Table><TableHeader><TableRow>{["Saved record", "Total", "Today (UTC)", "Yesterday (UTC)", "Last 7 days"].map(label => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{[["Reports", totals.data.saved_reports], ["Simulations", totals.data.saved_simulations]].map(([label, counts]) => { const value = counts as NonNullable<typeof totals.data>["saved_reports"]; return <TableRow key={String(label)}><TableCell>{String(label)}</TableCell><TableCell>{value.total}</TableCell><TableCell>{value.today}</TableCell><TableCell>{value.yesterday}</TableCell><TableCell>{value.last_7_days}</TableCell></TableRow>; })}</TableBody></Table>}</SectionCard>
+    <form className="page-controls api-controls" onSubmit={event => { event.preventDefault(); setFilters(previous => ({ ...previous, ...fields, q: fields.q.trim(), owner_id: fields.owner_id.trim(), portfolio_id: fields.portfolio_id.trim(), offset: 0 })); }}>
+      <label className="page-search"><Search/><Input value={fields.q} maxLength={100} onChange={event => change("q", event.target.value)} placeholder="Search portfolio or owner" aria-label="Search reports"/></label>
+      {(["owner_id", "portfolio_id"] as const).map(key => <label className="api-filter" key={key}>{key === "owner_id" ? "Owner ID" : "Portfolio ID"}<Input aria-label={`Report ${key === "owner_id" ? "owner" : "portfolio"} ID`} value={fields[key]} pattern={uuidPattern} placeholder="Optional UUID" onChange={event => change(key, event.target.value)}/></label>)}
+      <Filter label="Report format" value={filters.report_version} options={["V1", "V2", "V3", "OTHER"]} onChange={report_version => setFilters(previous => ({ ...previous, report_version, offset: 0 }))}/>
+      <label className="api-filter">Saved from (UTC)<Input type="date" aria-label="Report saved from UTC" value={fields.from} max={fields.to || undefined} onChange={event => change("from", event.target.value)}/></label>
+      <label className="api-filter">Saved to (UTC)<Input type="date" aria-label="Report saved to UTC" value={fields.to} min={fields.from || undefined} onChange={event => change("to", event.target.value)}/></label>
+      <Button type="submit" variant="outline">Search</Button><Button type="button" variant="outline" onClick={() => { const empty = { q: "", owner_id: "", portfolio_id: "", from: "", to: "" }; setFields(empty); setFilters({ ...empty, report_version: "", offset: 0 }); }}>Clear filters</Button>
+      <Button type="button" variant="outline" onClick={() => { query.retry(); totals.retry(); }}>Refresh</Button>
+    </form>
+    <SectionCard title="Saved Report Directory" description="Portfolio names and owner details reflect the directory today. Report results remain frozen."><ApiState {...query}/>{query.data && <>
+      <Table><TableHeader><TableRow>{["Report / ID", "Portfolio / ID", "Owner", "Format", "Analysis period", "Saved (UTC)", "Details"].map(label => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{query.data.items.map(item => <TableRow key={item.id}>
+        <TableCell className="whitespace-normal"><small className="block max-w-40 break-all">{item.id}</small></TableCell><TableCell className="whitespace-normal"><div className="min-w-40 max-w-60 break-words"><b>{item.portfolio_name}</b><small className="block break-all text-muted-foreground">{item.portfolio_id}</small></div></TableCell>
+        <TableCell className="whitespace-normal"><div className="min-w-40 max-w-60 break-words">{item.owner.display_name ?? item.owner.email ?? "Legacy account"}<small className="block break-all text-muted-foreground">{item.owner.email ?? "No registered email"}</small><small className="block break-all text-muted-foreground">{item.owner.id}</small>{item.owner.status === "SUSPENDED" && <span className="status-pill api-status-suspended">Suspended</span>}</div></TableCell>
+        <TableCell>{formats[item.report_version]}</TableCell><TableCell>{item.start_date}<br/>{item.end_date}</TableCell><TableCell>{utc(item.created_at)}</TableCell><TableCell><Button variant="outline" size="sm" disabled={item.report_version === "OTHER"} title={item.report_version === "OTHER" ? "This saved format is not supported by the report reader" : undefined} aria-label={`View report ${item.id}`} onClick={event => { action.current = event.currentTarget; setSelected(item); }}>View report</Button></TableCell>
+      </TableRow>)}</TableBody></Table>{query.data.items.length === 0 && <p className="api-message">No saved reports match these filters.</p>}<Pagination {...query.data} onChange={offset => setFilters(previous => ({ ...previous, offset }))}/>
+    </>}</SectionCard>
+    {selected && <ReportDetails key={selected.id} id={selected.id} onClose={() => setSelected(undefined)} restoreFocus={() => action.current?.focus()}/>}
+  </div>;
+}
+
+function Pair({ label, children }: { label: string; children: ReactNode }) { return <p><span>{label}</span><b>{children}</b></p>; }
+function ReportDetails({ id, onClose, restoreFocus }: { id: string; onClose: () => void; restoreFocus: () => void }) {
+  const load = useCallback((signal: AbortSignal) => adminApi.report(id, signal), [id]);
+  const query = useAdminQuery(load);
+  const item = query.data, report = item?.report, analysis = report?.analysis;
+  const money = report && "monetary_metrics" in report ? report.monetary_metrics : null;
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl" onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(); }}>
+    <DialogHeader><DialogTitle>Saved analysis report</DialogTitle><DialogDescription>Immutable saved results. Opening this report does not run a new analysis or use current market data.</DialogDescription></DialogHeader><ApiState {...query}/>
+    {item && report && analysis && <div className="page-stack">
+      <div className="data-pairs grid grid-cols-1 gap-x-6 break-words sm:grid-cols-2"><Pair label="Report ID">{item.id}</Pair><Pair label="Format">{formats[item.report_version]}</Pair><Pair label="Saved portfolio name">{analysis.portfolio_name}</Pair><Pair label="Portfolio directory name">{item.portfolio_name}</Pair><Pair label="Owner">{item.owner.display_name ?? item.owner.email ?? "Legacy account"} · {humanize(item.owner.status)}</Pair><Pair label="Saved (UTC)">{utc(item.created_at)}</Pair><Pair label="Requested period">{item.start_date} – {item.end_date}</Pair><Pair label="Available analysis period">{analysis.metadata.analysis_start} – {analysis.metadata.analysis_end}</Pair></div>
+      {"baseline" in report && <p className="api-message">{report.baseline.hypothetical_notice}</p>}
+      <SectionCard title="Historical Risk Metrics" description="Historical educational results; these are not actual profit/loss or forecasts."><div className="data-pairs grid grid-cols-2 gap-3 sm:grid-cols-4"><Pair label="Historical portfolio return">{percent(analysis.portfolio_metrics.cumulative_return)}</Pair><Pair label="Annualized return">{percent(analysis.portfolio_metrics.annualized_return)}</Pair><Pair label="Annualized volatility">{percent(analysis.portfolio_metrics.annualized_volatility)}</Pair><Pair label="Sharpe ratio">{number(analysis.portfolio_metrics.sharpe_ratio)}</Pair><Pair label="Maximum drawdown">{percent(analysis.max_drawdown.max_drawdown)}</Pair><Pair label="Risk classification">{analysis.risk_classification.risk_level} · {number(analysis.risk_classification.risk_score)}/100</Pair><Pair label="Diversification">{analysis.diversification.level}{analysis.diversification.overall_score === null ? "" : ` · ${number(analysis.diversification.overall_score)}/100`}</Pair><Pair label="Largest allocation">{percent(analysis.concentration.largest_weight)}</Pair></div><p className="api-message">{analysis.risk_classification.reasons.join(" · ")}</p></SectionCard>
+      {"valuation" in report && <SectionCard title="Frozen Current Valuation"><div className="data-pairs grid grid-cols-2 gap-3"><Pair label="Saved value">{report.valuation.total_current_value} {report.valuation.valuation_currency}</Pair><Pair label="Saved price range">{report.valuation.oldest_price_as_of} – {report.valuation.newest_price_as_of}</Pair></div><Table><TableHeader><TableRow>{["Asset", "Shares", "Saved value", "Saved allocation (fraction)", "Price date"].map(label => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{report.holdings.map(holding => <TableRow key={holding.id}><TableCell>{holding.symbol}</TableCell><TableCell>{holding.shares}</TableCell><TableCell>{holding.current_value} {report.valuation.valuation_currency}</TableCell><TableCell>{holding.current_allocation}</TableCell><TableCell>{holding.price_as_of}</TableCell></TableRow>)}</TableBody></Table></SectionCard>}
+      {"baseline" in report && <SectionCard title="Frozen Proposed Allocation" description={`Hypothetical total: ${report.baseline.total_proposed_amount} ${report.baseline.plan_currency}`}><Table><TableHeader><TableRow><TableHead>Asset</TableHead><TableHead>Proposed amount</TableHead><TableHead>Target weight (fraction)</TableHead></TableRow></TableHeader><TableBody>{report.baseline.holdings.map(holding => <TableRow key={holding.id}><TableCell>{holding.symbol}</TableCell><TableCell>{holding.proposed_amount} {report.baseline.plan_currency}</TableCell><TableCell>{holding.target_allocation}</TableCell></TableRow>)}</TableBody></Table></SectionCard>}
+      {money && <SectionCard title="Historical Monetary Context" description="Backend-derived amounts from the frozen report; no live valuation."><div className="data-pairs grid grid-cols-2 gap-3"><Pair label="Reference amount">{money.reference_amount} {money.currency}</Pair><Pair label="Historical change">{money.cumulative_return_amount} {money.currency}</Pair><Pair label="Drawdown amount">{money.maximum_drawdown_amount === null ? "Unavailable in this saved report" : `${money.maximum_drawdown_amount} ${money.currency}`}</Pair>{money.estimated_ending_value && <Pair label="Hypothetical ending value">{money.estimated_ending_value} {money.currency}</Pair>}</div></SectionCard>}
+      <SectionCard title="Saved Asset Metrics"><Table><TableHeader><TableRow>{["Asset", "Allocation", "Historical return", "Annualized volatility", "Max drawdown", "Sharpe"].map(label => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{analysis.asset_metrics.map(asset => <TableRow key={asset.symbol}><TableCell>{asset.symbol}</TableCell><TableCell>{percent(asset.weight)}</TableCell><TableCell>{percent(asset.cumulative_return)}</TableCell><TableCell>{percent(asset.annualized_volatility)}</TableCell><TableCell>{percent(asset.max_drawdown)}</TableCell><TableCell>{number(asset.sharpe_ratio)}</TableCell></TableRow>)}</TableBody></Table></SectionCard>
+      <SectionCard title="Saved Risk Contributions" description="Signed contributions to portfolio volatility; negative contributions can offset risk."><Table><TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Asset</TableHead><TableHead>Volatility contribution</TableHead></TableRow></TableHeader><TableBody>{analysis.risk_drivers.entries.map(driver => <TableRow key={driver.symbol}><TableCell>{driver.rank}</TableCell><TableCell>{driver.symbol}</TableCell><TableCell>{percent(driver.percentage_volatility_contribution)}</TableCell></TableRow>)}</TableBody></Table></SectionCard>
+      <SectionCard title="Saved Correlations"><Table><TableHeader><TableRow><TableHead>Asset</TableHead>{analysis.correlation_matrix.symbols.map(symbol => <TableHead key={symbol}>{symbol}</TableHead>)}</TableRow></TableHeader><TableBody>{analysis.correlation_matrix.symbols.map((symbol, index) => <TableRow key={symbol}><TableCell>{symbol}</TableCell>{analysis.correlation_matrix.values[index].map((value, column) => <TableCell key={column}>{number(value)}</TableCell>)}</TableRow>)}</TableBody></Table></SectionCard>
+    </div>}
+  </DialogContent></Dialog>;
+}

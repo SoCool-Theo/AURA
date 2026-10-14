@@ -29,6 +29,18 @@ try {
     await Promise.all([api.dashboard(), api.inventory(), api.marketStatus(), api.health(), api.audit({ limit: 4 })]);
   }
   console.log("PASS concurrent dashboard reads across three rounds");
+  const reports = await api.reports({ limit: 25 });
+  for (const report_version of ["V1", "V2", "V3"]) {
+    const supported = await api.reports({ report_version, limit: 1 });
+    if (supported.items.length) {
+      const detail = await api.report(supported.items[0].id);
+      assert.equal(detail.report.id, detail.id);
+      assert.equal(detail.report_version, report_version);
+    }
+  }
+  assert.equal((await api.reports({ q: "doesnotexist", limit: 25 })).total, 0);
+  assert.ok(reports.total >= 0);
+  console.log("PASS saved report directory and frozen V1/V2/V3 client contracts");
   const portfolios = await api.portfolios({ limit: 25 });
   if (portfolios.items.length) {
     const details = await api.portfolio(portfolios.items[0].id);

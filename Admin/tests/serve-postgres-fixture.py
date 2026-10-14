@@ -150,6 +150,8 @@ def check_http(app, password, factory):
         check_user_creation(client, factory, password)
         from check_portfolios import check_portfolios
         check_portfolios(client, factory, password)
+        from check_reports import check_reports
+        check_reports(client, factory, password)
 
 
 def check_account_status(client, password, factory, admin, customer):
