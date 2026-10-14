@@ -54,10 +54,20 @@ Admin/
 - Settings
 
 Dashboard, Users, Market Data, System Health, AI Monitoring, and Activity Logs now
-read the existing FastAPI admin endpoints. Portfolios and Reports show supported
-aggregate counts; global directories, deletion, report downloads,
+read the existing FastAPI admin endpoints. Portfolios provides a global directory
+with search, type/owner filters, pagination and saved holding details. Reports
+still shows aggregate counts; deletion, report downloads,
 notifications, and system/security mutations
 remain unavailable. These controls never simulate a successful server operation.
+
+Portfolio details use separate administrator-only read endpoints; customer
+ownership APIs remain unchanged. Ordered current shares/provenance, hypothetical
+planned amounts and saved legacy weights use the existing portfolio contracts.
+Decimal amounts remain strings. Counts include retained reports/simulations,
+without reading snapshots or recalculating values/risk. Missing records, loading
+and service errors have explicit feedback and retry. No write or migration is
+required. Details return only safe owner identity/status, never credentials or
+private profile preferences.
 
 Users supports Active/Suspended status filtering and suspend/reactivate actions.
 The existing themed confirmation explains the access change and preserves user

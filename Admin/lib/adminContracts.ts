@@ -41,6 +41,38 @@ export type AdminUser = z.infer<typeof usersSchema>["items"][number];
 export const userStatusSchema = z.object({ id: z.string().uuid(), status: accountStatus, updated_at: timestamp });
 export const userRoleSchema = z.object({ id: z.string().uuid(), role, updated_at: timestamp });
 
+const portfolioType = z.enum(["CURRENT", "PLANNED", "LEGACY"]);
+const currency = z.enum(["USD", "THB"]);
+const portfolioFields = {
+  id: z.string().uuid(), name: z.string(), portfolio_type: portfolioType, plan_currency: currency.nullable(),
+  created_at: timestamp, updated_at: timestamp,
+  owner: z.object({ id: z.string().uuid(), email: z.string().email().nullable(), display_name: z.string().nullable(), account_type: z.enum(["REGISTERED", "LEGACY"]), status: accountStatus }),
+  holding_count: count, saved_report_count: count, saved_simulation_count: count,
+};
+const validPlanCurrency = (item: { portfolio_type: string; plan_currency: string | null }) => (item.portfolio_type === "PLANNED") === (item.plan_currency !== null);
+export const portfoliosSchema = pageSchema(z.object(portfolioFields).refine(validPlanCurrency));
+export type AdminPortfolio = z.infer<typeof portfoliosSchema>["items"][number];
+const positiveDecimal = z.string().regex(/^\d+(\.\d+)?$/).refine(value => /[1-9]/.test(value));
+const nullableDecimal = positiveDecimal.nullable().optional().default(null);
+const holdingSchema = z.object({
+  id: z.string().uuid(), symbol: z.string().min(1), position: count,
+  weight: z.number().finite().min(0).max(1).nullable(),
+  shares: nullableDecimal, proposed_amount: nullableDecimal, invested_amount: nullableDecimal,
+  invested_currency: currency.nullable().optional().default(null), purchase_date: date.nullable().optional().default(null),
+}).refine(item => {
+  const provenance = [item.invested_amount, item.invested_currency, item.purchase_date];
+  const absent = provenance.every(value => value === null);
+  if (item.proposed_amount !== null) return item.weight === null && item.shares === null && absent;
+  if (item.weight !== null) return item.shares === null && absent;
+  return item.shares !== null && (absent || provenance.every(value => value !== null));
+});
+export const portfolioDetailSchema = z.object({ ...portfolioFields, source_plan_id: z.string().uuid().nullable(), holdings: z.array(holdingSchema) }).refine(item =>
+  validPlanCurrency(item) && (item.portfolio_type === "CURRENT" || item.source_plan_id === null) && item.source_plan_id !== item.id &&
+  item.holding_count === item.holdings.length && new Set(item.holdings.map(holding => holding.symbol)).size === item.holdings.length &&
+  item.holdings.every((holding, index) => (index === 0 || item.holdings[index - 1].position < holding.position) &&
+    (item.portfolio_type === "PLANNED" ? holding.proposed_amount !== null : item.portfolio_type === "LEGACY" ? holding.weight !== null : holding.shares !== null && holding.weight === null && holding.proposed_amount === null)));
+export type AdminPortfolioDetail = z.infer<typeof portfolioDetailSchema>;
+
 export const inventorySchema = z.object({
   checked_at: timestamp, total_records: count, stored_symbols: count, required_symbols: count,
   present_required_symbols: count, current_required_symbols: count, stale_required_symbols: count,

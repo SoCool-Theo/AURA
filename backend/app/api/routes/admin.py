@@ -56,6 +56,9 @@ from app.services.ai_monitoring_service import AIMonitoringService
 from app.services.audit_log_service import AuditLogService
 from app.services.market_data_status_service import MarketDataStatusService
 from app.services.auth_service import DuplicateEmailError
+from app.schemas.admin_portfolio import AdminPortfolioDetail, AdminPortfoliosQuery, AdminPortfoliosResponse
+from app.database.models.portfolio import PortfolioType
+from app.services.admin_portfolio_service import AdminPortfolioService
 
 
 router = APIRouter(
@@ -118,6 +121,34 @@ def get_admin_dashboard(
         return AdminOverviewService(session).dashboard()
     except (SQLAlchemyError, ValidationError) as error:
         raise HTTPException(status_code=503, detail="Admin dashboard unavailable") from error
+
+
+@router.get("/portfolios", response_model=AdminPortfoliosResponse)
+def list_admin_portfolios(
+    session: DatabaseSession, current_admin: CurrentAdmin,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
+    q: Annotated[str | None, Query(max_length=100)] = None,
+    portfolio_type: PortfolioType | None = None,
+    owner_id: UUID | None = None,
+) -> AdminPortfoliosResponse:
+    try:
+        return AdminPortfolioService(session).list(AdminPortfoliosQuery(
+            limit=limit, offset=offset, q=q, portfolio_type=portfolio_type, owner_id=owner_id,
+        ))
+    except (SQLAlchemyError, ValidationError) as error:
+        raise HTTPException(status_code=503, detail="Admin portfolio directory unavailable") from error
+
+
+@router.get("/portfolios/{portfolio_id}", response_model=AdminPortfolioDetail)
+def get_admin_portfolio(portfolio_id: UUID, session: DatabaseSession, current_admin: CurrentAdmin) -> AdminPortfolioDetail:
+    try:
+        result = AdminPortfolioService(session).detail(portfolio_id)
+    except (SQLAlchemyError, ValidationError) as error:
+        raise HTTPException(status_code=503, detail="Admin portfolio details unavailable") from error
+    if result is None:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    return result
 
 
 @router.get("/users", response_model=AdminUsersListResponse)

@@ -4077,3 +4077,47 @@ remain separate follow-on work.
   were untouched. No deployment, real-provider/model execution, database migration,
   staging, commit or push. Preserved independent presentation progress and
   unrelated untracked files on feat/admin-web-foundation.
+
+### Administrator portfolio directory and details — 2026-10-14
+
+- Added administrator-only GET /api/admin/portfolios and
+  GET /api/admin/portfolios/{portfolio_id}. The global directory supports bounded
+  pagination, literal case-insensitive portfolio/owner search, type and owner UUID
+  filters, deterministic creation-time/UUID order and matching totals on empty
+  pages. Safe owner identity/status, holding counts and saved report/simulation
+  counts use one SQL projection per read after existing actor authorization.
+  Independent aggregates avoid inflated counts and do not load result snapshots.
+- Details reuse the existing current/planned/legacy portfolio and holding schemas,
+  return saved position order, exact decimal amount/share strings, optional current
+  investment provenance and source plan ID, hypothetical planned amounts/currency
+  and existing numeric legacy weights. Empty portfolios are readable. Customer
+  ownership APIs remain unchanged; no valuation, analytics, provider execution,
+  write/audit event, deletion, dependency or migration is introduced. Invalid or
+  unavailable records produce explicit 404/422/sanitized 503 responses.
+- Replaced the aggregate-only admin placeholder with the directory and themed
+  details dialog while retaining totals. Added server filters, pagination,
+  refresh/clear controls, explicit loading/error/empty states, runtime identity,
+  mode/order/count/decimal checks and close/Escape focus restoration. Wrapped long
+  IDs and stacked identity metadata after browser inspection; existing theme and
+  component styles are preserved. README/API contracts document these boundaries.
+  Corrected one existing non-UTF-8 dash in the API contract document.
+- Verification: 389 relevant backend regressions passed, including 33 new portfolio
+  API cases; final focused rerun passed all 33 after a restricted Python launcher
+  stalled. All 35 admin Node tests passed outside the restricted native-runtime
+  sandbox. Final TypeScript, ESLint and production build passed; existing large
+  chunk/route-classification notices remain. Guarded Docker PostgreSQL 18.4
+  acceptance verified exact large decimals, all portfolio modes, owner/type search,
+  pagination/counts, access rejection and retained customer ownership alongside
+  prior admin acceptance. Real frontend client contracts against the preview passed.
+- Browser verification on the final built preview covered session restoration,
+  pagination, current quantities/provenance, planned decimals/hypothetical wording,
+  legacy weights, empty holdings, owner/type/search filters, empty results,
+  keyboard Escape/focus restoration and sign-out. Browser warnings/errors were
+  empty. Saved a real portfolio-details screenshot outside the repo. Desktop
+  checks do not imply physical-device or broader responsive coverage.
+- Gracefully stopped temporary test servers and closed the temporary browser tab.
+  Disposable PostgreSQL schemas and generated credentials were removed; all public
+  table inventory/content fingerprints matched after both acceptance cleanups.
+  Existing accounts/data, user development servers, remote configuration and
+  unrelated report files were preserved. No staging, commit, push or deployment.
+  Work remains on feat/admin-web-foundation; report browsing is the next feature.

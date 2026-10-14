@@ -148,6 +148,8 @@ def check_http(app, password, factory):
         check_manual_refresh(client, factory, login("admin@example.com"), login("customer00@example.com"))
         from check_user_creation import check_user_creation
         check_user_creation(client, factory, password)
+        from check_portfolios import check_portfolios
+        check_portfolios(client, factory, password)
 
 
 def check_account_status(client, password, factory, admin, customer):

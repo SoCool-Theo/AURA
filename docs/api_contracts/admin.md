@@ -1,7 +1,8 @@
 # Administration backend contracts
 
 The backend supplies the access boundary, Audit Log storage/query API, Dashboard
-statistics, a Users directory with account suspension/reactivation, Market Data inventory/status/history,
+statistics, a Users directory with account suspension/reactivation, a global
+portfolio directory/details API, Market Data inventory/status/history,
 System Health checks, and content-free AI Monitoring for Aura's separate admin
 website. Its frontend integration is implemented in `Admin/`.
 Account deletion remains subsequent work. Customer account creation is implemented below. Administrator role management
@@ -727,9 +728,10 @@ loaded page. DTOs are runtime validated; malformed payloads show an error, never
 prototype data. Decimal prices remain strings. Date labels and filters use UTC.
 AI summary counts cover all retained events; request filters apply to the list.
 
-Portfolios and Reports show dashboard aggregate counts because there are no
-global admin detail/list/download/delete endpoints. No customer ownership
-endpoint is used to simulate global access. Users supports the status and role
+Portfolios supports the global read directory and saved details documented below.
+Reports still shows dashboard aggregate counts; global report browsing/downloads
+and portfolio deletion are subsequent features. No customer ownership endpoint
+is used to simulate global access. Users supports the status and role
 actions and audit events described above. Market Data supports manual refresh
 and run history. Users also create customer accounts. User deletion, account editing, security/session
 administration, notifications,
@@ -801,7 +803,7 @@ actual actor/target UUIDs and their previous/new roles.
 `POST /api/admin/users` requires verified administrator permission and creates
 one active, registered CUSTOMER account. Its request accepts canonical `email`,
 `password` using the existing minimum-eight-character authentication rule, and
-optional nullable `display_name` using the existing trimmed 1�100 character
+optional nullable `display_name` using the existing trimmed 1–100 character
 profile rule. Extra fields are forbidden, including role, status, user ID,
 password hash and session version. Password whitespace is significant and is
 not trimmed. Omitted/null name leaves the account unnamed. Public registration
@@ -851,3 +853,51 @@ does not cancel a committed server operation. Failure/uncertainty retains safe
 feedback and refreshes the directory; success validates the server's customer
 response, resets stale filters to display the new account and restores focus.
 Activity Logs filters/displays the persisted creation event.
+
+## Global portfolio directory and saved details
+
+Both endpoints require the router's verified persisted administrator permission.
+They read portfolios across all owners, including legacy and suspended owners.
+Customer endpoints retain their existing ownership checks, even for administrators.
+
+- GET /api/admin/portfolios returns items, total, limit and offset. Default limit
+  is 25 (1–100); offset is 0 (0–10000). Optional portfolio_type accepts CURRENT,
+  PLANNED or LEGACY. Optional owner_id is an account UUID; an absent owner matches
+  zero records. Optional q is trimmed, at most 100 characters and searches portfolio
+  name, owner email or owner display name case-insensitively. Percent, underscore
+  and backslash are literal search characters. Filters combine with AND. Order is
+  created_at descending, then UUID descending. Empty pages retain the matching
+  total. Counts and rows share a single SQL statement snapshot.
+- Directory items contain id, name, portfolio_type, plan_currency, UTC created_at
+  and updated_at; owner (id, nullable email/display_name, REGISTERED/LEGACY
+  account_type, ACTIVE/SUSPENDED status); holding_count, saved_report_count and
+  saved_simulation_count. Holdings and immutable result snapshots are not loaded
+  for directory pages. Independent aggregates avoid multiplying counts through
+  holdings/results joins. Account type and portfolio type are distinct.
+- GET /api/admin/portfolios/{portfolio_id} returns those fields plus nullable
+  source_plan_id and holdings in stored position order. It reuses existing
+  PortfolioResponse/PortfolioHoldingResponse validation and serialization:
+  current shares plus optional investment provenance/date; planned proposed_amount
+  in the portfolio's plan_currency; legacy saved weight. Holding IDs, symbols and
+  positions are included. Amounts/shares are exact decimal strings; legacy weights
+  retain the existing numeric response contract. Optional fields follow the
+  existing mode-aware serializer. Empty portfolios return an empty holdings list.
+  Header, owner, counts and holdings share one SQL snapshot without loading saved
+  report/simulation payloads.
+
+Missing/invalid/stale authorization returns 401 with Bearer challenge; authenticated
+customers return 403, before reading portfolio data or revealing existence. A missing
+portfolio returns 404 Portfolio not found. Invalid UUIDs/filters return 422.
+Storage or invalid persisted response state returns sanitized 503 Admin portfolio
+directory unavailable / Admin portfolio details unavailable. No fallback, repair,
+valuation, analytics, provider call or synthetic risk/market value is produced.
+Credentials, session generations, phone numbers, private preferences and saved
+snapshot contents are excluded from both projections.
+
+These are read-only endpoints: no commit, mutation audit, write API, portfolio
+deletion or migration is added. The frontend retains aggregate totals and adds
+server search/type/owner filters, pagination, explicit loading/error/empty states
+and a themed details dialog with retry and focus restoration. It verifies the
+detail UUID, decimal strings, mode, counts and ordered holding shape at runtime.
+Proposed amounts are described as hypothetical; financial results are not
+recalculated in the dialog. Report browsing/downloads remain a separate feature.

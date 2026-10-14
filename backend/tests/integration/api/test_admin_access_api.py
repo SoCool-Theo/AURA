@@ -152,6 +152,7 @@ def test_admin_openapi_requires_bearer_and_exposes_only_guarded_role_write():
         "/api/admin/users/{user_id}/status",
         "/api/admin/users/{user_id}/role",
         "/api/admin/market-data/refresh", "/api/admin/market-data/refresh-runs",
+        "/api/admin/portfolios", "/api/admin/portfolios/{portfolio_id}",
     }
     assert set(paths["/api/admin/me"]) == {"get"}
     operation = paths["/api/admin/me"]["get"]
@@ -162,3 +163,6 @@ def test_admin_openapi_requires_bearer_and_exposes_only_guarded_role_write():
     assert set(paths["/api/admin/users/{user_id}/role"]) == {"patch"}
     assert set(paths["/api/admin/users"]) == {"get", "post"}
     assert paths["/api/admin/users"]["post"]["security"] == [{"HTTPBearer": []}]
+    for path in ("/api/admin/portfolios", "/api/admin/portfolios/{portfolio_id}"):
+        assert set(paths[path]) == {"get"}
+        assert paths[path]["get"]["security"] == [{"HTTPBearer": []}]

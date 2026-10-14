@@ -29,6 +29,13 @@ try {
     await Promise.all([api.dashboard(), api.inventory(), api.marketStatus(), api.health(), api.audit({ limit: 4 })]);
   }
   console.log("PASS concurrent dashboard reads across three rounds");
+  const portfolios = await api.portfolios({ limit: 25 });
+  if (portfolios.items.length) {
+    const details = await api.portfolio(portfolios.items[0].id);
+    assert.equal(details.holding_count, details.holdings.length);
+    assert.equal((await api.portfolios({ owner_id: details.owner.id })).items.every(item => item.owner.id === details.owner.id), true);
+    console.log("PASS global portfolio client contracts, saved details and owner filter");
+  }
   const directory = await api.users({ limit: 25 });
   assert.equal((await api.users({ limit: 25, offset: 25 })).items.length, Math.min(25, Math.max(0, directory.total - 25)));
   assert.equal((await api.users({ q: "customer00@example.com", limit: 25 })).total, 1);

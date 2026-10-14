@@ -12,7 +12,8 @@ import { SectionCard } from "./SectionCard";
 import { DashboardPage } from "./pages/DashboardPage";
 import { UsersPage } from "./pages/UsersPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { ActivityPage, AiOversightPage, HealthPage, MarketDataPage, PortfoliosPage, ReportsPage } from "./pages/OtherPages";
+import { ActivityPage, AiOversightPage, HealthPage, MarketDataPage, ReportsPage } from "./pages/OtherPages";
+import { PortfoliosPage } from "./pages/PortfoliosPage";
 import type { AppearanceSettings, PageKey } from "./types";
 
 const titles: Record<PageKey, string> = { dashboard: "Dashboard", users: "Users", portfolios: "Portfolios", market: "Market Data", reports: "Reports", health: "System Health", ai: "AI Monitoring", activity: "Activity Logs", settings: "Settings" };

@@ -8,8 +8,47 @@ const vite = await createServer({ configFile: false, root, cacheDir: ".wrangler/
 after(() => vite.close());
 const { createAdminApi, ADMIN_TOKEN_KEY, apiOrigin } = await vite.ssrLoadModule("/lib/adminApi.ts");
 const contracts = await vite.ssrLoadModule("/lib/adminContracts.ts");
+
+const portfolio = {
+  id: "00000000-0000-4000-8000-000000000064", name: "Saved portfolio", portfolio_type: "CURRENT", plan_currency: null,
+  created_at: "2026-10-14T00:00:00Z", updated_at: "2026-10-14T00:00:00Z",
+  owner: { id: "00000000-0000-4000-8000-000000000002", email: null, display_name: null, account_type: "LEGACY", status: "ACTIVE" },
+  holding_count: 1, saved_report_count: 8, saved_simulation_count: 3,
+};
+const portfolioDetails = { ...portfolio, source_plan_id: null, holdings: [{ id: "00000000-0000-4000-8000-0000000000c8", symbol: "AAPL", position: 0, weight: null, shares: "2.123456789012", invested_amount: null, invested_currency: null, purchase_date: null }] };
+
+test("portfolio directory encodes server filters and strips private response fields", async () => {
+  let called;
+  const { api } = setup(async (url, init) => { called = [url, init]; return response({ items: [{ ...portfolio, result_snapshot: { private: true } }], total: 1, limit: 25, offset: 0 }); }, "token");
+  const result = await api.portfolios({ q: "100%_\\", owner_id: portfolio.owner.id, portfolio_type: "CURRENT", limit: 25 });
+  const query = new URL(called[0]);
+  assert.equal(query.pathname, "/api/admin/portfolios"); assert.equal(query.searchParams.get("q"), "100%_\\");
+  assert.equal(query.searchParams.get("owner_id"), portfolio.owner.id); assert.equal(called[1].method, "GET");
+  assert.deepEqual(result.items[0], portfolio);
+});
+test("portfolio details keep exact decimal strings and reject mismatched identity or mode", async () => {
+  const { api } = setup(async () => response(portfolioDetails), "token");
+  assert.equal((await api.portfolio(portfolio.id)).holdings[0].shares, "2.123456789012");
+  await assert.rejects(api.portfolio(portfolio.owner.id), /invalid portfolio details/);
+  const planned = { ...portfolioDetails, portfolio_type: "PLANNED", plan_currency: "THB", holdings: [{ id: portfolioDetails.holdings[0].id, symbol: "AAPL", position: 0, weight: null, proposed_amount: "1234567890.123456789012" }] };
+  assert.equal(contracts.portfolioDetailSchema.parse(planned).holdings[0].proposed_amount, "1234567890.123456789012");
+  for (const invalid of [
+    { ...planned, plan_currency: null }, { ...portfolioDetails, holding_count: 2 },
+    { ...portfolioDetails, portfolio_type: "LEGACY" }, { ...portfolioDetails, source_plan_id: portfolio.id },
+    { ...portfolioDetails, holdings: [{ ...portfolioDetails.holdings[0], shares: 2.123456789012 }] },
+    { ...portfolioDetails, holdings: [{ ...portfolioDetails.holdings[0], invested_currency: "USD" }] },
+    { ...portfolioDetails, holding_count: 2, holdings: [portfolioDetails.holdings[0], { ...portfolioDetails.holdings[0], symbol: "MSFT" }] },
+  ]) assert.equal(contracts.portfolioDetailSchema.safeParse(invalid).success, false);
+});
+test("missing portfolios and read failures keep the admin session with safe feedback", async () => {
+  for (const status of [404, 503]) {
+    const { api } = setup(async () => response({ detail: "private credentials" }, status), "token");
+    await assert.rejects(api.portfolio(portfolio.id), error => error.status === status && !error.message.includes("credentials") && (status !== 404 || error.message.includes("portfolio")));
+    assert.equal(api.readToken(), "token");
+  }
+});
 const identity = { id: "00000000-0000-4000-8000-000000000001", email: "admin@example.com", display_name: null, role: "ADMIN" };
-const response = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+function response(body, status = 200) { return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }); }
 function setup(fetcher, token) {
   const values = new Map(token ? [[ADMIN_TOKEN_KEY, token]] : []);
   const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
