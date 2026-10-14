@@ -1,1093 +1,442 @@
 # Aura System Architecture
 
-This document defines Aura's backend, customer web, mobile, and shared
-client-backend architecture. Proposed structures are targets unless current
-repository evidence or `CURRENT_STATUS.md` identifies them as implemented.
+Aura is a portfolio risk education platform. The customer web and mobile
+applications share a FastAPI backend and PostgreSQL database. This document
+describes the implementation on `main`, reviewed on 2026-10-14; deployment
+configuration and model artifacts must still be verified in each environment.
 
 ## Quick Navigation
 
-- [Backend Architecture](#backend-architecture)
-- [Frontend Web Architecture](#frontend-web-architecture)
-- [Mobile App Architecture](#mobile-app-architecture)
-- [Shared Client-Backend Architecture](#shared-client-backend-architecture)
-- [Project Folder Definitions](#project-folder-definitions)
-- [Architecture Decisions](#architecture-decisions)
+- [System Overview](#system-overview)
+- [Backend Responsibilities](#backend-responsibilities)
+- [Portfolio Baselines and Valuation](#portfolio-baselines-and-valuation)
+- [Analytics and Saved Snapshots](#analytics-and-saved-snapshots)
+- [Forecasting](#forecasting)
+- [Market Data Worker](#market-data-worker)
+- [Authentication and Sessions](#authentication-and-sessions)
+- [Persistence and Transactions](#persistence-and-transactions)
+- [Customer Clients](#customer-clients)
+- [Runtime Configuration](#runtime-configuration)
+- [Repository Map](#repository-map)
+- [Current Boundaries](#current-boundaries)
+- [Related Documentation](#related-documentation)
 
-## Project Structure
+## System Overview
 
-```text
-AURA/
-│
-├── .venv/                         ← Virtual Environment
-├── AGENTS.md                      ← Tells Codex how to work on Aura
-├── PROJECT_CONTEXT.md             ← What Aura is and why it is being built
-├── CURRENT_STATUS.md              ← Tells Codex what has actually been completed
-├── backend/                       ← FastAPI backend, analytics, database, simulations, AI
-├── web-prototype-react/            ← Customer React web application
-├── mobile/                        ← Customer mobile application
-├── data/                          ← Shared market data
-├── docs/                          ← Project documentation
-├── .gitignore
-└── README.md
+```mermaid
+flowchart LR
+    Web["Customer web: React + TypeScript"] --> API["FastAPI"]
+    Mobile["Customer mobile: React Native + Expo"] --> API
+    API --> DB[("PostgreSQL")]
+    API --> Models["Frozen forecast artifacts"]
+    API --> LLM["Configured OpenAI or Groq provider"]
+    Worker["Separate market data worker"] --> Provider["Daily market data provider"]
+    Worker --> DB
+    Offline["Offline forecast workflow"] --> Models
+    Offline --> DB
 ```
 
-# Architecture Decisions
+Both clients call authenticated HTTP endpoints. They do not access PostgreSQL,
+market data providers, or LLM credentials directly. The backend owns portfolio
+valuation, historical analytics, simulations, currency conversion, forecast
+inference, and account authorization.
 
-- Customer website uses React and TypeScript and lives under `web-prototype-react/`.
-- The customer mobile application uses React Native and TypeScript and lives under `mobile/`.
-- The website and mobile application share one backend contract.
-- FastAPI remains the shared backend for the React web and React Native clients; there is no separate mobile backend.
-- PostgreSQL remains the backend persistence layer.
-- Clean historical data is used directly for calculations.
-- Automatic market-data updates.
-- Backend analytics and simulation calculations are the source of truth; web and mobile clients do not duplicate financial formulas.
-- Both customer clients use dedicated API layers rather than scattered network calls in pages or screens.
-- Bearer authentication is shared through the backend and handled through dedicated client authentication layers, with the backend remaining authoritative.
-- Web and mobile may use different backend URLs during local development while preserving the same API contracts.
-- Analytics engine first.
-- Historical simulator after core analytics.
-- The AI agent explains backend-owned deterministic results and remains
-  educational and non-advisory.
-- The dashboard remains concise while detailed analytics live on dedicated pages.
-- Web and mobile mock data is development/test data and remains separate from production API data.
-- Shared components, charts, styles, and types are separated from feature-specific pages.
-- The backend AI Agent and the current customer web/mobile AI integrations are
-  implemented; saved resources are grounded from frozen snapshots.
-- No ML training folder yet.
+The worker updates shared daily observations independently of customer requests.
+Offline forecasting scripts produce versioned artifacts; normal API requests
+load those artifacts without training models.
 
----
+## Backend Responsibilities
 
-# Backend Architecture
+The backend lives in `backend/app/`. Responsibilities follow the existing
+route, service, calculation, and persistence boundaries.
 
-## Detailed Backend Folder Structure
+| Module | Responsibility |
+| --- | --- |
+| `api/` | HTTP routes, request dependencies, authentication, ownership checks, and response handling |
+| `schemas/` | Pydantic request and response contracts, including versioned snapshots |
+| `services/` | Portfolio baseline resolution, workflow orchestration, snapshot mapping, forecasts, sessions, watchlists, and notifications |
+| `analytics/` | Deterministic historical return, risk, contribution, and diversification calculations |
+| `scenarios/` | Historical what-if and allocation scenario calculations |
+| `forecasting/` | Feature and target construction, evaluation, artifact validation, and inference |
+| `agents/` | LLM provider adapters, grounded tools, prompts, and guardrails |
+| `data_pipeline/` | Market observation fetching, cleaning, validation, and persistence preparation |
+| `scheduler/` | Worker scheduling, coordination, retries, and health bookkeeping |
+| `database/` | SQLAlchemy models, connections, and repositories |
+| `core/` | Configuration, security, supported instruments, and logging |
+| `utils/` | Shared implementation helpers |
 
-```text
-AURA/
-│
-├── .venv/
-├── AGENTS.md
-├── PROJECT_CONTEXT.md
-├── CURRENT_STATUS.md
-│
-├── backend/
-│   │
-│   ├── app/
-│   │   │
-│   │   ├── __init__.py
-│   │   ├── main.py
-│   │   │
-│   │   ├── core/
-│   │   │   ├── __init__.py
-│   │   │   ├── config.py
-│   │   │   ├── constants.py
-│   │   │   └── logging.py
-│   │   │
-│   │   ├── api/
-│   │   │   ├── __init__.py
-│   │   │   ├── router.py
-│   │   │   │
-│   │   │   └── routes/
-│   │   │       ├── __init__.py
-│   │   │       ├── health.py
-│   │   │       ├── portfolio.py
-│   │   │       ├── simulation.py
-│   │   │       └── agent.py
-│   │   │
-│   │   ├── analytics/
-│   │   │   ├── __init__.py
-│   │   │   ├── returns.py
-│   │   │   ├── volatility.py
-│   │   │   ├── drawdown.py
-│   │   │   ├── sharpe.py
-│   │   │   ├── correlation.py
-│   │   │   ├── concentration.py
-│   │   │   ├── diversification.py
-│   │   │   ├── risk_driver.py
-│   │   │   ├── risk_classifier.py
-│   │   │   └── engine.py
-│   │   │
-│   │   ├── scenarios/
-│   │   │   ├── __init__.py
-│   │   │   ├── definitions.py
-│   │   │   └── simulator.py
-│   │   │
-│   │   ├── data_pipeline/
-│   │   │   ├── __init__.py
-│   │   │   ├── providers/
-│   │   │   │   ├── __init__.py
-│   │   │   │   └── market_provider.py
-│   │   │   ├── fetcher.py
-│   │   │   ├── cleaner.py
-│   │   │   ├── validator.py
-│   │   │   └── updater.py
-│   │   │
-│   │   ├── database/
-│   │   │   ├── __init__.py
-│   │   │   ├── connection.py
-│   │   │   │
-│   │   │   ├── models/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── user.py
-│   │   │   │   ├── portfolio.py
-│   │   │   │   ├── holding.py
-│   │   │   │   ├── market_data.py
-│   │   │   │   ├── analysis.py
-│   │   │   │   └── conversation.py          ← Later
-│   │   │   │
-│   │   │   └── repositories/
-│   │   │       ├── __init__.py
-│   │   │       ├── market_data_repository.py
-│   │   │       ├── portfolio_repository.py
-│   │   │       └── analysis_repository.py
-│   │   │
-│   │   ├── schemas/
-│   │   │   ├── __init__.py
-│   │   │   ├── portfolio.py
-│   │   │   ├── analytics.py
-│   │   │   ├── market_data.py
-│   │   │   ├── simulation.py
-│   │   │   └── agent.py
-│   │   │
-│   │   ├── services/
-│   │   │   ├── __init__.py
-│   │   │   ├── market_data_service.py
-│   │   │   ├── portfolio_service.py
-│   │   │   └── analysis_service.py
-│   │   │
-│   │   ├── agents/
-│   │   │   ├── __init__.py
-│   │   │   ├── agent.py
-│   │   │   ├── tools.py
-│   │   │   └── prompts.py
-│   │   │
-│   │   └── utils/
-│   │       ├── __init__.py
-│   │       └── date_utils.py
-│   │
-│   ├── tests/
-│   │   │
-│   │   ├── __init__.py
-│   │   │
-│   │   ├── unit/
-│   │   │   │
-│   │   │   ├── analytics/
-│   │   │   │   ├── test_returns.py
-│   │   │   │   ├── test_volatility.py
-│   │   │   │   ├── test_drawdown.py
-│   │   │   │   ├── test_sharpe.py
-│   │   │   │   ├── test_correlation.py
-│   │   │   │   └── test_engine.py
-│   │   │   │
-│   │   │   └── data_pipeline/
-│   │   │       ├── test_cleaner.py
-│   │   │       └── test_validator.py
-│   │   │
-│   │   └── integration/
-│   │       ├── __init__.py
-│   │       │
-│   │       ├── api/
-│   │       │   ├── __init__.py
-│   │       │   ├── test_health_api.py
-│   │       │   ├── test_portfolio_api.py
-│   │       │   └── test_simulation_api.py
-│   │       │
-│   │       └── database/
-│   │           └── test_database.py
-│   │
-│   ├── scripts/
-│   │   ├── seed_historical_data.py
-│   │   ├── update_market_data.py
-│   │   └── run_engine_check.py
-│   │
-│   ├── examples/
-│   │   ├── portfolio_request.json
-│   │   ├── analysis_response.json
-│   │   └── simulation_response.json
-│   │
-│   ├── .env.example
-│   ├── requirements.txt
-│   └── README.md
-│
-├── web-prototype-react/            ← Customer React web application
-│
-├── mobile/
-│
-├── data/
-│   ├── raw/
-│   ├── processed/
-│   └── README.md
-│
-├── docs/
-│   ├── api_contracts/
-│   ├── architecture/
-│   └── data_dictionary/
-│
-├── .gitignore
-└── README.md
-```
+Routes call services; repositories handle database access under caller-owned
+transactions. Calculation modules do not fetch provider data or save records.
+Money and quantity boundaries use `Decimal`; numerical analytics use the
+validated arrays and data frames appropriate to their calculations.
 
----
+The public API covers accounts, portfolios and holdings, reports, simulations,
+asset and portfolio outlooks, watchlists, notifications, AI explanations, and
+market data status. Endpoint details belong in the
+[public API contract](../api_contracts/public_api.md).
 
-## Backend Folder Definitions
+The AI service resolves an owned portfolio or saved report/simulation context
+before calling the configured provider. Backend calculations and snapshots
+supply the numerical facts. LLM responses explain those facts and remain subject
+to educational guardrails.
 
-| Folder | Simple Meaning |
-|---|---|
-| `api/` | Receives frontend requests |
-| `analytics/` | Calculates portfolio risk |
-| `scenarios/` | Runs historical What-If simulations |
-| `data_pipeline/` | Automatically updates market data |
-| `database/` | Reads and saves stored data |
-| `schemas/` | Defines data input/output format |
-| `services/` | Coordinates the whole process |
-| `agents/` | Grounded educational AI explanation layer |
-| `core/` | Global settings and constants |
-| `utils/` | Small reusable helper functions |
+## Portfolio Baselines and Valuation
 
-## Current Holding and Valuation Architecture
+### Persisted holding modes
 
-The currently implemented compatibility architecture below is being extended
-by the approved [planned-portfolio target contract](../api_contracts/planned_portfolios.md).
-Type-aware CRUD exposes user-facing `CURRENT` and `PLANNED` portfolio types
-while retaining `LEGACY` as internal compatibility state. The shared baseline
-resolver, analysis composition, reporting, simulations, and AI grounding now
-support all three modes.
-
-Aura supports three complete, mutually exclusive persisted holding modes:
-
-| Mode | Persisted holding state | Current valuation |
+| Mode | Saved facts | Analytics baseline |
 | --- | --- | --- |
-| `LEGACY` | `weight` is present; real-holding fields and `proposed_amount` are `NULL` | Not available |
-| `CURRENT` | `weight` and `proposed_amount` are `NULL`; `shares` is present; investment provenance is either complete or absent | Available from persisted current market data |
-| `PLANNED` | `proposed_amount` is present; `weight` and real-holding fields are `NULL` | Target allocation is derived without current prices; current valuation is not ownership-authoritative |
+| `CURRENT` | Symbol, positive share quantity, ordered position, and optional purchase provenance | Current share quantities and derived current market allocations |
+| `PLANNED` | Symbol, positive proposed amount, ordered position, and one plan currency (`USD` or `THB`) | Proposed amounts normalized into target allocations |
+| `LEGACY` | Symbol, saved weight, and ordered position | Saved allocations for compatibility |
 
-For a current holding, the normal customer write contract is `symbol` plus
-positive `shares` (the quantity owned). The backend controls the zero-based
-`position` used to preserve order. Existing/full current records may also carry
-`invested_amount`, `invested_currency`, and `purchase_date` as one complete
-optional provenance group; Aura never fabricates those facts for new
-quantity-only rows. Aura does not persist manual weight, current allocation,
-current price, current value, or FX rate for current holdings.
+The modes are mutually exclusive. Current holdings do not persist derived
+weights, prices, market values, or FX rates. Optional invested amount, investment
+currency, and purchase date are supplied together or omitted together. Planned
+holdings do not persist real share quantities or purchase provenance.
 
-For a planned holding, the user controls `symbol` and positive
-`proposed_amount` in the portfolio's single `plan_currency`. The backend derives
-the total and exact canonical target allocation without market or FX data.
-`GET /api/portfolios/{portfolio_id}/planned-preview` may also derive estimated
-shares from a best-effort current USD asset price and, for THB plans, USD/THB
-FX. Each estimate carries explicit availability and provenance; estimates are
-never persisted and never influence canonical weights or analytics.
+Legacy portfolios remain readable for existing data. They are not a separate
+customer creation option. Replacing their holdings through the current-holdings
+workflow can convert them to `CURRENT`.
 
-`PortfolioBaselineResolutionService` is the sole analysis baseline resolver:
+### Shared baseline resolution
 
-```text
-CURRENT -> current valuation -> dynamic weights
-PLANNED -> proposed amounts -> target weights
-LEGACY  -> saved weights
-                            |
-                            v
-                   canonical weights
-                            |
-                            v
-                 analysis composition
-```
+`PortfolioBaselineResolutionService` in
+`services/portfolio_baseline_resolver.py` resolves the saved mode into canonical
+allocations and any valuation or planned-allocation context. Report, simulation,
+and forecast services use this boundary rather than deriving their own baseline.
 
-For `CURRENT`, the same valuation also supplies the owned share quantities.
-Those fixed quantities are valued at every aligned historical price date to
-produce the portfolio-value and portfolio-return series. The current dynamic
-weights remain authoritative for concentration, diversification, and risk
-contribution.
-
-Planned analysis therefore does not require current-price or FX availability.
-It still requires sufficient aligned historical price data under the same
-no-fabrication rules as other portfolio modes.
-
-Current valuation is calculated once in `PortfolioValuationService`:
+For current holdings:
 
 ```text
-current_value_usd = shares × latest valid USD market price
-total_current_value_usd = sum(current_value_usd)
-current_allocation = current_value_usd / total_current_value_usd
+holding_value_usd = share_quantity * latest_valid_usd_price
+portfolio_value_usd = sum(holding_value_usd)
+current_allocation = holding_value_usd / portfolio_value_usd
 ```
 
-The maximum accepted age for each required current observation is four
-calendar days. USD is canonical. THB is an optional display currency using the
-internal `THB=X` series as USD/THB (THB per USD). Missing or stale `THB=X`
-disables THB display but does not affect USD valuation.
+Valuation reads persisted daily observations. Supported asset prices and optional
+USD/THB observations must satisfy the four-calendar-day freshness limit.
+`THB=X` supplies THB per USD. A THB display converts USD amounts using that rate;
+it does not change allocation or risk ratios.
 
-The instrument registry deliberately separates 17 user-selectable assets from
-the internal `THB=X` market instrument. Default/scheduled updates cover both
-groups, while explicit user asset selection remains limited to the 17 assets.
+Planned allocations come directly from proposed amounts in their shared plan
+currency. Optional estimated-share previews use available prices and FX, but
+remain best-effort previews. They are never saved as real holdings or used to
+define the canonical planned baseline.
 
-## Analysis, Reporting, Simulation, and AI Composition
+### Historical performance
 
-For a current portfolio, Aura keeps today's owned share quantities fixed and
-values them using aligned prices throughout the user-selected historical
-period. Portfolio cumulative return, annualized return, volatility, Sharpe,
-and maximum drawdown come from that historical portfolio-value series. This is
-not realized profit/loss: `purchase_date`, trades, deposits, withdrawals, and
-other cash flows do not change the reconstructed series.
-
-Individual-asset return, volatility, maximum drawdown, and Sharpe describe the
-asset over the analysis period. Portfolio risk contribution additionally
-depends on portfolio allocation and covariance/correlation. Investing more does
-not make the asset itself more volatile, although a larger current allocation
-can increase its contribution to portfolio risk.
-
-Report persistence supports `portfolio-analysis-response-v1` for legacy
-portfolios, `portfolio-analysis-response-v2` for current portfolios, and
-`portfolio-analysis-response-v3` for planned portfolios. V2 freezes the
-valuation currency/date, price dates, USD/display totals, optional FX, holding
-facts, prices, values, dynamic allocations, complete analytics, per-asset
-metrics, and risk contribution/rank. V3 freezes the plan currency, ordered
-proposed amounts, exact backend target weights, complete analytics, and the
-hypothetical/non-forecast limitation. Report V3 can additionally freeze one
-best-effort USD/THB observation for display-only currency views; missing FX
-never blocks planned analysis. It does not store estimated shares.
-
-Simulation history supports the existing V1 formats and these V2 formats:
-
-- `historical-scenario-simulation-response-v2`
-- `allocation-simulation-response-v2`
-- `combined-simulation-response-v2`
-
-Planned simulation history uses separate V3 formats:
-
-- `historical-scenario-simulation-response-v3`
-- `allocation-simulation-response-v3`
-- `combined-simulation-response-v3`
-
-The real simulation's original allocation is the current canonical USD
-allocation. Allocation and Combined retain the user's hypothetical percentages
-as the modified allocation. For planned simulations, the original allocation
-is the target allocation resolved from proposed amounts; modified percentages
-remain separate hypothetical input. V2 and V3 history freeze their baseline at
-creation. Opening a saved report or simulation restores the JSONB snapshot and
-never revalues or reruns it. Planned report currency switching uses only an FX
-observation frozen at creation and never queries live FX on retrieval.
-
-AI grounding follows the same source boundary: live legacy portfolios use
-saved weights, live current portfolios use current USD valuation, and live
-planned portfolios use proposed amounts and their exact target weights. Report
-V2/V3 and Simulation V2/V3 use their frozen snapshots. Saved resources do not
-require current market prices. Context carries `portfolio_type`,
-`baseline_source`, and snapshot version so the model uses current, planned, or
-saved-allocation language correctly. Planned context excludes estimated shares
-and adds an explicit hypothetical/non-forecast limitation. AI remains
-educational, non-advisory, cannot claim proposed assets are currently owned,
-and cannot produce buy/sell recommendations.
-
-## Transaction Ownership
-
-- Repositories and services do not commit.
-- The successful API/request boundary commits writes.
-- Current valuation is read-only and persists nothing.
-- Reports and simulations save immutable snapshots at the successful outer
-  transaction boundary.
-- A failed valuation, analysis, or simulation does not commit a partial
-  snapshot.
-
-[↑ Back to Quick Navigation](#quick-navigation)
-
----
-
-# Frontend Web Architecture
-
-The customer website uses React and TypeScript under `web-prototype-react/`. The structure below is the **target frontend architecture** agreed for the application. It describes intended responsibilities and planned separation; it does not claim that every listed file, integration, or feature is already implemented.
+Current-portfolio historical performance holds today's saved share quantities
+fixed across the aligned historical price series:
 
 ```text
-web-prototype-react/
-├─ public/
-│  └─ favicon.svg
-│
-├─ src/
-│  ├─ app/
-│  │  ├─ App.tsx
-│  │  ├─ AppLayout.tsx
-│  │  ├─ navigation.ts
-│  │  └─ routes.ts
-│  │
-│  ├─ api/
-│  │  ├─ apiClient.ts
-│  │  ├─ authApi.ts
-│  │  ├─ portfoliosApi.ts
-│  │  ├─ analyticsApi.ts
-│  │  ├─ reportsApi.ts
-│  │  └─ simulationsApi.ts
-│  │
-│  ├─ auth/
-│  │  ├─ AuthContext.tsx
-│  │  ├─ useAuth.ts
-│  │  ├─ authStorage.ts
-│  │  └─ ProtectedRoute.tsx
-│  │
-│  ├─ config/
-│  │  └─ environment.ts
-│  │
-│  ├─ assets/
-│  │  ├─ images/
-│  │  │  └─ aura-market-background.png
-│  │  └─ icons/
-│  │
-│  ├─ components/
-│  │  ├─ navigation/
-│  │  │  ├─ TopNavigation.tsx
-│  │  │  ├─ ProfileMenu.tsx
-│  │  │  └─ TopNavigation.module.css
-│  │  │
-│  │  ├─ ui/
-│  │  │  ├─ Button.tsx
-│  │  │  ├─ Card.tsx
-│  │  │  ├─ Icon.tsx
-│  │  │  ├─ Input.tsx
-│  │  │  ├─ Select.tsx
-│  │  │  ├─ Modal.tsx
-│  │  │  ├─ Spinner.tsx
-│  │  │  ├─ EmptyState.tsx
-│  │  │  ├─ ErrorState.tsx
-│  │  │  ├─ PageHeader.tsx
-│  │  │  ├─ RiskPill.tsx
-│  │  │  ├─ SymbolBadge.tsx
-│  │  │  └─ ui.module.css
-│  │  │
-│  │  ├─ charts/
-│  │  │  ├─ DonutChart.tsx
-│  │  │  ├─ GaugeChart.tsx
-│  │  │  ├─ LineChart.tsx
-│  │  │  ├─ MiniLineChart.tsx
-│  │  │  └─ charts.module.css
-│  │  │
-│  │  └─ portfolio/
-│  │     ├─ PortfolioMetric.tsx
-│  │     ├─ PortfolioCard.tsx
-│  │     ├─ HoldingsTable.tsx
-│  │     └─ AllocationLegend.tsx
-│  │
-│  ├─ pages/
-│  │  ├─ auth/
-│  │  │  ├─ LoginPage.tsx
-│  │  │  ├─ RegisterPage.tsx
-│  │  │  └─ AuthPage.module.css
-│  │  │
-│  │  ├─ dashboard/
-│  │  │  ├─ DashboardPage.tsx
-│  │  │  ├─ DashboardPage.module.css
-│  │  │  └─ components/
-│  │  │     ├─ DashboardHeader.tsx
-│  │  │     ├─ DashboardKpiGrid.tsx
-│  │  │     ├─ PortfolioPerformance.tsx
-│  │  │     ├─ RiskDrivers.tsx
-│  │  │     ├─ PortfolioAllocation.tsx
-│  │  │     ├─ AiInsight.tsx
-│  │  │     ├─ PortfolioAnalysisCard.tsx
-│  │  │     ├─ PortfolioSelector.tsx
-│  │  │     └─ DateRangeSelector.tsx
-│  │  │
-│  │  ├─ portfolios/
-│  │  │  ├─ PortfoliosPage.tsx
-│  │  │  ├─ PortfolioDetailPage.tsx
-│  │  │  ├─ CreatePortfolioPage.tsx
-│  │  │  ├─ portfolios.module.css
-│  │  │  └─ components/
-│  │  │     ├─ PortfolioListCard.tsx
-│  │  │     ├─ PortfolioOverviewTab.tsx
-│  │  │     ├─ HoldingsTab.tsx
-│  │  │     ├─ PerformanceTab.tsx
-│  │  │     └─ ActivityTab.tsx
-│  │  │
-│  │  ├─ analytics/
-│  │  │  ├─ AnalyticsPage.tsx
-│  │  │  ├─ AnalyticsPage.module.css
-│  │  │  └─ components/
-│  │  │     ├─ AnalysisSummary.tsx
-│  │  │     ├─ RiskDriverTable.tsx
-│  │  │     ├─ CorrelationHeatmap.tsx
-│  │  │     └─ AssetAnalysisCard.tsx
-│  │  │
-│  │  ├─ simulations/
-│  │  │  ├─ SimulationsPage.tsx
-│  │  │  ├─ SimulationsPage.module.css
-│  │  │  └─ components/
-│  │  │     ├─ SimulationModeSelector.tsx
-│  │  │     ├─ HistoricalScenarioSelector.tsx
-│  │  │     ├─ SimulationSetup.tsx
-│  │  │     ├─ AllocationEditor.tsx
-│  │  │     ├─ SimulationResults.tsx
-│  │  │     ├─ SimulationComparison.tsx
-│  │  │     └─ SimulationHistory.tsx
-│  │  │
-│  │  ├─ assistant/
-│  │  │  ├─ AssistantPage.tsx
-│  │  │  ├─ AssistantPage.module.css
-│  │  │  └─ components/
-│  │  │     ├─ ConversationList.tsx
-│  │  │     ├─ ChatWorkspace.tsx
-│  │  │     └─ PortfolioContext.tsx
-│  │  │
-│  │  ├─ reports/
-│  │  │  ├─ ReportsPage.tsx
-│  │  │  ├─ ReportDetailPage.tsx
-│  │  │  ├─ ReportsPage.module.css
-│  │  │  └─ components/
-│  │  │     ├─ ReportSummary.tsx
-│  │  │     ├─ ReportFilters.tsx
-│  │  │     └─ ReportTable.tsx
-│  │  │
-│  │  ├─ watchlist/
-│  │  ├─ learn/
-│  │  └─ settings/
-│  │
-│  ├─ hooks/
-│  │  ├─ useHashRoute.ts
-│  │  └─ usePersistedState.ts
-│  │
-│  ├─ mocks/
-│  │  ├─ dashboard.mock.ts
-│  │  ├─ portfolios.mock.ts
-│  │  ├─ analytics.mock.ts
-│  │  └─ simulations.mock.ts
-│  │
-│  ├─ types/
-│  │  ├─ api.ts
-│  │  ├─ auth.ts
-│  │  ├─ portfolio.ts
-│  │  ├─ analytics.ts
-│  │  ├─ report.ts
-│  │  ├─ simulation.ts
-│  │  └─ settings.ts
-│  │
-│  ├─ utils/
-│  │  ├─ formatting.ts
-│  │  └─ uiCalculations.ts
-│  │
-│  ├─ styles/
-│  │  ├─ tokens.css
-│  │  ├─ globals.css
-│  │  ├─ accessibility.css
-│  │  └─ responsive.css
-│  │
-│  └─ main.tsx
-│
-├─ index.html
-├─ package.json
-├─ tsconfig.json
-└─ vite.config.ts
+historical_portfolio_value[t] = sum(saved_shares[i] * historical_price[i, t])
+historical_return[t] = historical_portfolio_value[t] / historical_portfolio_value[t-1] - 1
 ```
 
-## Frontend Web Folder Definitions
+This does not reconstruct purchase transactions or cash flows. Purchase dates
+remain provenance. Current allocations supply concentration, diversification,
+and risk-contribution context.
 
-| Folder | Simple Meaning |
-|---|---|
-| `app/` | Controls the overall React application structure, routing, navigation configuration, and shared page layout. |
-| `api/` | Handles communication between the React frontend and the FastAPI backend. |
-| `auth/` | Manages frontend authentication state, Bearer token handling, current-user access, and protected routes. |
-| `config/` | Stores frontend environment and application configuration such as the backend API base URL. |
-| `assets/` | Stores visual resources such as images, the Aura market background, and custom icons. |
-| `components/` | Contains reusable UI, navigation, chart, and portfolio components shared across multiple pages. |
-| `pages/` | Contains Aura's main user-facing screens organized by product feature. |
-| `hooks/` | Contains reusable React state and behavior logic that does not directly render UI. |
-| `mocks/` | Contains temporary/demo frontend data used during UI development and testing; it is not production backend data. |
-| `types/` | Defines TypeScript interfaces and types for frontend data and backend API contracts. |
-| `utils/` | Contains small frontend helper functions such as formatting and UI-only calculations. |
-| `styles/` | Defines Aura's shared design tokens, global styling, accessibility rules, and responsive behavior. |
+Planned and legacy baselines use their resolved fixed allocations for historical
+analytics. Their results describe allocation-based hypothetical performance.
 
-| Shared Component Folder | Simple Meaning |
-|---|---|
-| `components/navigation/` | Shared top navigation and profile-menu components. |
-| `components/ui/` | Generic reusable UI components such as buttons, cards, inputs, selectors, loading states, and risk badges. |
-| `components/charts/` | Reusable chart-rendering components such as line, donut, gauge, and mini charts. |
-| `components/portfolio/` | Reusable components that specifically represent portfolios, holdings, metrics, and allocation information. |
+## Analytics and Saved Snapshots
 
-## Frontend-to-Backend Responsibility Boundary
+Historical analytics include cumulative and annualized returns, annualized
+volatility, maximum drawdown, Sharpe ratio, correlations, concentration,
+diversification, signed risk contributions, contributor rankings, and risk
+classification. Maximum drawdown follows the negative-return convention.
+
+Reports and simulations freeze their results in versioned JSONB payloads.
+
+| Version | Baseline and captured context |
+| --- | --- |
+| V1 | Legacy allocation results |
+| V2 | Current-holding facts, valuation and price dates, derived allocations, monetary values, optional FX context, and calculated results |
+| V3 | Planned currency and proposed amounts, ordered target allocations, calculated results, and hypothetical-context disclosures |
+
+Report snapshots retain portfolio and per-asset analytics. Simulation snapshots
+retain the scenario inputs, original and modified allocations where applicable,
+comparison results, and their baseline context. Supported simulation workflows
+are historical scenarios, allocation comparisons, and combined scenarios.
+
+Opening saved history reads the original snapshot. It does not recalculate
+analytics, revalue holdings, or fetch today's FX rate.
+
+New V2/V3 simulation snapshots can also capture a `currency_display` payload
+with complete USD and THB monetary views and the conversion context. Both clients
+select the supplied view. Older snapshots without that payload retain their
+original supported currency.
+
+Currency conversion changes monetary presentation only. It does not change
+returns, volatility, weights, risk scores, or scenario assumptions.
+
+## Forecasting
+
+### Offline workflow and runtime inference
+
+The forecasting package supports dataset construction, features and horizon
+targets, chronological training/evaluation splits, candidate selection,
+calibration, final evaluation, training, and artifact validation. These are
+explicit offline workflows under `backend/scripts/`.
+
+Versioned artifacts live under the ignored `backend/artifacts/forecasting/`
+directory. Runtime configuration selects the expected artifact version.
+Artifacts must be provisioned separately from source code.
+
+API inference reads persisted historical observations and validated frozen
+artifacts. It does not fit models, fetch new provider data, or persist a forecast
+result as a report or simulation.
+
+### Horizons and outputs
+
+The primary outlook uses a 30-calendar-day horizon. Separate experimental
+7-, 14-, and 21-calendar-day workflows use their own targets and artifacts.
+Weekly results are not scaled versions of the 30-day output.
+
+Outputs distinguish expected return from non-annualized horizon volatility.
+Available asset prediction ranges carry their configured coverage and model
+warnings. Portfolio outlooks combine component forecasts with historical
+correlation; they do not invent daily price paths or portfolio prediction ranges.
+
+Weekly contracts explicitly report `experimental: true` and
+`predictive_quality_approved: false`. These are educational estimates with
+mixed model quality, not approved reliable predictions.
+
+### Portfolio and currency context
+
+Current portfolios use their derived current allocations and exact current USD
+values. Planned portfolios use proposed allocations and amounts in their plan
+currency. Legacy portfolios provide allocation-based outlooks without an
+invented monetary baseline.
+
+Where available, backend `currency_display` data supplies USD/THB amounts for
+portfolio outlooks. Conversion does not forecast future FX movement; the outlook
+discloses the unchanged-FX assumption. Standalone asset outlooks do not invent
+personal holding amounts.
+
+Missing or stale history and invalid or unavailable artifacts produce an
+unavailable response rather than fabricated output. Supported instruments and
+freshness checks are enforced by the backend.
+
+## Market Data Worker
+
+Daily data refresh runs in a separately supervised Python process:
+
+```bash
+python -m backend.scripts.run_market_data_scheduler
+```
+
+The default schedule is 02:00 UTC, configurable through backend settings.
+Daily collection normally ends at yesterday's UTC date to avoid an unfinished
+daily bar. The registry contains 17 customer assets plus the internal
+`THB=X` FX instrument.
+
+The pipeline fetches, cleans, validates, and upserts observations by
+`(symbol, date)`. PostgreSQL advisory locks coordinate worker leadership and
+updates. Heartbeats, startup and hourly catch-up checks, and bounded retries
+support recovery. Failed symbol updates preserve previously stored observations.
+
+Observation writes and final refresh status are committed together.
+Attempt and heartbeat bookkeeping use their own short transactions.
+
+The authenticated `/api/market-data/status` endpoint reads shared coverage,
+freshness, and worker status. Refreshing a customer page does not trigger a
+provider fetch.
+
+The worker must use the same database as the API and a connection that supports
+session advisory locks. Generated files in `data/raw/` and `data/processed/`
+are not the runtime database authority. See the
+[market data worker guide](../development/market-data-worker.md) for connection,
+scheduling, recovery, and operator commands.
+
+## Authentication and Sessions
+
+Passwords are hashed with Argon2. The backend issues HS256 Bearer JWTs with a
+default 30-minute access-token lifetime. Authenticated endpoints resolve the
+token subject to an existing user and enforce resource ownership.
+
+### Web refresh sessions
+
+Web sign-in uses `/api/auth/web/login`, `/refresh`, and `/logout`.
+
+1. Login creates a persisted session, returns a short-lived access JWT, and sets
+   the opaque `aura_refresh` cookie.
+2. The browser restores a session through the cookie on startup and refreshes
+   after an access-token rejection, retrying the original request once.
+3. Each successful refresh consumes the previous token and rotates the cookie.
+4. Logout revokes the server session and clears the cookie. The UI waits for the
+   server acknowledgement and displays failures.
+
+The refresh policy is seven days without authenticated activity or successful
+refresh, or 30 days since the original sign-in, whichever occurs first.
+Activity advances the idle deadline; it never extends the fixed maximum lifetime.
+
+Web JWTs include a session identifier. The authentication dependency checks
+session validity and records activity in a short transaction before endpoint
+work. Revoked, idle-expired, or maximum-expired sessions cannot continue using
+their otherwise unexpired JWTs.
+
+Refresh tokens are random opaque credentials. PostgreSQL stores only their hashes,
+session association, and rotation timestamps. A recently consumed token receives
+a retryable conflict during the five-second concurrency window, without new
+credentials. Later replay revokes the session.
+
+The cookie is HttpOnly and scoped to `/api/auth/web`. Secure and SameSite settings
+are configurable; production requires Secure, and `SameSite=None` requires
+Secure. Web session endpoints validate the configured browser Origin and
+`X-Aura-Web-Session: 1` header. Credentialed CORS uses explicit allowed origins.
+
+The web client stores only the access token in `sessionStorage`. Refresh tokens
+are never exposed in JSON responses or JavaScript storage. Refresh calls use
+single-flight coordination and browser Web Locks where available. Response
+guards prevent delayed requests from restoring a signed-out or different account.
+An optional logout session identifier protects against clearing a newer session
+established by another tab.
+
+### Mobile and account changes
+
+Mobile currently uses `/api/auth/login` and stores its access token in Expo
+SecureStore. Startup validates the restored identity through the API. Mobile
+sign-out clears local authentication, and expired credentials require sign-in.
+The web cookie refresh flow is not implemented for mobile.
+
+Password changes revoke all web sessions. Account deletion removes the user and
+owned records, making subsequent token authentication fail. Legacy/mobile access
+tokens do not carry a persisted web-session identifier; password changes do not
+provide immediate revocation of those existing tokens.
+
+## Persistence and Transactions
+
+PostgreSQL persists account-owned facts, shared market observations, and frozen
+results. SQLAlchemy models are registered through
+`backend/app/database/models/__init__.py`.
+
+| Tables | Stored responsibility |
+| --- | --- |
+| `users` | Account profile and password hash |
+| `portfolios`, `holdings` | Owned portfolio metadata and ordered holding facts |
+| `market_data` | Shared daily asset and FX observations |
+| `market_data_refresh_state` | Refresh attempts, status, and worker heartbeat |
+| `analyses`, `simulations` | Owned versioned report and simulation snapshots |
+| `watchlist_items` | Account watchlist membership |
+| `notifications`, `notification_preferences` | In-app activity records and account notification settings |
+| `web_sessions`, `web_refresh_tokens` | Session lifetime, revocation, and hashed refresh-token rotation |
+
+Repositories and business services flush changes without committing
+caller-owned transactions. Routes commit successful mutations. Saving a report
+or simulation and its associated notification happens in the same transaction;
+failure rolls back the workflow.
+
+Authentication activity commits separately before potentially expensive
+analytics or LLM work, avoiding a long-held session-row lock. The worker owns its
+refresh transactions independently of API requests.
+
+Owned data is scoped by the authenticated user. Account deletion cascades through
+owned records, while shared market observations remain available to other users.
+Device-local preferences and exported files are outside database deletion.
+
+## Customer Clients
+
+Both clients support real backend account, portfolio, report, simulation,
+forecast, watchlist, notification, and AI workflows. Current and planned
+holdings, legacy compatibility, and V1/V2/V3 saved results are integrated.
+
+| Concern | Customer web | Customer mobile |
+| --- | --- | --- |
+| Runtime | React, TypeScript, and Vite | React Native, TypeScript, and Expo |
+| Entry and providers | `src/main.tsx`, auth, privacy, and Learn progress providers | `src/app/AppProviders.tsx`, auth, preferences, privacy, portfolio/report/simulation data, and navigation providers |
+| Navigation | Application hash routes and protected pages | React Navigation auth, tabs, and feature stacks |
+| API access | `src/api/` and centralized API client | `src/api/` and centralized API client |
+| Authentication | Web refresh sessions and access-token storage | Bearer access token in SecureStore |
+| Presentation | Shared components, pages, hooks, types, and utilities | Shared components, screens, feature modules, theme, hooks, types, and utilities |
+
+Clients render and format backend results, including supplied monetary currency
+views. They do not duplicate portfolio risk formulas, financial FX conversions,
+or forecast inference.
+
+Account and selection guards prevent stale responses from displaying another
+account or portfolio's data. Loading, empty, unavailable, and failure states
+remain part of the feature UI.
+
+Learn lessons and completion progress are local client features. Privacy value
+masking and applicable display preferences are also local; masking does not
+change backend authorization. Local reset does not delete server portfolios or
+saved results.
+
+Notifications are account-owned in-app records with read/clear actions and
+links to saved results. Foreground polling updates client activity views.
+Mock data supports development and tests, not authoritative customer results.
+
+## Runtime Configuration
+
+The web application can be hosted separately from the API. Its public
+`VITE_API_BASE_URL` and the mobile `EXPO_PUBLIC_API_URL` select the backend
+origin. Database credentials, JWT secrets, and LLM keys remain backend-only.
+
+Cross-origin hosting requires an explicit allowed web origin and credentialed
+requests for refresh cookies. SameSite must match whether the deployed web and
+API are same-site or cross-site. HTTPS and browser cookie policy affect cookie
+delivery; hostname configuration is part of deployment verification.
+
+The API and worker require the migrated PostgreSQL schema. Alembic migrations
+live in `backend/alembic/`. The API requires the selected forecast artifacts
+for available outlooks, and an enabled LLM provider requires its server-side key.
+Deploying the API does not automatically start the separate data worker.
+
+Local database setup, environment variables, and server commands are documented
+in the development guides below and the root README.
+
+## Repository Map
 
 ```text
-React Page
-    ↓
-Reusable Component
-    ↓
-Frontend API Module
-    ↓
-FastAPI REST API
-    ↓
-Backend Service
-    ↓
-Repository / Analytics / Simulation
-    ↓
-PostgreSQL
+AURA/
+  backend/
+    app/                     Shared API, business workflows, calculations, and persistence
+    alembic/                 Database migrations
+    scripts/                 Worker, data operations, and offline forecasting commands
+    tests/                   Backend unit and integration checks
+    artifacts/forecasting/   Separately provisioned, ignored model artifacts
+  web-prototype-react/
+    src/                     Customer web application
+    tests/                   Web behavior and contract checks
+  mobile/
+    src/                     Customer mobile application
+    tests/                   Mobile behavior and contract checks
+  data/                      Generated local data outputs
+  docs/
+    architecture/            System architecture
+    api_contracts/           Public and feature contracts
+    development/             Setup and operational workflows
+  PROJECT_CONTEXT.md         Product context and project constraints
+  CURRENT_STATUS.md          Implementation checkpoints
+  README.md                  Product overview and local setup entry point
 ```
 
-React is responsible for presentation, interaction, navigation, form handling, loading and error states, and displaying results returned by the backend. FastAPI remains responsible for portfolio ownership rules, analytics calculations, simulation calculations, reporting behavior, authentication verification, and database operations.
-
-Backend calculations are the source of truth. The frontend must not independently calculate or duplicate Aura's official:
-
-- risk score;
-- volatility;
-- Sharpe ratio;
-- maximum drawdown;
-- diversification score;
-- correlation;
-- risk drivers; or
-- historical simulation results.
-
-Frontend utilities may perform display-only work such as currency formatting, percentage formatting, chart display transformations, and basic visual or UI derivations. Portfolio-specific financial formulas remain in the backend.
-
-## Frontend API Layer
-
-`src/api/` is the single frontend integration boundary for the FastAPI backend. It owns API base URL handling, HTTP requests, JSON request and response handling, Bearer authentication headers, and standardized frontend API errors.
-
-Feature API modules remain separated by responsibility:
-
-```text
-authApi.ts
-portfoliosApi.ts
-analyticsApi.ts
-reportsApi.ts
-simulationsApi.ts
-```
-
-React pages should use these modules rather than scattering hard-coded `fetch()` calls throughout page components.
-
-## Frontend Authentication Architecture
-
-The intended frontend authentication flow is:
-
-```text
-Login / Register Page
-        ↓
-authApi
-        ↓
-FastAPI Authentication API
-        ↓
-Bearer JWT received
-        ↓
-Frontend Auth State
-        ↓
-Protected Routes
-        ↓
-Authenticated API Requests
-```
-
-- `AuthContext.tsx` manages frontend authentication state.
-- `useAuth.ts` exposes authentication behavior to React components.
-- `authStorage.ts` owns the agreed frontend token or session persistence behavior.
-- `ProtectedRoute.tsx` prevents unauthenticated access to protected frontend pages.
-- Backend authentication remains authoritative.
-- The frontend must not use `X-User-ID` as authentication.
-- Authenticated profile fields are persisted with the User. Email changes and
-  password replacement require current-password verification; plaintext
-  passwords are never returned or stored.
-
-This is a target architecture. It does not imply that refresh tokens, OAuth, MFA, password reset, logout revocation, or every authentication screen is already implemented.
-
-## Page Responsibilities
-
-| Page | Main Responsibility |
-|---|---|
-| Dashboard | Shows a concise portfolio overview, performance, risk summary, top risk drivers, allocation, AI insight preview, and current analysis state. |
-| Portfolios | Creates, lists, opens, renames, edits, duplicates, and deletes user portfolios and holdings. |
-| Analytics | Shows detailed portfolio risk analysis including volatility, drawdown, Sharpe ratio, correlation, diversification, risk drivers, and individual asset analysis. |
-| Simulations | Runs Historical Scenario, Allocation Change, and Combined Simulation workflows and displays simulation history. |
-| AI Assistant | Provides grounded educational explanations through the backend AI Agent. |
-| Reports | Lists and displays saved immutable portfolio-analysis reports. |
-| Settings | Handles frontend profile and application settings. |
-| Watchlist | Presents the authenticated observation-only Watchlist API, including add/remove actions and persisted latest/daily/YTD market context. |
-| Learn | Optional or later educational content functionality. |
-
-Watchlist and Learn may exist as routes or frontend features without appearing in the current primary top navigation. Watchlist is integrated on the protected web route and in the mobile `More` stack without adding another bottom tab.
-
-## Dashboard Design Boundary
-
-The Dashboard remains intentionally concise:
-
-```text
-Top Navigation
-        ↓
-Dashboard Header
-        ↓
-4 KPI Cards
-        ↓
-Portfolio Performance + Top Risk Drivers
-        ↓
-Portfolio Allocation + AI Insight + Portfolio Analysis
-```
-
-The four Dashboard KPI cards are:
-
-1. Total Portfolio Value
-2. Risk Score
-3. Annualized Return
-4. Maximum Drawdown
-
-Detailed volatility, Sharpe ratio, correlation, diversification, complete risk-driver tables, and individual asset analysis belong on Analytics rather than the main Dashboard. Simulation history belongs to Simulations, report history belongs to Reports, and portfolio management belongs to Portfolios.
-
-## Reusable UI and Chart Architecture
-
-Generic UI components remain independent from feature-specific business logic:
-
-```text
-Button
-Card
-Input
-Select
-Modal
-Spinner
-EmptyState
-ErrorState
-RiskPill
-SymbolBadge
-```
-
-Generic chart components are:
-
-```text
-LineChart
-MiniLineChart
-DonutChart
-GaugeChart
-```
-
-Feature components compose these shared primitives:
-
-```text
-PortfolioPerformance
-        ↓
-LineChart
-
-PortfolioAllocation
-        ↓
-DonutChart
-
-Risk Score KPI
-        ↓
-GaugeChart
-```
-
-Generic charts render data but do not contain portfolio-specific business calculations.
-
-## Frontend Styling Architecture
-
-```text
-styles/
-├─ tokens.css
-├─ globals.css
-├─ accessibility.css
-└─ responsive.css
-```
-
-- `tokens.css` — Aura design tokens such as colors, spacing, typography, borders, and shared visual constants.
-- `globals.css` — global page, body, and default application styling.
-- `accessibility.css` — focus states, reduced motion, visibility, and accessibility-related rules.
-- `responsive.css` — shared breakpoint and responsive-layout behavior.
-
-Feature and page-specific styling remains in CSS modules near the related component or page. Reusable design values should use tokens rather than being hard-coded across unrelated components.
-
-The agreed customer-web design direction is a professional dark fintech theme with a dark navy and blue background, teal and cyan primary accents, restrained amber and red risk-state colors, and subtle financial-market background imagery. Information hierarchy remains stronger than decoration. Large decorative cryptocurrency artwork and childish visual themes are not part of this direction.
-
-## Frontend Assets
-
-`src/assets/images/aura-market-background.png` is the approved subtle financial-market background visual for the React web interface. It remains secondary to content and must not interfere with text readability or dashboard cards.
-
-## Frontend Mock-Data Boundary
-
-`mocks/` contains frontend development and test data only. It is not the production source of portfolio, analysis, report, simulation, or authentication data.
-
-During real backend integration:
-
-```text
-Mock data
-   ↓ replaced by
-src/api/*
-   ↓
-FastAPI
-```
-
-Mocks may remain for deterministic frontend testing or isolated UI development. Production data and official calculations come from FastAPI and its backend services.
-
-## Frontend Implementation Status Boundary
-
-This section documents the architecture and responsibility boundaries. The
-current customer web app has backend authentication, portfolio, report,
-simulation, and AI integration, but it still requires the real-holding and V2
-contract work listed in `docs/frontend_mobile_integration_backlog.md`.
-
-[↑ Back to Quick Navigation](#quick-navigation)
-
----
-
-# Mobile App Architecture
-
-Aura's customer mobile application uses React Native and TypeScript under
-`mobile/`. It connects to the same FastAPI backend as the React web application
-and does not introduce a separate mobile backend. The structure below defines
-the target responsibilities; completed and deferred capabilities are tracked in
-`CURRENT_STATUS.md` and `docs/frontend_mobile_integration_backlog.md`.
-
-## Target Mobile Structure
-
-```text
-mobile/
-├─ assets/
-│  ├─ images/
-│  └─ icons/
-│
-├─ src/
-│  ├─ app/
-│  │  ├─ App.tsx
-│  │  └─ AppProviders.tsx
-│  │
-│  ├─ navigation/
-│  │  ├─ RootNavigator.tsx
-│  │  ├─ AuthNavigator.tsx
-│  │  ├─ MainTabNavigator.tsx
-│  │  └─ navigationTypes.ts
-│  │
-│  ├─ api/
-│  │  ├─ apiClient.ts
-│  │  ├─ authApi.ts
-│  │  ├─ portfoliosApi.ts
-│  │  ├─ analyticsApi.ts
-│  │  ├─ reportsApi.ts
-│  │  └─ simulationsApi.ts
-│  │
-│  ├─ auth/
-│  │  ├─ AuthProvider.tsx
-│  │  ├─ useAuth.ts
-│  │  └─ authStorage.ts
-│  │
-│  ├─ config/
-│  │  └─ environment.ts
-│  │
-│  ├─ components/
-│  │  ├─ ui/
-│  │  ├─ charts/
-│  │  └─ portfolio/
-│  │
-│  ├─ screens/
-│  │  ├─ auth/
-│  │  ├─ dashboard/
-│  │  ├─ portfolios/
-│  │  ├─ analytics/
-│  │  ├─ simulations/
-│  │  ├─ reports/
-│  │  ├─ assistant/
-│  │  └─ settings/
-│  │
-│  ├─ hooks/
-│  ├─ storage/
-│  ├─ types/
-│  ├─ utils/
-│  ├─ theme/
-│  └─ mocks/
-│
-├─ app.json
-├─ package.json
-├─ tsconfig.json
-└─ .env.example
-```
-
-## Mobile App Folder Definitions
-
-| Folder | Simple Meaning |
-|---|---|
-| `app/` | Starts the React Native application and installs global providers. |
-| `navigation/` | Controls authentication flow, screen navigation, and bottom-tab navigation. |
-| `api/` | Communicates with the shared Aura FastAPI backend. |
-| `auth/` | Manages login state, JWT authentication, and current-user state. |
-| `config/` | Stores environment configuration such as the backend API URL. |
-| `components/` | Contains reusable mobile UI, charts, and portfolio components. |
-| `screens/` | Contains the main mobile screens shown to the user. |
-| `hooks/` | Contains reusable React Native logic and state behavior. |
-| `storage/` | Handles device-local and secure authentication storage. |
-| `types/` | Contains TypeScript structures matching backend API contracts. |
-| `utils/` | Contains formatting and UI-only helper functions. |
-| `theme/` | Defines Aura mobile colors, typography, spacing, and shared visual rules. |
-| `mocks/` | Contains temporary frontend development/test data only. |
-| `assets/` | Stores mobile images, icons, and visual resources. |
-
-## Mobile Authentication and Secure Storage
-
-The intended mobile authentication flow is:
-
-```text
-Login / Register Screen
-        ↓
-authApi
-        ↓
-FastAPI
-        ↓
-Bearer JWT
-        ↓
-Secure Mobile Storage
-        ↓
-Authenticated API Requests
-```
-
-- `AuthProvider.tsx` manages current-user and authentication state for the React Native application.
-- `useAuth.ts` exposes authentication behavior to screens and components.
-- `authStorage.ts` coordinates the agreed persistence behavior with secure device storage where appropriate.
-- Authentication tokens or other sensitive session material must not be placed in ordinary mock data or hard-coded in source files.
-- FastAPI remains authoritative for authentication, portfolio ownership, and access control.
-
-This is an intended boundary. It does not imply that registration, secure token persistence, refresh tokens, OAuth, MFA, password reset, logout revocation, or mobile/backend authentication integration is already complete.
-
-## Mobile Financial Calculation Boundary
-
-React Native is responsible for mobile presentation, interaction, navigation, form handling, loading and error states, and displaying backend results. It must not independently calculate or duplicate Aura's official:
-
-- risk score;
-- volatility;
-- Sharpe ratio;
-- maximum drawdown;
-- correlation;
-- diversification score;
-- risk drivers; or
-- historical, allocation, or combined simulation results.
-
-The mobile app receives these values from FastAPI. Mobile utilities may perform presentation-only work such as currency, percentage, and date formatting, chart presentation transformations, and basic visual derivations. Backend analytics and simulation services remain the financial source of truth.
-
-## Mobile Navigation
-
-Mobile navigation should be optimized for phone interaction rather than copying the web application's top navigation. The recommended primary bottom navigation is:
-
-```text
-Home
-Portfolio
-Simulate
-AI
-More
-```
-
-Additional destinations may be grouped under `More` or reached through feature-specific screens:
-
-```text
-Analytics
-Reports
-Settings
-Learn
-Watchlist
-```
-
-Navigation placement does not claim that every listed screen is integrated.
-The AI interface and authenticated Watchlist backend and clients are
-implemented; Notifications remain deferred.
-
-## Mobile Environment Configuration
-
-Web and mobile may use different backend URLs during local development while connecting to the same FastAPI application and using the same API contracts:
-
-```text
-Web development:
-http://localhost:8000
-
-Physical mobile device:
-http://<development-PC-LAN-IP>:8000
-
-Production:
-https://<Aura-API-domain>
-```
-
-Backend URLs must not be hard-coded inside screens. `src/config/environment.ts` and environment variables provide the mobile configuration boundary.
-
-## Mobile Mock-Data and Implementation Status Boundary
-
-Mobile `mocks/` data is limited to development, testing, and isolated screen work. It is not a production source for authentication, portfolios, analysis, reports, simulations, or AI responses.
-
-The mobile tree documents responsibility boundaries. Authentication,
-portfolio/report/simulation flows, secure token storage, and the AI Assistant
-are integrated against the pre-real-holding contract. Real-holding/valuation and
-V2 history parity plus production deployment remain incomplete.
-
-[↑ Back to Quick Navigation](#quick-navigation)
-
----
-
-# Shared Client-Backend Architecture
-
-Aura's React web and React Native applications use the same FastAPI backend and
-PostgreSQL persistence layer:
-
-```text
-React Web App ───────────┐
-                         │
-                         ▼
-                  FastAPI Backend
-                         │
-                         ▼
-                     PostgreSQL
-                         ▲
-                         │
-React Native App ────────┘
-```
-
-Both clients use the same backend API contracts for:
-
-- authentication;
-- portfolios;
-- holdings;
-- analysis;
-- reports;
-- historical simulations;
-- allocation simulations;
-- combined simulations;
-- simulation history; and
-- grounded AI explanations.
-
-Separate `/api/web/...` and `/api/mobile/...` endpoint families should not be created without a real technical requirement. Both applications should receive consistent ownership decisions, financial calculations, simulation results, reports, and authentication outcomes from the shared backend.
-
-Each client may adapt backend responses for its presentation needs, but neither client replaces backend business rules or official calculations. Different local-development API URLs identify how each device reaches the same FastAPI application; they do not create different backend architectures or contracts.
-
-[↑ Back to Quick Navigation](#quick-navigation)
-
----
-
-# Project Folder Definitions
-
-Platform-specific folder definitions are available in their corresponding sections:
-
-- [Backend Folder Definitions](#backend-folder-definitions)
-- [Frontend Web Folder Definitions](#frontend-web-folder-definitions)
-- [Mobile App Folder Definitions](#mobile-app-folder-definitions)
-
-## Important File and Folder Roles
-
-### Root Files
-
-- `AGENTS.md` — tells Codex how to work on Aura.
-- `PROJECT_CONTEXT.md` — explains what Aura is, why it exists, and the main project direction.
-- `CURRENT_STATUS.md` — tracks what is completed, what is currently being worked on, and what comes next.
-- `.gitignore` — prevents local, generated, private, and unnecessary files from being uploaded to GitHub.
-- `README.md` — gives the main project overview and setup instructions.
-
-### Backend
-
-- `core/` — application settings, constants, and logging.
-- `api/` — FastAPI routes and request handling.
-- `analytics/` — portfolio risk calculations.
-- `scenarios/` — historical What-If simulation logic.
-- `data_pipeline/` — market-data fetching, cleaning, validation, and updating.
-- `database/` — database connection, models, and repository actions.
-- `schemas/` — expected data structures for input and output.
-- `services/` — coordinates workflows between different backend parts.
-- `agents/` — grounded educational AI explanation layer.
-- `utils/` — small reusable helper functions.
-
-### Tests
-
-- `tests/unit/` — tests individual functions and modules.
-- `tests/integration/` — tests how multiple components work together.
-- `test_health_api.py` — verifies the implemented health endpoint.
-
-### Scripts
-
-- `seed_historical_data.py` — manually loads initial historical market data.
-- `update_market_data.py` — manually triggers a market-data update.
-- `run_engine_check.py` — reserved for manually checking the analytics engine.
-
-### Shared Data
-
-- `data/raw/` — original market-data files.
-- `data/processed/` — cleaned and prepared market-data files.
-
-### Documentation
-
-- `docs/api_contracts/` — API request and response documentation.
-- `docs/architecture/` — system architecture documents.
-- `docs/data_dictionary/` — definitions of stored data fields.
+## Current Boundaries
+
+- Historical results describe the implemented holding or allocation baseline,
+  not a reconstructed transaction ledger.
+- Forecast outputs are educational estimates; weekly predictive quality is not
+  approved.
+- Planned-to-current atomic conversion is not implemented.
+- Mobile refresh sessions, OAuth, MFA, and password-reset workflows are not
+  implemented.
+- Notifications are in-app; email delivery and push delivery are not implemented.
+- Learn progress and local display preferences are not server-synchronized.
+
+## Related Documentation
+
+- [Product overview and setup](../../README.md)
+- [Public API contract](../api_contracts/public_api.md)
+- [Portfolio analysis contract](../api_contracts/portfolio_analysis.md)
+- [Planned portfolio contract](../api_contracts/planned_portfolios.md)
+- [Analytics response contract](../api_contracts/analytics_response.md)
+- [Market data contract](../api_contracts/market_data.md)
+- [Local environment setup](../development/local-environment-setup.md)
+- [Running local servers](../development/running-local-servers.md)
+- [Test database setup](../development/test-database-setup.md)
+- [Market data worker operations](../development/market-data-worker.md)
+- [Multi-horizon forecasting workflow](../development/multi-horizon-forecasting.md)
+- [Forecasting selection provenance](../development/forecasting-selection-provenance.md)
