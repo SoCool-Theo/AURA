@@ -1,0 +1,7 @@
+.control { display: flex; flex-direction: column; gap: 8px; }
+.options { display: flex; gap: 6px; flex-wrap: wrap; }
+.options button { padding: 8px 16px; border-radius: 10px; border: 1px solid var(--border-control); background: var(--control-bg); color: var(--text-secondary); font: inherit; cursor: pointer; }
+.options button.selected { color: var(--teal-primary); border-color: var(--teal-primary); }
+.options button:disabled { opacity: .45; cursor: not-allowed; }
+.options button:focus-visible { outline: 2px solid var(--teal-primary); outline-offset: 3px; }
+.control p { margin: 0; font-size: 12px; color: var(--text-secondary); }
