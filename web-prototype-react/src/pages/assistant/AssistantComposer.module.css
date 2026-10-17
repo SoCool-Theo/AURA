@@ -16,7 +16,7 @@
 
 .questionHeader > label {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size:var(--font-size-description);
   font-weight: 700;
 }
 
@@ -28,7 +28,7 @@
 
 .characterCount {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size:var(--font-size-description);
   font-weight: 500;
 }
 

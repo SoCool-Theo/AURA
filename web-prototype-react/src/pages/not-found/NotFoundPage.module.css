@@ -110,7 +110,7 @@
   justify-content: center;
   gap: 12px;
   color: var(--text-primary);
-  font-size: 16px;
+  font-size:var(--font-size-description);
   font-weight: 750;
   cursor: pointer;
   transition: border-color .16s ease, background .16s ease, filter .16s ease, transform .16s ease;
@@ -149,7 +149,7 @@
 .supportLine {
   margin: 31px 0 0;
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size:var(--font-size-body);
 }
 
 .supportLine button {
@@ -231,13 +231,13 @@
 
 .suggestionGrid strong {
   color: var(--text-primary);
-  font-size: 14px;
+  font-size:var(--font-size-description);
 }
 
 .suggestionGrid small {
   margin-top: 6px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size:var(--font-size-caption);
   white-space: nowrap;
 }
 
@@ -261,7 +261,7 @@
 .notFoundFooter small {
   display: block;
   margin: 0;
-  font-size: 12px;
+  font-size:var(--font-size-description);
 }
 
 .notFoundFooter small {
@@ -305,7 +305,7 @@
 
   .notFoundHero > p:not(.supportLine) {
     margin-top: 15px;
-    font-size: 15px;
+    font-size:var(--font-size-body);
   }
 
   .primaryActions {
