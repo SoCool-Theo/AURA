@@ -3345,3 +3345,22 @@ remain separate follow-on work.
   JWT-key-length warnings and the web bundle-size warning remain. Live browser
   acceptance is still manual. Production migration/deployment was not performed.
 - No staging, commit or push was performed.
+
+### Web typography readability — 2026-10-17
+
+- Added shared web typography variables for 16px body text and form inputs,
+  14px supporting descriptions, table values and text buttons, and 12px compact
+  labels. Applied them across the existing global and page/component styles,
+  including narrow-screen overrides, with more readable paragraph spacing.
+- Enlarged Assistant answers, Learn lesson text, Help answers, notices and
+  supporting financial text while retaining the existing larger headings and
+  metric values. Updated the notification layout regression to expect the
+  shared description size instead of the previous 12px buttons.
+- Verification: all 162 web tests and the TypeScript/production build passed;
+  the existing bundle-size warning remains. A CSS declaration audit confirmed
+  typography-only changes in 24 stylesheets and no fixed CSS font size below
+  12px. Browser checks covered the welcome page at desktop, 390px and 320px,
+  and sign-in/sign-up at 320px without page overflow; inputs render at 16px.
+  Signed-in dashboard/report/simulation visual acceptance remains manual.
+- No backend, mobile, dependency, financial calculation or saved-data changes.
+  No staging, commit or push was performed.

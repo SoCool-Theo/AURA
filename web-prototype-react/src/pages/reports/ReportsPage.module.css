@@ -5,7 +5,7 @@
   border-radius: 9px;
   background: rgba(90, 32, 40, 0.25);
   color: var(--red-bright);
-  font-size: 12px;
+  font-size:var(--font-size-description);
 }
 
 :global(.report-row-actions) .deleteAction {
@@ -13,7 +13,7 @@
   min-width: 62px;
   padding: 0 9px;
   color: var(--red-bright);
-  font-size: 10px;
+  font-size:var(--font-size-description);
   font-weight: 700;
 }
 

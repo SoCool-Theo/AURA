@@ -34,7 +34,7 @@
   align-items: center;
   color: var(--purple-light);
   text-decoration: none;
-  font-size: 13px;
+  font-size:var(--font-size-description);
 }
 
 .welcomeLink:focus-visible {
@@ -86,7 +86,7 @@
 .authBrand p {
   margin: 7px 0 0;
   color: var(--purple-light);
-  font-size: 14px;
+  font-size:var(--font-size-body);
 }
 
 .authHeading {
@@ -105,7 +105,7 @@
 .authHeading p {
   margin: 10px 0 0;
   color: var(--text-secondary);
-  font-size: 15px;
+  font-size:var(--font-size-description);
 }
 
 .authForm {
@@ -117,7 +117,7 @@
 
 .authForm > label {
   color: var(--text-primary);
-  font-size: 14px;
+  font-size:var(--font-size-description);
   font-weight: 650;
 }
 
@@ -175,7 +175,7 @@
   outline: 0;
   background: transparent;
   color: var(--text-primary);
-  font-size: 15px;
+  font-size:var(--font-size-body);
 }
 
 .authForm input::placeholder {
@@ -218,7 +218,7 @@
   display: block;
   margin-top: 7px;
   color: var(--red-bright);
-  font-size: 12px;
+  font-size:var(--font-size-description);
   font-weight: 500;
 }
 
@@ -229,7 +229,7 @@
   border: 0;
   background: transparent;
   color: var(--purple-light);
-  font-size: 13px;
+  font-size:var(--font-size-description);
   cursor: pointer;
 }
 
@@ -245,7 +245,7 @@
   border-radius: 8px;
   background: linear-gradient(105deg, var(--purple-bright), var(--purple-primary) 50%, #24bca8);
   color: var(--on-primary);
-  font-size: 16px;
+  font-size:var(--font-size-description);
   font-weight: 800;
   cursor: pointer;
   box-shadow: 0 10px 28px rgba(24, 186, 163, .18);
@@ -264,7 +264,7 @@
   border-radius: 8px;
   background: rgba(90, 32, 40, .45);
   color: var(--red-bright);
-  font-size: 13px;
+  font-size:var(--font-size-description);
   line-height: 1.45;
 }
 
@@ -282,7 +282,7 @@
   align-items: center;
   gap: 18px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size:var(--font-size-description);
 }
 
 .authDivider::before,
@@ -313,7 +313,7 @@
   justify-content: center;
   gap: 12px;
   color: var(--text-primary);
-  font-size: 15px;
+  font-size:var(--font-size-description);
   cursor: pointer;
   transition: border-color .16s ease, background .16s ease;
 }
@@ -338,7 +338,7 @@
 .authSwitch {
   margin: 34px 0 0;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size:var(--font-size-description);
   text-align: center;
 }
 
@@ -362,7 +362,7 @@
 
 .passwordGroup > label {
   color: var(--text-primary);
-  font-size: 14px;
+  font-size:var(--font-size-description);
   font-weight: 650;
 }
 
@@ -408,7 +408,7 @@
 .passwordStrength p {
   margin: 7px 0 0;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size:var(--font-size-body);
 }
 
 .passwordStrength strong {
@@ -437,7 +437,7 @@
   align-items: flex-start;
   gap: 10px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size:var(--font-size-description);
   font-weight: 500;
   line-height: 1.5;
 }
@@ -492,7 +492,7 @@
   display: block;
   margin-top: 7px;
   color: var(--red-bright);
-  font-size: 12px;
+  font-size:var(--font-size-description);
 }
 
 .registerSwitch {
@@ -533,7 +533,7 @@
   }
 
   .authBrand p {
-    font-size: 12px;
+    font-size:var(--font-size-body);
   }
 
   .authHeading {
@@ -545,7 +545,7 @@
   }
 
   .authHeading p {
-    font-size: 13px;
+    font-size:var(--font-size-description);
   }
 
   .authForm {

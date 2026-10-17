@@ -336,6 +336,6 @@ test('web notification cards use scoped compact spacing and horizontal actions w
   assert.match(css, /\.icon \{[^}]*width: 38px; height: 38px/);
   assert.match(css, /\.actions \{[^}]*flex-wrap: wrap/);
   assert.doesNotMatch(css, /\.actions \{[^}]*flex-direction: column/);
-  assert.match(css, /\.toolbar button, \.actions button, \.pagination button \{[^}]*min-height: 36px[^}]*font-size: 12px/);
+  assert.match(css, /\.toolbar button, \.actions button, \.pagination button \{[^}]*min-height: 36px[^}]*font-size:\s*var\(--font-size-description\)/);
   assert.match(css, /@media \(max-width: 600px\)[^\n]*min-height: 44px/);
 });
